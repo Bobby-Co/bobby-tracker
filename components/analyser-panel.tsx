@@ -52,7 +52,13 @@ export function AnalyserPanel({
 
     const enabled = !!state?.enabled
     const status = state?.status ?? "disabled"
-    const showStatus = indexing ? "indexing" : status
+    // True when an index is in flight — either streamed by THIS client
+    // (local indexing flag) or recorded server-side from a previous run
+    // that may still be active in another tab / a long-running route.
+    // Disable/Re-index/Private-repo controls are gated on this so users
+    // can't kick off a parallel run or yank the integration mid-flight.
+    const isIndexing = indexing || status === "indexing"
+    const showStatus = isIndexing ? "indexing" : status
     const label = STATUS_LABEL[showStatus]
 
     function appendLog(line: string) {
@@ -169,7 +175,12 @@ export function AnalyserPanel({
                 <span className={`ml-2 ${label.className}`}>{label.text}</span>
                 <span className="ml-auto" />
                 {enabled ? (
-                    <button onClick={() => call("disable")} disabled={indexing} className="btn-ghost px-3 py-1.5 text-[12px]">
+                    <button
+                        onClick={() => call("disable")}
+                        disabled={isIndexing}
+                        title={isIndexing ? "Wait for the current index to finish" : undefined}
+                        className="btn-ghost px-3 py-1.5 text-[12px]"
+                    >
                         Disable
                     </button>
                 ) : (
@@ -193,10 +204,15 @@ export function AnalyserPanel({
 
             {enabled && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <button onClick={runIndex} disabled={indexing} className="btn-primary">
-                        {indexing ? "Indexing…" : (state?.last_indexed_at ? "Re-index now" : "Index now")}
+                    <button
+                        onClick={runIndex}
+                        disabled={isIndexing}
+                        title={isIndexing && !indexing ? "An index is already in progress" : undefined}
+                        className="btn-primary"
+                    >
+                        {isIndexing ? "Indexing…" : (state?.last_indexed_at ? "Re-index now" : "Index now")}
                     </button>
-                    {!indexing && (
+                    {!isIndexing && (
                         <button type="button" onClick={() => setAdvanced((v) => !v)} className="btn-ghost">
                             {advanced ? "Hide private-repo token" : "Private repo?"}
                         </button>
@@ -204,7 +220,7 @@ export function AnalyserPanel({
                 </div>
             )}
 
-            {advanced && enabled && !indexing && (
+            {advanced && enabled && !isIndexing && (
                 <div className="mt-3 rounded-[12px] border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">
                     <p>
                         Paste a <strong>short-lived</strong> GitHub PAT or App installation token. It&apos;s sent server-side only — never stored — and used solely for the next clone.
@@ -229,6 +245,16 @@ export function AnalyserPanel({
                     elapsedMs={elapsedMs}
                     logLines={logLines}
                 />
+            )}
+
+            {/* Server says indexing, but we don't have the live stream
+                (e.g. user just opened this tab). Show a small notice so
+                the disabled buttons aren't a mystery. */}
+            {!indexing && status === "indexing" && (
+                <p className="anim-fade mt-3 inline-flex items-center gap-2 rounded-[10px] bg-amber-50 px-3 py-1.5 text-[12px] text-amber-900">
+                    <Spinner />
+                    An index is in progress. Refresh in a minute or open the tab that started it.
+                </p>
             )}
 
             {state?.last_error && status === "failed" && !indexing && (
