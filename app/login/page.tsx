@@ -18,6 +18,14 @@ function LoginInner() {
     const [pending, setPending] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
+    const getUrl = () => {
+        const base =
+          window.location.hostname === "localhost"
+            ? "http://localhost:3000"
+            : "https://track.bobby.host"
+        return new URL("/auth/callback", base).href
+    }
+
     async function signIn() {
         setPending(true)
         setError(null)
@@ -25,7 +33,7 @@ function LoginInner() {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "github",
             options: {
-                redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+                redirectTo: `${getUrl()}?next=${encodeURIComponent(next)}`,
                 scopes: "read:user user:email",
             },
         })
