@@ -49,8 +49,13 @@ export function IssueForm({ projectId, onSuccess, onCancel }: IssueFormProps) {
                 setError(e?.error?.message || `Failed (${res.status})`)
                 return
             }
-            router.refresh()
+            const { issue } = await res.json()
             onSuccess?.()
+            // Land on the new issue's detail page so the suggestions panel
+            // can auto-trigger investigation. Refresh the issues list too
+            // so when the user navigates back it's already up to date.
+            router.refresh()
+            if (issue?.id) router.push(`/projects/${projectId}/issues/${issue.id}`)
         })
     }
 

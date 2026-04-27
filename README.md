@@ -20,11 +20,21 @@ Smart issue tracker for Bobby projects. Powered by Supabase (shared with Bobby C
    ```
    …or paste it into the Supabase SQL editor. Then in **Supabase → Settings → API → Exposed schemas**, add `tracker` alongside `public`.
 
-3. **Configure auth:** Supabase → Authentication → Providers → GitHub. Already set up for Bobby CI? Same setting is reused. Add this app's redirect to the allowed list:
+3. **Enable Realtime publication** for `tracker.project_analyser` and `tracker.issue_suggestions` so the analyser panel and issue-suggestions panel pick up server-side updates without a refresh:
+
+   ```bash
+   # Run as part of the migration set above, or paste into the SQL editor:
+   alter publication supabase_realtime add table tracker.project_analyser;
+   alter publication supabase_realtime add table tracker.issue_suggestions;
+   ```
+
+   (Migration `0003_realtime.sql` does this for you.) RLS still applies to realtime — clients only receive rows their JWT can read.
+
+4. **Configure auth:** Supabase → Authentication → Providers → GitHub. Already set up for Bobby CI? Same setting is reused. Add this app's redirect to the allowed list:
    - `https://your-tracker-domain/auth/callback`
    - `http://localhost:3000/auth/callback` (dev)
 
-4. **Env:**
+5. **Env:**
 
    ```bash
    cp .env.local.example .env.local
@@ -34,7 +44,7 @@ Smart issue tracker for Bobby projects. Powered by Supabase (shared with Bobby C
    # domain shared with Bobby CI for SSO.
    ```
 
-5. **Run:**
+6. **Run:**
 
    ```bash
    npm run dev    # http://localhost:3000

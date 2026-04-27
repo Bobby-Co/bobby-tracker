@@ -1,8 +1,9 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/components/cn"
+import { createClient } from "@/lib/supabase/client"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 
 const STATUS_LABEL: Record<ProjectAnalyser["status"], { text: string; className: string }> = {
@@ -24,7 +25,6 @@ interface ProgressEvent {
     cumulative_usd?: number
     error?: string
 }
-interface LogLine { stream: "stdout" | "stderr"; data: string }
 
 export function AnalyserPanel({
     projectId,
@@ -44,7 +44,6 @@ export function AnalyserPanel({
     const [stepIdx, setStepIdx] = useState<number | null>(null)
     const [stepTotal, setStepTotal] = useState<number | null>(null)
     const [costUsd, setCostUsd] = useState<number>(0)
-    const [logLines, setLogLines] = useState<string[]>([])
     const startedAtRef = useRef<number | null>(null)
     const [elapsedMs, setElapsedMs] = useState(0)
     const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -52,22 +51,9 @@ export function AnalyserPanel({
 
     const enabled = !!state?.enabled
     const status = state?.status ?? "disabled"
-    // True when an index is in flight — either streamed by THIS client
-    // (local indexing flag) or recorded server-side from a previous run
-    // that may still be active in another tab / a long-running route.
-    // Disable/Re-index/Private-repo controls are gated on this so users
-    // can't kick off a parallel run or yank the integration mid-flight.
     const isIndexing = indexing || status === "indexing"
     const showStatus = isIndexing ? "indexing" : status
     const label = STATUS_LABEL[showStatus]
-
-    function appendLog(line: string) {
-        setLogLines((prev) => {
-            const next = [...prev, line]
-            if (next.length > 500) next.splice(0, next.length - 500)
-            return next
-        })
-    }
 
     function resetLive() {
         setPhase(null)
@@ -75,10 +61,33 @@ export function AnalyserPanel({
         setStepIdx(null)
         setStepTotal(null)
         setCostUsd(0)
-        setLogLines([])
         setElapsedMs(0)
         startedAtRef.current = null
     }
+
+    // Realtime: pick up status flips from other tabs / server-side
+    // updates so a refresh isn't needed. UPDATEs land when the index
+    // route writes 'indexing' → 'ready' / 'failed'. router.refresh()
+    // re-server-renders the page so the `state` prop updates.
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`project-analyser-${projectId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "tracker",
+                    table: "project_analyser",
+                    filter: `project_id=eq.${projectId}`,
+                },
+                () => router.refresh(),
+            )
+            .subscribe()
+        return () => {
+            void supabase.removeChannel(channel)
+        }
+    }, [projectId, router])
 
     async function call(path: string) {
         setError(null)
@@ -157,11 +166,9 @@ export function AnalyserPanel({
                 setPhase(humanPhase(p))
                 break
             }
-            case "log": {
-                const l = frame as unknown as LogLine
-                appendLog(l.data)
-                break
-            }
+            // log frames intentionally ignored — the structured progress
+            // (phase + slug + step + cost) is enough; raw stdout/stderr
+            // belongs in `docker compose logs server`, not the UI.
             case "done":  setPhase("Done"); break
             case "error": setError(String(frame.message ?? "indexing failed")); break
         }
@@ -243,17 +250,16 @@ export function AnalyserPanel({
                     stepTotal={stepTotal}
                     costUsd={costUsd}
                     elapsedMs={elapsedMs}
-                    logLines={logLines}
                 />
             )}
 
             {/* Server says indexing, but we don't have the live stream
-                (e.g. user just opened this tab). Show a small notice so
-                the disabled buttons aren't a mystery. */}
+                (e.g. user just opened this tab). Realtime will refresh
+                the page when status flips; until then show a notice. */}
             {!indexing && status === "indexing" && (
                 <p className="anim-fade mt-3 inline-flex items-center gap-2 rounded-[10px] bg-amber-50 px-3 py-1.5 text-[12px] text-amber-900">
                     <Spinner />
-                    An index is in progress. Refresh in a minute or open the tab that started it.
+                    An index is in progress. This page updates live when it finishes.
                 </p>
             )}
 
@@ -279,7 +285,7 @@ function Stat({ label, value, mono }: { label: string; value: string; mono?: boo
 }
 
 function LiveProgress({
-    phase, currentSlug, stepIdx, stepTotal, costUsd, elapsedMs, logLines,
+    phase, currentSlug, stepIdx, stepTotal, costUsd, elapsedMs,
 }: {
     phase: string | null
     currentSlug: string | null
@@ -287,7 +293,6 @@ function LiveProgress({
     stepTotal: number | null
     costUsd: number
     elapsedMs: number
-    logLines: string[]
 }) {
     const pct = stepTotal && stepTotal > 0 && stepIdx != null ? Math.round((stepIdx / stepTotal) * 100) : null
     return (
@@ -316,14 +321,6 @@ function LiveProgress({
                     {stepIdx} / {stepTotal} modules
                 </div>
             )}
-            <details className="text-[11px]">
-                <summary className="cursor-pointer text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]">
-                    Show stream ({logLines.length})
-                </summary>
-                <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-emerald-200">
-                    {logLines.length === 0 ? "(no log lines yet)" : logLines.join("\n")}
-                </pre>
-            </details>
         </div>
     )
 }
@@ -337,8 +334,6 @@ function humanPhase(p: ProgressEvent): string {
         case "module_start":    return p.slug ? `Indexing ${p.slug}` : "Indexing module"
         case "module_complete": return p.slug ? `Done ${p.slug}` : "Module done"
         case "module_fail":     return p.slug ? `Failed ${p.slug}` : "Module failed"
-        case "tool_call":       return p.tool_name ? `Tool: ${p.tool_name}` : "Tool call"
-        case "tool_result":     return "Tool result"
         case "usage":           return "Model call"
         case "budget_stop":     return "Budget reached"
         case "bootstrap_end":   return "Bootstrap complete"

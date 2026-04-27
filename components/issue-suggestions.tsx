@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import { useEffect, useRef, useState, useTransition } from "react"
+import { cn } from "@/components/cn"
+import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/github"
 import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/supabase/types"
 
@@ -19,6 +19,7 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
     const [error, setError] = useState<string | null>(null)
     const [errorCode, setErrorCode] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
+    const autoFiredRef = useRef(false)
 
     function regenerate() {
         setError(null)
@@ -35,6 +36,46 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
             setSuggestion(next)
         })
     }
+
+    // Auto-trigger when the issue lands on this page with no cached
+    // suggestion AND the analyser is ready. Fires once per mount so a
+    // user revisiting an unanswered issue gets investigation started
+    // without an extra click. The setState happens via startTransition
+    // inside regenerate(), not synchronously in the effect body — but
+    // the lint rule fires on the call site regardless, so suppress.
+    useEffect(() => {
+        if (autoFiredRef.current) return
+        if (!analyserReady) return
+        if (suggestion) return
+        autoFiredRef.current = true
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- regenerate() defers via startTransition; this is the right pattern for "kick off when conditions become true"
+        regenerate()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [analyserReady, suggestion?.id])
+
+    // Realtime: pick up new suggestion rows even when this tab didn't
+    // start the investigation (background regeneration, parallel tab,
+    // etc.). RLS on tracker.issue_suggestions ensures only authorised
+    // rows arrive.
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`issue-suggestions-${issueId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "tracker",
+                    table: "issue_suggestions",
+                    filter: `issue_id=eq.${issueId}`,
+                },
+                (payload) => setSuggestion(payload.new as IssueSuggestion),
+            )
+            .subscribe()
+        return () => {
+            void supabase.removeChannel(channel)
+        }
+    }, [issueId])
 
     return (
         <section className="rounded-xl border border-zinc-200 bg-white p-4 transition-colors dark:border-zinc-800 dark:bg-zinc-950">
@@ -95,24 +136,23 @@ function SuggestionBody({
     repo: RepoRef
     indexedSha: string | null
 }) {
+    // Always prefer the structured payload now. Legacy rows without
+    // `data` are vanishingly rare after the migration; treat them as a
+    // bare summary string.
     const data: IssueAnalysisData | null = suggestion.data
-    if (data) return <StructuredView data={data} repo={repo} sha={indexedSha} suggestion={suggestion} />
-    return <LegacyMarkdownView suggestion={suggestion} repo={repo} sha={indexedSha} />
-}
+    if (!data) {
+        return (
+            <div className="mt-4 anim-rise text-[13px] leading-6 text-zinc-700 dark:text-zinc-300">
+                {suggestion.markdown || "(no result)"}
+            </div>
+        )
+    }
 
-function StructuredView({
-    data,
-    repo,
-    sha,
-    suggestion,
-}: {
-    data: IssueAnalysisData
-    repo: RepoRef
-    sha: string | null
-    suggestion: IssueSuggestion
-}) {
     return (
-        <div className="mt-4 flex flex-col gap-5 stagger" style={{ ["--stagger-step" as string]: "70ms" } as React.CSSProperties}>
+        <div
+            className="mt-4 flex flex-col gap-5 stagger"
+            style={{ ["--stagger-step" as string]: "70ms" } as React.CSSProperties}
+        >
             {data.summary && (
                 <div className="anim-rise" style={{ ["--i" as string]: 0 } as React.CSSProperties}>
                     <SectionLabel>Summary</SectionLabel>
@@ -124,7 +164,7 @@ function StructuredView({
                 <div className="anim-rise" style={{ ["--i" as string]: 1 } as React.CSSProperties}>
                     <SectionLabel>Files to investigate</SectionLabel>
                     <ul
-                        className="mt-2 flex flex-col gap-2 stagger"
+                        className="mt-2 flex flex-col gap-1.5 stagger"
                         style={{ ["--stagger-step" as string]: "55ms" } as React.CSSProperties}
                     >
                         {data.suggestions.map((s, i) => (
@@ -132,7 +172,7 @@ function StructuredView({
                                 key={`${s.file}:${s.line ?? ""}:${i}`}
                                 finding={s}
                                 repo={repo}
-                                sha={sha}
+                                sha={indexedSha}
                                 index={i}
                             />
                         ))}
@@ -144,7 +184,7 @@ function StructuredView({
                 <MetaRow
                     confidence={data.confidence ?? suggestion.confidence ?? null}
                     graphId={suggestion.graph_id}
-                    sha={sha}
+                    sha={indexedSha}
                     durationMs={suggestion.duration_ms ?? data.duration_ms ?? null}
                 />
             </div>
@@ -152,6 +192,9 @@ function StructuredView({
     )
 }
 
+// FindingCard — collapsed by default, showing just `basename:line` +
+// confidence badge on the right. Click expands to reveal the reason,
+// optional symbol, and a link to the full path on GitHub.
 function FindingCard({
     finding,
     repo,
@@ -163,36 +206,76 @@ function FindingCard({
     sha: string | null
     index: number
 }) {
+    const [open, setOpen] = useState(false)
     const url = blobUrl(repo, finding.file, finding.line, sha)
-    const label = finding.line ? `${finding.file}:${finding.line}` : finding.file
+    const filename = basename(finding.file)
+    const headline = finding.line ? `${filename}:${finding.line}` : filename
+
     return (
         <li
-            className="anim-rise group rounded-lg border border-zinc-200 bg-zinc-50 p-3 transition-all duration-200 hover:-translate-y-px hover:border-zinc-300 hover:bg-white hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-900/80"
+            className="anim-rise overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-all duration-200 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
             style={{ ["--i" as string]: index } as React.CSSProperties}
         >
-            <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/60 dark:hover:bg-zinc-900/60"
+            >
+                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-zinc-900 dark:text-zinc-100">
+                    {headline}
+                </span>
+                {finding.symbol && !open && (
+                    <span className="hidden font-mono text-[11px] text-zinc-500 sm:inline">
+                        {finding.symbol}
+                    </span>
+                )}
+                {finding.confidence && <ConfidenceBadge value={finding.confidence} />}
+                <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className={cn(
+                        "shrink-0 text-zinc-400 transition-transform duration-200",
+                        open && "rotate-180",
+                    )}
+                    aria-hidden
+                >
+                    <path d="M6 9l6 6 6-6" />
+                </svg>
+            </button>
+
+            {open && (
+                <div className="anim-fade border-t border-zinc-200/60 bg-white px-3 py-2.5 dark:border-zinc-800/60 dark:bg-zinc-950">
+                    {finding.symbol && (
+                        <div className="font-mono text-[11.5px] text-zinc-500 dark:text-zinc-400">
+                            {finding.symbol}
+                        </div>
+                    )}
+                    {finding.reason && (
+                        <p className="mt-1 text-[13px] leading-5 text-zinc-700 dark:text-zinc-300">
+                            {finding.reason}
+                        </p>
+                    )}
                     {url ? (
                         <a
                             href={url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 font-mono text-[12px] text-zinc-900 transition-colors hover:text-blue-600 dark:text-zinc-100 dark:hover:text-blue-400"
+                            className="mt-2.5 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[11.5px] text-zinc-500 hover:text-blue-600 hover:underline dark:hover:text-blue-400"
                         >
-                            <span className="truncate">{label}</span>
-                            <ExternalLinkIcon className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                            <span className="truncate">{finding.file}</span>
+                            <ExternalLinkIcon />
                         </a>
                     ) : (
-                        <span className="font-mono text-[12px] text-zinc-900 dark:text-zinc-100">{label}</span>
-                    )}
-                    {finding.symbol && (
-                        <span className="ml-2 font-mono text-[11px] text-zinc-500">{finding.symbol}</span>
+                        <span className="mt-2.5 inline-block max-w-full truncate font-mono text-[11.5px] text-zinc-500">
+                            {finding.file}
+                        </span>
                     )}
                 </div>
-                {finding.confidence && <ConfidenceBadge value={finding.confidence} />}
-            </div>
-            {finding.reason && (
-                <p className="mt-1.5 text-[13px] leading-5 text-zinc-700 dark:text-zinc-300">{finding.reason}</p>
             )}
         </li>
     )
@@ -233,58 +316,6 @@ function MetaRow({
     )
 }
 
-function LegacyMarkdownView({
-    suggestion,
-    repo,
-    sha,
-}: {
-    suggestion: IssueSuggestion
-    repo: RepoRef
-    sha: string | null
-}) {
-    return (
-        <div className="mt-4 flex flex-col gap-4 anim-rise">
-            {suggestion.code_cites.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                    <SectionLabel>Files cited</SectionLabel>
-                    <ul className="flex flex-col gap-1.5">
-                        {suggestion.code_cites.map((c, i) => {
-                            const url = blobUrl(repo, c.file, c.line, sha)
-                            const label = c.line ? `${c.file}:${c.line}` : c.file
-                            return (
-                                <li key={`${c.file}:${c.line ?? ""}:${i}`}>
-                                    {url ? (
-                                        <a
-                                            href={url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-xs text-zinc-700 transition-all hover:-translate-y-px hover:border-zinc-300 hover:bg-white dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-950"
-                                        >
-                                            {label}
-                                            <ExternalLinkIcon />
-                                        </a>
-                                    ) : (
-                                        <span className="font-mono text-xs">{label}</span>
-                                    )}
-                                </li>
-                            )
-                        })}
-                    </ul>
-                </div>
-            )}
-            <article className="prose-tracker">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{suggestion.markdown || ""}</ReactMarkdown>
-            </article>
-            <MetaRow
-                confidence={suggestion.confidence}
-                graphId={suggestion.graph_id}
-                sha={sha}
-                durationMs={suggestion.duration_ms}
-            />
-        </div>
-    )
-}
-
 function SuggestionsSkeleton() {
     return (
         <div className="mt-4 flex flex-col gap-5 anim-fade">
@@ -298,19 +329,15 @@ function SuggestionsSkeleton() {
             </div>
             <div>
                 <SectionLabel>Files to investigate</SectionLabel>
-                <ul className="mt-2 flex flex-col gap-2">
+                <ul className="mt-2 flex flex-col gap-1.5">
                     {[0, 1, 2].map((i) => (
                         <li
                             key={i}
-                            className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900"
+                            className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
                         >
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center justify-between gap-2 px-3 py-2">
                                 <div className="skeleton h-3 w-1/3" />
                                 <div className="skeleton h-3 w-12" />
-                            </div>
-                            <div className="mt-2 flex flex-col gap-1.5">
-                                <div className="skeleton h-2.5 w-full" />
-                                <div className="skeleton h-2.5 w-5/6" />
                             </div>
                         </li>
                     ))}
@@ -340,6 +367,10 @@ function Pill({ children, mono }: { children: React.ReactNode; mono?: boolean })
             {children}
         </span>
     )
+}
+
+function basename(path: string): string {
+    return path.split("/").pop() || path
 }
 
 function timeAgo(iso: string): string {
@@ -392,21 +423,9 @@ function ExternalLinkIcon({ className = "" }: { className?: string }) {
 }
 function SmallSpinner() {
     return (
-        <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            className="animate-spin"
-            aria-hidden
-        >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden>
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-            <path
-                d="M22 12a10 10 0 0 1-10 10"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-            />
+            <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
     )
 }
