@@ -47,10 +47,10 @@ function IssueGroup({ title, projectId, issues, muted }: { title: string; projec
                     <li key={i.id} className={muted ? "opacity-70" : ""}>
                         <Link
                             href={`/projects/${projectId}/issues/${i.id}`}
-                            className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                            className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
                         >
-                            <span className="font-mono text-xs text-zinc-500">#{i.issue_number}</span>
-                            <span className="min-w-0 flex-1 truncate text-sm">{i.title}</span>
+                            <span className="font-mono text-xs text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-300">#{i.issue_number}</span>
+                            <span className="min-w-0 flex-1 truncate text-sm transition-transform group-hover:translate-x-px">{i.title}</span>
                             <div className="flex items-center gap-1.5">
                                 {i.labels.slice(0, 3).map((l) => (
                                     <span key={l} className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">

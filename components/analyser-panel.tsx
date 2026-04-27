@@ -286,16 +286,16 @@ function LiveProgress({
 }) {
     const pct = stepTotal && stepTotal > 0 && stepIdx != null ? Math.round((stepIdx / stepTotal) * 100) : null
     return (
-        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mt-4 anim-rise flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                     <Spinner />
-                    <span className="font-medium text-zinc-900 dark:text-zinc-100">{phase || "Starting…"}</span>
+                    <span className="font-medium text-zinc-900 transition-opacity dark:text-zinc-100">{phase || "Starting…"}</span>
                     {currentSlug && (
-                        <span className="font-mono text-zinc-500">{currentSlug}</span>
+                        <span className="truncate font-mono text-zinc-500">{currentSlug}</span>
                     )}
                 </div>
-                <div className="flex items-center gap-3 tabular-nums text-zinc-500">
+                <div className="flex shrink-0 items-center gap-3 tabular-nums text-zinc-500">
                     <span>${costUsd.toFixed(4)}</span>
                     <span>{formatElapsed(elapsedMs)}</span>
                 </div>
@@ -304,7 +304,7 @@ function LiveProgress({
             {pct != null && (
                 <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
                     <div
-                        className="absolute inset-y-0 left-0 bg-zinc-900 transition-[width] duration-300 dark:bg-zinc-100"
+                        className="absolute inset-y-0 left-0 bg-zinc-900 transition-[width] duration-500 ease-out dark:bg-zinc-100"
                         style={{ width: `${pct}%` }}
                     />
                 </div>

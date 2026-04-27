@@ -56,7 +56,6 @@ export interface IssueFinding {
 export interface IssueAnalysisData {
     summary: string
     suggestions: IssueFinding[]
-    investigation_plan?: string[]
     confidence?: string
     graph_cites?: string[]
     stop_reason?: string

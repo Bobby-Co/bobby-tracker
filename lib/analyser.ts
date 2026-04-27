@@ -72,16 +72,15 @@ export interface IssueFinding {
 }
 
 export interface IssueAnalysis {
-    summary:             string
-    suggestions:         IssueFinding[]
-    investigation_plan?: string[]
-    confidence?:         "high" | "medium" | "low" | string
-    graph_cites?:        string[]
-    stop_reason?:        string
-    cost_usd:            number
-    duration_ms:         number
-    tool_calls?:         number
-    markdown?:           string
+    summary:      string
+    suggestions:  IssueFinding[]
+    confidence?:  "high" | "medium" | "low" | string
+    graph_cites?: string[]
+    stop_reason?: string
+    cost_usd:     number
+    duration_ms:  number
+    tool_calls?:  number
+    markdown?:    string
 }
 
 export interface IssueAnalyseInput {
