@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import { IssueForm } from "@/components/issue-form"
+import { NewIssueButton } from "@/components/new-issue-button"
 import { IssueTile } from "@/components/issue-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import { PriorityChip, StatusChip } from "@/components/status-chip"
@@ -40,7 +40,7 @@ export default async function IssuesPage({
                 </p>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} />
-                    <IssueForm projectId={id} />
+                    <NewIssueButton projectId={id} />
                 </div>
             </div>
 
