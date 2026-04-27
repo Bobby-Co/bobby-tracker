@@ -11,7 +11,7 @@ export function Sidebar({ projects, activeProjectId }: { projects: Project[]; ac
 
     return (
         <nav className="flex h-full w-60 shrink-0 flex-col gap-1 border-r border-[color:var(--c-border)] bg-white px-3 py-4">
-            <div className="mb-2 flex items-center gap-1 px-3">
+            <div className="mb-4 flex items-center gap-1 px-3">
                 <BobbyMark />
                 <span className="text-[15px] font-bold tracking-[-0.01em]">Tracker</span>
             </div>
