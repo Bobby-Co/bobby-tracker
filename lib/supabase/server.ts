@@ -1,0 +1,46 @@
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
+
+// Server-side Supabase client used inside Server Components and Route
+// Handlers. Reads/writes the auth cookies (with the shared cookie
+// domain when configured) so the session round-trips between the CI
+// app and the tracker without re-login. Bound to the `tracker` schema.
+export async function createClient() {
+    const cookieStore = await cookies()
+    return createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            db: { schema: "tracker" },
+            cookieOptions: sharedCookieOptions(),
+            cookies: {
+                getAll: () => cookieStore.getAll(),
+                setAll: (toSet: { name: string; value: string; options: CookieOptions }[]) => {
+                    try {
+                        toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+                    } catch {
+                        // Server Components can't set cookies — proxy.ts handles refresh there.
+                    }
+                },
+            },
+        },
+    )
+}
+
+function sharedCookieOptions() {
+    const domain = process.env.NEXT_PUBLIC_AUTH_COOKIE_DOMAIN
+    return domain
+        ? { domain, path: "/", sameSite: "lax" as const, secure: true }
+        : undefined
+}
+
+// Service-role client for trusted server-only operations (e.g. forwarding
+// indexing jobs to the analyser). Bypasses RLS — never expose to clients.
+export function createServiceClient() {
+    return createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { db: { schema: "tracker" }, auth: { persistSession: false } },
+    )
+}
