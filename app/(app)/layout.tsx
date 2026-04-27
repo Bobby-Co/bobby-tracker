@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { Sidebar } from "@/components/sidebar"
+import { MobileSidebar } from "@/components/mobile-sidebar"
 import { SignOutButton } from "@/components/sign-out-button"
 import type { Project } from "@/lib/supabase/types"
 
@@ -19,8 +20,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="flex h-screen w-full bg-[color:var(--c-page)] text-[color:var(--c-text)]">
             <Sidebar projects={projects ?? []} />
             <div className="flex min-w-0 flex-1 flex-col">
-                <header className="flex h-14 items-center justify-between border-b border-[color:var(--c-border)] bg-white px-5">
-                    <div className="flex items-center gap-2">
+                <header className="flex h-14 items-center justify-between gap-3 border-b border-[color:var(--c-border)] bg-white px-3 sm:px-5">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <MobileSidebar projects={projects ?? []} />
                         <span className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-[color:var(--c-text-muted)]">
                             Bobby
                         </span>

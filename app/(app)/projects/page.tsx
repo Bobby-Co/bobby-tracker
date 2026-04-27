@@ -17,15 +17,17 @@ export default async function ProjectsPage() {
     const list = projects ?? []
 
     return (
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
-            <header className="flex items-end justify-between gap-4">
-                <div>
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+                <div className="min-w-0">
                     <h1 className="h-page">Projects</h1>
                     <p className="mt-1 max-w-prose text-[13.5px] text-[color:var(--c-text-muted)]">
                         One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
                     </p>
                 </div>
-                <NewProjectButton />
+                <div className="self-start sm:self-auto">
+                    <NewProjectButton />
+                </div>
             </header>
 
             {list.length === 0 ? (

@@ -91,24 +91,29 @@ function IssueGroup({
                         <li key={i.id} className={muted ? "opacity-70" : undefined}>
                             <Link
                                 href={`/projects/${projectId}/issues/${i.id}`}
-                                className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[color:var(--c-surface-2)]"
+                                className="group flex items-center gap-2.5 px-3 py-3 transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-4"
                             >
-                                <span className="font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)]">
+                                <span className="hidden font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)] sm:inline">
                                     #{i.issue_number}
                                 </span>
                                 <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium transition-transform group-hover:translate-x-px">
+                                    <span className="mr-1.5 font-mono text-[11px] text-[color:var(--c-text-dim)] sm:hidden">
+                                        #{i.issue_number}
+                                    </span>
                                     {i.title}
                                 </span>
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex shrink-0 items-center gap-1.5">
                                     {i.labels.slice(0, 3).map((l) => (
                                         <span
                                             key={l}
-                                            className="rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]"
+                                            className="hidden rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)] md:inline"
                                         >
                                             {l}
                                         </span>
                                     ))}
-                                    <PriorityChip priority={i.priority} />
+                                    <span className="hidden sm:inline">
+                                        <PriorityChip priority={i.priority} />
+                                    </span>
                                     <StatusChip status={i.status} />
                                 </div>
                             </Link>

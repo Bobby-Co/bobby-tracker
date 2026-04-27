@@ -5,21 +5,31 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/components/cn"
 import type { Project } from "@/lib/supabase/types"
 
-export function Sidebar({ projects, activeProjectId }: { projects: Project[]; activeProjectId?: string }) {
+interface SidebarProps {
+    projects: Project[]
+    activeProjectId?: string
+    onNavigate?: () => void
+}
+
+// SidebarContent is the navigation guts — used inline on desktop and
+// inside the slide-out drawer on mobile. onNavigate fires after any link
+// tap so the drawer can close itself; on desktop it's a no-op.
+export function SidebarContent({ projects, activeProjectId, onNavigate }: SidebarProps) {
     const pathname = usePathname()
     const isInbox = pathname === "/projects"
 
     return (
-        <nav className="flex h-full w-60 shrink-0 flex-col gap-1 border-r border-[color:var(--c-border)] bg-white px-3 py-4">
-            <div className="mb-4 flex items-center gap-1 px-3">
+        <nav className="flex h-full flex-col gap-1 px-3 py-4">
+            <div className="mb-4 flex items-center gap-1.5 px-3">
                 <BobbyMark />
                 <span className="text-[15px] font-bold tracking-[-0.01em]">Tracker</span>
             </div>
 
             <Link
                 href="/projects"
+                onClick={onNavigate}
                 className={cn(
-                    "flex items-center justify-between rounded-[10px] px-3 py-1.5 text-sm font-medium transition-colors",
+                    "flex items-center justify-between rounded-[10px] px-3 py-2 text-sm font-medium transition-colors",
                     isInbox
                         ? "bg-zinc-100 text-zinc-900"
                         : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
@@ -48,8 +58,9 @@ export function Sidebar({ projects, activeProjectId }: { projects: Project[]; ac
                         <Link
                             key={p.id}
                             href={`/projects/${p.id}/issues`}
+                            onClick={onNavigate}
                             className={cn(
-                                "group flex items-center gap-2 truncate rounded-[10px] px-3 py-1.5 text-[13px] transition-colors",
+                                "group flex items-center gap-2 truncate rounded-[10px] px-3 py-2 text-[13px] transition-colors",
                                 active
                                     ? "bg-zinc-100 text-zinc-900 font-semibold"
                                     : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
@@ -57,7 +68,7 @@ export function Sidebar({ projects, activeProjectId }: { projects: Project[]; ac
                         >
                             <span
                                 className={cn(
-                                    "h-1.5 w-1.5 rounded-full transition-colors",
+                                    "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
                                     active ? "bg-zinc-900" : "bg-zinc-300 group-hover:bg-zinc-500",
                                 )}
                             />
@@ -67,6 +78,16 @@ export function Sidebar({ projects, activeProjectId }: { projects: Project[]; ac
                 })}
             </div>
         </nav>
+    )
+}
+
+// Sidebar — desktop wrapper. Hidden on small screens; the topbar's
+// MobileSidebar handles those.
+export function Sidebar({ projects, activeProjectId }: SidebarProps) {
+    return (
+        <aside className="hidden h-full w-60 shrink-0 border-r border-[color:var(--c-border)] bg-white md:block">
+            <SidebarContent projects={projects} activeProjectId={activeProjectId} />
+        </aside>
     )
 }
 
