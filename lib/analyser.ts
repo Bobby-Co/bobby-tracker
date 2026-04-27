@@ -117,11 +117,10 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
 // ─── /jobs/run (HTTP fire-and-forget) ───────────────────────────────────────
 
 export interface SupabaseProgressTarget {
-    url: string
-    service_role_key: string
-    schema?: string
-    table: string
-    key_column: string
+    /** Row key — the only piece the tracker sends. Connection details
+     * (URL, service-role JWT, schema, table, key column) are
+     * configured on the analyser server's environment so secrets stay
+     * off the wire. */
     key_value: string
 }
 
