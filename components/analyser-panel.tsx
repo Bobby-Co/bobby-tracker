@@ -163,10 +163,6 @@ export function AnalyserPanel({
 
     return (
         <div className="card">
-            <span className="card-tag card-tag-action">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4" /></svg>
-                Integration
-            </span>
             <div className="card-title">
                 <SparklesIcon />
                 <span>Bobby-analyser</span>
