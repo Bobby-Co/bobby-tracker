@@ -60,8 +60,6 @@ export default async function ProjectsPage() {
                         >
                             <Link href={`/projects/${p.id}/issues`} className="block">
                                 <WorkflowCard
-                                    tag="action"
-                                    tagLabel="Project"
                                     icon={<RepoIcon />}
                                     title={p.name}
                                     menu={<span className="card-menu-btn"><ChevronIcon /></span>}

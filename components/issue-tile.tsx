@@ -184,8 +184,8 @@ function ExcerptBox({ text, className }: { text: string; className?: string }) {
 // ── inline icons ────────────────────────────────────────────────────────
 function Dot() {
     return (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <circle cx="12" cy="12" r="4" />
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <circle cx="12" cy="12" r="6" />
         </svg>
     )
 }

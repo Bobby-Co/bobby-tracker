@@ -88,15 +88,29 @@ html, body {
             disabled:opacity-50;
     }
 
-    /* CI workflow card */
+    /* CI workflow card — fully rounded by default. The tabbed variant
+       (used inside .card-stack with a .card-tab sibling) flattens just
+       the top-left corner so the tab tucks under cleanly. */
     .card {
         @apply rounded-[16px] border border-[color:var(--c-border)] bg-white p-3.5
             transition-[transform,box-shadow,border-color] duration-[220ms];
         box-shadow: var(--shadow-card);
     }
+    .card-stack:has(> .card-tab) > .card {
+        border-top-left-radius: 0;
+    }
     .card-hover:hover {
         @apply -translate-y-px border-[color:var(--c-border-strong)];
         box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 12px 28px -10px rgba(15,23,42,0.10);
+    }
+    /* When the hoverable card lives inside a stack with a tab, lift the
+       whole stack instead of just the card body — that way the tab
+       follows. Suppress the inner translate to avoid double-lifting. */
+    .card-stack:has(> .card-tab):has(.card-hover):hover {
+        transform: translateY(-1px);
+    }
+    .card-stack:has(> .card-tab) > .card-hover:hover {
+        transform: none;
     }
 
     /* card-tag — pill-shaped, lives INSIDE the card body */
@@ -115,6 +129,7 @@ html, body {
     }
     .card-stack {
         @apply flex flex-col items-stretch h-full;
+        transition: transform var(--t-mid);
     }
     .card-tag-trigger,
     .card-tab-trigger { background: var(--c-trigger-bg); color: var(--c-trigger-fg); }
