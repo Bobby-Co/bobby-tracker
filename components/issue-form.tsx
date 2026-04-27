@@ -4,6 +4,10 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import { Dropdown } from "@/components/dropdown"
+
+const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
+const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 
 export function IssueForm({ projectId }: { projectId: string }) {
     const router = useRouter()
@@ -55,6 +59,9 @@ export function IssueForm({ projectId }: { projectId: string }) {
     if (!open) {
         return (
             <button onClick={() => setOpen(true)} className="btn-primary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
                 New issue
             </button>
         )
@@ -63,34 +70,44 @@ export function IssueForm({ projectId }: { projectId: string }) {
     return (
         <form
             onSubmit={submit}
-            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
+            className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)] anim-rise"
         >
             <input
                 autoFocus
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Title"
-                className="input mb-2 text-sm font-medium"
+                placeholder="Issue title…"
+                className="input mb-2 text-[14px] font-semibold"
             />
             <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={4}
                 placeholder="Describe what's happening (markdown supported)…"
-                className="input text-sm"
+                className="input text-[13px]"
             />
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Select value={status} onChange={setStatus} options={ISSUE_STATUSES} />
-                <Select value={priority} onChange={setPriority} options={ISSUE_PRIORITIES} />
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Dropdown<IssueStatus>
+                    value={status}
+                    onChange={setStatus}
+                    options={STATUS_OPTIONS}
+                    aria-label="Status"
+                />
+                <Dropdown<IssuePriority>
+                    value={priority}
+                    onChange={setPriority}
+                    options={PRIORITY_OPTIONS}
+                    aria-label="Priority"
+                />
                 <input
                     value={labels}
                     onChange={(e) => setLabels(e.target.value)}
                     placeholder="bug, performance"
-                    className="input flex-1 min-w-[8rem] text-xs"
+                    className="input"
                 />
             </div>
-            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+            {error && <p className="mt-2 text-[12px] text-rose-700">{error}</p>}
             <div className="mt-3 flex justify-end gap-2">
                 <button
                     type="button"
@@ -107,29 +124,5 @@ export function IssueForm({ projectId }: { projectId: string }) {
                 </button>
             </div>
         </form>
-    )
-}
-
-function Select<T extends string>({
-    value,
-    onChange,
-    options,
-}: {
-    value: T
-    onChange: (v: T) => void
-    options: readonly T[]
-}) {
-    return (
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value as T)}
-            className="input text-xs"
-        >
-            {options.map((o) => (
-                <option key={o} value={o}>
-                    {o.replace(/_/g, " ")}
-                </option>
-            ))}
-        </select>
     )
 }

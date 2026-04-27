@@ -2,14 +2,15 @@
 
 import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { cn } from "@/components/cn"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 
 const STATUS_LABEL: Record<ProjectAnalyser["status"], { text: string; className: string }> = {
-    disabled: { text: "Disabled",    className: "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400" },
-    pending:  { text: "Pending",     className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
-    indexing: { text: "Indexing…",   className: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
-    ready:    { text: "Ready",       className: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300" },
-    failed:   { text: "Failed",      className: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
+    disabled: { text: "Disabled",  className: "pill" },
+    pending:  { text: "Pending",   className: "pill pill-warn" },
+    indexing: { text: "Indexing…", className: "pill pill-warn" },
+    ready:    { text: "Ready",     className: "pill pill-success" },
+    failed:   { text: "Failed",    className: "pill pill-error" },
 }
 
 interface ProgressEvent {
@@ -37,7 +38,6 @@ export function AnalyserPanel({
     const [advanced, setAdvanced] = useState(false)
     const [token, setToken] = useState("")
 
-    // Live indexing state — populated while the NDJSON stream is open.
     const [indexing, setIndexing] = useState(false)
     const [phase, setPhase] = useState<string | null>(null)
     const [currentSlug, setCurrentSlug] = useState<string | null>(null)
@@ -58,7 +58,7 @@ export function AnalyserPanel({
     function appendLog(line: string) {
         setLogLines((prev) => {
             const next = [...prev, line]
-            if (next.length > 500) next.splice(0, next.length - 500) // cap
+            if (next.length > 500) next.splice(0, next.length - 500)
             return next
         })
     }
@@ -76,9 +76,7 @@ export function AnalyserPanel({
 
     async function call(path: string) {
         setError(null)
-        const res = await fetch(`/api/projects/${projectId}/analyser/${path}`, {
-            method: "POST",
-        })
+        const res = await fetch(`/api/projects/${projectId}/analyser/${path}`, { method: "POST" })
         if (!res.ok) {
             const e = await res.json().catch(() => ({}))
             setError(e?.error?.message || `Failed (${res.status})`)
@@ -113,11 +111,9 @@ export function AnalyserPanel({
                 setError(e?.error?.message || `Failed (${res.status})`)
                 return
             }
-
             const reader = res.body.getReader()
             const decoder = new TextDecoder()
             let buf = ""
-
             while (true) {
                 const { value, done } = await reader.read()
                 if (done) break
@@ -144,16 +140,13 @@ export function AnalyserPanel({
 
     function handleFrame(frame: Record<string, unknown>) {
         switch (frame.event) {
-            case "accepted":
-                setPhase("Cloning…")
-                break
+            case "accepted": setPhase("Cloning…"); break
             case "progress": {
                 const p = frame as unknown as ProgressEvent & { event: string }
                 if (typeof p.cumulative_usd === "number") setCostUsd(p.cumulative_usd)
                 if (p.slug) setCurrentSlug(p.slug)
                 if (typeof p.index === "number" && typeof p.total === "number") {
-                    setStepIdx(p.index)
-                    setStepTotal(p.total)
+                    setStepIdx(p.index); setStepTotal(p.total)
                 }
                 setPhase(humanPhase(p))
                 break
@@ -163,40 +156,38 @@ export function AnalyserPanel({
                 appendLog(l.data)
                 break
             }
-            case "done":
-                setPhase("Done")
-                break
-            case "error":
-                setError(String(frame.message ?? "indexing failed"))
-                break
+            case "done":  setPhase("Done"); break
+            case "error": setError(String(frame.message ?? "indexing failed")); break
         }
     }
 
     return (
-        <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">Bobby-analyser</span>
-                        <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${label.className}`}>{label.text}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-zinc-500">
-                        Indexes the repo into a knowledge graph so issue suggestions can cite specific files and lines.
-                    </p>
-                </div>
+        <div className="card">
+            <span className="card-tag card-tag-action">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4" /></svg>
+                Integration
+            </span>
+            <div className="card-title">
+                <SparklesIcon />
+                <span>Bobby-analyser</span>
+                <span className={`ml-2 ${label.className}`}>{label.text}</span>
+                <span className="ml-auto" />
                 {enabled ? (
-                    <button onClick={() => call("disable")} disabled={indexing} className="btn-ghost">
+                    <button onClick={() => call("disable")} disabled={indexing} className="btn-ghost px-3 py-1.5 text-[12px]">
                         Disable
                     </button>
                 ) : (
-                    <button onClick={() => call("enable")} className="btn-primary">
+                    <button onClick={() => call("enable")} className="btn-primary px-3 py-1.5 text-[12px]">
                         Enable
                     </button>
                 )}
             </div>
+            <p className="mt-1.5 text-[12.5px] text-[color:var(--c-text-muted)]">
+                Indexes the repo into a knowledge graph so issue suggestions can cite specific files and lines.
+            </p>
 
             {enabled && (
-                <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
                     <Stat label="Last indexed" value={state?.last_indexed_at ? new Date(state.last_indexed_at).toLocaleString() : "—"} />
                     <Stat label="HEAD SHA"     value={state?.last_indexed_sha ? state.last_indexed_sha.slice(0, 7) : "—"} mono />
                     <Stat label="Last cost"    value={state?.last_index_cost_usd != null ? `$${Number(state.last_index_cost_usd).toFixed(4)}` : "—"} />
@@ -205,12 +196,8 @@ export function AnalyserPanel({
             )}
 
             {enabled && (
-                <div className="mt-5 flex flex-wrap items-center gap-2">
-                    <button
-                        onClick={runIndex}
-                        disabled={indexing}
-                        className="btn-primary"
-                    >
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button onClick={runIndex} disabled={indexing} className="btn-primary">
                         {indexing ? "Indexing…" : (state?.last_indexed_at ? "Re-index now" : "Index now")}
                     </button>
                     {!indexing && (
@@ -222,8 +209,8 @@ export function AnalyserPanel({
             )}
 
             {advanced && enabled && !indexing && (
-                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs dark:border-amber-900 dark:bg-amber-950/40">
-                    <p className="text-amber-900 dark:text-amber-200">
+                <div className="mt-3 rounded-[12px] border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">
+                    <p>
                         Paste a <strong>short-lived</strong> GitHub PAT or App installation token. It&apos;s sent server-side only — never stored — and used solely for the next clone.
                     </p>
                     <input
@@ -231,7 +218,7 @@ export function AnalyserPanel({
                         onChange={(e) => setToken(e.target.value)}
                         type="password"
                         placeholder="ghs_…"
-                        className="input mt-2 text-xs"
+                        className="input mt-2 text-[12px]"
                     />
                 </div>
             )}
@@ -249,11 +236,11 @@ export function AnalyserPanel({
             )}
 
             {state?.last_error && status === "failed" && !indexing && (
-                <p className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-800 dark:bg-red-950/40 dark:text-red-300">
+                <p className="mt-3 rounded-[12px] bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
                     Last error: {state.last_error}
                 </p>
             )}
-            {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+            {error && <p className="mt-3 text-[12px] text-rose-700">{error}</p>}
         </div>
     )
 }
@@ -261,20 +248,16 @@ export function AnalyserPanel({
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
     return (
         <div>
-            <div className="text-[11px] uppercase tracking-wider text-zinc-500">{label}</div>
-            <div className={`mt-0.5 truncate ${mono ? "font-mono" : ""}`}>{value}</div>
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.10em] text-[color:var(--c-text-dim)]">
+                {label}
+            </div>
+            <div className={cn("mt-0.5 truncate text-[12.5px]", mono && "font-mono")}>{value}</div>
         </div>
     )
 }
 
 function LiveProgress({
-    phase,
-    currentSlug,
-    stepIdx,
-    stepTotal,
-    costUsd,
-    elapsedMs,
-    logLines,
+    phase, currentSlug, stepIdx, stepTotal, costUsd, elapsedMs, logLines,
 }: {
     phase: string | null
     currentSlug: string | null
@@ -286,40 +269,36 @@ function LiveProgress({
 }) {
     const pct = stepTotal && stepTotal > 0 && stepIdx != null ? Math.round((stepIdx / stepTotal) * 100) : null
     return (
-        <div className="mt-4 anim-rise flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-center justify-between text-xs">
+        <div className="anim-rise mt-4 flex flex-col gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-4">
+            <div className="flex items-center justify-between text-[12px]">
                 <div className="flex min-w-0 items-center gap-2">
                     <Spinner />
-                    <span className="font-medium text-zinc-900 transition-opacity dark:text-zinc-100">{phase || "Starting…"}</span>
-                    {currentSlug && (
-                        <span className="truncate font-mono text-zinc-500">{currentSlug}</span>
-                    )}
+                    <span className="font-semibold text-[color:var(--c-text)]">{phase || "Starting…"}</span>
+                    {currentSlug && <span className="truncate font-mono text-[color:var(--c-text-muted)]">{currentSlug}</span>}
                 </div>
-                <div className="flex shrink-0 items-center gap-3 tabular-nums text-zinc-500">
+                <div className="flex shrink-0 items-center gap-3 tabular-nums text-[color:var(--c-text-muted)]">
                     <span>${costUsd.toFixed(4)}</span>
                     <span>{formatElapsed(elapsedMs)}</span>
                 </div>
             </div>
-
             {pct != null && (
-                <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--c-border)]">
                     <div
-                        className="absolute inset-y-0 left-0 bg-zinc-900 transition-[width] duration-500 ease-out dark:bg-zinc-100"
+                        className="absolute inset-y-0 left-0 rounded-full bg-zinc-900 transition-[width] duration-500 ease-out"
                         style={{ width: `${pct}%` }}
                     />
                 </div>
             )}
             {pct != null && (
-                <div className="text-[11px] text-zinc-500">
+                <div className="text-[11px] text-[color:var(--c-text-muted)]">
                     {stepIdx} / {stepTotal} modules
                 </div>
             )}
-
             <details className="text-[11px]">
-                <summary className="cursor-pointer text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+                <summary className="cursor-pointer text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]">
                     Show stream ({logLines.length})
                 </summary>
-                <pre className="mt-2 max-h-64 overflow-auto rounded bg-black p-2 font-mono text-[11px] leading-snug text-green-200">
+                <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-zinc-900 p-2 font-mono text-[11px] leading-snug text-emerald-200">
                     {logLines.length === 0 ? "(no log lines yet)" : logLines.join("\n")}
                 </pre>
             </details>
@@ -353,9 +332,17 @@ function formatElapsed(ms: number): string {
 
 function Spinner() {
     return (
-        <svg className="h-3 w-3 animate-spin text-zinc-500" viewBox="0 0 24 24" fill="none">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="animate-spin text-[color:var(--c-text-muted)]" aria-hidden>
             <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
             <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+    )
+}
+function SparklesIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z" />
+            <path d="M19 14l.9 2.3L22 17l-2.1.7L19 20l-.9-2.3L16 17l2.1-.7z" />
         </svg>
     )
 }

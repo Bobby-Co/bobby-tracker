@@ -1,137 +1,187 @@
 @import "tailwindcss";
 
+/* ─── tokens (light-mode-first, mirrors ci/tokens.json) ─────────────── */
 :root {
-    --background: #ffffff;
-    --foreground: #18181b;
+    --c-page:          #fafafa;
+    --c-surface:       #ffffff;
+    --c-surface-2:     #f9f9f9;
+    --c-border:        #e5e7eb;
+    --c-border-strong: #d1d5db;
+    --c-text:          #1f2937;
+    --c-text-muted:    #6b7280;
+    --c-text-dim:      #9ca3af;
+    --c-overlay:       rgba(0,0,0,0.04);
+
+    /* CI workflow tag palette */
+    --c-trigger-bg:    #fef3c7;
+    --c-trigger-fg:    #92400e;
+    --c-action-bg:     #dbeafe;
+    --c-action-fg:     #1e40af;
+    --c-output-bg:     #d1fae5;
+    --c-output-fg:     #065f46;
+    --c-info-bg:       #ede9fe;
+    --c-info-fg:       #5b21b6;
+    --c-rose-bg:       #ffe4e6;
+    --c-rose-fg:       #9f1239;
+
+    --c-success:       #16a34a;
+    --c-success-bg:    #f0fdf4;
+    --c-warn:          #b45309;
+    --c-warn-bg:       #fffbeb;
+    --c-error:         #b91c1c;
+    --c-error-bg:      #fef2f2;
+    --c-accent:        #4f46e5;
+    --c-accent-2:      #4338ca;
+
+    --r-sm:  8px;
+    --r-md:  12px;
+    --r-lg:  16px;
+    --r-xl:  20px;
+
+    --shadow-card: 0 1px 2px rgba(15,23,42,0.04), 0 4px 14px -4px rgba(15,23,42,0.06);
+    --shadow-pop:  0 12px 32px -8px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06);
+
+    --t-fast: 140ms cubic-bezier(0.22, 1, 0.36, 1);
+    --t-mid:  220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        --background: #09090b;
-        --foreground: #fafafa;
-    }
+    --color-background: var(--c-page);
+    --color-foreground: var(--c-text);
+    --font-sans: var(--font-nunito), Nunito, system-ui, -apple-system, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 html, body {
-    background: var(--background);
-    color: var(--foreground);
+    background: var(--c-page);
+    color: var(--c-text);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-@keyframes rise {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: translateY(0);   }
-}
-@keyframes fade {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
-@keyframes shimmer {
-    0%   { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+/* dotted background — applied to the (app) shell so login/landing can opt out */
+.dotted-bg {
+    background-image: radial-gradient(circle at 1px 1px, rgba(15,23,42,0.045) 1px, transparent 0);
+    background-size: 18px 18px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .anim-rise, .anim-fade { animation: none; }
-    .skeleton::after        { animation: none; }
-}
-
+/* ─── reusable element classes ──────────────────────────────────────── */
 @layer components {
     .input {
-        @apply w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm
-            text-zinc-900 placeholder:text-zinc-400
-            focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-200
-            dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100
-            dark:placeholder:text-zinc-500 dark:focus:border-zinc-600 dark:focus:ring-zinc-800;
+        @apply w-full rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-sm
+            text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)]
+            transition-colors duration-[140ms]
+            hover:border-[color:var(--c-border-strong)]
+            focus:border-zinc-900 focus:outline-none focus:ring-[3px] focus:ring-zinc-900/8;
     }
     .btn-primary {
-        @apply inline-flex items-center justify-center rounded-md bg-zinc-900 px-3 py-1.5
-            text-sm font-medium text-white transition hover:bg-zinc-700
-            disabled:opacity-50
-            dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200;
+        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-zinc-900 px-3.5 py-2
+            text-[13px] font-semibold text-white shadow-sm transition
+            hover:bg-zinc-800 active:scale-[0.98]
+            disabled:opacity-50 disabled:hover:bg-zinc-900 disabled:active:scale-100;
     }
     .btn-ghost {
-        @apply inline-flex items-center justify-center rounded-md border border-zinc-200
-            px-3 py-1.5 text-sm text-zinc-700 transition hover:bg-zinc-100
-            disabled:opacity-50
-            dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900;
-    }
-    /* Subtle entrance animation for content that streams in
-       (suggestion cards, summary paragraph). Stagger via inline
-       --i variable on parent: each child computes its delay. */
-    .anim-rise {
-        animation: rise 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
-    }
-    .anim-fade {
-        animation: fade 220ms ease-out backwards;
-    }
-    .stagger > * {
-        animation-delay: calc(var(--stagger-step, 60ms) * var(--i, 0));
+        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)]
+            bg-white px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]
+            transition hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]
+            disabled:opacity-50;
     }
 
-    /* Shimmer for loading skeletons. Lighter than animate-pulse — a
-       diagonal sweep instead of an opacity blink. */
-    .skeleton {
-        @apply relative overflow-hidden rounded-md bg-zinc-200/70 dark:bg-zinc-800/60;
+    /* CI workflow card */
+    .card {
+        @apply rounded-[16px] border border-[color:var(--c-border)] bg-white p-3.5
+            transition-[transform,box-shadow,border-color] duration-[220ms];
+        box-shadow: var(--shadow-card);
     }
-    .skeleton::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background-image: linear-gradient(
-            90deg,
-            transparent 0%,
-            rgba(255, 255, 255, 0.55) 50%,
-            transparent 100%
-        );
-        transform: translateX(-100%);
-        animation: shimmer 1.4s ease-in-out infinite;
-    }
-    @media (prefers-color-scheme: dark) {
-        .skeleton::after {
-            background-image: linear-gradient(
-                90deg,
-                transparent 0%,
-                rgba(255, 255, 255, 0.06) 50%,
-                transparent 100%
-            );
-        }
+    .card-hover:hover {
+        @apply -translate-y-px border-[color:var(--c-border-strong)];
+        box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 12px 28px -10px rgba(15,23,42,0.10);
     }
 
-    /* Tight, GitHub-issue-style markdown rendering for analyser suggestions. */
-    .prose-tracker {
-        @apply text-sm leading-6 text-zinc-700 dark:text-zinc-300;
+    .card-tag {
+        @apply mb-2.5 inline-flex items-center gap-1.5 rounded-full px-2 py-[2px] text-[11px] font-bold tracking-[0.02em];
     }
-    .prose-tracker p          { @apply my-2; }
+    .card-tag-trigger { background: var(--c-trigger-bg); color: var(--c-trigger-fg); }
+    .card-tag-action  { background: var(--c-action-bg);  color: var(--c-action-fg); }
+    .card-tag-output  { background: var(--c-output-bg);  color: var(--c-output-fg); }
+    .card-tag-info    { background: var(--c-info-bg);    color: var(--c-info-fg); }
+    .card-tag-rose    { background: var(--c-rose-bg);    color: var(--c-rose-fg); }
+
+    .card-title {
+        @apply flex items-center gap-2 text-sm font-bold tracking-[-0.005em];
+    }
+    .card-menu-btn {
+        @apply ml-auto grid h-[26px] w-[26px] place-items-center rounded-md text-[color:var(--c-text-dim)]
+            transition-colors duration-[140ms] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)];
+    }
+    .card-footer {
+        @apply mt-2.5 flex items-center gap-3 border-t border-dashed border-[color:var(--c-border)]
+            pt-2.5 text-[11.5px] text-[color:var(--c-text-dim)] tabular-nums;
+    }
+
+    /* Status / priority pills */
+    .pill {
+        @apply inline-flex items-center gap-1 rounded-full border border-[color:var(--c-border)]
+            bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text)];
+    }
+    .pill-success { background: var(--c-success-bg); border-color: rgba(22,163,74,0.20); color: var(--c-success); }
+    .pill-warn    { background: var(--c-warn-bg);    border-color: rgba(180,83,9,0.20);  color: var(--c-warn); }
+    .pill-error   { background: var(--c-error-bg);   border-color: rgba(185,28,28,0.18); color: var(--c-error); }
+
+    /* Headings */
+    .h-page    { @apply text-[22px] font-bold tracking-[-0.012em]; }
+    .h-section { @apply text-[13px] font-semibold uppercase tracking-[0.05em] text-[color:var(--c-text-muted)]; }
+
+    /* GitHub-issue-style markdown for analyser suggestions. */
+    .prose-tracker { @apply text-sm leading-6 text-[color:var(--c-text)]; }
+    .prose-tracker p { @apply my-2; }
     .prose-tracker h1, .prose-tracker h2, .prose-tracker h3 {
-        @apply mt-3 mb-1 font-semibold text-zinc-900 dark:text-zinc-100;
+        @apply mt-3 mb-1 font-semibold text-[color:var(--c-text)];
     }
     .prose-tracker h1 { @apply text-base; }
-    .prose-tracker h2 { @apply text-sm; }
-    .prose-tracker h3 { @apply text-sm; }
-    .prose-tracker ul, .prose-tracker ol {
-        @apply my-2 ml-5 list-outside;
-    }
+    .prose-tracker h2, .prose-tracker h3 { @apply text-sm; }
+    .prose-tracker ul, .prose-tracker ol { @apply my-2 ml-5; }
     .prose-tracker ul { @apply list-disc; }
     .prose-tracker ol { @apply list-decimal; }
     .prose-tracker li { @apply my-0.5; }
     .prose-tracker pre {
-        @apply my-2 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[12px]
-            dark:border-zinc-800 dark:bg-zinc-900;
+        @apply my-2 overflow-x-auto rounded-lg border border-[color:var(--c-border)]
+            bg-[color:var(--c-surface-2)] p-3 text-[12px];
     }
     .prose-tracker pre code { @apply bg-transparent p-0; }
-    .prose-tracker a { @apply text-blue-600 underline-offset-2 hover:underline dark:text-blue-400; }
+    .prose-tracker code:not(pre code) {
+        @apply rounded bg-[color:var(--c-overlay)] px-1 py-[1px] font-mono text-[12px];
+    }
+    .prose-tracker a {
+        @apply text-[color:var(--c-accent)] underline-offset-2 hover:underline;
+    }
     .prose-tracker blockquote {
-        @apply my-2 border-l-2 border-zinc-300 pl-3 italic text-zinc-600 dark:border-zinc-700 dark:text-zinc-400;
+        @apply my-2 border-l-2 border-[color:var(--c-border-strong)] pl-3 italic text-[color:var(--c-text-muted)];
     }
-    .prose-tracker table { @apply my-2 w-full border-collapse text-xs; }
-    .prose-tracker th, .prose-tracker td {
-        @apply border border-zinc-200 px-2 py-1 text-left dark:border-zinc-800;
+
+    /* Animations */
+    .anim-rise { animation: rise 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+    .anim-fade { animation: fade 220ms ease-out backwards; }
+    .stagger > * { animation-delay: calc(var(--stagger-step, 60ms) * var(--i, 0)); }
+
+    .skeleton {
+        @apply relative overflow-hidden rounded bg-[color:var(--c-surface-2)];
     }
+    .skeleton::after {
+        content: "";
+        position: absolute; inset: 0;
+        background-image: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%);
+        transform: translateX(-100%);
+        animation: shimmer 1.4s ease-in-out infinite;
+    }
+}
+
+@keyframes rise    { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fade    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .anim-rise, .anim-fade { animation: none; }
+    .skeleton::after        { animation: none; }
 }

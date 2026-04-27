@@ -16,16 +16,19 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ i
     return (
         <div className="flex flex-col gap-4">
             <header>
-                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Integrations</h2>
-                <p className="mt-1 text-sm text-zinc-500">
+                <h2 className="h-section">Integrations</h2>
+                <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
                     Connect this project to bobby-analyser to power smart issue suggestions.
                 </p>
             </header>
             <AnalyserPanel projectId={id} state={state ?? null} />
 
-            <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-5 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950">
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">GitHub Issues sync</span>
-                <span className="ml-2 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] dark:bg-zinc-900">Phase 3</span>
+            <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-[13px] text-[color:var(--c-text-muted)]">
+                <span className="card-tag card-tag-info">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4" /></svg>
+                    Soon
+                </span>
+                <div className="text-[14px] font-bold text-[color:var(--c-text)]">GitHub Issues sync</div>
                 <p className="mt-1">Two-way sync of issues with the linked GitHub repo.</p>
             </div>
         </div>

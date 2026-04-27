@@ -22,20 +22,25 @@ export default async function ProjectLayout({
 
     return (
         <div className="flex min-h-full flex-col">
-            <div className="border-b border-zinc-200 dark:border-zinc-800">
-                <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 pt-6">
+            <div className="border-b border-[color:var(--c-border)] bg-white">
+                <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-4 px-6 pt-6">
                     <div className="min-w-0">
-                        <Link href="/projects" className="text-xs text-zinc-500 hover:underline">
-                            Projects
+                        <Link
+                            href="/projects"
+                            className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]"
+                        >
+                            ← Projects
                         </Link>
-                        <h1 className="mt-1 truncate text-xl font-semibold tracking-tight">{project.name}</h1>
+                        <h1 className="mt-1 truncate text-[22px] font-bold tracking-[-0.012em]">
+                            {project.name}
+                        </h1>
                         <a
                             href={project.repo_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="truncate text-xs text-zinc-500 hover:underline"
+                            className="inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[12px] text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)] hover:underline"
                         >
-                            {project.repo_url}
+                            {project.repo_full_name ? project.repo_full_name : project.repo_url}
                         </a>
                     </div>
                 </div>

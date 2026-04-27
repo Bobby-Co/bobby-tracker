@@ -2,11 +2,15 @@
 
 export function SignOutButton({ email }: { email?: string | null }) {
     return (
-        <form action="/auth/sign-out" method="post" className="flex items-center gap-2">
-            {email && <span className="truncate text-xs text-zinc-500">{email}</span>}
+        <form action="/auth/sign-out" method="post" className="flex items-center gap-2.5">
+            {email && (
+                <span className="hidden truncate text-[12px] text-[color:var(--c-text-muted)] sm:inline">
+                    {email}
+                </span>
+            )}
             <button
                 type="submit"
-                className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                className="rounded-[8px] border border-[color:var(--c-border)] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)]"
             >
                 Sign out
             </button>

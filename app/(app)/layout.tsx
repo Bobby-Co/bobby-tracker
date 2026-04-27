@@ -16,14 +16,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         .returns<Project[]>()
 
     return (
-        <div className="flex h-screen w-full bg-white text-zinc-900 dark:bg-black dark:text-zinc-50">
+        <div className="flex h-screen w-full bg-[color:var(--c-page)] text-[color:var(--c-text)]">
             <Sidebar projects={projects ?? []} />
             <div className="flex min-w-0 flex-1 flex-col">
-                <header className="flex h-12 items-center justify-between border-b border-zinc-200 px-4 dark:border-zinc-800">
-                    <span className="text-sm font-semibold tracking-tight">Bobby Tracker</span>
+                <header className="flex h-14 items-center justify-between border-b border-[color:var(--c-border)] bg-white px-5">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-[color:var(--c-text-muted)]">
+                            Bobby
+                        </span>
+                        <span className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-[color:var(--c-text-dim)]">
+                            ·
+                        </span>
+                        <span className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-[color:var(--c-text-muted)]">
+                            Tracker
+                        </span>
+                    </div>
                     <SignOutButton email={user.email} />
                 </header>
-                <main className="flex-1 overflow-auto">{children}</main>
+                <main className="dotted-bg flex-1 overflow-auto">{children}</main>
             </div>
         </div>
     )

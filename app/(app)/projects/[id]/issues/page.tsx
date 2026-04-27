@@ -22,10 +22,11 @@ export default async function IssuesPage({ params }: { params: Promise<{ id: str
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-xs text-zinc-500">{open.length} open · {closed.length} closed</p>
-                </div>
+            <div className="flex items-center justify-between gap-3">
+                <p className="text-[12px] text-[color:var(--c-text-muted)]">
+                    <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
+                    <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
+                </p>
                 <IssueForm projectId={id} />
             </div>
 
@@ -38,22 +39,29 @@ export default async function IssuesPage({ params }: { params: Promise<{ id: str
 function IssueGroup({ title, projectId, issues, muted }: { title: string; projectId: string; issues: Issue[]; muted?: boolean }) {
     return (
         <section>
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">{title}</h2>
-            <ul className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+            <h2 className="h-section mb-3">{title}</h2>
+            <ul className="overflow-hidden rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-card)] divide-y divide-[color:var(--c-border)]">
                 {issues.length === 0 && (
-                    <li className="px-4 py-6 text-center text-sm text-zinc-500">No issues here.</li>
+                    <li className="px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">No issues here.</li>
                 )}
                 {issues.map((i) => (
                     <li key={i.id} className={muted ? "opacity-70" : ""}>
                         <Link
                             href={`/projects/${projectId}/issues/${i.id}`}
-                            className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                            className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[color:var(--c-surface-2)]"
                         >
-                            <span className="font-mono text-xs text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-300">#{i.issue_number}</span>
-                            <span className="min-w-0 flex-1 truncate text-sm transition-transform group-hover:translate-x-px">{i.title}</span>
+                            <span className="font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)]">
+                                #{i.issue_number}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium transition-transform group-hover:translate-x-px">
+                                {i.title}
+                            </span>
                             <div className="flex items-center gap-1.5">
                                 {i.labels.slice(0, 3).map((l) => (
-                                    <span key={l} className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                                    <span
+                                        key={l}
+                                        className="rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]"
+                                    >
                                         {l}
                                     </span>
                                 ))}

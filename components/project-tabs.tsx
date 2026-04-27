@@ -19,12 +19,14 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
                         key={t.href}
                         href={t.href}
                         className={cn(
-                            "relative px-3 py-2 text-sm",
-                            active ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
+                            "relative px-3 py-2 text-[13px] font-semibold transition-colors",
+                            active
+                                ? "text-zinc-900"
+                                : "text-zinc-500 hover:text-zinc-900",
                         )}
                     >
                         {t.label}
-                        {active && <span className="absolute inset-x-0 -bottom-px h-px bg-zinc-900 dark:bg-zinc-100" />}
+                        {active && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-zinc-900" />}
                     </Link>
                 )
             })}

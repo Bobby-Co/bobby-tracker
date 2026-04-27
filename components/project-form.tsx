@@ -62,8 +62,8 @@ export function ProjectForm() {
                     className="input"
                 />
             </Field>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex justify-end gap-2 pt-2">
+            {error && <p className="text-[12.5px] text-rose-700">{error}</p>}
+            <div className="flex justify-end gap-2 pt-1">
                 <button type="submit" disabled={pending} className="btn-primary">
                     {pending ? "Creating…" : "Create project"}
                 </button>
@@ -75,7 +75,9 @@ export function ProjectForm() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                {label}
+            </span>
             {children}
         </label>
     )

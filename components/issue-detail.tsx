@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus } from "@/lib/supabase/types"
 import { PriorityChip, StatusChip } from "@/components/status-chip"
+import { Dropdown } from "@/components/dropdown"
+
+const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
+const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 
 export function IssueDetail({ issue }: { issue: Issue }) {
     const router = useRouter()
@@ -24,25 +28,27 @@ export function IssueDetail({ issue }: { issue: Issue }) {
     }
 
     return (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_220px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px]">
             <article className="min-w-0">
-                <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-zinc-500">#{issue.issue_number}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[12px] text-[color:var(--c-text-dim)]">#{issue.issue_number}</span>
                     <StatusChip status={issue.status} />
                     <PriorityChip priority={issue.priority} />
                 </div>
-                <h1 className="mt-2 text-2xl font-semibold tracking-tight">{issue.title}</h1>
-                <div className="mt-1 text-xs text-zinc-500">
+                <h1 className="mt-2 text-[24px] font-extrabold leading-tight tracking-[-0.012em]">
+                    {issue.title}
+                </h1>
+                <div className="mt-1 text-[12px] text-[color:var(--c-text-muted)]">
                     Updated {new Date(issue.updated_at).toLocaleString()}
                 </div>
 
-                <section className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                <section className="mt-6 rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)]">
                     <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Description</span>
+                        <span className="h-section">Description</span>
                         {!editingBody && (
                             <button
                                 onClick={() => setEditingBody(true)}
-                                className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                                className="rounded-md px-2 py-1 text-[11.5px] font-semibold text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
                             >
                                 Edit
                             </button>
@@ -54,7 +60,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
                                 rows={8}
-                                className="input text-sm"
+                                className="input text-[13px]"
                                 autoFocus
                             />
                             <div className="flex justify-end gap-2">
@@ -80,41 +86,33 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                             </div>
                         </div>
                     ) : (
-                        <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-                            {body || <span className="italic text-zinc-400">No description yet.</span>}
+                        <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-6 text-[color:var(--c-text)]">
+                            {body || (
+                                <span className="italic text-[color:var(--c-text-dim)]">
+                                    No description yet.
+                                </span>
+                            )}
                         </pre>
                     )}
                 </section>
-
-                {/* Phase 3 will hook the analyser-suggestions panel in here. */}
             </article>
 
-            <aside className="flex flex-col gap-4 text-sm">
+            <aside className="flex flex-col gap-4 text-sm lg:sticky lg:top-6 lg:self-start">
                 <Field label="Status">
-                    <select
+                    <Dropdown<IssueStatus>
                         value={issue.status}
-                        onChange={(e) => patch({ status: e.target.value as IssueStatus })}
-                        className="input text-xs"
-                    >
-                        {ISSUE_STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                                {s.replace(/_/g, " ")}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(v) => patch({ status: v })}
+                        options={STATUS_OPTIONS}
+                        aria-label="Status"
+                    />
                 </Field>
                 <Field label="Priority">
-                    <select
+                    <Dropdown<IssuePriority>
                         value={issue.priority}
-                        onChange={(e) => patch({ priority: e.target.value as IssuePriority })}
-                        className="input text-xs"
-                    >
-                        {ISSUE_PRIORITIES.map((p) => (
-                            <option key={p} value={p}>
-                                {p}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={(v) => patch({ priority: v })}
+                        options={PRIORITY_OPTIONS}
+                        aria-label="Priority"
+                    />
                 </Field>
                 <Field label="Labels">
                     <input
@@ -125,7 +123,7 @@ export function IssueDetail({ issue }: { issue: Issue }) {
                             })
                         }
                         placeholder="bug, performance"
-                        className="input text-xs"
+                        className="input text-[12.5px]"
                     />
                 </Field>
             </aside>
@@ -135,8 +133,10 @@ export function IssueDetail({ issue }: { issue: Issue }) {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
-        <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">{label}</span>
+        <label className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
+                {label}
+            </span>
             {children}
         </label>
     )
