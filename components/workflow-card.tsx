@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { cn } from "@/components/cn"
 
-type Tag = "trigger" | "action" | "output" | "info" | "rose"
+type Tag = "trigger" | "action" | "output" | "info" | "rose" | "muted"
 
 interface WorkflowCardProps {
     tag?: Tag

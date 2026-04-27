@@ -1,13 +1,24 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { IssueForm } from "@/components/issue-form"
+import { IssueTile } from "@/components/issue-tile"
+import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import { PriorityChip, StatusChip } from "@/components/status-chip"
 import type { Issue } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
 
-export default async function IssuesPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function IssuesPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ id: string }>
+    searchParams: Promise<{ view?: string }>
+}) {
     const { id } = await params
+    const { view: viewParam } = await searchParams
+    const view: IssuesView = viewParam === "tile" ? "tile" : "list"
+
     const supabase = await createClient()
     const { data: issues } = await supabase
         .from("issues")
@@ -22,56 +33,89 @@ export default async function IssuesPage({ params }: { params: Promise<{ id: str
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-[12px] text-[color:var(--c-text-muted)]">
                     <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
                     <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
                 </p>
-                <IssueForm projectId={id} />
+                <div className="flex items-center gap-2">
+                    <IssuesViewToggle active={view} />
+                    <IssueForm projectId={id} />
+                </div>
             </div>
 
-            <IssueGroup title="Open" projectId={id} issues={open} />
-            {closed.length > 0 && <IssueGroup title="Closed" projectId={id} issues={closed} muted />}
+            <IssueGroup title="Open" projectId={id} issues={open} view={view} />
+            {closed.length > 0 && <IssueGroup title="Closed" projectId={id} issues={closed} view={view} muted />}
         </div>
     )
 }
 
-function IssueGroup({ title, projectId, issues, muted }: { title: string; projectId: string; issues: Issue[]; muted?: boolean }) {
+function IssueGroup({
+    title,
+    projectId,
+    issues,
+    view,
+    muted,
+}: {
+    title: string
+    projectId: string
+    issues: Issue[]
+    view: IssuesView
+    muted?: boolean
+}) {
     return (
-        <section>
+        <section className={muted ? "opacity-90" : ""}>
             <h2 className="h-section mb-3">{title}</h2>
-            <ul className="overflow-hidden rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-card)] divide-y divide-[color:var(--c-border)]">
-                {issues.length === 0 && (
-                    <li className="px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">No issues here.</li>
-                )}
-                {issues.map((i) => (
-                    <li key={i.id} className={muted ? "opacity-70" : ""}>
-                        <Link
-                            href={`/projects/${projectId}/issues/${i.id}`}
-                            className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[color:var(--c-surface-2)]"
-                        >
-                            <span className="font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)]">
-                                #{i.issue_number}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium transition-transform group-hover:translate-x-px">
-                                {i.title}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                                {i.labels.slice(0, 3).map((l) => (
-                                    <span
-                                        key={l}
-                                        className="rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]"
-                                    >
-                                        {l}
-                                    </span>
-                                ))}
-                                <PriorityChip priority={i.priority} />
-                                <StatusChip status={i.status} />
-                            </div>
-                        </Link>
-                    </li>
-                ))}
-            </ul>
+
+            {issues.length === 0 ? (
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                    No issues here.
+                </div>
+            ) : view === "tile" ? (
+                <ul
+                    className="grid gap-3 stagger"
+                    style={{
+                        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                        ["--stagger-step" as string]: "55ms",
+                    } as React.CSSProperties}
+                >
+                    {issues.map((i, idx) => (
+                        <li key={i.id} className={muted ? "opacity-70" : undefined}>
+                            <IssueTile issue={i} projectId={projectId} index={idx} />
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <ul className="overflow-hidden rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-card)] divide-y divide-[color:var(--c-border)]">
+                    {issues.map((i) => (
+                        <li key={i.id} className={muted ? "opacity-70" : undefined}>
+                            <Link
+                                href={`/projects/${projectId}/issues/${i.id}`}
+                                className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[color:var(--c-surface-2)]"
+                            >
+                                <span className="font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)]">
+                                    #{i.issue_number}
+                                </span>
+                                <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium transition-transform group-hover:translate-x-px">
+                                    {i.title}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                    {i.labels.slice(0, 3).map((l) => (
+                                        <span
+                                            key={l}
+                                            className="rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]"
+                                        >
+                                            {l}
+                                        </span>
+                                    ))}
+                                    <PriorityChip priority={i.priority} />
+                                    <StatusChip status={i.status} />
+                                </div>
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </section>
     )
 }

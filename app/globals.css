@@ -107,6 +107,7 @@ html, body {
     .card-tag-output  { background: var(--c-output-bg);  color: var(--c-output-fg); }
     .card-tag-info    { background: var(--c-info-bg);    color: var(--c-info-fg); }
     .card-tag-rose    { background: var(--c-rose-bg);    color: var(--c-rose-fg); }
+    .card-tag-muted   { background: var(--c-surface-2);  color: var(--c-text-muted); }
 
     .card-title {
         @apply flex items-center gap-2 text-sm font-bold tracking-[-0.005em];
