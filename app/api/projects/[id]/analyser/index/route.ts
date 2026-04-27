@@ -74,7 +74,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     {
                         onAccepted: (jobId) => write({ event: "accepted", job_id: jobId }),
                         onProgress: (p) => write({ event: "progress", ...p }),
-                        onLog:      (l) => write({ event: "log", ...l }),
+                        // onLog intentionally omitted — the analyser no longer
+                        // emits log frames, and the UI never rendered them.
                     },
                 )
 
