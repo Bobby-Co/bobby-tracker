@@ -62,8 +62,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Detach the work from the request lifecycle. Use the service-role
     // client so the background job's writes aren't affected by the
     // request's session expiring mid-run.
+    console.log(`[analyser-index] starting background job project=${id} repo=${project.repo_url}`)
     void runIndexingJob(id, project, gitToken).catch((e) => {
-        console.error("[analyser-index] background job crashed", e)
+        console.error(`[analyser-index] background job crashed project=${id}`, e)
     })
 
     return Response.json(
@@ -96,6 +97,9 @@ async function runIndexingJob(projectId: string, project: Project, gitToken: str
             .from("project_analyser")
             .update({ progress: snapshot })
             .eq("project_id", projectId)
+            .then(({ error }) => {
+                if (error) console.error(`[analyser-index] progress write failed project=${projectId}`, error)
+            })
     }
 
     function bump(next: AnalyserProgress) {
@@ -110,6 +114,7 @@ async function runIndexingJob(projectId: string, project: Project, gitToken: str
     }
 
     try {
+        let firstEventLogged = false
         const result = await runJob(
             {
                 repo_url: project.repo_url,
@@ -119,7 +124,12 @@ async function runIndexingJob(projectId: string, project: Project, gitToken: str
                     : undefined,
             },
             {
+                onAccepted: (jobId) => console.log(`[analyser-index] accepted project=${projectId} job=${jobId}`),
                 onProgress: (p: JobProgress) => {
+                    if (!firstEventLogged) {
+                        console.log(`[analyser-index] first progress event project=${projectId} kind=${p.kind}`)
+                        firstEventLogged = true
+                    }
                     const snap: AnalyserProgress = {
                         phase: humanPhase(p),
                         slug: p.slug,
@@ -134,6 +144,7 @@ async function runIndexingJob(projectId: string, project: Project, gitToken: str
         )
         // Make sure the last progress lands before the terminal write.
         flush()
+        console.log(`[analyser-index] complete project=${projectId} graph=${result.repo_id} cost=$${result.cost_usd}`)
 
         await admin
             .from("project_analyser")
@@ -154,6 +165,7 @@ async function runIndexingJob(projectId: string, project: Project, gitToken: str
     } catch (e) {
         flush()
         const message = e instanceof Error ? e.message : String(e)
+        console.error(`[analyser-index] failed project=${projectId} err=${message}`)
         await admin
             .from("project_analyser")
             .upsert(
