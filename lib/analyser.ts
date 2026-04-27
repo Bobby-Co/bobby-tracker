@@ -88,20 +88,38 @@ export interface JobResult {
 
 export interface JobProgress {
     kind: string
+    index?: number
+    total?: number
+    slug?: string
+    language?: string
     message?: string
+    tool_name?: string
     cost_usd?: number
     cumulative_usd?: number
+    elapsed_ms?: number
     error?: string
 }
 
+export interface JobLog {
+    stream: "stdout" | "stderr"
+    data: string
+}
+
+export interface RunJobHandlers {
+    onAccepted?: (jobId: string) => void
+    onProgress?: (p: JobProgress) => void
+    onLog?:      (l: JobLog) => void
+}
+
 // runJob opens the WebSocket, fires `start`, and resolves when the analyser
-// emits `done` (or rejects on `error`). onProgress fires for every progress
-// frame so callers can stream updates somewhere (DB row, SSE, etc.).
+// emits `done` (or rejects on `error`). The handlers fire for every frame
+// of the corresponding kind so callers can stream updates somewhere (HTTP
+// response body, DB row, SSE, etc.).
 //
 // Note: this holds the WS open for the entire indexing run, which can take
 // minutes for a large repo. Run it from a long-lived process (e.g. `next
 // start` on a node host) — it will not survive a Vercel function timeout.
-export function runJob(spec: JobSpec, onProgress?: (p: JobProgress) => void, opts?: { timeoutMs?: number }): Promise<JobResult> {
+export function runJob(spec: JobSpec, handlers?: RunJobHandlers, opts?: { timeoutMs?: number }): Promise<JobResult> {
     const { ws } = assertConfigured()
     const timeoutMs = opts?.timeoutMs ?? 15 * 60_000
 
@@ -137,9 +155,13 @@ export function runJob(spec: JobSpec, onProgress?: (p: JobProgress) => void, opt
             switch (msg.type) {
                 case "accepted":
                     jobId = msg.job_id || ""
+                    handlers?.onAccepted?.(jobId)
                     break
                 case "progress":
-                    if (onProgress && msg.progress) onProgress(msg.progress)
+                    if (msg.progress) handlers?.onProgress?.(msg.progress)
+                    break
+                case "log":
+                    if (msg.log) handlers?.onLog?.(msg.log)
                     break
                 case "done": {
                     const d = msg.done || {} as DoneBody
@@ -184,8 +206,9 @@ interface ServerFrame {
     type: "accepted" | "progress" | "log" | "done" | "error" | "pong"
     job_id?: string
     progress?: JobProgress
-    done?: DoneBody
-    error?: { code?: string; message?: string }
+    log?:      JobLog
+    done?:     DoneBody
+    error?:    { code?: string; message?: string }
 }
 
 // The analyser doesn't echo repo_id in the done frame, but it does return
