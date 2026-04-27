@@ -114,7 +114,57 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
     return (await res.json()) as IssueAnalysis
 }
 
-// ─── /jobs (WebSocket) ──────────────────────────────────────────────────────
+// ─── /jobs/run (HTTP fire-and-forget) ───────────────────────────────────────
+
+export interface SupabaseProgressTarget {
+    url: string
+    service_role_key: string
+    schema?: string
+    table: string
+    key_column: string
+    key_value: string
+}
+
+export interface KickoffJobInput {
+    repo_url: string
+    repo_ref?: string
+    repo_id?: string
+    effort?: "low" | "medium" | "high"
+    only_lang?: string[]
+    max_budget_usd?: number
+    concurrency?: number
+    git_auth?: { token: string; username?: string; scheme?: "basic" | "bearer" }
+    supabase_progress: SupabaseProgressTarget
+}
+
+export interface KickoffResult {
+    job_id: string
+    status: "accepted"
+    runner: string
+    version: string
+    hostname?: string
+}
+
+// kickoffJob POSTs the job spec to /jobs/run on the analyser. The
+// analyser runs the job in a detached goroutine and PATCHes progress
+// directly to Supabase (using the supplied service-role JWT). This
+// HTTP call returns within ~50ms — Netlify / Vercel function safe.
+export async function kickoffJob(input: KickoffJobInput): Promise<KickoffResult> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/jobs/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify(input),
+    })
+    if (!res.ok && res.status !== 202) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `kickoff failed: HTTP ${res.status}`, err.code || "kickoff_failed")
+    }
+    return (await res.json()) as KickoffResult
+}
+
+// ─── /jobs (WebSocket, kept for CLI use) ────────────────────────────────────
 
 export interface JobSpec {
     repo_url: string
