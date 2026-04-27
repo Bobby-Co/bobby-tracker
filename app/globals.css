@@ -44,4 +44,34 @@ html, body {
             disabled:opacity-50
             dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900;
     }
+    /* Tight, GitHub-issue-style markdown rendering for analyser suggestions. */
+    .prose-tracker {
+        @apply text-sm leading-6 text-zinc-700 dark:text-zinc-300;
+    }
+    .prose-tracker p          { @apply my-2; }
+    .prose-tracker h1, .prose-tracker h2, .prose-tracker h3 {
+        @apply mt-3 mb-1 font-semibold text-zinc-900 dark:text-zinc-100;
+    }
+    .prose-tracker h1 { @apply text-base; }
+    .prose-tracker h2 { @apply text-sm; }
+    .prose-tracker h3 { @apply text-sm; }
+    .prose-tracker ul, .prose-tracker ol {
+        @apply my-2 ml-5 list-outside;
+    }
+    .prose-tracker ul { @apply list-disc; }
+    .prose-tracker ol { @apply list-decimal; }
+    .prose-tracker li { @apply my-0.5; }
+    .prose-tracker pre {
+        @apply my-2 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[12px]
+            dark:border-zinc-800 dark:bg-zinc-900;
+    }
+    .prose-tracker pre code { @apply bg-transparent p-0; }
+    .prose-tracker a { @apply text-blue-600 underline-offset-2 hover:underline dark:text-blue-400; }
+    .prose-tracker blockquote {
+        @apply my-2 border-l-2 border-zinc-300 pl-3 italic text-zinc-600 dark:border-zinc-700 dark:text-zinc-400;
+    }
+    .prose-tracker table { @apply my-2 w-full border-collapse text-xs; }
+    .prose-tracker th, .prose-tracker td {
+        @apply border border-zinc-200 px-2 py-1 text-left dark:border-zinc-800;
+    }
 }

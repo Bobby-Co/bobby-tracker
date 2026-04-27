@@ -51,10 +51,19 @@ Run `next start` on a Node host. The `/api/projects/[id]/analyser/index` route h
 - `lib/analyser.ts` — server-only HTTP/WS client to bobby-analyser. Reads `BOBBY_ANALYSER_URL` + `BOBBY_ANALYSER_TOKEN` from the env; never imported into client components.
 - `proxy.ts` — refreshes the Supabase auth cookie and redirects unauthenticated requests to `/login`.
 
-## Phase 3 (next session)
+## Smart issue suggestions
 
-- Issue detail "Investigate with analyser" button → caches a `tracker.issue_suggestions` row → renders file/line cards.
-- GitHub Issues two-way sync (per-project toggle on the Integrations page).
+Open any issue → the **Investigate with analyser** panel:
+- Pulls the latest cached `tracker.issue_suggestions` row server-side and renders it instantly.
+- Hit **Investigate** / **Regenerate** to call `POST /api/issues/[id]/suggest`, which sends the issue title + body to bobby-analyser `/query` against the project's indexed graph and stores the result.
+- Renders the analyser's markdown answer plus a list of file/line citations as clickable GitHub blob links pinned to the **indexed SHA** (so the line numbers match what the agent actually saw).
+- Returns `409 needs_indexing` if the project hasn't been analysed yet — the UI surfaces a prompt to enable + index.
+
+Cost is whatever the analyser charges per query (≈$0.01–0.05 with default budget).
+
+## Phase 3b (next session)
+
+- GitHub Issues two-way sync (per-project toggle on the Integrations page, webhook receiver, GitHub App / PAT credential storage).
 
 ## Conventions
 
