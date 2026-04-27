@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import { ProjectForm } from "@/components/project-form"
+import { NewProjectButton } from "@/components/new-project-button"
 import { WorkflowCard } from "@/components/workflow-card"
 import type { Project } from "@/lib/supabase/types"
 
@@ -14,40 +14,37 @@ export default async function ProjectsPage() {
         .order("updated_at", { ascending: false })
         .returns<Project[]>()
 
+    const list = projects ?? []
+
     return (
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
-            <header>
-                <h1 className="h-page">Projects</h1>
-                <p className="mt-1 max-w-prose text-[13.5px] text-[color:var(--c-text-muted)]">
-                    One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
-                </p>
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-10">
+            <header className="flex items-end justify-between gap-4">
+                <div>
+                    <h1 className="h-page">Projects</h1>
+                    <p className="mt-1 max-w-prose text-[13.5px] text-[color:var(--c-text-muted)]">
+                        One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
+                    </p>
+                </div>
+                <NewProjectButton />
             </header>
 
-            <section className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-5 shadow-[var(--shadow-card)]">
-                <div className="mb-1 inline-flex items-center gap-2">
-                    <span className="card-tag card-tag-trigger">
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" /></svg>
-                        New
-                    </span>
-                </div>
-                <h2 className="text-[15px] font-bold tracking-[-0.005em]">Create a project</h2>
-                <p className="mt-0.5 text-[12.5px] text-[color:var(--c-text-muted)]">
-                    Connect a Git repo and start filing issues.
-                </p>
-                <div className="mt-4">
-                    <ProjectForm />
-                </div>
-            </section>
-
-            <section>
-                <h2 className="h-section mb-3">Your projects</h2>
-
-                {(projects ?? []).length === 0 && (
-                    <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-12 text-center text-[13px] text-[color:var(--c-text-muted)]">
-                        No projects yet — create one above.
+            {list.length === 0 ? (
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-16 text-center">
+                    <div className="mx-auto grid h-10 w-10 place-items-center rounded-[10px] bg-[color:var(--c-surface-2)] text-[color:var(--c-text-dim)]">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                            <rect x="3" y="3" width="18" height="18" rx="3" />
+                            <path d="M3 9h18M9 21V9" />
+                        </svg>
                     </div>
-                )}
-
+                    <p className="mt-3 text-[14px] font-semibold">No projects yet</p>
+                    <p className="mt-1 text-[12.5px] text-[color:var(--c-text-muted)]">
+                        Create one to start tracking issues against a repo.
+                    </p>
+                    <div className="mt-4 flex justify-center">
+                        <NewProjectButton />
+                    </div>
+                </div>
+            ) : (
                 <ul
                     className="grid gap-3 stagger"
                     style={{
@@ -55,7 +52,7 @@ export default async function ProjectsPage() {
                         ["--stagger-step" as string]: "60ms",
                     } as React.CSSProperties}
                 >
-                    {(projects ?? []).map((p, i) => (
+                    {list.map((p, i) => (
                         <li
                             key={p.id}
                             className="anim-rise"
@@ -69,12 +66,10 @@ export default async function ProjectsPage() {
                                     title={p.name}
                                     menu={<span className="card-menu-btn"><ChevronIcon /></span>}
                                     footer={
-                                        <>
-                                            <span className="inline-flex items-center gap-1">
-                                                <ClockIcon />
-                                                {new Date(p.updated_at).toLocaleDateString()}
-                                            </span>
-                                        </>
+                                        <span className="inline-flex items-center gap-1">
+                                            <ClockIcon />
+                                            {new Date(p.updated_at).toLocaleDateString()}
+                                        </span>
                                     }
                                 >
                                     <div className="rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 font-mono text-[12px] text-[color:var(--c-text-muted)] truncate">
@@ -90,7 +85,7 @@ export default async function ProjectsPage() {
                         </li>
                     ))}
                 </ul>
-            </section>
+            )}
         </div>
     )
 }
