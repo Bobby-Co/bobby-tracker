@@ -1,28 +1,18 @@
-import { runJob, AnalyserError } from "@/lib/analyser"
+import { runJob, type JobProgress } from "@/lib/analyser"
 import { jsonError, requireUser } from "@/lib/api"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/supabase/server"
+import type { AnalyserProgress, Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/analyser/index
 //
-// Returns an NDJSON stream of events while the analyser runs:
+// Fire-and-forget: returns 202 the moment the job is accepted, then
+// runs the indexing in the background and writes progress / final state
+// to tracker.project_analyser. Clients render from that row via
+// Supabase Realtime — no HTTP stream to keep open, no reconnection
+// problem when the proxy / network blips.
 //
-//   {"event":"accepted","job_id":"…"}
-//   {"event":"progress","kind":"clone_start", …}
-//   {"event":"log","stream":"stderr","data":"…"}
-//   {"event":"progress","kind":"module_start","slug":"go-internal-auth", …}
-//   {"event":"done","graph_id":"abc123","cost_usd":0.12, …}
-//
-// Or on failure:
-//
-//   {"event":"error","code":"ws_error","message":"…"}
-//
-// The browser reads the body via fetch().body.getReader() and updates the
-// AnalyserPanel live. Status is also written back to project_analyser at
-// start (`indexing`), success (`ready`), and failure (`failed`) so other
-// clients see the same state on a refresh.
-//
-// Run on `next start` on a Node host — this stream stays open for the
-// duration of the indexing job (potentially several minutes).
+// Run on `next start` on a node host. Vercel functions would kill the
+// background work after the response returns; not supported here.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
@@ -39,89 +29,161 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .single<Project>()
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
 
+    // Background work outlives the request, so the user's session token
+    // can't be trusted to still be valid when we write the terminal
+    // status. Require the service-role key explicitly so this fails
+    // fast at deploy time instead of producing zombie jobs that can't
+    // mark themselves done.
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return jsonError(
+            "config_missing",
+            "Tracker is missing SUPABASE_SERVICE_ROLE_KEY env var (required for background indexing writes).",
+            500,
+        )
+    }
+
+    // Mark indexing immediately. Realtime delivers this to subscribers,
+    // so the UI flips to "Indexing…" without waiting for the first
+    // progress event.
     const { error: upErr } = await supabase
         .from("project_analyser")
         .upsert(
-            { project_id: id, enabled: true, status: "indexing", last_error: null },
+            {
+                project_id: id,
+                enabled: true,
+                status: "indexing",
+                last_error: null,
+                progress: { phase: "Starting…", started_at: new Date().toISOString() } satisfies AnalyserProgress,
+            },
             { onConflict: "project_id" },
         )
     if (upErr) return jsonError("db_error", upErr.message, 500)
 
-    const stream = new ReadableStream({
-        async start(controller) {
-            const enc = new TextEncoder()
-            const write = (frame: Record<string, unknown>) => {
-                try {
-                    controller.enqueue(enc.encode(JSON.stringify(frame) + "\n"))
-                } catch {
-                    // controller closed (client disconnected) — swallow.
-                }
-            }
-
-            // Heartbeat every 15s so reverse proxies don't think the
-            // connection has stalled during quiet stretches.
-            const heartbeat = setInterval(() => write({ event: "heartbeat", ts: Date.now() }), 15_000)
-
-            try {
-                const result = await runJob(
-                    {
-                        repo_url: project.repo_url,
-                        effort: "medium",
-                        git_auth: gitToken
-                            ? { token: gitToken, username: "x-access-token", scheme: "basic" }
-                            : undefined,
-                    },
-                    {
-                        onAccepted: (jobId) => write({ event: "accepted", job_id: jobId }),
-                        onProgress: (p) => write({ event: "progress", ...p }),
-                        // onLog intentionally omitted — the analyser no longer
-                        // emits log frames, and the UI never rendered them.
-                    },
-                )
-
-                const { data: row } = await supabase
-                    .from("project_analyser")
-                    .upsert(
-                        {
-                            project_id: id,
-                            enabled: true,
-                            status: "ready",
-                            graph_id: result.repo_id || null,
-                            last_indexed_at: new Date().toISOString(),
-                            last_indexed_sha: result.head_sha || null,
-                            last_index_cost_usd: result.cost_usd || 0,
-                            last_error: null,
-                        },
-                        { onConflict: "project_id" },
-                    )
-                    .select("*")
-                    .single<ProjectAnalyser>()
-
-                write({ event: "done", result, analyser: row })
-            } catch (e) {
-                const message = e instanceof Error ? e.message : String(e)
-                const code = e instanceof AnalyserError ? e.code : "unknown"
-                await supabase
-                    .from("project_analyser")
-                    .upsert(
-                        { project_id: id, enabled: true, status: "failed", last_error: message },
-                        { onConflict: "project_id" },
-                    )
-                write({ event: "error", code, message })
-            } finally {
-                clearInterval(heartbeat)
-                try { controller.close() } catch {}
-            }
-        },
+    // Detach the work from the request lifecycle. Use the service-role
+    // client so the background job's writes aren't affected by the
+    // request's session expiring mid-run.
+    void runIndexingJob(id, project, gitToken).catch((e) => {
+        console.error("[analyser-index] background job crashed", e)
     })
 
-    return new Response(stream, {
-        headers: {
-            "Content-Type":      "application/x-ndjson; charset=utf-8",
-            "Cache-Control":     "no-store",
-            "X-Content-Type-Options": "nosniff",
-            // Tell intermediaries (Caddy) not to buffer.
-            "X-Accel-Buffering": "no",
-        },
-    })
+    return Response.json(
+        { status: "indexing", project_id: id },
+        { status: 202 },
+    )
+}
+
+async function runIndexingJob(projectId: string, project: Project, gitToken: string | undefined) {
+    const admin = createServiceClient()
+    const startedAt = new Date().toISOString()
+
+    // Throttle DB writes: progress events arrive in bursts (~every 100
+    // ms during cluster work). Coalesce to once per second per
+    // project_id row to keep load on Postgres + realtime sane.
+    let pending: AnalyserProgress | null = null
+    let lastFlushAt = 0
+    let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+    function flush() {
+        if (!pending) return
+        const snapshot = pending
+        pending = null
+        lastFlushAt = Date.now()
+        if (flushTimer) {
+            clearTimeout(flushTimer)
+            flushTimer = null
+        }
+        void admin
+            .from("project_analyser")
+            .update({ progress: snapshot })
+            .eq("project_id", projectId)
+    }
+
+    function bump(next: AnalyserProgress) {
+        pending = { ...(pending ?? {}), ...next, started_at: pending?.started_at ?? startedAt }
+        const now = Date.now()
+        if (now - lastFlushAt >= 1000) {
+            flush()
+            return
+        }
+        if (flushTimer) return
+        flushTimer = setTimeout(flush, 1000 - (now - lastFlushAt))
+    }
+
+    try {
+        const result = await runJob(
+            {
+                repo_url: project.repo_url,
+                effort: "medium",
+                git_auth: gitToken
+                    ? { token: gitToken, username: "x-access-token", scheme: "basic" }
+                    : undefined,
+            },
+            {
+                onProgress: (p: JobProgress) => {
+                    const snap: AnalyserProgress = {
+                        phase: humanPhase(p),
+                        slug: p.slug,
+                        step_idx: p.index,
+                        step_total: p.total,
+                        cost_usd: p.cumulative_usd,
+                        message: p.message,
+                    }
+                    bump(snap)
+                },
+            },
+        )
+        // Make sure the last progress lands before the terminal write.
+        flush()
+
+        await admin
+            .from("project_analyser")
+            .upsert(
+                {
+                    project_id: projectId,
+                    enabled: true,
+                    status: "ready",
+                    graph_id: result.repo_id || null,
+                    last_indexed_at: new Date().toISOString(),
+                    last_indexed_sha: result.head_sha || null,
+                    last_index_cost_usd: result.cost_usd || 0,
+                    last_error: null,
+                    progress: {} satisfies AnalyserProgress,
+                } satisfies Partial<ProjectAnalyser>,
+                { onConflict: "project_id" },
+            )
+    } catch (e) {
+        flush()
+        const message = e instanceof Error ? e.message : String(e)
+        await admin
+            .from("project_analyser")
+            .upsert(
+                {
+                    project_id: projectId,
+                    enabled: true,
+                    status: "failed",
+                    last_error: message,
+                    progress: {} satisfies AnalyserProgress,
+                },
+                { onConflict: "project_id" },
+            )
+    }
+}
+
+function humanPhase(p: JobProgress): string {
+    switch (p.kind) {
+        case "clone_start":     return "Cloning repo…"
+        case "clone_end":       return "Clone complete"
+        case "phase1_start":    return "Phase 1 — discovery"
+        case "phase1_end":      return "Phase 1 complete"
+        case "grouper_start":   return "Grouping modules"
+        case "grouper_end":     return "Groups ready"
+        case "phase2_start":    return "Phase 2 — clusters"
+        case "module_start":    return p.slug ? `Indexing ${p.slug}` : "Indexing module"
+        case "module_complete": return p.slug ? `Done ${p.slug}` : "Module done"
+        case "module_fail":     return p.slug ? `Failed ${p.slug}` : "Module failed"
+        case "usage":           return "Model call"
+        case "budget_stop":     return "Budget reached"
+        case "bootstrap_end":   return "Bootstrap complete"
+        default:                return p.message || p.kind
+    }
 }

@@ -33,6 +33,16 @@ export interface Issue {
     updated_at: string
 }
 
+export interface AnalyserProgress {
+    phase?: string         // human-readable phase label
+    slug?: string          // current module slug being processed
+    step_idx?: number      // 1-based progress through phase 2 modules
+    step_total?: number
+    cost_usd?: number      // cumulative spend so far
+    started_at?: string    // ISO timestamp the run began
+    message?: string       // any one-liner the server wants to surface
+}
+
 export interface ProjectAnalyser {
     project_id: string
     enabled: boolean
@@ -42,6 +52,7 @@ export interface ProjectAnalyser {
     last_indexed_sha: string | null
     last_index_cost_usd: number | null
     last_error: string | null
+    progress: AnalyserProgress | null
     updated_at: string
 }
 

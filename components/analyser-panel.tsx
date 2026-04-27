@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/components/cn"
 import { createClient } from "@/lib/supabase/client"
@@ -14,18 +14,6 @@ const STATUS_LABEL: Record<ProjectAnalyser["status"], { text: string; className:
     failed:   { text: "Failed",    className: "pill pill-error" },
 }
 
-interface ProgressEvent {
-    kind: string
-    index?: number
-    total?: number
-    slug?: string
-    language?: string
-    message?: string
-    tool_name?: string
-    cumulative_usd?: number
-    error?: string
-}
-
 export function AnalyserPanel({
     projectId,
     state,
@@ -34,41 +22,26 @@ export function AnalyserPanel({
     state: ProjectAnalyser | null
 }) {
     const router = useRouter()
+    // Local mirror of the DB row so realtime updates land instantly
+    // without waiting on a server re-render. Initialised from the
+    // server-rendered prop and overwritten by realtime payloads.
+    const [analyser, setAnalyser] = useState<ProjectAnalyser | null>(state)
     const [error, setError] = useState<string | null>(null)
     const [advanced, setAdvanced] = useState(false)
     const [token, setToken] = useState("")
+    const [busy, setBusy] = useState(false) // toggling enable/disable/index buttons
 
-    const [indexing, setIndexing] = useState(false)
-    const [phase, setPhase] = useState<string | null>(null)
-    const [currentSlug, setCurrentSlug] = useState<string | null>(null)
-    const [stepIdx, setStepIdx] = useState<number | null>(null)
-    const [stepTotal, setStepTotal] = useState<number | null>(null)
-    const [costUsd, setCostUsd] = useState<number>(0)
-    const startedAtRef = useRef<number | null>(null)
-    const [elapsedMs, setElapsedMs] = useState(0)
-    const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-    const abortRef = useRef<AbortController | null>(null)
+    const enabled = !!analyser?.enabled
+    const status = analyser?.status ?? "disabled"
+    const isIndexing = status === "indexing"
+    const label = STATUS_LABEL[status]
 
-    const enabled = !!state?.enabled
-    const status = state?.status ?? "disabled"
-    const isIndexing = indexing || status === "indexing"
-    const showStatus = isIndexing ? "indexing" : status
-    const label = STATUS_LABEL[showStatus]
-
-    function resetLive() {
-        setPhase(null)
-        setCurrentSlug(null)
-        setStepIdx(null)
-        setStepTotal(null)
-        setCostUsd(0)
-        setElapsedMs(0)
-        startedAtRef.current = null
-    }
-
-    // Realtime: pick up status flips from other tabs / server-side
-    // updates so a refresh isn't needed. UPDATEs land when the index
-    // route writes 'indexing' → 'ready' / 'failed'. router.refresh()
-    // re-server-renders the page so the `state` prop updates.
+    // Realtime: every UPDATE/INSERT to project_analyser for this project
+    // lands here. Update local state inline (no router.refresh — that
+    // would re-render the whole page on every progress write). When the
+    // status flips out of indexing, run a refresh once so other parts of
+    // the page that depend on it (e.g. issue suggestions auto-trigger)
+    // re-evaluate.
     useEffect(() => {
         const supabase = createClient()
         const channel = supabase
@@ -81,7 +54,16 @@ export function AnalyserPanel({
                     table: "project_analyser",
                     filter: `project_id=eq.${projectId}`,
                 },
-                () => router.refresh(),
+                (payload) => {
+                    const next = payload.new as ProjectAnalyser
+                    setAnalyser((prev) => {
+                        if (prev && prev.status === "indexing" && next.status !== "indexing") {
+                            // Status terminal: refresh server-side bits.
+                            queueMicrotask(() => router.refresh())
+                        }
+                        return next
+                    })
+                },
             )
             .subscribe()
         return () => {
@@ -89,89 +71,32 @@ export function AnalyserPanel({
         }
     }, [projectId, router])
 
-    async function call(path: string) {
+    async function call(path: string, body?: unknown) {
         setError(null)
-        const res = await fetch(`/api/projects/${projectId}/analyser/${path}`, { method: "POST" })
-        if (!res.ok) {
-            const e = await res.json().catch(() => ({}))
-            setError(e?.error?.message || `Failed (${res.status})`)
-            return
-        }
-        router.refresh()
-    }
-
-    async function runIndex() {
-        setError(null)
-        setIndexing(true)
-        resetLive()
-        // eslint-disable-next-line react-hooks/purity -- event handler, not render
-        const startedAt = Date.now()
-        startedAtRef.current = startedAt
-        elapsedTimerRef.current = setInterval(() => {
-            setElapsedMs(Date.now() - startedAt)
-        }, 250)
-
-        const ac = new AbortController()
-        abortRef.current = ac
-
+        setBusy(true)
         try {
-            const res = await fetch(`/api/projects/${projectId}/analyser/index`, {
+            const res = await fetch(`/api/projects/${projectId}/analyser/${path}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(advanced && token ? { git_token: token } : {}),
-                signal: ac.signal,
+                headers: body ? { "Content-Type": "application/json" } : undefined,
+                body: body ? JSON.stringify(body) : undefined,
             })
-            if (!res.ok || !res.body) {
+            if (!res.ok && res.status !== 202) {
                 const e = await res.json().catch(() => ({}))
                 setError(e?.error?.message || `Failed (${res.status})`)
                 return
             }
-            const reader = res.body.getReader()
-            const decoder = new TextDecoder()
-            let buf = ""
-            while (true) {
-                const { value, done } = await reader.read()
-                if (done) break
-                buf += decoder.decode(value, { stream: true })
-                let i: number
-                while ((i = buf.indexOf("\n")) !== -1) {
-                    const line = buf.slice(0, i).trim()
-                    buf = buf.slice(i + 1)
-                    if (!line) continue
-                    handleFrame(JSON.parse(line))
-                }
-            }
-        } catch (e) {
-            if ((e as { name?: string })?.name !== "AbortError") {
-                setError(e instanceof Error ? e.message : String(e))
-            }
+            // The route updates the DB; realtime delivers the new state.
+            // For non-indexing endpoints, also call refresh so server-
+            // rendered fallbacks update immediately.
+            if (path !== "index") router.refresh()
         } finally {
-            if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current)
-            elapsedTimerRef.current = null
-            setIndexing(false)
-            router.refresh()
+            setBusy(false)
         }
     }
 
-    function handleFrame(frame: Record<string, unknown>) {
-        switch (frame.event) {
-            case "accepted": setPhase("Cloning…"); break
-            case "progress": {
-                const p = frame as unknown as ProgressEvent & { event: string }
-                if (typeof p.cumulative_usd === "number") setCostUsd(p.cumulative_usd)
-                if (p.slug) setCurrentSlug(p.slug)
-                if (typeof p.index === "number" && typeof p.total === "number") {
-                    setStepIdx(p.index); setStepTotal(p.total)
-                }
-                setPhase(humanPhase(p))
-                break
-            }
-            // log frames intentionally ignored — the structured progress
-            // (phase + slug + step + cost) is enough; raw stdout/stderr
-            // belongs in `docker compose logs server`, not the UI.
-            case "done":  setPhase("Done"); break
-            case "error": setError(String(frame.message ?? "indexing failed")); break
-        }
+    function runIndex() {
+        const payload = advanced && token ? { git_token: token } : undefined
+        void call("index", payload)
     }
 
     return (
@@ -184,14 +109,14 @@ export function AnalyserPanel({
                 {enabled ? (
                     <button
                         onClick={() => call("disable")}
-                        disabled={isIndexing}
+                        disabled={isIndexing || busy}
                         title={isIndexing ? "Wait for the current index to finish" : undefined}
                         className="btn-ghost px-3 py-1.5 text-[12px]"
                     >
                         Disable
                     </button>
                 ) : (
-                    <button onClick={() => call("enable")} className="btn-primary px-3 py-1.5 text-[12px]">
+                    <button onClick={() => call("enable")} disabled={busy} className="btn-primary px-3 py-1.5 text-[12px]">
                         Enable
                     </button>
                 )}
@@ -202,10 +127,10 @@ export function AnalyserPanel({
 
             {enabled && (
                 <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-                    <Stat label="Last indexed" value={state?.last_indexed_at ? new Date(state.last_indexed_at).toLocaleString() : "—"} />
-                    <Stat label="HEAD SHA"     value={state?.last_indexed_sha ? state.last_indexed_sha.slice(0, 7) : "—"} mono />
-                    <Stat label="Last cost"    value={state?.last_index_cost_usd != null ? `$${Number(state.last_index_cost_usd).toFixed(4)}` : "—"} />
-                    <Stat label="Graph ID"     value={state?.graph_id || "—"} mono />
+                    <Stat label="Last indexed" value={analyser?.last_indexed_at ? new Date(analyser.last_indexed_at).toLocaleString() : "—"} />
+                    <Stat label="HEAD SHA"     value={analyser?.last_indexed_sha ? analyser.last_indexed_sha.slice(0, 7) : "—"} mono />
+                    <Stat label="Last cost"    value={analyser?.last_index_cost_usd != null ? `$${Number(analyser.last_index_cost_usd).toFixed(4)}` : "—"} />
+                    <Stat label="Graph ID"     value={analyser?.graph_id || "—"} mono />
                 </div>
             )}
 
@@ -213,11 +138,10 @@ export function AnalyserPanel({
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                     <button
                         onClick={runIndex}
-                        disabled={isIndexing}
-                        title={isIndexing && !indexing ? "An index is already in progress" : undefined}
+                        disabled={isIndexing || busy}
                         className="btn-primary"
                     >
-                        {isIndexing ? "Indexing…" : (state?.last_indexed_at ? "Re-index now" : "Index now")}
+                        {isIndexing ? "Indexing…" : (analyser?.last_indexed_at ? "Re-index now" : "Index now")}
                     </button>
                     {!isIndexing && (
                         <button type="button" onClick={() => setAdvanced((v) => !v)} className="btn-ghost">
@@ -242,30 +166,11 @@ export function AnalyserPanel({
                 </div>
             )}
 
-            {indexing && (
-                <LiveProgress
-                    phase={phase}
-                    currentSlug={currentSlug}
-                    stepIdx={stepIdx}
-                    stepTotal={stepTotal}
-                    costUsd={costUsd}
-                    elapsedMs={elapsedMs}
-                />
-            )}
+            {isIndexing && <LiveProgress progress={analyser?.progress ?? null} />}
 
-            {/* Server says indexing, but we don't have the live stream
-                (e.g. user just opened this tab). Realtime will refresh
-                the page when status flips; until then show a notice. */}
-            {!indexing && status === "indexing" && (
-                <p className="anim-fade mt-3 inline-flex items-center gap-2 rounded-[10px] bg-amber-50 px-3 py-1.5 text-[12px] text-amber-900">
-                    <Spinner />
-                    An index is in progress. This page updates live when it finishes.
-                </p>
-            )}
-
-            {state?.last_error && status === "failed" && !indexing && (
+            {analyser?.last_error && status === "failed" && (
                 <p className="mt-3 rounded-[12px] bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
-                    Last error: {state.last_error}
+                    Last error: {analyser.last_error}
                 </p>
             )}
             {error && <p className="mt-3 text-[12px] text-rose-700">{error}</p>}
@@ -284,24 +189,37 @@ function Stat({ label, value, mono }: { label: string; value: string; mono?: boo
     )
 }
 
-function LiveProgress({
-    phase, currentSlug, stepIdx, stepTotal, costUsd, elapsedMs,
-}: {
-    phase: string | null
-    currentSlug: string | null
-    stepIdx: number | null
-    stepTotal: number | null
-    costUsd: number
-    elapsedMs: number
-}) {
-    const pct = stepTotal && stepTotal > 0 && stepIdx != null ? Math.round((stepIdx / stepTotal) * 100) : null
+// LiveProgress renders directly from the DB-backed progress snapshot.
+// It uses an internal ticker for elapsed time so it ticks every 250ms
+// even when no realtime event has arrived; everything else (phase,
+// slug, step counts, cumulative cost) advances when realtime delivers
+// the next row update.
+function LiveProgress({ progress }: { progress: ProjectAnalyser["progress"] }) {
+    const startedAt = progress?.started_at ? new Date(progress.started_at).getTime() : null
+    const [now, setNow] = useState(() => Date.now())
+
+    useEffect(() => {
+        if (!startedAt) return
+        const id = setInterval(() => setNow(Date.now()), 250)
+        return () => clearInterval(id)
+    }, [startedAt])
+
+    const elapsedMs = startedAt ? now - startedAt : 0
+    const phase = progress?.phase || "Starting…"
+    const slug = progress?.slug
+    const stepIdx = progress?.step_idx
+    const stepTotal = progress?.step_total
+    const costUsd = progress?.cost_usd ?? 0
+    const pct =
+        stepTotal && stepTotal > 0 && stepIdx != null ? Math.round((stepIdx / stepTotal) * 100) : null
+
     return (
         <div className="anim-rise mt-4 flex flex-col gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-4">
             <div className="flex items-center justify-between text-[12px]">
                 <div className="flex min-w-0 items-center gap-2">
                     <Spinner />
-                    <span className="font-semibold text-[color:var(--c-text)]">{phase || "Starting…"}</span>
-                    {currentSlug && <span className="truncate font-mono text-[color:var(--c-text-muted)]">{currentSlug}</span>}
+                    <span className="font-semibold text-[color:var(--c-text)]">{phase}</span>
+                    {slug && <span className="truncate font-mono text-[color:var(--c-text-muted)]">{slug}</span>}
                 </div>
                 <div className="flex shrink-0 items-center gap-3 tabular-nums text-[color:var(--c-text-muted)]">
                     <span>${costUsd.toFixed(4)}</span>
@@ -325,23 +243,8 @@ function LiveProgress({
     )
 }
 
-function humanPhase(p: ProgressEvent): string {
-    switch (p.kind) {
-        case "clone_start":     return "Cloning repo…"
-        case "clone_end":       return "Clone complete"
-        case "phase1_start":    return "Phase 1 — discovery"
-        case "phase2_start":    return "Phase 2 — module clusters"
-        case "module_start":    return p.slug ? `Indexing ${p.slug}` : "Indexing module"
-        case "module_complete": return p.slug ? `Done ${p.slug}` : "Module done"
-        case "module_fail":     return p.slug ? `Failed ${p.slug}` : "Module failed"
-        case "usage":           return "Model call"
-        case "budget_stop":     return "Budget reached"
-        case "bootstrap_end":   return "Bootstrap complete"
-        default:                return p.message || p.kind
-    }
-}
-
 function formatElapsed(ms: number): string {
+    if (ms <= 0) return "0:00"
     const s = Math.floor(ms / 1000)
     const m = Math.floor(s / 60)
     return `${m}:${String(s % 60).padStart(2, "0")}`
