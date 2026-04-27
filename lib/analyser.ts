@@ -61,6 +61,60 @@ export async function ask(repoId: string, question: string, maxBudgetUsd?: numbe
     return (await res.json()) as QueryResult
 }
 
+// ─── /issues/analyse (structured) ──────────────────────────────────────────
+
+export interface IssueFinding {
+    file:        string
+    line?:       number
+    symbol?:     string
+    reason:      string
+    confidence?: "high" | "medium" | "low" | string
+}
+
+export interface IssueAnalysis {
+    summary:             string
+    suggestions:         IssueFinding[]
+    investigation_plan?: string[]
+    confidence?:         "high" | "medium" | "low" | string
+    graph_cites?:        string[]
+    stop_reason?:        string
+    cost_usd:            number
+    duration_ms:         number
+    tool_calls?:         number
+    markdown?:           string
+}
+
+export interface IssueAnalyseInput {
+    repoId:        string
+    title:         string
+    body?:         string
+    labels?:       string[]
+    priority?:     string
+    maxBudgetUsd?: number
+}
+
+export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnalysis> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/issues/analyse`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({
+            repo_id: input.repoId,
+            title:   input.title,
+            body:    input.body,
+            labels:  input.labels,
+            priority: input.priority,
+            max_budget_usd: input.maxBudgetUsd,
+        }),
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `analyse failed: HTTP ${res.status}`, err.code || "analyse_failed")
+    }
+    return (await res.json()) as IssueAnalysis
+}
+
 // ─── /jobs (WebSocket) ──────────────────────────────────────────────────────
 
 export interface JobSpec {

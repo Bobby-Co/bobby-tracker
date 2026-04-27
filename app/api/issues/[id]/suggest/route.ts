@@ -1,16 +1,15 @@
-import { ask, AnalyserError } from "@/lib/analyser"
+import { analyseIssue, AnalyserError } from "@/lib/analyser"
 import { jsonError, requireUser } from "@/lib/api"
 import type { Issue, IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
 
 // POST /api/issues/[id]/suggest
 //
-// Triggers a fresh analyser /query for the issue, caches the result in
-// tracker.issue_suggestions, and returns it. Synchronous — the analyser's
-// /query endpoint typically returns inside ~30s for an indexed graph.
+// Calls bobby-analyser's structured /issues/analyse endpoint and caches
+// the response in tracker.issue_suggestions. Synchronous — typically
+// returns inside ~30s once the graph is indexed.
 //
-// Requires the project to have an enabled analyser graph (status='ready').
-// Returns 409 with code "needs_indexing" otherwise so the UI can prompt
-// the user to flip the integration toggle.
+// Returns 409 with code "needs_indexing" if project_analyser isn't
+// ready, so the UI can prompt the user to enable + index first.
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
@@ -18,9 +17,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
 
     const { data: issue, error: iErr } = await supabase
         .from("issues")
-        .select("id,project_id,title,body")
+        .select("id,project_id,title,body,labels,priority")
         .eq("id", id)
-        .single<Pick<Issue, "id" | "project_id" | "title" | "body">>()
+        .single<Pick<Issue, "id" | "project_id" | "title" | "body" | "labels" | "priority">>()
     if (iErr || !issue) return jsonError("not_found", "issue not found", 404)
 
     const { data: analyser, error: aErr } = await supabase
@@ -38,20 +37,26 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     }
 
     try {
-        const question = composeQuestion(issue.title, issue.body)
-        const result = await ask(analyser.graph_id, question)
+        const result = await analyseIssue({
+            repoId:   analyser.graph_id,
+            title:    issue.title,
+            body:     issue.body || "",
+            labels:   issue.labels,
+            priority: issue.priority,
+        })
 
         const { data: row, error: insErr } = await supabase
             .from("issue_suggestions")
             .insert({
-                issue_id: issue.id,
-                markdown: result.markdown,
-                code_cites: result.code_cites ?? [],
+                issue_id:    issue.id,
+                data:        result,
+                markdown:    result.markdown ?? result.summary ?? "",
+                code_cites:  (result.suggestions ?? []).map((s) => ({ file: s.file, line: s.line })),
                 graph_cites: result.graph_cites ?? [],
-                confidence: result.confidence ?? null,
-                cost_usd: result.cost_usd ?? 0,
+                confidence:  result.confidence ?? null,
+                cost_usd:    result.cost_usd ?? 0,
                 duration_ms: result.duration_ms ?? 0,
-                graph_id: analyser.graph_id,
+                graph_id:    analyser.graph_id,
             })
             .select("*")
             .single<IssueSuggestion>()
@@ -62,18 +67,4 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
         const message = e instanceof Error ? e.message : String(e)
         return jsonError(code, message, 502)
     }
-}
-
-// composeQuestion builds the question we hand to the analyser. The agent
-// works best with a single clear ask — we lead with the title (most
-// signal-dense), then include up to ~8 KB of body so long bug reports
-// aren't chopped at sentence boundaries that lose context. The header
-// nudges the agent to surface concrete file:line citations.
-function composeQuestion(title: string, body: string): string {
-    const prompt = `An issue has been filed in our tracker. Investigate the codebase and explain which files, functions, and lines a developer should look at first to fix it. Cite file:line where you can.
-
-Title: ${title}`
-    if (!body || !body.trim()) return prompt
-    const trimmed = body.length > 8000 ? body.slice(0, 8000) + "\n\n[…truncated]" : body
-    return `${prompt}\n\nDescription:\n${trimmed}`
 }

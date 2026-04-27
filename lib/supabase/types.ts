@@ -45,9 +45,33 @@ export interface ProjectAnalyser {
     updated_at: string
 }
 
+export interface IssueFinding {
+    file: string
+    line?: number
+    symbol?: string
+    reason: string
+    confidence?: string
+}
+
+export interface IssueAnalysisData {
+    summary: string
+    suggestions: IssueFinding[]
+    investigation_plan?: string[]
+    confidence?: string
+    graph_cites?: string[]
+    stop_reason?: string
+    cost_usd?: number
+    duration_ms?: number
+    tool_calls?: number
+    markdown?: string
+}
+
 export interface IssueSuggestion {
     id: string
     issue_id: string
+    // Structured analysis from /issues/analyse. Null for legacy rows
+    // produced by the old /query path — those used the markdown column.
+    data: IssueAnalysisData | null
     markdown: string
     code_cites: { file: string; line?: number }[]
     graph_cites: string[]
