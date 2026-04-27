@@ -23,13 +23,15 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ i
             </header>
             <AnalyserPanel projectId={id} state={state ?? null} />
 
-            <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-[13px] text-[color:var(--c-text-muted)]">
-                <span className="card-tag card-tag-info">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="4" /></svg>
+            <div className="card-stack">
+                <span className="card-tab card-tab-info">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="12" cy="12" r="4" /></svg>
                     Soon
                 </span>
-                <div className="text-[14px] font-bold text-[color:var(--c-text)]">GitHub Issues sync</div>
-                <p className="mt-1">Two-way sync of issues with the linked GitHub repo.</p>
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-[13px] text-[color:var(--c-text-muted)]">
+                    <div className="text-[14px] font-bold text-[color:var(--c-text)]">GitHub Issues sync</div>
+                    <p className="mt-1">Two-way sync of issues with the linked GitHub repo.</p>
+                </div>
             </div>
         </div>
     )

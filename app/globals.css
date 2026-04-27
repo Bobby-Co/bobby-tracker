@@ -99,15 +99,35 @@ html, body {
         box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 12px 28px -10px rgba(15,23,42,0.10);
     }
 
+    /* card-tag — pill-shaped, lives INSIDE the card body */
     .card-tag {
         @apply mb-2.5 inline-flex items-center gap-1.5 rounded-full px-2 py-[2px] text-[11px] font-bold tracking-[0.02em];
     }
-    .card-tag-trigger { background: var(--c-trigger-bg); color: var(--c-trigger-fg); }
-    .card-tag-action  { background: var(--c-action-bg);  color: var(--c-action-fg); }
-    .card-tag-output  { background: var(--c-output-bg);  color: var(--c-output-fg); }
-    .card-tag-info    { background: var(--c-info-bg);    color: var(--c-info-fg); }
-    .card-tag-rose    { background: var(--c-rose-bg);    color: var(--c-rose-fg); }
-    .card-tag-muted   { background: var(--c-surface-2);  color: var(--c-text-muted); }
+    /* card-tab — folder-tab variant. Sits ABOVE the card with rounded
+       top corners only; its bottom edge tucks under the card border so
+       they read as one unit. Use inside .card-stack. */
+    .card-tab {
+        @apply inline-flex items-center gap-1.5 self-start
+            rounded-t-[10px] px-2.5 py-[5px] text-[11.5px] font-bold tracking-[0.005em];
+        margin-bottom: -1px;
+        position: relative;
+        z-index: 1;
+    }
+    .card-stack {
+        @apply flex flex-col items-stretch h-full;
+    }
+    .card-tag-trigger,
+    .card-tab-trigger { background: var(--c-trigger-bg); color: var(--c-trigger-fg); }
+    .card-tag-action,
+    .card-tab-action  { background: var(--c-action-bg);  color: var(--c-action-fg); }
+    .card-tag-output,
+    .card-tab-output  { background: var(--c-output-bg);  color: var(--c-output-fg); }
+    .card-tag-info,
+    .card-tab-info    { background: var(--c-info-bg);    color: var(--c-info-fg); }
+    .card-tag-rose,
+    .card-tab-rose    { background: var(--c-rose-bg);    color: var(--c-rose-fg); }
+    .card-tag-muted,
+    .card-tab-muted   { background: var(--c-surface-2);  color: var(--c-text-muted); }
 
     .card-title {
         @apply flex items-center gap-2 text-sm font-bold tracking-[-0.005em];
@@ -117,8 +137,7 @@ html, body {
             transition-colors duration-[140ms] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)];
     }
     .card-footer {
-        @apply mt-2.5 flex items-center gap-3 border-t border-dashed border-[color:var(--c-border)]
-            pt-2.5 text-[11.5px] text-[color:var(--c-text-dim)] tabular-nums;
+        @apply mt-3 flex items-center gap-3 text-[11.5px] text-[color:var(--c-text-dim)] tabular-nums;
     }
 
     /* Status / priority pills */

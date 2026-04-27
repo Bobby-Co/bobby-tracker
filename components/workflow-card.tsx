@@ -15,9 +15,10 @@ interface WorkflowCardProps {
     interactive?: boolean
 }
 
-// Reusable card primitive matching ci/components.html. Composes the tag,
-// title row, body, and footer slots so individual screens can drop in
-// content without re-implementing the chrome.
+// Reusable card primitive matching the CI reference image. The status tag
+// is rendered as a folder-tab outside the card body (rounded top corners,
+// flush bottom that tucks under the card border) so the two read as one
+// unit. Body holds the title row + content + optional footer slot.
 export function WorkflowCard({
     tag,
     tagLabel,
@@ -29,24 +30,29 @@ export function WorkflowCard({
     children,
     interactive = true,
 }: WorkflowCardProps) {
-    const tagClass = tag ? `card-tag-${tag}` : ""
     return (
-        <div className={cn("card", interactive && "card-hover", className)}>
+        <div className={cn("card-stack", className)}>
             {tag && (
-                <span className={cn("card-tag", tagClass)}>
+                <span className={cn("card-tab", `card-tab-${tag}`)}>
                     <BoltDot />
                     {tagLabel ?? defaultTagLabel(tag)}
                 </span>
             )}
-            {title && (
-                <div className="card-title">
-                    {icon && <span className="grid h-[18px] w-[18px] shrink-0 place-items-center text-[color:var(--c-text)]">{icon}</span>}
-                    <span className="min-w-0 truncate">{title}</span>
-                    {menu ?? <DefaultMenuButton />}
-                </div>
-            )}
-            {children && <div className="mt-2.5 flex flex-col gap-2">{children}</div>}
-            {footer && <div className="card-footer">{footer}</div>}
+            <article className={cn("card flex flex-1 flex-col", interactive && "card-hover")}>
+                {title && (
+                    <div className="card-title">
+                        {icon && (
+                            <span className="grid h-[18px] w-[18px] shrink-0 place-items-center text-[color:var(--c-text)]">
+                                {icon}
+                            </span>
+                        )}
+                        <span className="min-w-0 truncate">{title}</span>
+                        {menu ?? <DefaultMenuButton />}
+                    </div>
+                )}
+                {children && <div className="mt-2.5 flex flex-1 flex-col gap-2">{children}</div>}
+                {footer && <div className="card-footer">{footer}</div>}
+            </article>
         </div>
     )
 }
@@ -75,7 +81,6 @@ function DefaultMenuButton() {
     )
 }
 
-// Footer helpers — small inline components used inside card footer slots.
 export function FooterMeta({ children }: { children: ReactNode }) {
     return <span className="inline-flex items-center gap-1">{children}</span>
 }
