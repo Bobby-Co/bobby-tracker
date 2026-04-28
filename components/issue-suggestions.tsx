@@ -37,6 +37,14 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
         })
     }
 
+    // Sync the server-rendered prop into local state on changes. Without
+    // this, a router.refresh that surfaces a freshly-inserted suggestion
+    // (from another tab, cron, etc.) would be ignored because useState
+    // only honours the initial value.
+    useEffect(() => {
+        setSuggestion(initial)
+    }, [initial])
+
     // Auto-trigger when the issue lands on this page with no cached
     // suggestion AND the analyser is ready. Fires once per mount so a
     // user revisiting an unanswered issue gets investigation started
@@ -76,6 +84,32 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
             void supabase.removeChannel(channel)
         }
     }, [issueId])
+
+    // Polling fallback while an investigation is in flight. The /suggest
+    // POST blocks for the full analyser run (~30s), which is long enough
+    // for proxies / fetch idle timeouts to drop the response even after
+    // the row has been inserted. Realtime should pick it up, but if WAL
+    // events are being dropped the user would otherwise sit on the
+    // spinner until they reload. Bounded to `pending` so it stops the
+    // moment any path delivers the row.
+    useEffect(() => {
+        if (!pending) return
+        let cancelled = false
+        const tick = async () => {
+            try {
+                const res = await fetch(`/api/issues/${issueId}/suggestions`, { cache: "no-store" })
+                if (!res.ok || cancelled) return
+                const { suggestion: latest } = (await res.json()) as { suggestion: IssueSuggestion | null }
+                if (!latest || cancelled) return
+                setSuggestion(latest)
+            } catch {}
+        }
+        const id = setInterval(tick, 3000)
+        return () => {
+            cancelled = true
+            clearInterval(id)
+        }
+    }, [pending, issueId])
 
     return (
         <section className="rounded-xl border border-zinc-200 bg-white p-4 transition-colors dark:border-zinc-800 dark:bg-zinc-950">
