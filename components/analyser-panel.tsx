@@ -36,6 +36,14 @@ export function AnalyserPanel({
     const isIndexing = status === "indexing"
     const label = STATUS_LABEL[status]
 
+    // Sync the server-rendered prop into local state on changes. Without
+    // this, useState's initial-value-only behaviour would swallow the
+    // refreshed row after enable/disable calls (which run router.refresh)
+    // and the panel would stay stale unless realtime happened to deliver.
+    useEffect(() => {
+        setAnalyser(state)
+    }, [state])
+
     // Realtime: every UPDATE/INSERT to project_analyser for this project
     // lands here. Update local state inline (no router.refresh — that
     // would re-render the whole page on every progress write). When the
@@ -71,6 +79,35 @@ export function AnalyserPanel({
         }
     }, [projectId, router])
 
+    // Polling fallback for active states. Realtime is the primary path,
+    // but if WAL events are dropped (RLS edge cases, dropped websocket,
+    // unapplied migration in a fresh env, etc.) the UI would otherwise
+    // sit on "Indexing…" until the user reloads. Bounded to pending +
+    // indexing so we don't poll the row when there's nothing to watch.
+    useEffect(() => {
+        if (status !== "indexing" && status !== "pending") return
+        let cancelled = false
+        const tick = async () => {
+            try {
+                const res = await fetch(`/api/projects/${projectId}/analyser/status`, { cache: "no-store" })
+                if (!res.ok || cancelled) return
+                const { analyser: latest } = (await res.json()) as { analyser: ProjectAnalyser | null }
+                if (!latest || cancelled) return
+                setAnalyser((prev) => {
+                    if (prev && prev.status === "indexing" && latest.status !== "indexing") {
+                        queueMicrotask(() => router.refresh())
+                    }
+                    return latest
+                })
+            } catch {}
+        }
+        const id = setInterval(tick, 3000)
+        return () => {
+            cancelled = true
+            clearInterval(id)
+        }
+    }, [status, projectId, router])
+
     async function call(path: string, body?: unknown) {
         setError(null)
         setBusy(true)
@@ -85,16 +122,28 @@ export function AnalyserPanel({
                 setError(e?.error?.message || `Failed (${res.status})`)
                 return
             }
-            // The route updates the DB; realtime delivers the new state.
-            // For non-indexing endpoints, also call refresh so server-
-            // rendered fallbacks update immediately.
-            if (path !== "index") router.refresh()
+            // enable/disable return the upserted row — apply it to local
+            // state immediately so the pill flips without waiting on
+            // realtime (which may be lossy) or the round-trip refresh.
+            if (path !== "index") {
+                const data = await res.json().catch(() => null) as { analyser?: ProjectAnalyser } | null
+                if (data?.analyser) setAnalyser(data.analyser)
+                router.refresh()
+            }
         } finally {
             setBusy(false)
         }
     }
 
     function runIndex() {
+        // Optimistic flip: the route upserts status='indexing' before
+        // returning 202, but realtime may take a beat to deliver it.
+        // Mirror that locally so the UI reacts on click.
+        setAnalyser((prev) =>
+            prev
+                ? { ...prev, status: "indexing", last_error: null, progress: { phase: "Starting…", started_at: new Date().toISOString() } }
+                : prev,
+        )
         const payload = advanced && token ? { git_token: token } : undefined
         void call("index", payload)
     }
