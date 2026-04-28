@@ -10,10 +10,19 @@ import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 // SUPABASE_* env vars on the ANALYSER's host. No service-role key
 // crosses the wire from this side.
 //
+// Body:
+//   - git_token?  short-lived clone credential (private repos)
+//   - job_type?   "bootstrap" (default) or "incremental"
+//
+// Incremental requires a prior successful bootstrap of the same
+// project; the analyser surfaces a clean "bootstrap first?" error
+// otherwise and the catch block below records it as a failed run.
+//
 // This route just:
 //   1. Auth + load project
 //   2. Mark status='indexing' so the UI flips immediately
-//   3. POST to analyser /jobs/run with the project_id (row key)
+//   3. POST to analyser /jobs/run with the project_id (row key) and
+//      the requested job_type
 //   4. Return 202
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -23,6 +32,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch {}
     const gitToken = typeof body?.git_token === "string" && body.git_token ? body.git_token : undefined
+    const jobType: "bootstrap" | "incremental" =
+        body?.job_type === "incremental" ? "incremental" : "bootstrap"
 
     const { data: project, error: pErr } = await supabase
         .from("projects")
@@ -34,7 +45,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Flip the UI to "Indexing…" right away. Realtime delivers this
     // to subscribers instantly; the analyser will overwrite progress
     // updates as the job runs.
-    const initial: AnalyserProgress = { phase: "Starting…", started_at: new Date().toISOString() }
+    const initialPhase = jobType === "incremental" ? "Update — starting…" : "Starting…"
+    const initial: AnalyserProgress = { phase: initialPhase, started_at: new Date().toISOString() }
     const { error: upErr } = await supabase
         .from("project_analyser")
         .upsert(
@@ -51,6 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     try {
         const result = await kickoffJob({
+            job_type: jobType,
             repo_url: project.repo_url,
             effort: "medium",
             git_auth: gitToken
@@ -62,7 +75,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             supabase_progress: { key_value: id },
         })
         return Response.json(
-            { status: "accepted", job_id: result.job_id, project_id: id },
+            { status: "accepted", job_id: result.job_id, project_id: id, job_type: jobType },
             { status: 202 },
         )
     } catch (e) {

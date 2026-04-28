@@ -135,17 +135,20 @@ export function AnalyserPanel({
         }
     }
 
-    function runIndex() {
+    function runIndex(jobType: "bootstrap" | "incremental" = "bootstrap") {
         // Optimistic flip: the route upserts status='indexing' before
         // returning 202, but realtime may take a beat to deliver it.
         // Mirror that locally so the UI reacts on click.
+        const optimisticPhase = jobType === "incremental" ? "Update — starting…" : "Starting…"
         setAnalyser((prev) =>
             prev
-                ? { ...prev, status: "indexing", last_error: null, progress: { phase: "Starting…", started_at: new Date().toISOString() } }
+                ? { ...prev, status: "indexing", last_error: null, progress: { phase: optimisticPhase, started_at: new Date().toISOString() } }
                 : prev,
         )
-        const payload = advanced && token ? { git_token: token } : undefined
-        void call("index", payload)
+        const payload: Record<string, unknown> = {}
+        if (advanced && token) payload.git_token = token
+        if (jobType === "incremental") payload.job_type = "incremental"
+        void call("index", Object.keys(payload).length ? payload : undefined)
     }
 
     return (
@@ -186,12 +189,25 @@ export function AnalyserPanel({
             {enabled && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                     <button
-                        onClick={runIndex}
+                        onClick={() => runIndex("bootstrap")}
                         disabled={isIndexing || busy}
                         className="btn-primary"
                     >
                         {isIndexing ? "Indexing…" : (analyser?.last_indexed_at ? "Re-index now" : "Index now")}
                     </button>
+                    {/* Incremental update: only meaningful once we have a prior
+                        graph on the analyser. last_indexed_at is the proxy for
+                        "successfully bootstrapped at least once". */}
+                    {!isIndexing && analyser?.last_indexed_at && (
+                        <button
+                            onClick={() => runIndex("incremental")}
+                            disabled={busy}
+                            className="btn-ghost"
+                            title="Re-analyse only the modules touched since the last index. Faster and cheaper than a full re-index."
+                        >
+                            Update
+                        </button>
+                    )}
                     {!isIndexing && (
                         <button type="button" onClick={() => setAdvanced((v) => !v)} className="btn-ghost">
                             {advanced ? "Hide private-repo token" : "Private repo?"}

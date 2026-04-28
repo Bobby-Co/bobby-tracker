@@ -125,6 +125,12 @@ export interface SupabaseProgressTarget {
 }
 
 export interface KickoffJobInput {
+    /** Selects the analyser pipeline. Empty defaults to "bootstrap"
+     * server-side. Use "incremental" to run a delta against an existing
+     * graph (the project must have been bootstrapped successfully on
+     * this server before — otherwise the analyser fails fast with a
+     * "bootstrap first?" error). */
+    job_type?: "bootstrap" | "incremental"
     repo_url: string
     repo_ref?: string
     repo_id?: string
