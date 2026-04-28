@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { Issue, IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
@@ -13,6 +13,24 @@ export async function POST(request: Request) {
     const title = String(body?.title ?? "").trim()
     if (!project_id) return jsonError("bad_request", "project_id required", 400)
     if (!title) return jsonError("bad_request", "title required", 400)
+
+    // Issues without a knowledge graph are low-value (no suggestions,
+    // no Ask citations). Block creation until the project has been
+    // bootstrapped at least once. The UI mirrors this with a banner +
+    // disabled "New issue" button on the issues page; this is the
+    // server-side enforcement so direct API calls can't bypass it.
+    const { data: analyser } = await supabase
+        .from("project_analyser")
+        .select("enabled,status,graph_id")
+        .eq("project_id", project_id)
+        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id">>()
+    if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
+        return jsonError(
+            "needs_indexing",
+            "Enable the analyser and run the first index on the Knowledge tab before creating issues.",
+            409,
+        )
+    }
 
     const rawStatus = typeof body?.status === "string" ? body.status : ""
     const rawPriority = typeof body?.priority === "string" ? body.priority : ""

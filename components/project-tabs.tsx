@@ -9,6 +9,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     const tabs = [
         { href: `/projects/${projectId}/issues`, label: "Issues" },
         { href: `/projects/${projectId}/ask`, label: "Ask" },
+        { href: `/projects/${projectId}/knowledge`, label: "Knowledge" },
         { href: `/projects/${projectId}/integrations`, label: "Integrations" },
     ]
     return (

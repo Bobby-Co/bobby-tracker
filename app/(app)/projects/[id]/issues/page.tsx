@@ -4,7 +4,7 @@ import { NewIssueButton } from "@/components/new-issue-button"
 import { IssueTile } from "@/components/issue-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import { PriorityChip, StatusChip } from "@/components/status-chip"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
 
@@ -20,19 +20,37 @@ export default async function IssuesPage({
     const view: IssuesView = viewParam === "tile" ? "tile" : "list"
 
     const supabase = await createClient()
-    const { data: issues } = await supabase
-        .from("issues")
-        .select("*")
-        .eq("project_id", id)
-        .order("updated_at", { ascending: false })
-        .returns<Issue[]>()
+    const [{ data: issues }, { data: analyser }] = await Promise.all([
+        supabase
+            .from("issues")
+            .select("*")
+            .eq("project_id", id)
+            .order("updated_at", { ascending: false })
+            .returns<Issue[]>(),
+        supabase
+            .from("project_analyser")
+            .select("*")
+            .eq("project_id", id)
+            .maybeSingle<ProjectAnalyser>(),
+    ])
 
     const list = issues ?? []
     const open = list.filter((i) => i.status !== "done" && i.status !== "archived")
     const closed = list.filter((i) => i.status === "done" || i.status === "archived")
 
+    // A freshly-created project has no analyser row, or one with status
+    // pending/indexing/failed and no graph_id. Until the first index
+    // completes, "issues" without graph context aren't useful — the
+    // suggestion / ask flows can't cite anything. Block creation;
+    // direct the user to the Knowledge tab.
+    const ready =
+        !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
+
     return (
         <div className="flex flex-col gap-6">
+            {!ready && (
+                <KnowledgeRequiredBanner projectId={id} state={analyser ?? null} />
+            )}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-[12px] text-[color:var(--c-text-muted)]">
                     <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
@@ -40,12 +58,49 @@ export default async function IssuesPage({
                 </p>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} />
-                    <NewIssueButton projectId={id} />
+                    <NewIssueButton
+                        projectId={id}
+                        disabled={!ready}
+                        disabledReason="Enable the analyser and run the first index on the Knowledge tab before creating issues."
+                    />
                 </div>
             </div>
 
             <IssueGroup title="Open" projectId={id} issues={open} view={view} />
             {closed.length > 0 && <IssueGroup title="Closed" projectId={id} issues={closed} view={view} muted />}
+        </div>
+    )
+}
+
+function KnowledgeRequiredBanner({
+    projectId,
+    state,
+}: {
+    projectId: string
+    state: ProjectAnalyser | null
+}) {
+    const status = state?.status ?? "disabled"
+    let message = "Enable the analyser and run the first index before creating issues."
+    if (status === "indexing") {
+        message = "Indexing is in progress — issues will unlock when the first graph is ready."
+    } else if (status === "failed") {
+        message = "The last indexing run failed. Re-index from the Knowledge tab to unlock issues."
+    } else if (state?.enabled && !state?.graph_id) {
+        message = "Run the first index on the Knowledge tab before creating issues."
+    }
+    return (
+        <div className="anim-rise rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <span className="font-semibold">Knowledge graph required</span>
+                <span className="text-[12.5px] text-amber-800">{message}</span>
+                <span className="ml-auto" />
+                <Link
+                    href={`/projects/${projectId}/knowledge`}
+                    className="inline-flex items-center rounded-[10px] bg-amber-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-950"
+                >
+                    Go to Knowledge
+                </Link>
+            </div>
         </div>
     )
 }

@@ -38,11 +38,23 @@ export function VerifyPanel({
     const [checkedAt, setCheckedAt] = useState<string | null>(initialCheckedAt)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [collapsed, setCollapsed] = useState(false)
+    // `flash` rides a brief CSS ring + soft pulse whenever the report
+    // changes (manual click, realtime delivery from a server-side QC).
+    // Toggled on for 1.5s then off — the transition classes do the rest.
+    const [flash, setFlash] = useState(false)
+
+    useEffect(() => {
+        if (!flash) return
+        const t = setTimeout(() => setFlash(false), 1500)
+        return () => clearTimeout(t)
+    }, [flash])
 
     // Realtime: when project_analyser.last_health_report changes
     // (post-update QC, post-bootstrap QC, or another tab clicked
     // verify), pick it up here so the panel always shows the latest
-    // run without a manual refresh.
+    // run without a manual refresh. Trigger the flash so the user
+    // notices the data just changed.
     useEffect(() => {
         const supabase = createClient()
         const channel = supabase
@@ -59,6 +71,7 @@ export function VerifyPanel({
                     const row = payload.new as { last_health_report?: unknown; last_health_check_at?: string | null }
                     if (row.last_health_report) {
                         setReport(row.last_health_report as VerifyReport)
+                        setFlash(true)
                     }
                     if (row.last_health_check_at) {
                         setCheckedAt(row.last_health_check_at)
@@ -84,6 +97,7 @@ export function VerifyPanel({
             const r = (await res.json()) as VerifyReport
             setReport(r)
             setCheckedAt(new Date().toISOString())
+            setFlash(true)
             // The route also persists to Supabase; realtime will deliver
             // the same payload to other tabs / sessions automatically.
         } catch (err) {
@@ -94,12 +108,28 @@ export function VerifyPanel({
     }
 
     return (
-        <div className="card">
+        <div
+            className={cn(
+                "card transition-shadow duration-700",
+                flash && "ring-2 ring-emerald-400/70 shadow-lg shadow-emerald-100",
+            )}
+        >
             <div className="card-title">
                 <ShieldIcon />
                 <span>Graph health</span>
                 {report && <HealthChip score={report.overall_health} />}
                 <span className="ml-auto" />
+                {report && (
+                    <button
+                        type="button"
+                        onClick={() => setCollapsed((v) => !v)}
+                        aria-expanded={!collapsed}
+                        title={collapsed ? "Expand" : "Collapse"}
+                        className="btn-ghost px-2 py-1.5 text-[12px]"
+                    >
+                        <Chevron open={!collapsed} />
+                    </button>
+                )}
                 <button
                     onClick={run}
                     disabled={!ready || busy}
@@ -118,6 +148,18 @@ export function VerifyPanel({
                     {error}
                 </p>
             )}
+
+            {/* Collapsible body. Grid-rows trick gives a smooth height
+                animation without measuring DOM heights — the inner div
+                takes auto height and the outer grid expands into it. */}
+            <div
+                className={cn(
+                    "grid transition-[grid-template-rows,opacity] duration-300 ease-out",
+                    collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100",
+                )}
+                aria-hidden={collapsed}
+            >
+                <div className="overflow-hidden">
 
             {report && (
                 <div className="mt-4 flex flex-col gap-4">
@@ -195,7 +237,28 @@ export function VerifyPanel({
                     </p>
                 </div>
             )}
+                </div>
+            </div>
         </div>
+    )
+}
+
+function Chevron({ open }: { open: boolean }) {
+    return (
+        <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            className={cn("transition-transform duration-200", open ? "rotate-180" : "rotate-0")}
+        >
+            <path d="M6 9l6 6 6-6" />
+        </svg>
     )
 }
 
