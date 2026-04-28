@@ -53,6 +53,11 @@ export interface ProjectAnalyser {
     last_index_cost_usd: number | null
     last_error: string | null
     progress: AnalyserProgress | null
+    /** Latest verify.Report on the graph. Updated by manual verify
+     * button + post-update QC + post-bootstrap QC. Null until first run. */
+    last_health_report: unknown | null
+    /** Timestamp of the verify run that wrote last_health_report. */
+    last_health_check_at: string | null
     updated_at: string
 }
 

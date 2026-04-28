@@ -37,6 +37,8 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ i
                 repo={project ? { repo_url: project.repo_url, repo_full_name: project.repo_full_name } : null}
                 indexedSha={state?.last_indexed_sha ?? null}
                 ready={ready}
+                initialReport={(state?.last_health_report as unknown) || null}
+                initialCheckedAt={state?.last_health_check_at ?? null}
             />
 
             <div className="card-stack">

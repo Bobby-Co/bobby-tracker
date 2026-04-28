@@ -1,29 +1,75 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { cn } from "@/components/cn"
+import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/github"
 import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/lib/analyser"
 
 // VerifyPanel shows a "graph health" coverage report for a project.
 // No LLM cost — the analyser server clones the repo, validates every
 // note's file:line citations against live source, and computes last-
-// commit drift. Run on demand via the "Verify graph" button; report
-// is held in client state (refreshing the tab clears it).
+// commit drift.
+//
+// Persistence model: every verify run (manual button, post-update QC,
+// post-bootstrap QC) writes the latest report to project_analyser.
+// last_health_report. The page passes that as initialReport; we then
+// subscribe to realtime so the panel auto-refreshes whenever a
+// server-side run finishes a new report. Refreshing the tab no longer
+// clears the data.
 export function VerifyPanel({
     projectId,
     repo,
     indexedSha,
     ready,
+    initialReport,
+    initialCheckedAt,
 }: {
     projectId: string
     repo: RepoRef | null
     indexedSha: string | null
     ready: boolean
+    initialReport: unknown
+    initialCheckedAt: string | null
 }) {
-    const [report, setReport] = useState<VerifyReport | null>(null)
+    const [report, setReport] = useState<VerifyReport | null>(
+        (initialReport as VerifyReport | null) ?? null,
+    )
+    const [checkedAt, setCheckedAt] = useState<string | null>(initialCheckedAt)
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    // Realtime: when project_analyser.last_health_report changes
+    // (post-update QC, post-bootstrap QC, or another tab clicked
+    // verify), pick it up here so the panel always shows the latest
+    // run without a manual refresh.
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`project-analyser-health-${projectId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "tracker",
+                    table: "project_analyser",
+                    filter: `project_id=eq.${projectId}`,
+                },
+                (payload) => {
+                    const row = payload.new as { last_health_report?: unknown; last_health_check_at?: string | null }
+                    if (row.last_health_report) {
+                        setReport(row.last_health_report as VerifyReport)
+                    }
+                    if (row.last_health_check_at) {
+                        setCheckedAt(row.last_health_check_at)
+                    }
+                },
+            )
+            .subscribe()
+        return () => {
+            void supabase.removeChannel(channel)
+        }
+    }, [projectId])
 
     async function run() {
         setBusy(true)
@@ -37,6 +83,9 @@ export function VerifyPanel({
             }
             const r = (await res.json()) as VerifyReport
             setReport(r)
+            setCheckedAt(new Date().toISOString())
+            // The route also persists to Supabase; realtime will deliver
+            // the same payload to other tabs / sessions automatically.
         } catch (err) {
             setError(err instanceof Error ? err.message : String(err))
         } finally {
@@ -139,7 +188,10 @@ export function VerifyPanel({
                     )}
 
                     <p className="text-[10.5px] text-[color:var(--c-text-dim)]">
-                        Generated {new Date(report.generated_at).toLocaleString()}.
+                        {checkedAt
+                            ? `Last verified ${new Date(checkedAt).toLocaleString()}`
+                            : `Generated ${new Date(report.generated_at).toLocaleString()}`}
+                        .
                     </p>
                 </div>
             )}

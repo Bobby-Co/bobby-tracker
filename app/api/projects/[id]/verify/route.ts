@@ -47,6 +47,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             repoId: analyser.graph_id,
             gitToken,
         })
+        // Persist the latest report on the project_analyser row so:
+        //   - The verify panel renders cached data on page load (no
+        //     "click verify" empty state).
+        //   - Any future verify run (post-update QC, post-bootstrap QC,
+        //     manual button) overwrites it; realtime subscribers pick
+        //     up the change.
+        // Best-effort: a Supabase failure here doesn't fail the response
+        // (the report is still returned to the client this round-trip).
+        const { error: upErr } = await supabase
+            .from("project_analyser")
+            .update({
+                last_health_report: report,
+                last_health_check_at: new Date().toISOString(),
+            })
+            .eq("project_id", id)
+        if (upErr) {
+            console.warn("verify: persist failed:", upErr.message)
+        }
         return Response.json(report)
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e)
