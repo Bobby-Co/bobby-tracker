@@ -65,7 +65,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const result = await kickoffJob({
             job_type: jobType,
             repo_url: project.repo_url,
-            effort: "medium",
+            // Default to "low" effort to keep token spend predictable.
+            // Effort scales grouper aggressiveness + per-cluster turn budget
+            // on the analyser side; the smart-update agent fills in detail
+            // on subsequent commits, so a sparser first-pass graph is fine.
+            // Ignored by the analyser when job_type === "incremental".
+            effort: "low",
             git_auth: gitToken
                 ? { token: gitToken, username: "x-access-token", scheme: "basic" }
                 : undefined,
