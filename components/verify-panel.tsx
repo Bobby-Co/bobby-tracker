@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { cn } from "@/components/cn"
 import { blobUrl, type RepoRef } from "@/lib/github"
-import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote } from "@/lib/analyser"
+import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/lib/analyser"
 
 // VerifyPanel shows a "graph health" coverage report for a project.
 // No LLM cost — the analyser server clones the repo, validates every
@@ -72,7 +72,7 @@ export function VerifyPanel({
 
             {report && (
                 <div className="mt-4 flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
                         <Stat label="Notes" value={String(report.notes)} />
                         <Stat
                             label="Citation hit rate"
@@ -83,11 +83,29 @@ export function VerifyPanel({
                             }
                         />
                         <Stat
+                            label="Coverage"
+                            value={
+                                report.indexed_files === 0
+                                    ? "n/a"
+                                    : `${Math.round(report.coverage_rate * 100)}% (${report.covered_files}/${report.indexed_files})`
+                            }
+                            sub={
+                                report.uncovered_total > 0
+                                    ? `${report.uncovered_total} file${report.uncovered_total === 1 ? "" : "s"} uncovered`
+                                    : undefined
+                            }
+                        />
+                        <Stat
                             label="Median drift"
                             value={
                                 Object.values(report.drift_buckets ?? {}).reduce((a, b) => a + b, 0) === 0
                                     ? "n/a"
                                     : `${report.drift_median} commit${report.drift_median === 1 ? "" : "s"}`
+                            }
+                            sub={
+                                report.content_stale_total > 0
+                                    ? `${report.content_stale_total} content-stale`
+                                    : undefined
                             }
                         />
                         <Stat
@@ -101,6 +119,19 @@ export function VerifyPanel({
 
                     {report.citations_broken && report.citations_broken.length > 0 && (
                         <BrokenCites items={report.citations_broken} repo={repo} sha={indexedSha} />
+                    )}
+
+                    {report.content_stale_notes && report.content_stale_notes.length > 0 && (
+                        <ContentStaleList items={report.content_stale_notes} repo={repo} sha={indexedSha} />
+                    )}
+
+                    {report.uncovered_files && report.uncovered_files.length > 0 && (
+                        <UncoveredFilesList
+                            items={report.uncovered_files}
+                            total={report.uncovered_total}
+                            repo={repo}
+                            sha={indexedSha}
+                        />
                     )}
 
                     {report.stalest_notes && report.stalest_notes.length > 0 && (
@@ -206,13 +237,104 @@ function StaleList({ items }: { items: VerifyStaleNote[] }) {
     )
 }
 
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function Stat({ label, value, mono, sub }: { label: string; value: string; mono?: boolean; sub?: string }) {
     return (
         <div>
             <div className="text-[10.5px] font-bold uppercase tracking-[0.10em] text-[color:var(--c-text-dim)]">
                 {label}
             </div>
             <div className={cn("mt-0.5 truncate text-[12.5px]", mono && "font-mono")}>{value}</div>
+            {sub && <div className="mt-0.5 truncate text-[10.5px] text-[color:var(--c-text-dim)]">{sub}</div>}
+        </div>
+    )
+}
+
+function ContentStaleList({
+    items,
+    repo,
+    sha,
+}: {
+    items: VerifyContentStaleNote[]
+    repo: RepoRef | null
+    sha: string | null
+}) {
+    return (
+        <div>
+            <SectionLabel>Content-stale notes ({items.length} shown)</SectionLabel>
+            <p className="mt-1 text-[11px] text-[color:var(--c-text-muted)]">
+                Cited files have changed since the note was written. Sharper than commit-distance — the underlying code actually moved.
+            </p>
+            <ul className="mt-2 flex flex-col gap-1.5">
+                {items.map((s) => (
+                    <li key={s.path} className="text-[12.5px]">
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono">{s.path}</span>
+                            <span className="text-[11px] text-[color:var(--c-text-muted)]">
+                                last_commit {s.last_commit.slice(0, 7)}
+                            </span>
+                        </div>
+                        <ul className="mt-0.5 ml-4 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px]">
+                            {s.changed_cited_files.map((f) => {
+                                const url = repo ? blobUrl(repo, f, undefined, sha) : null
+                                return (
+                                    <li key={f}>
+                                        {url ? (
+                                            <a href={url} target="_blank" rel="noreferrer" className="font-mono text-[color:var(--c-text-muted)] hover:underline">
+                                                {f}
+                                            </a>
+                                        ) : (
+                                            <span className="font-mono text-[color:var(--c-text-muted)]">{f}</span>
+                                        )}
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    )
+}
+
+function UncoveredFilesList({
+    items,
+    total,
+    repo,
+    sha,
+}: {
+    items: string[]
+    total: number
+    repo: RepoRef | null
+    sha: string | null
+}) {
+    const remainder = total - items.length
+    return (
+        <div>
+            <SectionLabel>Uncovered indexed files ({items.length} shown of {total})</SectionLabel>
+            <p className="mt-1 text-[11px] text-[color:var(--c-text-muted)]">
+                The indexer knows about these files but no note cites them. Smart-update will mention them when the next commit touches them.
+            </p>
+            <ul className="mt-2 flex flex-col gap-0.5">
+                {items.map((f) => {
+                    const url = repo ? blobUrl(repo, f, undefined, sha) : null
+                    return (
+                        <li key={f} className="text-[12px]">
+                            {url ? (
+                                <a href={url} target="_blank" rel="noreferrer" className="font-mono hover:underline">
+                                    {f}
+                                </a>
+                            ) : (
+                                <span className="font-mono">{f}</span>
+                            )}
+                        </li>
+                    )
+                })}
+                {remainder > 0 && (
+                    <li className="text-[11px] text-[color:var(--c-text-muted)]">
+                        … and {remainder} more
+                    </li>
+                )}
+            </ul>
         </div>
     )
 }

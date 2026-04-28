@@ -130,21 +130,45 @@ export interface VerifyStaleNote {
     commits_behind: number
 }
 
+export interface VerifyContentStaleNote {
+    path: string
+    last_commit: string
+    /** Files this note cites that have been modified since note.last_commit. */
+    changed_cited_files: string[]
+}
+
 export interface VerifyReport {
     generated_at: string
     head_sha: string
     notes: number
     notes_by_kind: Record<string, number>
+
     citations_total: number
     citations_resolved: number
     citations_broken?: VerifyBrokenCite[]
     /** 0..1; 1.0 when there are zero citations (vacuously perfect). */
     hit_rate: number
+
     drift_median: number
     drift_max: number
     drift_buckets: Record<string, number>
     stalest_notes?: VerifyStaleNote[]
-    /** 0..1 composite of hit_rate (60%) and drift-decay (40%). */
+
+    /** Indexed source files the bootstrap knew about. */
+    indexed_files: number
+    /** Indexed files cited by at least one note. */
+    covered_files: number
+    /** Sample of indexed files no note cites; total is uncovered_total. */
+    uncovered_files?: string[]
+    uncovered_total: number
+    /** 0..1 covered/indexed; 1.0 when the bootstrap left no indexed-file map. */
+    coverage_rate: number
+
+    /** Notes whose cited files moved underneath them (sharper than drift). */
+    content_stale_notes?: VerifyContentStaleNote[]
+    content_stale_total: number
+
+    /** 0..1 composite of hit_rate (45%), drift-decay (20%), coverage (20%), content-stale penalty (15%). */
     overall_health: number
 }
 
