@@ -1,16 +1,30 @@
+import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, Project, ProjectAnalyser } from "@/lib/supabase/types"
 import { fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
 import { PublicIssueView } from "@/components/public-issue-view"
+import { PublicIssueDetailSkeleton } from "@/components/public-issue-detail-skeleton"
 
 export const dynamic = "force-dynamic"
 
-// Per-issue detail page for the public submission flow. Server-side
-// resolution mirrors the GET /api/public-issues/[id] gate (token →
-// project, public-session label) so an attacker can't fish around for
-// other issue IDs.
-export default async function PublicIssueDetail({
+// Per-issue detail page for the public submission flow. Wraps the
+// data-fetch in a Suspense boundary so the skeleton renders the
+// instant the user lands here on a soft navigation (clicked from
+// the history list, etc.) — never blocked by the round-trip.
+export default function PublicIssueDetail({
+    params,
+}: {
+    params: Promise<{ token: string; id: string }>
+}) {
+    return (
+        <Suspense fallback={<PublicIssueDetailSkeleton />}>
+            <PublicIssueDetailContent params={params} />
+        </Suspense>
+    )
+}
+
+async function PublicIssueDetailContent({
     params,
 }: {
     params: Promise<{ token: string; id: string }>

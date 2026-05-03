@@ -1,9 +1,11 @@
+import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { PublicSession } from "@/lib/supabase/types"
 import { PublicIssueForm } from "@/components/public-issue-form"
 import { PublicProfileBadge } from "@/components/public-profile-badge"
 import { PublicSessionHistory } from "@/components/public-session-history"
+import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
 
 export const dynamic = "force-dynamic"
 
@@ -20,11 +22,23 @@ function fmt(iso: string) {
     return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
-// Public submission page. Resolves the token to a session, shows the
-// covered project list, and lets anyone file an issue against any of
-// them. Reads use the service role (the new tables have owner-only
-// RLS) so we never expose other sessions or other projects.
-export default async function PublicSessionPage({
+// Public submission page. Synchronous shell wraps a streaming
+// <Suspense> boundary, so the skeleton renders the moment the user
+// navigates here (back from an issue detail, fresh visit, etc.) —
+// the data-fetching never blocks the initial paint.
+export default function PublicSessionPage({
+    params,
+}: {
+    params: Promise<{ token: string }>
+}) {
+    return (
+        <Suspense fallback={<PublicSessionSkeleton />}>
+            <PublicSessionContent params={params} />
+        </Suspense>
+    )
+}
+
+async function PublicSessionContent({
     params,
 }: {
     params: Promise<{ token: string }>
