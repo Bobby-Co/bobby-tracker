@@ -99,3 +99,14 @@ export interface IssueSuggestion {
 
 export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived"]
 export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urgent"]
+
+export interface ProjectPublicSession {
+    project_id: string
+    token: string
+    enabled: boolean
+    title: string | null
+    description: string | null
+    submission_count: number
+    created_at: string
+    updated_at: string
+}
