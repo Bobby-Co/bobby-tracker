@@ -44,11 +44,15 @@ export function SessionManagePanel({
     sessionProjects: initialProjects,
     allProjects,
     invites: initialInvites,
+    ownerEmail,
 }: {
     session: PublicSession
     sessionProjects: ProjectOption[]
     allProjects: ProjectOption[]
     invites: PublicSessionInvite[]
+    /** Lowercased email of the session owner — rendered as a locked
+     *  pill on the invite list and protected from removal. */
+    ownerEmail: string | null
 }) {
     const router = useRouter()
 
@@ -166,6 +170,18 @@ export function SessionManagePanel({
         run("setAccessMode", async () => {
             const data = await call(`/api/sessions/${session.id}`, "PATCH", { access_mode: mode })
             if (data?.session) setSession(data.session)
+            // Server auto-adds the owner email when flipping to invite —
+            // mirror that locally so the panel doesn't briefly show an
+            // empty whitelist + scary "no one can access" warning.
+            if (mode === "invite" && ownerEmail) {
+                setInvites((cur) => {
+                    if (cur.some((i) => i.email === ownerEmail)) return cur
+                    return [
+                        ...cur,
+                        { session_id: session.id, email: ownerEmail, created_at: new Date().toISOString() },
+                    ].sort((a, b) => a.email.localeCompare(b.email))
+                })
+            }
         })
     }
 
@@ -207,6 +223,10 @@ export function SessionManagePanel({
     }
 
     function removeInvite(email: string) {
+        // Mirror the server-side guard so the UI never even attempts
+        // to delete the owner row. The button is hidden anyway, but
+        // belt and suspenders.
+        if (ownerEmail && email === ownerEmail) return
         run("removeInvite", async () => {
             await call(
                 `/api/sessions/${session.id}/invites/${encodeURIComponent(email)}`,
@@ -335,25 +355,42 @@ export function SessionManagePanel({
                             </p>
                         ) : (
                             <ul className="mt-2 flex flex-wrap gap-1.5">
-                                {invites.map((i) => (
-                                    <li
-                                        key={i.email}
-                                        className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--c-surface-2)] px-2.5 py-1 text-[12px] font-semibold"
-                                    >
-                                        <span className="truncate font-mono text-[11.5px]">{i.email}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeInvite(i.email)}
-                                            disabled={busy}
-                                            aria-label={`Remove ${i.email}`}
-                                            className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                {invites.map((i) => {
+                                    const isOwner = !!ownerEmail && i.email === ownerEmail
+                                    return (
+                                        <li
+                                            key={i.email}
+                                            className={
+                                                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold " +
+                                                (isOwner
+                                                    ? "border border-emerald-200 bg-emerald-50 text-emerald-900"
+                                                    : "bg-[color:var(--c-surface-2)]")
+                                            }
                                         >
-                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
-                                                <path d="M6 6l12 12M18 6L6 18" />
-                                            </svg>
-                                        </button>
-                                    </li>
-                                ))}
+                                            <span className="truncate font-mono text-[11.5px]">{i.email}</span>
+                                            {isOwner ? (
+                                                <span
+                                                    title="The session owner is always invited and can't be removed."
+                                                    className="rounded-full bg-emerald-200/60 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.08em] text-emerald-900"
+                                                >
+                                                    You
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeInvite(i.email)}
+                                                    disabled={busy}
+                                                    aria-label={`Remove ${i.email}`}
+                                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                                >
+                                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
+                                                        <path d="M6 6l12 12M18 6L6 18" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </li>
+                                    )
+                                })}
                             </ul>
                         )}
 

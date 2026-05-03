@@ -69,6 +69,21 @@ export async function POST(request: Request) {
         .single<PublicSession>()
     if (insErr) return jsonError("db_error", insErr.message, 500)
 
+    // Owner is always implicitly invited. Insert their email so the
+    // panel renders them in the list and the public page lets them
+    // in immediately if they switched the session to invite mode.
+    if (access_mode === "invite") {
+        const ownerEmail = (user.email ?? "").trim().toLowerCase()
+        if (ownerEmail) {
+            await supabase
+                .from("public_session_invites")
+                .upsert(
+                    { session_id: session.id, email: ownerEmail },
+                    { onConflict: "session_id,email", ignoreDuplicates: true },
+                )
+        }
+    }
+
     if (projectIdsIn.length > 0) {
         const { error: linkErr } = await supabase
             .from("public_session_projects")

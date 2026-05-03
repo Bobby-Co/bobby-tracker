@@ -18,6 +18,8 @@ export default async function SessionDetailPage({
 }) {
     const { id } = await params
     const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const ownerEmail = (user?.email ?? "").trim().toLowerCase() || null
 
     const { data: session } = await supabase
         .from("public_sessions")
@@ -67,6 +69,7 @@ export default async function SessionDetailPage({
                 sessionProjects={sessionProjects}
                 allProjects={allProjects ?? []}
                 invites={invites ?? []}
+                ownerEmail={ownerEmail}
             />
         </div>
     )
