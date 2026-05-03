@@ -45,6 +45,7 @@ export async function POST(request: Request) {
         : "medium"
 
     const reporter = typeof body?.reporter === "string" ? body.reporter.trim().slice(0, 80) : ""
+    const reporterId = typeof body?.reporter_id === "string" ? body.reporter_id.trim().slice(0, 64) : ""
     const userBody = typeof body?.body === "string" ? body.body : ""
     const stamp = reporter
         ? `> Submitted via public link by **${reporter.replace(/[\r\n]+/g, " ")}**\n\n`
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
             body: finalBody,
             priority,
             labels: [PUBLIC_ISSUE_LABEL],
+            public_reporter_id: reporterId || null,
+            public_reporter_name: reporter || null,
         })
         .select("id,issue_number,title,created_at")
         .single<Pick<Issue, "id" | "issue_number" | "title" | "created_at">>()

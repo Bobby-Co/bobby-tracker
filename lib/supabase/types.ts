@@ -29,6 +29,13 @@ export interface Issue {
     github_issue_number: number | null
     github_node_id: string | null
     issue_number: number
+    /** Set on issues filed via /p/<token>. Stable per-browser id (UUID
+     *  written to the submitter's localStorage on first visit) so
+     *  anonymous reporters stay distinguishable across submissions. */
+    public_reporter_id: string | null
+    /** Display name the submitter typed into the public profile badge.
+     *  Null for anonymous submissions or owner-filed issues. */
+    public_reporter_name: string | null
     created_at: string
     updated_at: string
 }

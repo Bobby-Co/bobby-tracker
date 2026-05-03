@@ -1,24 +1,35 @@
 // Browser-only helpers for the anonymous "profile" used by /p/<token>
-// submitters. The display name lives at a single global key so a
-// submitter who fills it once on one project's link reuses it on
-// every other public link they visit. Submission history is keyed
-// per token so different links don't bleed into each other.
+// submitters. The display name and stable reporter id live at single
+// global keys so a submitter who fills them once on one public link
+// reuses them on every other public link they visit. Submission
+// history is no longer kept here — the public page server-renders
+// "All submissions" grouped by reporter, which gives every visitor
+// the same view regardless of device.
 
 const NAME_KEY = "bobby:public-profile:name"
-const ISSUES_KEY = (token: string) => `bobby:public-issues:${token}`
-
-export interface PublicSubmittedIssue {
-    /** UUID — required to build the detail URL. Older entries (before
-     *  this field existed) are dropped at read time. */
-    id: string
-    issue_number: number
-    title: string
-    created_at: string
-}
+const REPORTER_ID_KEY = "bobby:public-profile:reporter-id"
 
 export function readName(): string {
     if (typeof window === "undefined") return ""
     try { return localStorage.getItem(NAME_KEY) ?? "" } catch { return "" }
+}
+
+// Stable per-browser id used to distinguish anonymous submitters on
+// the public listing. Generated lazily on first call and persisted
+// to localStorage; same id is reused across every public session
+// the submitter visits.
+export function readReporterId(): string {
+    if (typeof window === "undefined") return ""
+    try {
+        let id = localStorage.getItem(REPORTER_ID_KEY)
+        if (!id) {
+            id = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+                ? crypto.randomUUID()
+                : Math.random().toString(36).slice(2) + Date.now().toString(36)
+            localStorage.setItem(REPORTER_ID_KEY, id)
+        }
+        return id
+    } catch { return "" }
 }
 
 export function writeName(name: string) {
@@ -31,33 +42,4 @@ export function writeName(name: string) {
         // only fire cross-tab; we want intra-tab sync too).
         window.dispatchEvent(new CustomEvent("bobby:profile-changed"))
     } catch { /* quota or unavailable */ }
-}
-
-export function readIssues(token: string): PublicSubmittedIssue[] {
-    if (typeof window === "undefined") return []
-    try {
-        const raw = localStorage.getItem(ISSUES_KEY(token))
-        if (!raw) return []
-        const parsed = JSON.parse(raw)
-        if (!Array.isArray(parsed)) return []
-        return parsed.filter(
-            (x): x is PublicSubmittedIssue =>
-                !!x &&
-                typeof x.id === "string" &&
-                typeof x.issue_number === "number" &&
-                typeof x.title === "string" &&
-                typeof x.created_at === "string",
-        )
-    } catch { return [] }
-}
-
-export function appendIssue(token: string, issue: PublicSubmittedIssue) {
-    if (typeof window === "undefined") return
-    try {
-        const list = readIssues(token)
-        // Newest first; cap at 50 so we never blow past the storage quota.
-        const next = [issue, ...list.filter((x) => x.id !== issue.id)].slice(0, 50)
-        localStorage.setItem(ISSUES_KEY(token), JSON.stringify(next))
-        window.dispatchEvent(new CustomEvent("bobby:public-issues-changed", { detail: { token } }))
-    } catch { /* noop */ }
 }

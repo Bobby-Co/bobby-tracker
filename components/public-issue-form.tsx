@@ -1,12 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { ISSUE_PRIORITIES } from "@/lib/supabase/types"
 import type { IssuePriority } from "@/lib/supabase/types"
 import { Dropdown } from "@/components/dropdown"
 import { Spinner } from "@/components/spinner"
-import { appendIssue, readName } from "@/lib/public-profile"
+import { readName, readReporterId } from "@/lib/public-profile"
 
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 const MAX_TITLE = 200
@@ -18,12 +19,13 @@ interface ProjectOption {
 }
 
 // Anonymous issue submission form for /p/<token>. The submitter's
-// display name comes from the global profile (PublicProfileBadge,
-// localStorage) — not collected per-submission. The session can
-// cover one or more projects; when there's more than one, a project
-// picker is rendered so the submitter can route their report. On
-// success we append the issue to the per-token history in
-// localStorage so the PublicSessionHistory component picks it up.
+// display name + stable reporter id come from the global profile
+// (PublicProfileBadge / localStorage) — not collected per-submission.
+// The session can cover one or more projects; when there's more than
+// one, a project picker is rendered so the submitter can route their
+// report. On success the new issue lands in the server-rendered
+// "All submissions" listing (router.refresh) so the visitor sees it
+// in their reporter group right away.
 export function PublicIssueForm({
     token,
     projects,
@@ -31,6 +33,7 @@ export function PublicIssueForm({
     token: string
     projects: ProjectOption[]
 }) {
+    const router = useRouter()
     const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? "")
     const [title, setTitle] = useState("")
     const [body, setBody] = useState("")
@@ -48,10 +51,11 @@ export function PublicIssueForm({
         }
         startTransition(async () => {
             const reporter = readName()
+            const reporter_id = readReporterId()
             const res = await fetch("/api/public-issues", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token, project_id: projectId, reporter, title, body, priority }),
+                body: JSON.stringify({ token, project_id: projectId, reporter, reporter_id, title, body, priority }),
             })
             if (!res.ok) {
                 const e = await res.json().catch(() => ({}))
@@ -61,13 +65,11 @@ export function PublicIssueForm({
             const data = await res.json()
             const issue = data.issue
             if (issue?.id && issue?.issue_number) {
-                appendIssue(token, {
-                    id: issue.id,
-                    issue_number: issue.issue_number,
-                    title: issue.title || title,
-                    created_at: issue.created_at || new Date().toISOString(),
-                })
                 setSubmitted({ id: issue.id, issue_number: issue.issue_number })
+                // Refresh so the new issue lands in the server-rendered
+                // "All submissions" list under the visitor's reporter
+                // group when they hit "Submit another" or scroll down.
+                router.refresh()
             }
         })
     }

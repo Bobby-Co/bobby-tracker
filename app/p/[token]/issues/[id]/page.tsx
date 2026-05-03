@@ -76,6 +76,8 @@ async function PublicIssueDetailContent({
                     status: issue.status,
                     priority: issue.priority,
                     labels: issue.labels,
+                    public_reporter_id: issue.public_reporter_id,
+                    public_reporter_name: issue.public_reporter_name,
                     created_at: issue.created_at,
                     updated_at: issue.updated_at,
                 }}

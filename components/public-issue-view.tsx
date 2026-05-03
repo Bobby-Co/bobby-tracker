@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
 import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, IssueSuggestion } from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
+import { reporterDisplay } from "@/lib/public-reporter"
 
 interface PublicIssue {
     id: string
@@ -13,6 +14,8 @@ interface PublicIssue {
     status: IssueStatus
     priority: IssuePriority
     labels: string[]
+    public_reporter_id: string | null
+    public_reporter_name: string | null
     created_at: string
     updated_at: string
 }
@@ -44,7 +47,13 @@ export function PublicIssueView({
     const [pending, startTransition] = useTransition()
     const autoFiredRef = useRef(false)
 
-    function regenerate() {
+    // Public visitors can't *manually* regenerate analysis (it would
+    // let any anonymous viewer churn analyser cost), but the issue
+    // still needs an analysis to be useful — so we auto-fire ONCE
+    // per mount when no suggestion is cached and the graph is ready.
+    // The owner can manually regenerate later from the authenticated
+    // tracker if they need a fresh run.
+    function autoRunOnce() {
         setError(null)
         setErrorCode(null)
         startTransition(async () => {
@@ -64,13 +73,12 @@ export function PublicIssueView({
         })
     }
 
-    // Auto-trigger once if no cached suggestion AND analyser is ready.
     useEffect(() => {
         if (autoFiredRef.current) return
         if (!analyser.ready) return
         if (suggestion) return
         autoFiredRef.current = true
-        regenerate()
+        autoRunOnce()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [analyser.ready, suggestion?.id])
 
@@ -119,8 +127,15 @@ export function PublicIssueView({
                     <StatusPill status={issue.status} />
                     <PriorityPill priority={issue.priority} />
                     <span className="grow" />
+                    <span>
+                        Filed by{" "}
+                        <span className="font-semibold text-[color:var(--c-text)]">
+                            {reporterDisplay(issue.public_reporter_id, issue.public_reporter_name)}
+                        </span>
+                    </span>
+                    <span aria-hidden>·</span>
                     <time dateTime={issue.created_at}>
-                        Filed {new Date(issue.created_at).toLocaleString()}
+                        {new Date(issue.created_at).toLocaleString()}
                     </time>
                 </div>
                 <h1 className="mt-2 text-[20px] font-bold leading-tight tracking-[-0.012em] sm:text-[24px]">
@@ -148,14 +163,10 @@ export function PublicIssueView({
                                     : "Citations into the project's source code (when the maintainer's graph is ready)."}
                         </p>
                     </div>
-                    {analyser.ready && (
-                        <button
-                            onClick={regenerate}
-                            disabled={pending}
-                            className="btn-ghost"
-                        >
-                            {pending ? (<><Spinner />Investigating…</>) : (suggestion ? "Regenerate" : "Investigate")}
-                        </button>
+                    {pending && (
+                        <span className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--c-text-muted)]">
+                            <Spinner /> Investigating…
+                        </span>
                     )}
                 </div>
 

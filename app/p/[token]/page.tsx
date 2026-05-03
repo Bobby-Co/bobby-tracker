@@ -1,11 +1,12 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { PublicSession } from "@/lib/supabase/types"
+import type { Issue, PublicSession } from "@/lib/supabase/types"
 import { PublicIssueForm } from "@/components/public-issue-form"
 import { PublicProfileBadge } from "@/components/public-profile-badge"
-import { PublicSessionHistory } from "@/components/public-session-history"
+import { PublicSessionSubmissions } from "@/components/public-session-submissions"
 import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
+import { groupByReporter, type PublicListedIssue } from "@/lib/public-reporter"
 
 export const dynamic = "force-dynamic"
 
@@ -67,6 +68,35 @@ async function PublicSessionContent({
         .filter((p) => p.name)
         .sort((a, b) => a.name.localeCompare(b.name))
 
+    const projectIds = projects.map((p) => p.id)
+    const projectNameById = new Map(projects.map((p) => [p.id, p.name]))
+
+    type ListedIssueRow = Pick<
+        Issue,
+        "id" | "issue_number" | "title" | "project_id" | "public_reporter_id" | "public_reporter_name" | "created_at"
+    >
+    const { data: issueRows } = projectIds.length
+        ? await svc
+            .from("issues")
+            .select("id,issue_number,title,project_id,public_reporter_id,public_reporter_name,created_at")
+            .in("project_id", projectIds)
+            .contains("labels", ["public-session"])
+            .order("created_at", { ascending: false })
+            .limit(200)
+            .returns<ListedIssueRow[]>()
+        : { data: [] as ListedIssueRow[] }
+
+    const listedIssues: PublicListedIssue[] = (issueRows ?? []).map((r) => ({
+        id: r.id,
+        issue_number: r.issue_number,
+        title: r.title,
+        project_name: projectNameById.get(r.project_id) ?? "",
+        public_reporter_id: r.public_reporter_id,
+        public_reporter_name: r.public_reporter_name,
+        created_at: r.created_at,
+    }))
+    const groups = groupByReporter(listedIssues)
+
     const win = session.enabled ? windowState(session) : "closed"
     const heading = session.title || session.name
 
@@ -125,7 +155,7 @@ async function PublicSessionContent({
                 ) : (
                     <>
                         <PublicIssueForm token={token} projects={projects} />
-                        <PublicSessionHistory token={token} />
+                        <PublicSessionSubmissions token={token} groups={groups} />
                     </>
                 )
             ) : !session.enabled ? (
