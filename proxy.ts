@@ -61,5 +61,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+    // Skip everything that can't benefit from an auth-cookie refresh:
+    // Next's internal asset paths and any URL with a file extension
+    // (images, fonts, source maps, etc.). Each skipped request is one
+    // fewer auth.getUser() round-trip to Supabase. We deliberately
+    // keep /p/* and /api/public-issues* in scope so an authenticated
+    // visitor's tokens get refreshed when they hit invite-only links.
+    matcher: [
+        "/((?!_next/static|_next/image|_next/data|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\..*).*)",
+    ],
 }

@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
+import { cache } from "react"
+import type { User } from "@supabase/supabase-js"
 
 // Server-side Supabase client used inside Server Components and Route
 // Handlers. Reads/writes the auth cookies (with the shared cookie
@@ -34,6 +36,18 @@ function sharedCookieOptions() {
         ? { domain, path: "/", sameSite: "lax" as const, secure: true }
         : undefined
 }
+
+// Cached per-request fetch of the current authenticated user.
+// auth.getUser() is a network round-trip to Supabase auth (it
+// validates the JWT with the auth server, not just decodes the
+// cookie). Multiple components / helpers in the same request all
+// need the user; React's `cache()` deduplicates so we pay for the
+// round-trip once instead of three or four times.
+export const getCurrentUser = cache(async (): Promise<User | null> => {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+})
 
 // Service-role client for trusted server-only operations (e.g. forwarding
 // indexing jobs to the analyser). Bypasses RLS — never expose to clients.

@@ -6,7 +6,7 @@
 // one place.
 
 import { jsonError } from "@/lib/api"
-import { createClient, createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient, getCurrentUser } from "@/lib/supabase/server"
 import type {
     Issue,
     PublicSession,
@@ -96,8 +96,7 @@ export const PUBLIC_ISSUE_LABEL = PUBLIC_LABEL
 // enforce 'own'-visibility filters. Returns null for anonymous
 // visitors — never throws.
 export async function getCurrentPublicUser(): Promise<{ id: string; email: string | null } | null> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser()
     if (!user) return null
     return { id: user.id, email: (user.email ?? "").trim().toLowerCase() || null }
 }

@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
 import { SessionManagePanel } from "@/components/session-manage-panel"
 
@@ -17,8 +17,8 @@ export default async function SessionDetailPage({
     params: Promise<{ id: string }>
 }) {
     const { id } = await params
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Run auth + client setup in parallel — they're independent.
+    const [user, supabase] = await Promise.all([getCurrentUser(), createClient()])
     const ownerEmail = (user?.email ?? "").trim().toLowerCase() || null
 
     const { data: session } = await supabase

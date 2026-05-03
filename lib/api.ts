@@ -1,7 +1,7 @@
 // Shared helpers for tracker API route handlers.
 
 import type { User } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, getCurrentUser } from "@/lib/supabase/server"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
@@ -13,8 +13,9 @@ type AuthOK   = { supabase: SupabaseServer; user: User;  error: null }
 type AuthFail = { supabase: SupabaseServer; user: null;  error: Response }
 
 export async function requireUser(): Promise<AuthOK | AuthFail> {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Run the (cached) auth check and the cookie-bound client setup
+    // in parallel — they don't depend on each other.
+    const [user, supabase] = await Promise.all([getCurrentUser(), createClient()])
     if (!user) {
         return { supabase, user: null, error: jsonError("unauthorized", "sign in required", 401) }
     }
