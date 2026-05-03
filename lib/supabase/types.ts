@@ -100,16 +100,34 @@ export interface IssueSuggestion {
 export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived"]
 export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urgent"]
 
-export interface ProjectPublicSession {
-    project_id: string
+/** Standalone shareable session that can cover one or more projects.
+ *  Replaces the old per-project ProjectPublicSession (migration 0009). */
+export interface PublicSession {
+    id: string
+    user_id: string
     token: string
     enabled: boolean
+    /** Internal label shown in the owner's session list. */
+    name: string
+    /** Public heading rendered to submitters (falls back to `name`). */
     title: string | null
     description: string | null
-    submission_count: number
     /** ISO timestamps. Null means open-ended on that side. */
     start_at: string | null
     end_at: string | null
+    submission_count: number
     created_at: string
     updated_at: string
+}
+
+export interface PublicSessionProject {
+    session_id: string
+    project_id: string
+    created_at: string
+}
+
+/** Convenience shape used by the management UI: a session with the
+ *  list of projects it covers (joined via public_session_projects). */
+export interface PublicSessionWithProjects extends PublicSession {
+    projects: { id: string; name: string }[]
 }

@@ -17,6 +17,7 @@ interface SidebarProps {
 export function SidebarContent({ projects, activeProjectId, onNavigate }: SidebarProps) {
     const pathname = usePathname()
     const isInbox = pathname === "/projects"
+    const isSessions = pathname === "/sessions" || pathname.startsWith("/sessions/")
 
     return (
         <nav className="flex h-full flex-col gap-1 px-3 py-4">
@@ -43,6 +44,24 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                     Projects
                 </span>
                 <span className="text-[11px] tabular-nums text-[color:var(--c-text-dim)]">{projects.length}</span>
+            </Link>
+
+            <Link
+                href="/sessions"
+                onClick={onNavigate}
+                className={cn(
+                    "flex items-center justify-between rounded-[10px] px-3 py-2 text-sm font-medium transition-colors",
+                    isSessions
+                        ? "bg-zinc-100 text-zinc-900"
+                        : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                )}
+            >
+                <span className="inline-flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                        <path d="M9 7l-6 5 6 5M15 7l6 5-6 5" />
+                    </svg>
+                    Public sessions
+                </span>
             </Link>
 
             <div className="mt-4 px-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-dim)]">

@@ -12,12 +12,26 @@ const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 const MAX_TITLE = 200
 const MAX_BODY = 10_000
 
+interface ProjectOption {
+    id: string
+    name: string
+}
+
 // Anonymous issue submission form for /p/<token>. The submitter's
 // display name comes from the global profile (PublicProfileBadge,
-// localStorage) — not collected per-submission. On success we
-// append the issue to the per-token history in localStorage so the
-// PublicSessionHistory component picks it up.
-export function PublicIssueForm({ token }: { token: string }) {
+// localStorage) — not collected per-submission. The session can
+// cover one or more projects; when there's more than one, a project
+// picker is rendered so the submitter can route their report. On
+// success we append the issue to the per-token history in
+// localStorage so the PublicSessionHistory component picks it up.
+export function PublicIssueForm({
+    token,
+    projects,
+}: {
+    token: string
+    projects: ProjectOption[]
+}) {
+    const [projectId, setProjectId] = useState<string>(projects[0]?.id ?? "")
     const [title, setTitle] = useState("")
     const [body, setBody] = useState("")
     const [priority, setPriority] = useState<IssuePriority>("medium")
@@ -28,12 +42,16 @@ export function PublicIssueForm({ token }: { token: string }) {
     function submit(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
+        if (!projectId) {
+            setError("Pick a project before submitting.")
+            return
+        }
         startTransition(async () => {
             const reporter = readName()
             const res = await fetch("/api/public-issues", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token, reporter, title, body, priority }),
+                body: JSON.stringify({ token, project_id: projectId, reporter, title, body, priority }),
             })
             if (!res.ok) {
                 const e = await res.json().catch(() => ({}))
@@ -108,6 +126,27 @@ export function PublicIssueForm({ token }: { token: string }) {
             aria-busy={pending}
         >
             <fieldset disabled={pending} className="contents">
+                {projects.length > 1 ? (
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                            Project
+                        </span>
+                        <Dropdown<string>
+                            value={projectId}
+                            onChange={setProjectId}
+                            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                            aria-label="Project"
+                        />
+                    </label>
+                ) : projects.length === 1 ? (
+                    <div className="flex items-center gap-2 text-[12px] text-[color:var(--c-text-muted)]">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.08em]">Project</span>
+                        <span className="rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 font-semibold text-[color:var(--c-text)]">
+                            {projects[0].name}
+                        </span>
+                    </div>
+                ) : null}
+
                 <label className="flex flex-col gap-1">
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
                         Title

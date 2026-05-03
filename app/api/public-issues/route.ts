@@ -20,16 +20,22 @@ export async function POST(request: Request) {
 
     const token = String(body?.token ?? "").trim()
     const title = String(body?.title ?? "").trim()
+    const project_id = String(body?.project_id ?? "").trim()
     if (!title) return jsonError("bad_request", "title required", 400)
+    if (!project_id) return jsonError("bad_request", "project_id required", 400)
 
     const svc = createServiceClient()
     const { session, error } = await resolvePublicSession(svc, token, { requireOpen: true })
     if (error) return error
 
+    if (!session.project_ids.includes(project_id)) {
+        return jsonError("bad_request", "this project isn't part of the session", 400)
+    }
+
     const { data: project } = await svc
         .from("projects")
         .select("id,user_id")
-        .eq("id", session.project_id)
+        .eq("id", project_id)
         .maybeSingle<Pick<Project, "id" | "user_id">>()
     if (!project) return jsonError("not_found", "project missing", 404)
 
@@ -62,15 +68,15 @@ export async function POST(request: Request) {
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).
     const { data: cur } = await svc
-        .from("project_public_sessions")
+        .from("public_sessions")
         .select("submission_count")
-        .eq("project_id", project.id)
+        .eq("id", session.id)
         .maybeSingle<{ submission_count: number }>()
     if (cur) {
         await svc
-            .from("project_public_sessions")
+            .from("public_sessions")
             .update({ submission_count: cur.submission_count + 1 })
-            .eq("project_id", project.id)
+            .eq("id", session.id)
     }
 
     return Response.json({

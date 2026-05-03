@@ -21,7 +21,7 @@ export default async function PublicIssueDetail({
     const sess = await resolvePublicSession(svc, token, { requireOpen: false })
     if (sess.error) notFound()
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_id)
+    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) notFound()
     const issue = found.issue
 

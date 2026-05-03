@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const sess = await resolvePublicSession(svc, token, { requireOpen: false })
     if (sess.error) return sess.error
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_id)
+    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) return found.error
     const issue = found.issue
 

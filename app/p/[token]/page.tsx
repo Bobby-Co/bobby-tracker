@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { Project, ProjectPublicSession } from "@/lib/supabase/types"
+import type { PublicSession } from "@/lib/supabase/types"
 import { PublicIssueForm } from "@/components/public-issue-form"
 import { PublicProfileBadge } from "@/components/public-profile-badge"
 import { PublicSessionHistory } from "@/components/public-session-history"
@@ -17,16 +17,13 @@ function windowState(s: { start_at: string | null; end_at: string | null }): Win
 }
 
 function fmt(iso: string) {
-    return new Date(iso).toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-    })
+    return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
 }
 
-// Public issue submission page. Anyone with the link can file an issue
-// against the linked project — no login required. Reads use the
-// service role (the table has owner-only RLS) so we never expose the
-// project list or other tokens.
+// Public submission page. Resolves the token to a session, shows the
+// covered project list, and lets anyone file an issue against any of
+// them. Reads use the service role (the new tables have owner-only
+// RLS) so we never expose other sessions or other projects.
 export default async function PublicSessionPage({
     params,
 }: {
@@ -36,22 +33,28 @@ export default async function PublicSessionPage({
     const svc = createServiceClient()
 
     const { data: session } = await svc
-        .from("project_public_sessions")
-        .select("project_id,enabled,title,description,start_at,end_at")
+        .from("public_sessions")
+        .select("id,enabled,name,title,description,start_at,end_at")
         .eq("token", token)
-        .maybeSingle<Pick<ProjectPublicSession, "project_id" | "enabled" | "title" | "description" | "start_at" | "end_at">>()
+        .maybeSingle<Pick<PublicSession, "id" | "enabled" | "name" | "title" | "description" | "start_at" | "end_at">>()
 
     if (!session) notFound()
 
-    const { data: project } = await svc
-        .from("projects")
-        .select("id,name")
-        .eq("id", session.project_id)
-        .maybeSingle<Pick<Project, "id" | "name">>()
-    if (!project) notFound()
+    const { data: links } = await svc
+        .from("public_session_projects")
+        .select("project_id,projects(id,name)")
+        .eq("session_id", session.id)
+    const projects = (links ?? [])
+        .map((r: { project_id: string; projects: unknown }) => {
+            const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
+            const name = (proj && typeof proj === "object" && "name" in proj) ? (proj as { name: string }).name : ""
+            return { id: r.project_id, name }
+        })
+        .filter((p) => p.name)
+        .sort((a, b) => a.name.localeCompare(b.name))
 
     const win = session.enabled ? windowState(session) : "closed"
-    const heading = session.title || "Report an issue"
+    const heading = session.title || session.name
 
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-5 px-4 py-8 sm:gap-6 sm:px-6 sm:py-12">
@@ -62,7 +65,7 @@ export default async function PublicSessionPage({
                             <circle cx="12" cy="12" r="9" />
                         </svg>
                     </span>
-                    <span className="truncate">{project.name}</span>
+                    <span>Public submission</span>
                 </div>
                 <div>
                     <h1 className="text-[22px] font-bold leading-tight tracking-[-0.012em] sm:text-[28px]">
@@ -74,6 +77,19 @@ export default async function PublicSessionPage({
                         </p>
                     )}
                 </div>
+                {projects.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-[color:var(--c-text-muted)]">
+                        <span>Covers:</span>
+                        {projects.map((p) => (
+                            <span
+                                key={p.id}
+                                className="rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 font-semibold text-[color:var(--c-text)]"
+                            >
+                                {p.name}
+                            </span>
+                        ))}
+                    </div>
+                )}
                 {(session.start_at || session.end_at) && win === "open" && (
                     <div className="text-[11.5px] text-[color:var(--c-text-dim)]">
                         {session.start_at && session.end_at
@@ -87,14 +103,21 @@ export default async function PublicSessionPage({
             </header>
 
             {win === "open" ? (
-                <>
-                    <PublicIssueForm token={token} />
-                    <PublicSessionHistory token={token} />
-                </>
+                projects.length === 0 ? (
+                    <ClosedCard
+                        title="No projects in this session yet"
+                        body="The owner hasn't added any projects to this submission link. Reach out to them and ask them to add at least one."
+                    />
+                ) : (
+                    <>
+                        <PublicIssueForm token={token} projects={projects} />
+                        <PublicSessionHistory token={token} />
+                    </>
+                )
             ) : !session.enabled ? (
                 <ClosedCard
                     title="Submissions paused"
-                    body="This public submission link has been disabled by the project owner. Check back later or reach out to them directly."
+                    body="This public submission link has been disabled by the owner. Check back later or reach out to them directly."
                 />
             ) : win === "not_yet" ? (
                 <ClosedCard
