@@ -1,7 +1,6 @@
-import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
-import { fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
+import { fetchPublicIssue, requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
 
 // GET /api/public-issues/[id]?token=<session_token>
 //
@@ -20,6 +19,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const svc = createServiceClient()
     const sess = await resolvePublicSession(svc, token, { requireOpen: false })
     if (sess.error) return sess.error
+
+    const inviteErr = await requireInviteAccess(sess.session)
+    if (inviteErr) return inviteErr
 
     const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) return found.error

@@ -46,6 +46,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const patch: Record<string, unknown> = {}
     if (typeof body.enabled === "boolean") patch.enabled = body.enabled
+    if (body.access_mode === "link" || body.access_mode === "invite") {
+        patch.access_mode = body.access_mode
+    }
     if (typeof body.name === "string") {
         const v = body.name.trim()
         if (!v) return jsonError("bad_request", "name cannot be empty", 400)

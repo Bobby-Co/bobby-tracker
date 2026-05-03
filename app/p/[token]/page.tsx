@@ -1,11 +1,13 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { Issue, PublicSession } from "@/lib/supabase/types"
+import type { Issue, PublicSession, PublicSessionAccessMode } from "@/lib/supabase/types"
 import { PublicIssueForm } from "@/components/public-issue-form"
 import { PublicProfileBadge } from "@/components/public-profile-badge"
 import { PublicSessionSubmissions } from "@/components/public-session-submissions"
 import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
+import { PublicSessionGate } from "@/components/public-session-gate"
+import { checkInviteAccess } from "@/lib/public-session"
 import { groupByReporter, type PublicListedIssue } from "@/lib/public-reporter"
 
 export const dynamic = "force-dynamic"
@@ -49,11 +51,31 @@ async function PublicSessionContent({
 
     const { data: session } = await svc
         .from("public_sessions")
-        .select("id,enabled,name,title,description,start_at,end_at")
+        .select("id,enabled,access_mode,name,title,description,start_at,end_at")
         .eq("token", token)
-        .maybeSingle<Pick<PublicSession, "id" | "enabled" | "name" | "title" | "description" | "start_at" | "end_at">>()
+        .maybeSingle<Pick<PublicSession, "id" | "enabled" | "access_mode" | "name" | "title" | "description" | "start_at" | "end_at">>()
 
     if (!session) notFound()
+
+    // Invite-only sessions are gated *before* we leak any submission
+    // data. We still render the public heading so the visitor knows
+    // which session they're being invited into.
+    if (session.enabled && session.access_mode === "invite") {
+        const access = await checkInviteAccess({
+            id: session.id,
+            access_mode: session.access_mode as PublicSessionAccessMode,
+        })
+        if (!access.ok) {
+            return (
+                <PublicSessionGate
+                    reason={access.reason}
+                    email={"email" in access ? access.email : null}
+                    nextPath={`/p/${token}`}
+                    heading={session.title || session.name}
+                />
+            )
+        }
+    }
 
     const { data: links } = await svc
         .from("public_session_projects")

@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import type { PublicSession } from "@/lib/supabase/types"
+import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
 import { SessionManagePanel } from "@/components/session-manage-panel"
 
 export const dynamic = "force-dynamic"
@@ -46,6 +46,13 @@ export default async function SessionDetailPage({
     const allProjects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
         .map((p) => ({ id: p.id, name: p.name }))
 
+    const { data: invites } = await supabase
+        .from("public_session_invites")
+        .select("session_id,email,created_at")
+        .eq("session_id", id)
+        .order("created_at", { ascending: true })
+        .returns<PublicSessionInvite[]>()
+
     return (
         <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
             <Link
@@ -59,6 +66,7 @@ export default async function SessionDetailPage({
                 session={session}
                 sessionProjects={sessionProjects}
                 allProjects={allProjects ?? []}
+                invites={invites ?? []}
             />
         </div>
     )

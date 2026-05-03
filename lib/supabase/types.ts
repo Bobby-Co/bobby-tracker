@@ -120,6 +120,11 @@ export interface IssueSuggestion {
 export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived"]
 export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urgent"]
 
+/** Who can open the public link.
+ *  - 'link'   — anyone with the URL (default)
+ *  - 'invite' — only signed-in users whose email is whitelisted */
+export type PublicSessionAccessMode = "link" | "invite"
+
 /** Standalone shareable session that can cover one or more projects.
  *  Replaces the old per-project ProjectPublicSession (migration 0009). */
 export interface PublicSession {
@@ -127,6 +132,7 @@ export interface PublicSession {
     user_id: string
     token: string
     enabled: boolean
+    access_mode: PublicSessionAccessMode
     /** Internal label shown in the owner's session list. */
     name: string
     /** Public heading rendered to submitters (falls back to `name`). */
@@ -138,6 +144,13 @@ export interface PublicSession {
     submission_count: number
     created_at: string
     updated_at: string
+}
+
+/** Whitelisted email for an invite-only session. */
+export interface PublicSessionInvite {
+    session_id: string
+    email: string
+    created_at: string
 }
 
 export interface PublicSessionProject {

@@ -2,9 +2,10 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, Project, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
-import { fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
+import { checkInviteAccess, fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
 import { PublicIssueView } from "@/components/public-issue-view"
 import { PublicIssueDetailSkeleton } from "@/components/public-issue-detail-skeleton"
+import { PublicSessionGate } from "@/components/public-session-gate"
 
 export const dynamic = "force-dynamic"
 
@@ -34,6 +35,20 @@ async function PublicIssueDetailContent({
 
     const sess = await resolvePublicSession(svc, token, { requireOpen: false })
     if (sess.error) notFound()
+
+    if (sess.session.access_mode === "invite") {
+        const access = await checkInviteAccess(sess.session)
+        if (!access.ok) {
+            return (
+                <PublicSessionGate
+                    reason={access.reason}
+                    email={"email" in access ? access.email : null}
+                    nextPath={`/p/${token}/issues/${id}`}
+                    heading={null}
+                />
+            )
+        }
+    }
 
     const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) notFound()

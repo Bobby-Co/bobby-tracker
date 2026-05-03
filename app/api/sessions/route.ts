@@ -48,6 +48,8 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "start_at must be before end_at", 400)
     }
 
+    const access_mode = body.access_mode === "invite" ? "invite" : "link"
+
     const projectIdsIn = Array.isArray(body.project_ids)
         ? body.project_ids.filter((x: unknown): x is string => typeof x === "string")
         : []
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
             user_id: user.id,
             token: newToken(),
             enabled: true,
+            access_mode,
             name, title, description, start_at, end_at,
         })
         .select("*")
