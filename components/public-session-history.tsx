@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { readIssues, type PublicSubmittedIssue } from "@/lib/public-profile"
 
@@ -44,20 +45,33 @@ export function PublicSessionHistory({ token }: { token: string }) {
             </header>
             <ul className="mt-3 flex flex-col divide-y divide-[color:var(--c-border)]">
                 {items.map((it) => (
-                    <li key={it.issue_number} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                        <span className="shrink-0 rounded-md bg-[color:var(--c-surface-2)] px-1.5 py-0.5 font-mono text-[11.5px] font-semibold tabular-nums text-[color:var(--c-text)]">
-                            #{it.issue_number}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-medium text-[color:var(--c-text)]">
-                                {it.title}
+                    <li key={it.id}>
+                        <Link
+                            href={`/p/${token}/issues/${it.id}`}
+                            className="-mx-2 flex items-start gap-3 rounded-[10px] px-2 py-2.5 transition-colors hover:bg-[color:var(--c-surface-2)]"
+                        >
+                            <span className="shrink-0 rounded-md bg-[color:var(--c-surface-2)] px-1.5 py-0.5 font-mono text-[11.5px] font-semibold tabular-nums text-[color:var(--c-text)]">
+                                #{it.issue_number}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-[13px] font-medium text-[color:var(--c-text)]">
+                                    {it.title}
+                                </div>
+                                <div className="text-[11px] text-[color:var(--c-text-dim)]">
+                                    <time dateTime={it.created_at}>
+                                        {new Date(it.created_at).toLocaleString()}
+                                    </time>
+                                </div>
                             </div>
-                            <div className="text-[11px] text-[color:var(--c-text-dim)]">
-                                <time dateTime={it.created_at}>
-                                    {new Date(it.created_at).toLocaleString()}
-                                </time>
-                            </div>
-                        </div>
+                            <svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                strokeWidth="2" strokeLinecap="round"
+                                className="mt-1 shrink-0 text-[color:var(--c-text-dim)]"
+                                aria-hidden
+                            >
+                                <path d="M9 6l6 6-6 6" />
+                            </svg>
+                        </Link>
                     </li>
                 ))}
             </ul>

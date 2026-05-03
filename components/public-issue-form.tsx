@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useTransition } from "react"
 import { ISSUE_PRIORITIES } from "@/lib/supabase/types"
 import type { IssuePriority } from "@/lib/supabase/types"
@@ -21,7 +22,7 @@ export function PublicIssueForm({ token }: { token: string }) {
     const [body, setBody] = useState("")
     const [priority, setPriority] = useState<IssuePriority>("medium")
     const [error, setError] = useState<string | null>(null)
-    const [submitted, setSubmitted] = useState<{ issue_number: number } | null>(null)
+    const [submitted, setSubmitted] = useState<{ id: string; issue_number: number } | null>(null)
     const [pending, startTransition] = useTransition()
 
     function submit(e: React.FormEvent) {
@@ -41,13 +42,14 @@ export function PublicIssueForm({ token }: { token: string }) {
             }
             const data = await res.json()
             const issue = data.issue
-            if (issue?.issue_number) {
+            if (issue?.id && issue?.issue_number) {
                 appendIssue(token, {
+                    id: issue.id,
                     issue_number: issue.issue_number,
                     title: issue.title || title,
                     created_at: issue.created_at || new Date().toISOString(),
                 })
-                setSubmitted({ issue_number: issue.issue_number })
+                setSubmitted({ id: issue.id, issue_number: issue.issue_number })
             }
         })
     }
@@ -77,9 +79,20 @@ export function PublicIssueForm({ token }: { token: string }) {
                     The maintainers will see this on their issue board. Reference{" "}
                     <span className="font-mono font-semibold">#{submitted.issue_number}</span> if you need to follow up.
                 </p>
-                <button type="button" onClick={reset} className="btn-ghost self-start">
-                    Submit another
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <Link
+                        href={`/p/${token}/issues/${submitted.id}`}
+                        className="btn-primary"
+                    >
+                        View issue & analysis
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                            <path d="M5 12h14M13 5l7 7-7 7" />
+                        </svg>
+                    </Link>
+                    <button type="button" onClick={reset} className="btn-ghost">
+                        Submit another
+                    </button>
+                </div>
             </div>
         )
     }

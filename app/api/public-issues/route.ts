@@ -1,7 +1,7 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { ISSUE_PRIORITIES } from "@/lib/supabase/types"
-import type { Issue, IssuePriority, Project, ProjectPublicSession } from "@/lib/supabase/types"
+import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
+import { PUBLIC_ISSUE_LABEL, resolvePublicSession } from "@/lib/public-session"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the
@@ -11,33 +11,20 @@ import type { Issue, IssuePriority, Project, ProjectPublicSession } from "@/lib/
 // We deliberately skip the analyser-readiness gate that POST /api/issues
 // enforces: a public submitter has no way to bootstrap the graph and we
 // don't want their report dropped on the floor. The owner can always
-// triage it later once the graph is ready.
+// triage it later once the graph is ready. Inference itself is
+// triggered separately via /api/public-issues/[id]/suggest, which the
+// public detail page auto-fires on mount.
 export async function POST(request: Request) {
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
     const token = String(body?.token ?? "").trim()
     const title = String(body?.title ?? "").trim()
-    if (!token) return jsonError("bad_request", "token required", 400)
     if (!title) return jsonError("bad_request", "title required", 400)
 
     const svc = createServiceClient()
-
-    const { data: session } = await svc
-        .from("project_public_sessions")
-        .select("project_id,enabled,start_at,end_at")
-        .eq("token", token)
-        .maybeSingle<Pick<ProjectPublicSession, "project_id" | "enabled" | "start_at" | "end_at">>()
-    if (!session || !session.enabled) {
-        return jsonError("not_found", "this submission link is inactive or invalid", 404)
-    }
-    const now = Date.now()
-    if (session.start_at && Date.parse(session.start_at) > now) {
-        return jsonError("window_closed", "submissions haven't opened yet", 403)
-    }
-    if (session.end_at && Date.parse(session.end_at) <= now) {
-        return jsonError("window_closed", "submissions are closed", 403)
-    }
+    const { session, error } = await resolvePublicSession(svc, token, { requireOpen: true })
+    if (error) return error
 
     const { data: project } = await svc
         .from("projects")
@@ -53,9 +40,6 @@ export async function POST(request: Request) {
 
     const reporter = typeof body?.reporter === "string" ? body.reporter.trim().slice(0, 80) : ""
     const userBody = typeof body?.body === "string" ? body.body : ""
-    // Stamp who submitted it (best-effort — purely informational, the
-    // value is whatever the submitter typed). The owner sees this as
-    // a quoted prefix on the issue body.
     const stamp = reporter
         ? `> Submitted via public link by **${reporter.replace(/[\r\n]+/g, " ")}**\n\n`
         : `> Submitted via public link\n\n`
@@ -69,7 +53,7 @@ export async function POST(request: Request) {
             title,
             body: finalBody,
             priority,
-            labels: ["public-session"],
+            labels: [PUBLIC_ISSUE_LABEL],
         })
         .select("id,issue_number,title,created_at")
         .single<Pick<Issue, "id" | "issue_number" | "title" | "created_at">>()

@@ -8,6 +8,9 @@ const NAME_KEY = "bobby:public-profile:name"
 const ISSUES_KEY = (token: string) => `bobby:public-issues:${token}`
 
 export interface PublicSubmittedIssue {
+    /** UUID — required to build the detail URL. Older entries (before
+     *  this field existed) are dropped at read time. */
+    id: string
     issue_number: number
     title: string
     created_at: string
@@ -39,7 +42,11 @@ export function readIssues(token: string): PublicSubmittedIssue[] {
         if (!Array.isArray(parsed)) return []
         return parsed.filter(
             (x): x is PublicSubmittedIssue =>
-                !!x && typeof x.issue_number === "number" && typeof x.title === "string" && typeof x.created_at === "string",
+                !!x &&
+                typeof x.id === "string" &&
+                typeof x.issue_number === "number" &&
+                typeof x.title === "string" &&
+                typeof x.created_at === "string",
         )
     } catch { return [] }
 }
@@ -49,7 +56,7 @@ export function appendIssue(token: string, issue: PublicSubmittedIssue) {
     try {
         const list = readIssues(token)
         // Newest first; cap at 50 so we never blow past the storage quota.
-        const next = [issue, ...list.filter((x) => x.issue_number !== issue.issue_number)].slice(0, 50)
+        const next = [issue, ...list.filter((x) => x.id !== issue.id)].slice(0, 50)
         localStorage.setItem(ISSUES_KEY(token), JSON.stringify(next))
         window.dispatchEvent(new CustomEvent("bobby:public-issues-changed", { detail: { token } }))
     } catch { /* noop */ }
