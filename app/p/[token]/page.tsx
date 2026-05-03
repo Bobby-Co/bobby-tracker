@@ -71,14 +71,11 @@ async function PublicSessionContent({
     const projectIds = projects.map((p) => p.id)
     const projectNameById = new Map(projects.map((p) => [p.id, p.name]))
 
-    type ListedIssueRow = Pick<
-        Issue,
-        "id" | "issue_number" | "title" | "project_id" | "public_reporter_id" | "public_reporter_name" | "created_at"
-    >
+    type ListedIssueRow = Pick<Issue, "id" | "issue_number" | "title" | "project_id" | "created_at">
     const { data: issueRows } = projectIds.length
         ? await svc
             .from("issues")
-            .select("id,issue_number,title,project_id,public_reporter_id,public_reporter_name,created_at")
+            .select("id,issue_number,title,project_id,created_at")
             .in("project_id", projectIds)
             .contains("labels", ["public-session"])
             .order("created_at", { ascending: false })
@@ -86,15 +83,32 @@ async function PublicSessionContent({
             .returns<ListedIssueRow[]>()
         : { data: [] as ListedIssueRow[] }
 
-    const listedIssues: PublicListedIssue[] = (issueRows ?? []).map((r) => ({
-        id: r.id,
-        issue_number: r.issue_number,
-        title: r.title,
-        project_name: projectNameById.get(r.project_id) ?? "",
-        public_reporter_id: r.public_reporter_id,
-        public_reporter_name: r.public_reporter_name,
-        created_at: r.created_at,
-    }))
+    const issueIds = (issueRows ?? []).map((r) => r.id)
+    const { data: reporterRows } = issueIds.length
+        ? await svc
+            .from("public_issue_reporters")
+            .select("issue_id,reporter_id,reporter_name")
+            .in("issue_id", issueIds)
+            .returns<{ issue_id: string; reporter_id: string | null; reporter_name: string | null }[]>()
+        : { data: [] as { issue_id: string; reporter_id: string | null; reporter_name: string | null }[] }
+
+    const reporterByIssue = new Map<string, { id: string | null; name: string | null }>()
+    for (const r of reporterRows ?? []) {
+        reporterByIssue.set(r.issue_id, { id: r.reporter_id, name: r.reporter_name })
+    }
+
+    const listedIssues: PublicListedIssue[] = (issueRows ?? []).map((r) => {
+        const rep = reporterByIssue.get(r.id)
+        return {
+            id: r.id,
+            issue_number: r.issue_number,
+            title: r.title,
+            project_name: projectNameById.get(r.project_id) ?? "",
+            public_reporter_id: rep?.id ?? null,
+            public_reporter_name: rep?.name ?? null,
+            created_at: r.created_at,
+        }
+    })
     const groups = groupByReporter(listedIssues)
 
     const win = session.enabled ? windowState(session) : "closed"

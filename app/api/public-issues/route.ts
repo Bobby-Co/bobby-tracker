@@ -61,12 +61,24 @@ export async function POST(request: Request) {
             body: finalBody,
             priority,
             labels: [PUBLIC_ISSUE_LABEL],
-            public_reporter_id: reporterId || null,
-            public_reporter_name: reporter || null,
         })
         .select("id,issue_number,title,created_at")
         .single<Pick<Issue, "id" | "issue_number" | "title" | "created_at">>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
+
+    // Reporter identity goes into its own table so the issues row
+    // stays clean. Best-effort — failure here doesn't undo the issue
+    // (the markdown body still carries the attribution stamp).
+    if (reporterId || reporter) {
+        await svc
+            .from("public_issue_reporters")
+            .insert({
+                issue_id: issue.id,
+                reporter_id: reporterId || null,
+                reporter_name: reporter || null,
+                session_id: session.id,
+            })
+    }
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).

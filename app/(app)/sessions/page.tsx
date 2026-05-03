@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import type { Project, PublicSession } from "@/lib/supabase/types"
+import type { PublicSession } from "@/lib/supabase/types"
 import { NewSessionButton } from "@/components/new-session-button"
 
 export const dynamic = "force-dynamic"
@@ -35,11 +35,16 @@ export default async function SessionsPage() {
         )
     }
 
-    const { data: projects } = await supabase
+    // Only enabled-integration projects are eligible for new sessions —
+    // the inner-join filter via !inner ensures projects without a
+    // matching project_public_integration row are excluded.
+    const { data: enabledProjects } = await supabase
         .from("projects")
-        .select("id,name")
+        .select("id,name,project_public_integration!inner(enabled)")
+        .eq("project_public_integration.enabled", true)
         .order("name", { ascending: true })
-        .returns<Pick<Project, "id" | "name">[]>()
+    const projects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
+        .map((p) => ({ id: p.id, name: p.name }))
 
     // Pull project counts per session via the junction. One round-trip;
     // we group client-side in this server component for simplicity.

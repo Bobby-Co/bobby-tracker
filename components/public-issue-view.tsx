@@ -14,10 +14,13 @@ interface PublicIssue {
     status: IssueStatus
     priority: IssuePriority
     labels: string[]
-    public_reporter_id: string | null
-    public_reporter_name: string | null
     created_at: string
     updated_at: string
+}
+
+interface ReporterInfo {
+    id: string | null
+    name: string | null
 }
 
 interface PublicAnalyser {
@@ -33,11 +36,13 @@ interface PublicAnalyser {
 export function PublicIssueView({
     token,
     issue,
+    reporter,
     initialSuggestion,
     analyser,
 }: {
     token: string
     issue: PublicIssue
+    reporter: ReporterInfo
     initialSuggestion: IssueSuggestion | null
     analyser: PublicAnalyser
 }) {
@@ -130,7 +135,7 @@ export function PublicIssueView({
                     <span>
                         Filed by{" "}
                         <span className="font-semibold text-[color:var(--c-text)]">
-                            {reporterDisplay(issue.public_reporter_id, issue.public_reporter_name)}
+                            {reporterDisplay(reporter.id, reporter.name)}
                         </span>
                     </span>
                     <span aria-hidden>·</span>

@@ -68,7 +68,19 @@ export async function POST(request: Request) {
         const { error: linkErr } = await supabase
             .from("public_session_projects")
             .insert(projectIdsIn.map((project_id) => ({ session_id: session.id, project_id })))
-        if (linkErr) return jsonError("db_error", linkErr.message, 500)
+        if (linkErr) {
+            // Trigger raises 23514 if any project doesn't have the
+            // integration enabled. Surface that distinctly so the UI
+            // can route the user to enable it.
+            if (linkErr.code === "23514") {
+                return jsonError(
+                    "integration_disabled",
+                    "Enable the public submissions integration on each selected project first.",
+                    409,
+                )
+            }
+            return jsonError("db_error", linkErr.message, 500)
+        }
     }
 
     return Response.json({ session })

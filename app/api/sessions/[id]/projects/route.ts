@@ -18,8 +18,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .from("public_session_projects")
         .insert({ session_id: id, project_id })
     if (dbErr) {
-        // Friendlier message for the duplicate case.
         if (dbErr.code === "23505") return jsonError("conflict", "project already in session", 409)
+        if (dbErr.code === "23514") {
+            return jsonError(
+                "integration_disabled",
+                "Enable the public submissions integration on this project before adding it to a session.",
+                409,
+            )
+        }
         return jsonError("db_error", dbErr.message, 500)
     }
     return Response.json({ ok: true })

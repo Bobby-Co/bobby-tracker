@@ -94,7 +94,7 @@ export function NewSessionButton({ projects }: { projects: ProjectOption[] }) {
                             </span>
                             {projects.length === 0 ? (
                                 <p className="rounded-[10px] bg-[color:var(--c-surface-2)] px-3 py-2 text-[12.5px] text-[color:var(--c-text-muted)]">
-                                    Create a project first.
+                                    No projects with the public-submissions integration enabled. Open a project's Integrations tab to enable it, then come back.
                                 </p>
                             ) : (
                                 <ul className="max-h-56 overflow-auto rounded-[10px] border border-[color:var(--c-border)]">

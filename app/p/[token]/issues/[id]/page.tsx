@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, Project, ProjectAnalyser } from "@/lib/supabase/types"
+import type { IssueSuggestion, Project, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
 import { fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
 import { PublicIssueView } from "@/components/public-issue-view"
 import { PublicIssueDetailSkeleton } from "@/components/public-issue-detail-skeleton"
@@ -53,6 +53,12 @@ async function PublicIssueDetailContent({
         .limit(1)
         .maybeSingle<IssueSuggestion>()
 
+    const { data: reporter } = await svc
+        .from("public_issue_reporters")
+        .select("reporter_id,reporter_name")
+        .eq("issue_id", issue.id)
+        .maybeSingle<Pick<PublicIssueReporter, "reporter_id" | "reporter_name">>()
+
     const { data: analyser } = await svc
         .from("project_analyser")
         .select("enabled,status,graph_id,last_indexed_sha")
@@ -76,10 +82,12 @@ async function PublicIssueDetailContent({
                     status: issue.status,
                     priority: issue.priority,
                     labels: issue.labels,
-                    public_reporter_id: issue.public_reporter_id,
-                    public_reporter_name: issue.public_reporter_name,
                     created_at: issue.created_at,
                     updated_at: issue.updated_at,
+                }}
+                reporter={{
+                    id: reporter?.reporter_id ?? null,
+                    name: reporter?.reporter_name ?? null,
                 }}
                 initialSuggestion={suggestion ?? null}
                 analyser={{

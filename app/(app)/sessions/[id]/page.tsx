@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import type { Project, PublicSession } from "@/lib/supabase/types"
+import type { PublicSession } from "@/lib/supabase/types"
 import { SessionManagePanel } from "@/components/session-manage-panel"
 
 export const dynamic = "force-dynamic"
@@ -38,11 +38,13 @@ export default async function SessionDetailPage({
         })
         .filter((p) => p.name)
 
-    const { data: allProjects } = await supabase
+    const { data: enabledProjects } = await supabase
         .from("projects")
-        .select("id,name")
+        .select("id,name,project_public_integration!inner(enabled)")
+        .eq("project_public_integration.enabled", true)
         .order("name", { ascending: true })
-        .returns<Pick<Project, "id" | "name">[]>()
+    const allProjects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
+        .map((p) => ({ id: p.id, name: p.name }))
 
     return (
         <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">

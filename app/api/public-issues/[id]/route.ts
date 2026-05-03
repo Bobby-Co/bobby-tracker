@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
+import type { IssueSuggestion, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
 import { fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
 
 // GET /api/public-issues/[id]?token=<session_token>
@@ -33,6 +33,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .limit(1)
         .maybeSingle<IssueSuggestion>()
 
+    const { data: reporter } = await svc
+        .from("public_issue_reporters")
+        .select("reporter_id,reporter_name")
+        .eq("issue_id", id)
+        .maybeSingle<Pick<PublicIssueReporter, "reporter_id" | "reporter_name">>()
+
     const { data: analyser } = await svc
         .from("project_analyser")
         .select("enabled,status,graph_id,last_indexed_sha")
@@ -51,10 +57,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             status: issue.status,
             priority: issue.priority,
             labels: issue.labels,
-            public_reporter_id: issue.public_reporter_id,
-            public_reporter_name: issue.public_reporter_name,
             created_at: issue.created_at,
             updated_at: issue.updated_at,
+        },
+        reporter: {
+            id: reporter?.reporter_id ?? null,
+            name: reporter?.reporter_name ?? null,
         },
         suggestion: suggestion ?? null,
         analyser: {

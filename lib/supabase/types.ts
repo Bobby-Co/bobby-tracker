@@ -29,15 +29,28 @@ export interface Issue {
     github_issue_number: number | null
     github_node_id: string | null
     issue_number: number
-    /** Set on issues filed via /p/<token>. Stable per-browser id (UUID
-     *  written to the submitter's localStorage on first visit) so
-     *  anonymous reporters stay distinguishable across submissions. */
-    public_reporter_id: string | null
-    /** Display name the submitter typed into the public profile badge.
-     *  Null for anonymous submissions or owner-filed issues. */
-    public_reporter_name: string | null
     created_at: string
     updated_at: string
+}
+
+/** Per-project toggle for the public-submissions integration.
+ *  A project must be enabled here before it can be added to a
+ *  public session (enforced by DB trigger). */
+export interface ProjectPublicIntegration {
+    project_id: string
+    enabled: boolean
+    created_at: string
+    updated_at: string
+}
+
+/** Reporter identity for a publicly-submitted issue. One row per
+ *  public-submission issue; owner-filed issues never have one. */
+export interface PublicIssueReporter {
+    issue_id: string
+    reporter_id: string | null
+    reporter_name: string | null
+    session_id: string | null
+    created_at: string
 }
 
 export interface AnalyserProgress {
