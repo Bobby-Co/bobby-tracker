@@ -1,11 +1,25 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { AskPanel } from "@/components/ask-panel"
+import { AskSkeleton } from "@/components/ask-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
 
-export default async function AskPage({ params }: { params: Promise<{ id: string }> }) {
+// Synchronous shell wraps a streaming <Suspense> boundary so the
+// skeleton renders the moment the user lands on this tab — soft
+// navigations between project tabs no longer wait on the Supabase
+// round-trip before showing anything.
+export default function AskPage({ params }: { params: Promise<{ id: string }> }) {
+    return (
+        <Suspense fallback={<AskSkeleton />}>
+            <AskContent params={params} />
+        </Suspense>
+    )
+}
+
+async function AskContent({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const supabase = await createClient()
 

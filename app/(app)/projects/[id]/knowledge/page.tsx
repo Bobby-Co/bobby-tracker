@@ -1,6 +1,8 @@
+import { Suspense } from "react"
 import { createClient } from "@/lib/supabase/server"
 import { AnalyserPanel } from "@/components/analyser-panel"
 import { VerifyPanel } from "@/components/verify-panel"
+import { KnowledgeSkeleton } from "@/components/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
@@ -11,7 +13,18 @@ export const dynamic = "force-dynamic"
 // "Integrations" alongside GitHub-sync stubs; that conflation made
 // the tab feel like a junk drawer. Knowledge keeps the cognitive
 // model clear: this is where the graph is born and inspected.
-export default async function KnowledgePage({ params }: { params: Promise<{ id: string }> }) {
+//
+// Synchronous shell + <Suspense> so soft tab switches paint the
+// skeleton instantly instead of stalling on the project_analyser fetch.
+export default function KnowledgePage({ params }: { params: Promise<{ id: string }> }) {
+    return (
+        <Suspense fallback={<KnowledgeSkeleton />}>
+            <KnowledgeContent params={params} />
+        </Suspense>
+    )
+}
+
+async function KnowledgeContent({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const supabase = await createClient()
     const [{ data: project }, { data: state }] = await Promise.all([
