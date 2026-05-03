@@ -43,7 +43,18 @@ function sharedCookieOptions() {
 // cookie). Multiple components / helpers in the same request all
 // need the user; React's `cache()` deduplicates so we pay for the
 // round-trip once instead of three or four times.
+//
+// Cookie sniff: Supabase only persists session via cookies prefixed
+// with `sb-`. No such cookie → no possible session → return null
+// without calling auth at all. This matters most on public routes
+// where the typical visitor is anonymous; without the short-circuit
+// every public page hit was burning a Supabase auth call and helping
+// trigger `over_request_rate_limit` errors.
 export const getCurrentUser = cache(async (): Promise<User | null> => {
+    const cookieStore = await cookies()
+    const hasAuthCookie = cookieStore.getAll().some((c) => c.name.startsWith("sb-"))
+    if (!hasAuthCookie) return null
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     return user
