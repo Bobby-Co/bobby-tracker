@@ -7,7 +7,7 @@ import { PublicProfileBadge } from "@/components/public-profile-badge"
 import { PublicSessionSubmissions } from "@/components/public-session-submissions"
 import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
 import { PublicSessionGate } from "@/components/public-session-gate"
-import { checkInviteAccess } from "@/lib/public-session"
+import { checkInviteAccess, getCurrentPublicUser } from "@/lib/public-session"
 import { groupByReporter, type PublicListedIssue } from "@/lib/public-reporter"
 
 export const dynamic = "force-dynamic"
@@ -51,9 +51,9 @@ async function PublicSessionContent({
 
     const { data: session } = await svc
         .from("public_sessions")
-        .select("id,enabled,access_mode,name,title,description,start_at,end_at")
+        .select("id,enabled,access_mode,submissions_visibility,name,title,description,start_at,end_at")
         .eq("token", token)
-        .maybeSingle<Pick<PublicSession, "id" | "enabled" | "access_mode" | "name" | "title" | "description" | "start_at" | "end_at">>()
+        .maybeSingle<Pick<PublicSession, "id" | "enabled" | "access_mode" | "submissions_visibility" | "name" | "title" | "description" | "start_at" | "end_at">>()
 
     if (!session) notFound()
 
@@ -109,17 +109,31 @@ async function PublicSessionContent({
     const { data: reporterRows } = issueIds.length
         ? await svc
             .from("public_issue_reporters")
-            .select("issue_id,reporter_id,reporter_name")
+            .select("issue_id,reporter_id,reporter_name,auth_user_id")
             .in("issue_id", issueIds)
-            .returns<{ issue_id: string; reporter_id: string | null; reporter_name: string | null }[]>()
-        : { data: [] as { issue_id: string; reporter_id: string | null; reporter_name: string | null }[] }
+            .returns<{ issue_id: string; reporter_id: string | null; reporter_name: string | null; auth_user_id: string | null }[]>()
+        : { data: [] as { issue_id: string; reporter_id: string | null; reporter_name: string | null; auth_user_id: string | null }[] }
 
-    const reporterByIssue = new Map<string, { id: string | null; name: string | null }>()
+    const reporterByIssue = new Map<string, { id: string | null; name: string | null; auth_user_id: string | null }>()
     for (const r of reporterRows ?? []) {
-        reporterByIssue.set(r.issue_id, { id: r.reporter_id, name: r.reporter_name })
+        reporterByIssue.set(r.issue_id, { id: r.reporter_id, name: r.reporter_name, auth_user_id: r.auth_user_id })
     }
 
-    const listedIssues: PublicListedIssue[] = (issueRows ?? []).map((r) => {
+    // 'own'-visibility filter:
+    //   - For a signed-in visitor (always true in invite mode), drop
+    //     any issue whose reporter row doesn't carry their auth_user_id.
+    //     This is the hard server-side gate.
+    //   - For an anonymous visitor on a link-mode session, the server
+    //     can't tell who they are; we pass restrictToOwn through to
+    //     the client component which filters by localStorage reporter
+    //     id. Soft preference, not a security boundary.
+    const restrictToOwn = session.submissions_visibility === "own"
+    const visitor = restrictToOwn ? await getCurrentPublicUser() : null
+    const filteredIssueRows = restrictToOwn && visitor
+        ? (issueRows ?? []).filter((r) => reporterByIssue.get(r.id)?.auth_user_id === visitor.id)
+        : (issueRows ?? [])
+
+    const listedIssues: PublicListedIssue[] = filteredIssueRows.map((r) => {
         const rep = reporterByIssue.get(r.id)
         return {
             id: r.id,
@@ -191,7 +205,12 @@ async function PublicSessionContent({
                 ) : (
                     <>
                         <PublicIssueForm token={token} projects={projects} />
-                        <PublicSessionSubmissions token={token} groups={groups} />
+                        <PublicSessionSubmissions
+                            token={token}
+                            groups={groups}
+                            restrictToOwn={restrictToOwn}
+                            visitorIsAuthenticated={!!visitor}
+                        />
                     </>
                 )
             ) : !session.enabled ? (

@@ -2,13 +2,19 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { PublicSession, PublicSessionAccessMode, PublicSessionInvite } from "@/lib/supabase/types"
+import type {
+    PublicSession,
+    PublicSessionAccessMode,
+    PublicSessionInvite,
+    PublicSessionSubmissionsVisibility,
+} from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
 
 type Action =
     | "save" | "rotate" | "toggle" | "delete"
     | "addProject" | "removeProject"
     | "setAccessMode" | "addInvite" | "removeInvite"
+    | "setVisibility"
     | null
 
 interface ProjectOption {
@@ -159,6 +165,14 @@ export function SessionManagePanel({
         if (mode === session.access_mode) return
         run("setAccessMode", async () => {
             const data = await call(`/api/sessions/${session.id}`, "PATCH", { access_mode: mode })
+            if (data?.session) setSession(data.session)
+        })
+    }
+
+    function setVisibility(v: PublicSessionSubmissionsVisibility) {
+        if (v === session.submissions_visibility) return
+        run("setVisibility", async () => {
+            const data = await call(`/api/sessions/${session.id}`, "PATCH", { submissions_visibility: v })
             if (data?.session) setSession(data.session)
         })
     }
@@ -371,6 +385,42 @@ export function SessionManagePanel({
                             Comparison is case-insensitive. Visitors must sign in with the email exactly as written here.
                         </p>
                     </div>
+                )}
+            </div>
+
+            {/* Submissions visibility */}
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-[14px] font-bold">Submissions visibility</div>
+                        <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
+                            Whether submitters can see other people&apos;s submissions in this session.
+                        </p>
+                    </div>
+                </div>
+
+                <fieldset disabled={busy} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <AccessOption
+                        active={session.submissions_visibility === "all"}
+                        title="Everyone sees everything"
+                        description="Useful for shared bug bashes where reporters can avoid duplicates."
+                        onClick={() => setVisibility("all")}
+                        pending={action === "setVisibility" && session.submissions_visibility !== "all"}
+                    />
+                    <AccessOption
+                        active={session.submissions_visibility === "own"}
+                        title="Each submitter only sees their own"
+                        description="Best for private feedback. Strongest when paired with invite-only access."
+                        onClick={() => setVisibility("own")}
+                        pending={action === "setVisibility" && session.submissions_visibility !== "own"}
+                    />
+                </fieldset>
+
+                {session.submissions_visibility === "own" && session.access_mode === "link" && (
+                    <p className="mt-3 rounded-[10px] bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                        On a public link, this is a soft preference — anonymous browsers are filtered by their local
+                        device id, which could be spoofed. Switch to invite-only above for a hard guarantee.
+                    </p>
                 )}
             </div>
 

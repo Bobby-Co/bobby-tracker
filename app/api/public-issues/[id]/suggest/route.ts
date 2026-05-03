@@ -2,7 +2,7 @@ import { analyseIssue, AnalyserError } from "@/lib/analyser"
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
-import { fetchPublicIssue, requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
+import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
 
 // POST /api/public-issues/[id]/suggest
 //
@@ -26,6 +26,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const inviteErr = await requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
+
+    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    if (visErr) return visErr
 
     const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) return found.error

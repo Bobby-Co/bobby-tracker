@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, Project, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
-import { checkInviteAccess, fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
+import { checkInviteAccess, fetchPublicIssue, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
 import { PublicIssueView } from "@/components/public-issue-view"
 import { PublicIssueDetailSkeleton } from "@/components/public-issue-detail-skeleton"
 import { PublicSessionGate } from "@/components/public-session-gate"
@@ -49,6 +49,9 @@ async function PublicIssueDetailContent({
             )
         }
     }
+
+    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    if (visErr) notFound()
 
     const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) notFound()

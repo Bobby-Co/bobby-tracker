@@ -49,6 +49,7 @@ export async function POST(request: Request) {
     }
 
     const access_mode = body.access_mode === "invite" ? "invite" : "link"
+    const submissions_visibility = body.submissions_visibility === "own" ? "own" : "all"
 
     const projectIdsIn = Array.isArray(body.project_ids)
         ? body.project_ids.filter((x: unknown): x is string => typeof x === "string")
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
             token: newToken(),
             enabled: true,
             access_mode,
+            submissions_visibility,
             name, title, description, start_at, end_at,
         })
         .select("*")

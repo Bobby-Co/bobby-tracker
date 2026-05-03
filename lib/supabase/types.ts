@@ -50,6 +50,10 @@ export interface PublicIssueReporter {
     reporter_id: string | null
     reporter_name: string | null
     session_id: string | null
+    /** Captured when the submitter was authenticated at submission
+     *  time (always set in invite-mode sessions). Used to enforce the
+     *  'own'-visibility filter across browsers. */
+    auth_user_id: string | null
     created_at: string
 }
 
@@ -125,6 +129,11 @@ export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urge
  *  - 'invite' — only signed-in users whose email is whitelisted */
 export type PublicSessionAccessMode = "link" | "invite"
 
+/** Who can see other submitters' submissions on the public listing.
+ *  - 'all' (default) — everyone sees every submission.
+ *  - 'own' — each submitter only sees their own. */
+export type PublicSessionSubmissionsVisibility = "all" | "own"
+
 /** Standalone shareable session that can cover one or more projects.
  *  Replaces the old per-project ProjectPublicSession (migration 0009). */
 export interface PublicSession {
@@ -133,6 +142,7 @@ export interface PublicSession {
     token: string
     enabled: boolean
     access_mode: PublicSessionAccessMode
+    submissions_visibility: PublicSessionSubmissionsVisibility
     /** Internal label shown in the owner's session list. */
     name: string
     /** Public heading rendered to submitters (falls back to `name`). */
