@@ -107,6 +107,9 @@ export interface ProjectPublicSession {
     title: string | null
     description: string | null
     submission_count: number
+    /** ISO timestamps. Null means open-ended on that side. */
+    start_at: string | null
+    end_at: string | null
     created_at: string
     updated_at: string
 }

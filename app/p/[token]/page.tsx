@@ -2,14 +2,31 @@ import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Project, ProjectPublicSession } from "@/lib/supabase/types"
 import { PublicIssueForm } from "@/components/public-issue-form"
+import { PublicProfileBadge } from "@/components/public-profile-badge"
+import { PublicSessionHistory } from "@/components/public-session-history"
 
 export const dynamic = "force-dynamic"
+
+type Window = "open" | "not_yet" | "closed"
+
+function windowState(s: { start_at: string | null; end_at: string | null }): Window {
+    const now = Date.now()
+    if (s.start_at && Date.parse(s.start_at) > now) return "not_yet"
+    if (s.end_at && Date.parse(s.end_at) <= now) return "closed"
+    return "open"
+}
+
+function fmt(iso: string) {
+    return new Date(iso).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+    })
+}
 
 // Public issue submission page. Anyone with the link can file an issue
 // against the linked project — no login required. Reads use the
 // service role (the table has owner-only RLS) so we never expose the
-// project list or other tokens. Layout is mobile-first; the form
-// owns the busy/skeleton/success states.
+// project list or other tokens.
 export default async function PublicSessionPage({
     params,
 }: {
@@ -20,9 +37,9 @@ export default async function PublicSessionPage({
 
     const { data: session } = await svc
         .from("project_public_sessions")
-        .select("project_id,enabled,title,description")
+        .select("project_id,enabled,title,description,start_at,end_at")
         .eq("token", token)
-        .maybeSingle<Pick<ProjectPublicSession, "project_id" | "enabled" | "title" | "description">>()
+        .maybeSingle<Pick<ProjectPublicSession, "project_id" | "enabled" | "title" | "description" | "start_at" | "end_at">>()
 
     if (!session) notFound()
 
@@ -33,28 +50,12 @@ export default async function PublicSessionPage({
         .maybeSingle<Pick<Project, "id" | "name">>()
     if (!project) notFound()
 
-    if (!session.enabled) {
-        return (
-            <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-4 py-10 sm:px-6">
-                <div className="anim-rise rounded-[14px] border border-[color:var(--c-border)] bg-white p-6 text-center shadow-sm sm:p-8">
-                    <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-zinc-100 text-zinc-600">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                            <rect x="6" y="5" width="4" height="14" rx="1" />
-                            <rect x="14" y="5" width="4" height="14" rx="1" />
-                        </svg>
-                    </div>
-                    <h1 className="mt-3 text-[18px] font-bold sm:text-[20px]">Submissions paused</h1>
-                    <p className="mt-2 text-[13px] text-[color:var(--c-text-muted)]">
-                        This public submission link has been disabled by the project owner. Check back later or reach out to them directly.
-                    </p>
-                </div>
-            </main>
-        )
-    }
+    const win = session.enabled ? windowState(session) : "closed"
+    const heading = session.title || "Report an issue"
 
     return (
         <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-5 px-4 py-8 sm:gap-6 sm:px-6 sm:py-12">
-            <header className="anim-fade">
+            <header className="anim-fade flex flex-col gap-3">
                 <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
                     <span className="grid h-5 w-5 place-items-center rounded-md bg-zinc-900 text-white">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
@@ -63,21 +64,68 @@ export default async function PublicSessionPage({
                     </span>
                     <span className="truncate">{project.name}</span>
                 </div>
-                <h1 className="mt-2 text-[22px] font-bold leading-tight tracking-[-0.012em] sm:text-[28px]">
-                    {session.title || "Report an issue"}
-                </h1>
-                {session.description && (
-                    <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[color:var(--c-text-muted)] sm:text-[14px]">
-                        {session.description}
-                    </p>
+                <div>
+                    <h1 className="text-[22px] font-bold leading-tight tracking-[-0.012em] sm:text-[28px]">
+                        {heading}
+                    </h1>
+                    {session.description && (
+                        <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-[color:var(--c-text-muted)] sm:text-[14px]">
+                            {session.description}
+                        </p>
+                    )}
+                </div>
+                {(session.start_at || session.end_at) && win === "open" && (
+                    <div className="text-[11.5px] text-[color:var(--c-text-dim)]">
+                        {session.start_at && session.end_at
+                            ? <>Open · closes <time dateTime={session.end_at}>{fmt(session.end_at)}</time></>
+                            : session.end_at
+                                ? <>Closes <time dateTime={session.end_at}>{fmt(session.end_at)}</time></>
+                                : <>Open since <time dateTime={session.start_at!}>{fmt(session.start_at!)}</time></>}
+                    </div>
                 )}
+                {win === "open" && <PublicProfileBadge />}
             </header>
 
-            <PublicIssueForm token={token} />
+            {win === "open" ? (
+                <>
+                    <PublicIssueForm token={token} />
+                    <PublicSessionHistory token={token} />
+                </>
+            ) : !session.enabled ? (
+                <ClosedCard
+                    title="Submissions paused"
+                    body="This public submission link has been disabled by the project owner. Check back later or reach out to them directly."
+                />
+            ) : win === "not_yet" ? (
+                <ClosedCard
+                    title="Not open yet"
+                    body={`Submissions open ${session.start_at ? fmt(session.start_at) : "soon"}.`}
+                />
+            ) : (
+                <ClosedCard
+                    title="Submissions closed"
+                    body={`This link closed ${session.end_at ? fmt(session.end_at) : "earlier"}.`}
+                />
+            )}
 
             <footer className="text-center text-[11px] text-[color:var(--c-text-dim)]">
                 Bobby Tracker · public submission
             </footer>
         </main>
+    )
+}
+
+function ClosedCard({ title, body }: { title: string; body: string }) {
+    return (
+        <div className="anim-rise rounded-[14px] border border-[color:var(--c-border)] bg-white p-6 text-center shadow-sm sm:p-8">
+            <div className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-zinc-100 text-zinc-600">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 7v5l3 2" />
+                </svg>
+            </div>
+            <h2 className="mt-3 text-[18px] font-bold sm:text-[20px]">{title}</h2>
+            <p className="mt-2 text-[13px] text-[color:var(--c-text-muted)]">{body}</p>
+        </div>
     )
 }

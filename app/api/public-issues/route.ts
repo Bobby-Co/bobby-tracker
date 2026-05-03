@@ -25,11 +25,18 @@ export async function POST(request: Request) {
 
     const { data: session } = await svc
         .from("project_public_sessions")
-        .select("project_id,enabled")
+        .select("project_id,enabled,start_at,end_at")
         .eq("token", token)
-        .maybeSingle<Pick<ProjectPublicSession, "project_id" | "enabled">>()
+        .maybeSingle<Pick<ProjectPublicSession, "project_id" | "enabled" | "start_at" | "end_at">>()
     if (!session || !session.enabled) {
         return jsonError("not_found", "this submission link is inactive or invalid", 404)
+    }
+    const now = Date.now()
+    if (session.start_at && Date.parse(session.start_at) > now) {
+        return jsonError("window_closed", "submissions haven't opened yet", 403)
+    }
+    if (session.end_at && Date.parse(session.end_at) <= now) {
+        return jsonError("window_closed", "submissions are closed", 403)
     }
 
     const { data: project } = await svc
@@ -64,8 +71,8 @@ export async function POST(request: Request) {
             priority,
             labels: ["public-session"],
         })
-        .select("id,issue_number")
-        .single<Pick<Issue, "id" | "issue_number">>()
+        .select("id,issue_number,title,created_at")
+        .single<Pick<Issue, "id" | "issue_number" | "title" | "created_at">>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
@@ -82,5 +89,13 @@ export async function POST(request: Request) {
             .eq("project_id", project.id)
     }
 
-    return Response.json({ ok: true, issue_number: issue.issue_number })
+    return Response.json({
+        ok: true,
+        issue: {
+            id: issue.id,
+            issue_number: issue.issue_number,
+            title: issue.title,
+            created_at: issue.created_at,
+        },
+    })
 }

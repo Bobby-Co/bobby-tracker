@@ -5,18 +5,18 @@ import { ISSUE_PRIORITIES } from "@/lib/supabase/types"
 import type { IssuePriority } from "@/lib/supabase/types"
 import { Dropdown } from "@/components/dropdown"
 import { Spinner } from "@/components/spinner"
+import { appendIssue, readName } from "@/lib/public-profile"
 
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
-
 const MAX_TITLE = 200
 const MAX_BODY = 10_000
 
-// Anonymous issue submission form for /p/<token>. Stateful: pending
-// disables inputs + shows a spinner on the submit button; success
-// swaps to a thank-you card animated in via anim-rise. Layout stacks
-// on mobile and rows out at sm.
+// Anonymous issue submission form for /p/<token>. The submitter's
+// display name comes from the global profile (PublicProfileBadge,
+// localStorage) — not collected per-submission. On success we
+// append the issue to the per-token history in localStorage so the
+// PublicSessionHistory component picks it up.
 export function PublicIssueForm({ token }: { token: string }) {
-    const [reporter, setReporter] = useState("")
     const [title, setTitle] = useState("")
     const [body, setBody] = useState("")
     const [priority, setPriority] = useState<IssuePriority>("medium")
@@ -28,6 +28,7 @@ export function PublicIssueForm({ token }: { token: string }) {
         e.preventDefault()
         setError(null)
         startTransition(async () => {
+            const reporter = readName()
             const res = await fetch("/api/public-issues", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -39,7 +40,15 @@ export function PublicIssueForm({ token }: { token: string }) {
                 return
             }
             const data = await res.json()
-            setSubmitted({ issue_number: data.issue_number })
+            const issue = data.issue
+            if (issue?.issue_number) {
+                appendIssue(token, {
+                    issue_number: issue.issue_number,
+                    title: issue.title || title,
+                    created_at: issue.created_at || new Date().toISOString(),
+                })
+                setSubmitted({ issue_number: issue.issue_number })
+            }
         })
     }
 
@@ -86,19 +95,6 @@ export function PublicIssueForm({ token }: { token: string }) {
             aria-busy={pending}
         >
             <fieldset disabled={pending} className="contents">
-                <label className="flex flex-col gap-1">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
-                        Your name <span className="font-medium normal-case tracking-normal text-[color:var(--c-text-dim)]">(optional)</span>
-                    </span>
-                    <input
-                        value={reporter}
-                        onChange={(e) => setReporter(e.target.value)}
-                        placeholder="Jane Doe"
-                        maxLength={80}
-                        className="input text-[13px]"
-                    />
-                </label>
-
                 <label className="flex flex-col gap-1">
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
                         Title

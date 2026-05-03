@@ -6,6 +6,23 @@ import { Spinner } from "@/components/spinner"
 
 type Action = "create" | "rotate" | "toggle" | "save" | "delete" | null
 
+// <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" in *local* time.
+// Convert from a stored ISO (UTC) by subtracting the local offset before
+// slicing off the seconds + Z. Empty string ↔ null.
+function isoToLocalInput(iso: string | null | undefined): string {
+    if (!iso) return ""
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return ""
+    const offset = d.getTimezoneOffset() * 60_000
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16)
+}
+
+function localInputToIso(v: string): string | null {
+    if (!v) return null
+    const t = Date.parse(v) // browsers parse the local datetime correctly
+    return Number.isNaN(t) ? null : new Date(t).toISOString()
+}
+
 // Owner-facing manager for a project's public submission link. Lives
 // on the Integrations tab. Tracks which specific action is in flight
 // so we can show a spinner on the right button instead of disabling
@@ -20,6 +37,8 @@ export function PublicSessionPanel({
     const [session, setSession] = useState<ProjectPublicSession | null>(initialSession)
     const [title, setTitle] = useState(initialSession?.title ?? "")
     const [description, setDescription] = useState(initialSession?.description ?? "")
+    const [startAt, setStartAt] = useState(isoToLocalInput(initialSession?.start_at))
+    const [endAt, setEndAt] = useState(isoToLocalInput(initialSession?.end_at))
     const [origin, setOrigin] = useState("")
     const [error, setError] = useState<string | null>(null)
     const [copied, setCopied] = useState(false)
@@ -33,7 +52,9 @@ export function PublicSessionPanel({
     useEffect(() => {
         setTitle(session?.title ?? "")
         setDescription(session?.description ?? "")
-    }, [session?.token])
+        setStartAt(isoToLocalInput(session?.start_at))
+        setEndAt(isoToLocalInput(session?.end_at))
+    }, [session?.token, session?.start_at, session?.end_at])
 
     const link = session ? `${origin}/p/${session.token}` : ""
     const busy = action !== null
@@ -64,7 +85,11 @@ export function PublicSessionPanel({
 
     function enable() {
         run("create", async () => {
-            const s = await call("POST", { title, description })
+            const s = await call("POST", {
+                title, description,
+                start_at: localInputToIso(startAt),
+                end_at: localInputToIso(endAt),
+            })
             if (s) setSession(s)
         })
     }
@@ -72,7 +97,11 @@ export function PublicSessionPanel({
     function rotate() {
         if (!confirm("Regenerate the link? The current URL will stop working.")) return
         run("rotate", async () => {
-            const s = await call("POST", { title, description })
+            const s = await call("POST", {
+                title, description,
+                start_at: localInputToIso(startAt),
+                end_at: localInputToIso(endAt),
+            })
             if (s) setSession(s)
         })
     }
@@ -87,7 +116,12 @@ export function PublicSessionPanel({
 
     function saveDetails() {
         run("save", async () => {
-            const s = await call("PATCH", { title, description })
+            const s = await call("PATCH", {
+                title,
+                description,
+                start_at: localInputToIso(startAt),
+                end_at: localInputToIso(endAt),
+            })
             if (s) setSession(s)
         })
     }
@@ -113,7 +147,13 @@ export function PublicSessionPanel({
 
     const detailsDirty =
         !!session &&
-        (title !== (session.title ?? "") || description !== (session.description ?? ""))
+        (title !== (session.title ?? "")
+            || description !== (session.description ?? "")
+            || startAt !== isoToLocalInput(session.start_at)
+            || endAt !== isoToLocalInput(session.end_at))
+
+    const windowInverted =
+        !!startAt && !!endAt && Date.parse(startAt) >= Date.parse(endAt)
 
     return (
         <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
@@ -189,10 +229,46 @@ export function PublicSessionPanel({
                             placeholder="What kinds of issues are you collecting? (markdown supported)"
                             className="input text-[13px]"
                         />
+
+                        <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="flex flex-col gap-1">
+                                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                                    Opens at <span className="font-medium normal-case tracking-normal text-[color:var(--c-text-dim)]">(optional)</span>
+                                </span>
+                                <input
+                                    type="datetime-local"
+                                    value={startAt}
+                                    onChange={(e) => setStartAt(e.target.value)}
+                                    max={endAt || undefined}
+                                    className="input text-[13px]"
+                                />
+                            </label>
+                            <label className="flex flex-col gap-1">
+                                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                                    Closes at <span className="font-medium normal-case tracking-normal text-[color:var(--c-text-dim)]">(optional)</span>
+                                </span>
+                                <input
+                                    type="datetime-local"
+                                    value={endAt}
+                                    onChange={(e) => setEndAt(e.target.value)}
+                                    min={startAt || undefined}
+                                    className="input text-[13px]"
+                                />
+                            </label>
+                        </div>
+                        {windowInverted && (
+                            <p className="text-[11.5px] text-rose-700">Closes-at must be after opens-at.</p>
+                        )}
+                        {(startAt || endAt) && !windowInverted && (
+                            <p className="text-[11.5px] text-[color:var(--c-text-dim)]">
+                                Times use your browser's timezone. Submitters see the same wall-clock window.
+                            </p>
+                        )}
+
                         <div className="flex justify-end">
                             <button
                                 onClick={saveDetails}
-                                disabled={busy || !detailsDirty}
+                                disabled={busy || !detailsDirty || windowInverted}
                                 className="btn-primary w-full sm:w-auto"
                             >
                                 {action === "save" ? (<><Spinner />Saving…</>) : "Save details"}
