@@ -2,10 +2,14 @@
 
 import { useEffect, useState, useTransition } from "react"
 import type { ProjectPublicSession } from "@/lib/supabase/types"
+import { Spinner } from "@/components/spinner"
+
+type Action = "create" | "rotate" | "toggle" | "save" | "delete" | null
 
 // Owner-facing manager for a project's public submission link. Lives
-// on the Integrations tab. Handles enable/create, regenerate, toggle
-// pause, edit public title/description, copy link, and disable.
+// on the Integrations tab. Tracks which specific action is in flight
+// so we can show a spinner on the right button instead of disabling
+// the whole panel undifferentiatedly.
 export function PublicSessionPanel({
     projectId,
     initialSession,
@@ -19,7 +23,8 @@ export function PublicSessionPanel({
     const [origin, setOrigin] = useState("")
     const [error, setError] = useState<string | null>(null)
     const [copied, setCopied] = useState(false)
-    const [pending, startTransition] = useTransition()
+    const [action, setAction] = useState<Action>(null)
+    const [, startTransition] = useTransition()
 
     useEffect(() => {
         if (typeof window !== "undefined") setOrigin(window.location.origin)
@@ -31,6 +36,7 @@ export function PublicSessionPanel({
     }, [session?.token])
 
     const link = session ? `${origin}/p/${session.token}` : ""
+    const busy = action !== null
 
     async function call(method: "POST" | "PATCH" | "DELETE", body?: unknown) {
         setError(null)
@@ -49,8 +55,15 @@ export function PublicSessionPanel({
         return data?.session as ProjectPublicSession | null
     }
 
-    function enable() {
+    function run(a: Exclude<Action, null>, fn: () => Promise<void>) {
+        setAction(a)
         startTransition(async () => {
+            try { await fn() } finally { setAction(null) }
+        })
+    }
+
+    function enable() {
+        run("create", async () => {
             const s = await call("POST", { title, description })
             if (s) setSession(s)
         })
@@ -58,7 +71,7 @@ export function PublicSessionPanel({
 
     function rotate() {
         if (!confirm("Regenerate the link? The current URL will stop working.")) return
-        startTransition(async () => {
+        run("rotate", async () => {
             const s = await call("POST", { title, description })
             if (s) setSession(s)
         })
@@ -66,14 +79,14 @@ export function PublicSessionPanel({
 
     function togglePaused() {
         if (!session) return
-        startTransition(async () => {
+        run("toggle", async () => {
             const s = await call("PATCH", { enabled: !session.enabled })
             if (s) setSession(s)
         })
     }
 
     function saveDetails() {
-        startTransition(async () => {
+        run("save", async () => {
             const s = await call("PATCH", { title, description })
             if (s) setSession(s)
         })
@@ -81,7 +94,7 @@ export function PublicSessionPanel({
 
     function disable() {
         if (!confirm("Delete the public link? Any existing URL will stop working.")) return
-        startTransition(async () => {
+        run("delete", async () => {
             await call("DELETE")
             setSession(null)
         })
@@ -98,10 +111,14 @@ export function PublicSessionPanel({
         }
     }
 
+    const detailsDirty =
+        !!session &&
+        (title !== (session.title ?? "") || description !== (session.description ?? ""))
+
     return (
-        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-5">
-            <div className="flex items-start justify-between gap-3">
-                <div>
+        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
                     <div className="text-[14px] font-bold text-[color:var(--c-text)]">Public issue session</div>
                     <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
                         Share a link so anyone — no login — can file an issue against this project.
@@ -111,8 +128,8 @@ export function PublicSessionPanel({
                     <span
                         className={
                             session.enabled
-                                ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-emerald-800"
-                                : "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-700"
+                                ? "shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-emerald-800"
+                                : "shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-700"
                         }
                     >
                         {session.enabled ? "Live" : "Paused"}
@@ -122,8 +139,8 @@ export function PublicSessionPanel({
 
             {!session ? (
                 <div className="mt-4">
-                    <button onClick={enable} disabled={pending} className="btn-primary">
-                        {pending ? "Creating…" : "Create public link"}
+                    <button onClick={enable} disabled={busy} className="btn-primary w-full sm:w-auto">
+                        {action === "create" ? (<><Spinner />Creating…</>) : "Create public link"}
                     </button>
                 </div>
             ) : (
@@ -131,21 +148,28 @@ export function PublicSessionPanel({
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <input
                             readOnly
-                            value={link}
+                            value={link || ""}
                             onFocus={(e) => e.currentTarget.select()}
                             className="input flex-1 font-mono text-[12px]"
+                            aria-label="Public submission link"
                         />
-                        <div className="flex gap-2">
-                            <button onClick={copy} className="btn-ghost" disabled={pending}>
+                        <div className="grid grid-cols-2 gap-2 sm:flex">
+                            <button onClick={copy} className="btn-ghost" disabled={busy || !link}>
                                 {copied ? "Copied" : "Copy"}
                             </button>
-                            <a href={link} target="_blank" rel="noreferrer" className="btn-ghost">
+                            <a
+                                href={link || "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-disabled={!link || undefined}
+                                className="btn-ghost"
+                            >
                                 Open
                             </a>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-2">
+                    <fieldset disabled={busy} className="grid grid-cols-1 gap-2">
                         <label className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
                             Public heading
                         </label>
@@ -168,40 +192,43 @@ export function PublicSessionPanel({
                         <div className="flex justify-end">
                             <button
                                 onClick={saveDetails}
-                                disabled={
-                                    pending ||
-                                    (title === (session.title ?? "") && description === (session.description ?? ""))
-                                }
-                                className="btn-primary"
+                                disabled={busy || !detailsDirty}
+                                className="btn-primary w-full sm:w-auto"
                             >
-                                Save details
+                                {action === "save" ? (<><Spinner />Saving…</>) : "Save details"}
                             </button>
                         </div>
-                    </div>
+                    </fieldset>
 
                     <div className="flex flex-wrap items-center gap-2 border-t border-[color:var(--c-border)] pt-3">
-                        <span className="text-[12px] text-[color:var(--c-text-muted)]">
+                        <span className="text-[12px] tabular-nums text-[color:var(--c-text-muted)]">
                             {session.submission_count} submission{session.submission_count === 1 ? "" : "s"}
                         </span>
                         <span className="grow" />
-                        <button onClick={togglePaused} disabled={pending} className="btn-ghost">
-                            {session.enabled ? "Pause" : "Resume"}
+                        <button onClick={togglePaused} disabled={busy} className="btn-ghost">
+                            {action === "toggle"
+                                ? (<><Spinner />{session.enabled ? "Pausing…" : "Resuming…"}</>)
+                                : (session.enabled ? "Pause" : "Resume")}
                         </button>
-                        <button onClick={rotate} disabled={pending} className="btn-ghost">
-                            Regenerate link
+                        <button onClick={rotate} disabled={busy} className="btn-ghost">
+                            {action === "rotate" ? (<><Spinner />Regenerating…</>) : "Regenerate link"}
                         </button>
                         <button
                             onClick={disable}
-                            disabled={pending}
+                            disabled={busy}
                             className="btn-ghost text-rose-700 hover:bg-rose-50"
                         >
-                            Delete
+                            {action === "delete" ? (<><Spinner />Deleting…</>) : "Delete"}
                         </button>
                     </div>
                 </div>
             )}
 
-            {error && <p className="mt-3 text-[12px] text-rose-700">{error}</p>}
+            {error && (
+                <p role="alert" className="mt-3 rounded-[10px] bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800">
+                    {error}
+                </p>
+            )}
         </div>
     )
 }
