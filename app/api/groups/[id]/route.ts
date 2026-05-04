@@ -18,7 +18,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     // hint per row).
     const { data: links } = await supabase
         .from("project_group_members")
-        .select("project_id,projects(id,name,project_analyser(summary_overview_embedding,summary_modules_embedding))")
+        .select("project_id,projects(id,name,project_analyser(summary_overview_embedding))")
         .eq("group_id", id)
     type Link = {
         project_id: string
@@ -31,9 +31,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         const p = proj as { id: string; name: string; project_analyser?: unknown }
         const analyser = Array.isArray(p.project_analyser) ? p.project_analyser[0] : p.project_analyser
         const a = (analyser && typeof analyser === "object")
-            ? analyser as { summary_overview_embedding?: unknown; summary_modules_embedding?: unknown }
+            ? analyser as { summary_overview_embedding?: unknown }
             : null
-        const hasSummary = !!a && (a.summary_overview_embedding != null || a.summary_modules_embedding != null)
+        const hasSummary = !!a && a.summary_overview_embedding != null
         members.push({ id: p.id, name: p.name, has_summary: hasSummary })
     }
     members.sort((a, b) => a.name.localeCompare(b.name))

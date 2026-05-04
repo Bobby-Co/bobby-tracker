@@ -215,41 +215,34 @@ export function issueEmbeddingText(issue: { title: string; body: string }): stri
     return `${title}\n\n${body}`.slice(0, 7500)
 }
 
-// Pick the text we should embed for cross-project *routing*. The
-// analyser produces a short domain/surface restatement specifically
-// for this — using it makes routing scores comparable to the project
-// facet vectors instead of being dominated by user prose. Older
-// analyser builds may omit it, in which case we fall back to the
-// title+body blob used for issue-to-issue similarity.
+// Pick the text we embed for cross-project routing. One vector per
+// issue, compared against each project's main embedding AND tag
+// pools by find_similar_projects.
+//
+// We prefer the analyser's domain/surface routing_summary because
+// it's intentionally written in the same maintainer/architecture
+// voice the project tags are embedded in — that keeps the issue and
+// project sides in compatible embedding space. We optionally append
+// the proposal's structured layer + feature tags so the query vector
+// also lands close to the tag pool's contextualised phrases on
+// projects that have those tags. Falls back to title+body when the
+// analyser didn't return a routing_summary at all.
 export function routingEmbeddingText(proposal: IssueComposeProposal): string {
     const summary = (proposal.routing_summary ?? "").trim()
-    if (summary) return summary.slice(0, 7500)
-    return issueEmbeddingText({ title: proposal.title, body: proposal.body })
-}
-
-// Text we embed for the layer dimension of cross-project routing. The
-// analyser's `layer` is a controlled vocab string ("frontend", etc.);
-// when missing we use a stable empty-fallback that still produces a
-// usable vector — it just won't match anything specific in the
-// project's layer pool.
-export function layerEmbeddingText(proposal: IssueComposeProposal): string {
     const layer = (proposal.layer ?? "").toString().trim()
-    return layer || "unspecified"
-}
-
-// Text we embed for the feature dimension. The analyser emits 1-3
-// hierarchical "domain/subdomain" tags; we join with newlines so the
-// embedding model treats each as a distinct phrase. Falls back to the
-// routing summary when the analyser didn't tag features — better than
-// embedding empty text.
-export function featureEmbeddingText(proposal: IssueComposeProposal): string {
-    const tags = (proposal.features ?? [])
+    const features = (proposal.features ?? [])
         .map((t) => (t ?? "").toString().trim())
         .filter(Boolean)
-    if (tags.length > 0) return tags.join("\n")
-    const summary = (proposal.routing_summary ?? "").trim()
-    if (summary) return summary.slice(0, 1000)
-    return "unspecified"
+
+    if (!summary && !layer && features.length === 0) {
+        return issueEmbeddingText({ title: proposal.title, body: proposal.body })
+    }
+
+    const lines: string[] = []
+    if (summary) lines.push(summary)
+    if (layer) lines.push(`Layer: ${layer}`)
+    if (features.length > 0) lines.push(`Features: ${features.join(", ")}`)
+    return lines.join("\n").slice(0, 7500)
 }
 
 // ─── /verify (HTTP, request/response) ──────────────────────────────────────

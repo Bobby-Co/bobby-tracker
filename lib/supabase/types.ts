@@ -108,16 +108,15 @@ export interface ProjectAnalyser {
      * + AI compose's "which project does this issue belong to?"
      * routing. Null until the first index. */
     summary_markdown: string | null
-    /** Per-facet 1536-dim embeddings used by find_similar_projects.
-     *  Overview / stack / modules stay as single prose vectors; the
-     *  layer + feature dimensions are tag pools (see ProjectLayerTag /
-     *  ProjectFeatureTag) embedded one-tag-per-row so issue compose
-     *  can score "any close match in this project's pool?" rather
-     *  than collapsing everything into one prose embedding. */
+    /** The project's main routing vector. Built from name + summary
+     *  + layers + features + stack + modules concatenated, embedded
+     *  as one rich text by bobby-analyser. Drives 70% of
+     *  find_similar_projects scoring; the layer + feature tag pools
+     *  (see ProjectLayerTag / ProjectFeatureTag) supply the other
+     *  30% via max-cosine refinement. */
     summary_overview_embedding: number[] | null
-    summary_stack_embedding:    number[] | null
-    summary_modules_embedding:  number[] | null
-    /** Embedding model that produced the facet vectors. */
+    /** Embedding model that produced summary_overview_embedding +
+     *  the tag-pool vectors. */
     summary_model: string | null
     /** When summary_markdown + the embeddings were last refreshed. */
     summary_updated_at: string | null

@@ -1,8 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import {
-    AnalyserError, composeIssue, embedText,
-    routingEmbeddingText, layerEmbeddingText, featureEmbeddingText,
-} from "@/lib/analyser"
+import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
 // POST /api/groups/[id]/ai-compose
@@ -12,22 +9,18 @@ import type { ProjectGroup } from "@/lib/supabase/types"
 // Compose + route in one round-trip:
 //
 //   1. Forward paragraph + images to bobby-analyser /issues/compose
-//      → structured draft (title/body/priority/labels) plus the
-//      routing fields the new tag system needs (layer, features,
-//      action, scope, routing_summary).
-//   2. Embed three query vectors in parallel:
-//        - routing_summary  → overview/stack/modules sims
-//        - layer text       → vs project_layer_tags pool
-//        - features text    → vs project_feature_tags pool
-//   3. tracker.find_similar_projects(routing, layer, feature,
-//      group_member_ids) with weights — layer + feature dominate at
-//      60% (30/30), modules 20%, overview/stack 10% each — so the
-//      cross-repo routing the old prose-blend kept missing actually
-//      lands.
+//      → structured draft (title/body/priority/labels/layer/features
+//      /action/scope/routing_summary).
+//   2. Embed ONE query vector from routing_summary + the proposal's
+//      layer + feature tags joined into a maintainer-voice phrase.
+//   3. tracker.find_similar_projects(query, group_member_ids):
+//        main_sim (cosine vs project_main_embedding)  — 70%
+//        tag_sim  (max cosine vs project tag pools)   — 30%
+//      → final = 0.7 * main_sim + 0.3 * tag_sim
 //
-// Returns proposal + ranking[]; each ranking row carries the per-
-// dimension breakdown so the UI can show which signal moved the
-// score.
+// The main embedding carries "what is this project" globally; the
+// tag pool refinement boosts projects that contain a specific match
+// for the issue's layer or feature. Returns proposal + ranking[].
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
@@ -89,42 +82,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    // Step 2: embed the three query vectors in parallel.
-    let routingVec: number[]
-    let layerVec: number[]
-    let featureVec: number[]
+    // Step 2: embed the single query vector. routingEmbeddingText
+    // folds the routing_summary + layer + features into a phrase
+    // that lives in the same embedding space as the project's
+    // contextualised tag pool entries.
+    let queryVec: number[]
     try {
-        const [routing, layer, feature] = await Promise.all([
-            embedText(routingEmbeddingText(proposal)),
-            embedText(layerEmbeddingText(proposal)),
-            embedText(featureEmbeddingText(proposal)),
-        ])
-        routingVec = routing.vector
-        layerVec   = layer.vector
-        featureVec = feature.vector
+        const embed = await embedText(routingEmbeddingText(proposal))
+        queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    // Step 3: weighted similarity. Defaults match migration 0021:
-    // layer 30%, feature 30%, modules 20%, overview 10%, stack 10%.
+    // Step 3: weighted similarity. Defaults match migration 0023:
+    // main 70% + max(layer,feature) 30%.
     interface RankRow {
-        project_id:   string
-        similarity:   number
-        layer_sim:    number | null
-        feature_sim:  number | null
-        overview_sim: number | null
-        stack_sim:    number | null
-        modules_sim:  number | null
+        project_id:  string
+        similarity:  number
+        main_sim:    number | null
+        layer_sim:   number | null
+        feature_sim: number | null
+        tag_sim:     number | null
     }
     const { data: ranked, error: rpcErr } = await supabase
         .rpc("find_similar_projects", {
-            p_routing_embedding: routingVec,
-            p_layer_embedding:   layerVec,
-            p_feature_embedding: featureVec,
-            p_project_ids:       projectIds,
-            p_limit:             projectIds.length,
+            p_query_embedding: queryVec,
+            p_project_ids:     projectIds,
+            p_limit:           projectIds.length,
         })
     if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
 
@@ -136,11 +121,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .map((m) => {
             const score = rankByProject.get(m.id)
             const hasAnyDimension = !!score && (
+                (score.main_sim ?? 0) > 0 ||
                 (score.layer_sim ?? 0) > 0 ||
-                (score.feature_sim ?? 0) > 0 ||
-                (score.overview_sim ?? 0) > 0 ||
-                (score.stack_sim ?? 0) > 0 ||
-                (score.modules_sim ?? 0) > 0
+                (score.feature_sim ?? 0) > 0
             )
             return {
                 project_id:     m.id,
@@ -149,11 +132,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 has_summary:    hasAnyDimension,
                 similarity:     score?.similarity ?? 0,
                 breakdown: score ? {
-                    layer:    score.layer_sim,
-                    feature:  score.feature_sim,
-                    modules:  score.modules_sim,
-                    overview: score.overview_sim,
-                    stack:    score.stack_sim,
+                    main:    score.main_sim,
+                    layer:   score.layer_sim,
+                    feature: score.feature_sim,
                 } : null,
             }
         })

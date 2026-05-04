@@ -64,7 +64,7 @@ async function GroupIssuesContent({
     // so we trust the join shape here.
     const { data: links } = await supabase
         .from("project_group_members")
-        .select("project_id,projects(id,name,project_analyser(status,enabled,graph_id,summary_overview_embedding,summary_modules_embedding))")
+        .select("project_id,projects(id,name,project_analyser(status,enabled,graph_id,summary_overview_embedding))")
         .eq("group_id", id)
     type Link = { project_id: string; projects: unknown }
     interface MemberInfo {
@@ -82,14 +82,13 @@ async function GroupIssuesContent({
         const a = (analyser && typeof analyser === "object")
             ? analyser as Pick<ProjectAnalyser, "status" | "enabled" | "graph_id"> & {
                 summary_overview_embedding?: unknown
-                summary_modules_embedding?: unknown
             }
             : null
         members.push({
             id: p.id,
             name: p.name,
             analyser_ready: !!a && a.enabled === true && a.status === "ready" && !!a.graph_id,
-            has_summary: !!a && (a.summary_overview_embedding != null || a.summary_modules_embedding != null),
+            has_summary: !!a && a.summary_overview_embedding != null,
         })
     }
     members.sort((a, b) => a.name.localeCompare(b.name))

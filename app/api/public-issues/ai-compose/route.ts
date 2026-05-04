@@ -1,9 +1,6 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import {
-    AnalyserError, composeIssue, embedText,
-    routingEmbeddingText, layerEmbeddingText, featureEmbeddingText,
-} from "@/lib/analyser"
+import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
 import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
 
 // POST /api/public-issues/ai-compose
@@ -82,39 +79,28 @@ export async function POST(request: Request) {
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    let routingVec: number[]
-    let layerVec: number[]
-    let featureVec: number[]
+    let queryVec: number[]
     try {
-        const [routing, layer, feature] = await Promise.all([
-            embedText(routingEmbeddingText(proposal)),
-            embedText(layerEmbeddingText(proposal)),
-            embedText(featureEmbeddingText(proposal)),
-        ])
-        routingVec = routing.vector
-        layerVec   = layer.vector
-        featureVec = feature.vector
+        const embed = await embedText(routingEmbeddingText(proposal))
+        queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
     interface RankRow {
-        project_id:   string
-        similarity:   number
-        layer_sim:    number | null
-        feature_sim:  number | null
-        overview_sim: number | null
-        stack_sim:    number | null
-        modules_sim:  number | null
+        project_id:  string
+        similarity:  number
+        main_sim:    number | null
+        layer_sim:   number | null
+        feature_sim: number | null
+        tag_sim:     number | null
     }
     const { data: ranked, error: rpcErr } = await svc
         .rpc("find_similar_projects", {
-            p_routing_embedding: routingVec,
-            p_layer_embedding:   layerVec,
-            p_feature_embedding: featureVec,
-            p_project_ids:       projectIds,
-            p_limit:             projectIds.length,
+            p_query_embedding: queryVec,
+            p_project_ids:     projectIds,
+            p_limit:           projectIds.length,
         })
     if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
 
@@ -147,11 +133,9 @@ export async function POST(request: Request) {
             const meta = metaById.get(id)
             const score = rankByProject.get(id)
             const hasAnyDimension = !!score && (
+                (score.main_sim ?? 0) > 0 ||
                 (score.layer_sim ?? 0) > 0 ||
-                (score.feature_sim ?? 0) > 0 ||
-                (score.overview_sim ?? 0) > 0 ||
-                (score.stack_sim ?? 0) > 0 ||
-                (score.modules_sim ?? 0) > 0
+                (score.feature_sim ?? 0) > 0
             )
             return {
                 project_id:     id,
@@ -160,11 +144,9 @@ export async function POST(request: Request) {
                 has_summary:    hasAnyDimension,
                 similarity:     score?.similarity ?? 0,
                 breakdown: score ? {
-                    layer:    score.layer_sim,
-                    feature:  score.feature_sim,
-                    modules:  score.modules_sim,
-                    overview: score.overview_sim,
-                    stack:    score.stack_sim,
+                    main:    score.main_sim,
+                    layer:   score.layer_sim,
+                    feature: score.feature_sim,
                 } : null,
             }
         })
