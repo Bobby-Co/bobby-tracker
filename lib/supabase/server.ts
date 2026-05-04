@@ -31,11 +31,19 @@ export async function createClient() {
     )
 }
 
+// Always pin path to "/" so the session cookie + PKCE verifier are
+// visible to every route. Without an explicit path, browser cookies
+// default to the URL that set them — the verifier written from /login
+// then doesn't get sent on /auth/callback and exchangeCodeForSession
+// fails with "code verifier not found". `domain` is only set when
+// NEXT_PUBLIC_AUTH_COOKIE_DOMAIN is provided (production cross-
+// subdomain SSO); dev leaves it host-scoped.
 function sharedCookieOptions() {
     const domain = process.env.NEXT_PUBLIC_AUTH_COOKIE_DOMAIN
-    return domain
-        ? { domain, path: "/", sameSite: "lax" as const, secure: true }
-        : undefined
+    if (domain) {
+        return { domain, path: "/", sameSite: "lax" as const, secure: true }
+    }
+    return { path: "/", sameSite: "lax" as const }
 }
 
 // Cached per-request fetch of the current authenticated user.

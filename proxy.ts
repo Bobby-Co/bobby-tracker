@@ -61,10 +61,13 @@ export async function proxy(request: NextRequest) {
     // so it can refresh, but do it inside a try/catch — a dead refresh
     // token here is the source of the `refresh_token_not_found` log
     // spam. On failure we clear the cookies and treat as anonymous.
+    // Pin path to "/" so cookie writes here line up with the ones the
+    // server / browser clients make — see lib/supabase/server.ts for
+    // the full rationale (PKCE verifier visibility on /auth/callback).
     const cookieDomain = process.env.NEXT_PUBLIC_AUTH_COOKIE_DOMAIN
     const sharedCookieOptions = cookieDomain
         ? { domain: cookieDomain, path: "/", sameSite: "lax" as const, secure: true }
-        : undefined
+        : { path: "/", sameSite: "lax" as const }
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
