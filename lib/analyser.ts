@@ -215,18 +215,33 @@ export function issueEmbeddingText(issue: { title: string; body: string }): stri
     return `${title}\n\n${body}`.slice(0, 7500)
 }
 
-// Pick the text we embed for cross-project routing. One vector per
-// issue, compared against each project's main embedding AND tag
-// pools by find_similar_projects.
+// Pick the text we embed for cross-project routing. ONE vector per
+// issue, compared against each project's main embedding AND its
+// per-tag embeddings by find_similar_projects.
 //
-// We prefer the analyser's domain/surface routing_summary because
-// it's intentionally written in the same maintainer/architecture
-// voice the project tags are embedded in — that keeps the issue and
-// project sides in compatible embedding space. We optionally append
-// the proposal's structured layer + feature tags so the query vector
-// also lands close to the tag pool's contextualised phrases on
-// projects that have those tags. Falls back to title+body when the
-// analyser didn't return a routing_summary at all.
+// We deliberately shape the text to mirror BOTH targets so a single
+// vector lands well in either subspace:
+//
+//   - First line(s): the analyser's domain/surface routing_summary
+//     in plain maintainer voice. Matches the project's main
+//     embedding (which is itself a prose blob mixing overview +
+//     layer/feature descriptions).
+//
+//   - Then per-dimension lines shaped EXACTLY like the project tag
+//     phrases the analyser produces:
+//
+//         "layer <slug>: <description>"
+//         "feature <slug>: <description>"
+//
+//     Project tags are embedded as "<projectName> — layer <slug>:
+//     <description>" so the trailing "<kind> <slug>: <description>"
+//     n-grams dominate the cosine similarity. Repeating the
+//     routing_summary as the description for each tag dimension
+//     gives the embedding model the shared structure it needs to
+//     pull the issue vector toward the project's tag-pool space.
+//
+// Falls back to title+body when the analyser didn't return any
+// routing fields at all (older analyser builds).
 export function routingEmbeddingText(proposal: IssueComposeProposal): string {
     const summary = (proposal.routing_summary ?? "").trim()
     const layer = (proposal.layer ?? "").toString().trim()
@@ -240,8 +255,18 @@ export function routingEmbeddingText(proposal: IssueComposeProposal): string {
 
     const lines: string[] = []
     if (summary) lines.push(summary)
-    if (layer) lines.push(`Layer: ${layer}`)
-    if (features.length > 0) lines.push(`Features: ${features.join(", ")}`)
+    // Per-tag-dimension lines that mimic the project tag-pool phrase
+    // shape. The description after the colon is the routing_summary
+    // (or the slug itself when summary is empty) so we never embed
+    // a bare "layer frontend." with no body — that's exactly the
+    // low-context vector the redesign was meant to avoid.
+    const tagDescription = summary || "described above"
+    if (layer) {
+        lines.push(`layer ${layer}: ${tagDescription}`)
+    }
+    for (const feature of features) {
+        lines.push(`feature ${feature}: ${tagDescription}`)
+    }
     return lines.join("\n").slice(0, 7500)
 }
 
