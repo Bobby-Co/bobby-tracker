@@ -23,11 +23,19 @@ export interface ResolvedPublicSession {
     submissions_visibility: PublicSessionSubmissionsVisibility
     start_at: string | null
     end_at: string | null
-    /** Project IDs this session covers. */
+    /** Project IDs this session covers. When the session is backed
+     *  by a project group (group_id != null), this is the group's
+     *  membership filtered to projects with the public-submissions
+     *  integration enabled. Otherwise it's the manual junction. */
     project_ids: string[]
+    /** Set when the session derives its coverage from a group. The
+     *  public AI compose endpoint uses this to enable per-project
+     *  routing via find_similar_projects. */
+    group_id: string | null
 }
 
-type SessionPick = Pick<PublicSession, "id" | "enabled" | "access_mode" | "submissions_visibility" | "start_at" | "end_at">
+type SessionPick = Pick<PublicSession,
+    "id" | "enabled" | "access_mode" | "submissions_visibility" | "start_at" | "end_at" | "group_id">
 
 // Resolve a token to a session row. Returns either a session (with
 // the list of covered project IDs) or a pre-built error Response so
@@ -40,7 +48,7 @@ export async function resolvePublicSession(
     if (!token) return { session: null, error: jsonError("bad_request", "token required", 400) }
     const { data } = await svc
         .from("public_sessions")
-        .select("id,enabled,access_mode,submissions_visibility,start_at,end_at")
+        .select("id,enabled,access_mode,submissions_visibility,start_at,end_at,group_id")
         .eq("token", token)
         .maybeSingle<SessionPick>()
     if (!data) return { session: null, error: jsonError("not_found", "this submission link is invalid", 404) }
@@ -55,12 +63,29 @@ export async function resolvePublicSession(
         }
     }
 
-    const { data: links } = await svc
-        .from("public_session_projects")
-        .select("project_id")
-        .eq("session_id", data.id)
-        .returns<{ project_id: string }[]>()
-    const project_ids = (links ?? []).map((r) => r.project_id)
+    let project_ids: string[] = []
+    if (data.group_id) {
+        // Group-backed session: pull the group's current membership
+        // and filter to projects that have the public-submissions
+        // integration enabled. The integration trigger guards manual
+        // adds to public_session_projects; for groups we apply the
+        // same filter at read time so a project added to the group
+        // before public-submissions is enabled doesn't get exposed.
+        const { data: members } = await svc
+            .from("project_group_members")
+            .select("project_id,projects!inner(project_public_integration!inner(enabled))")
+            .eq("group_id", data.group_id)
+            .eq("projects.project_public_integration.enabled", true)
+            .returns<{ project_id: string }[]>()
+        project_ids = (members ?? []).map((r) => r.project_id)
+    } else {
+        const { data: links } = await svc
+            .from("public_session_projects")
+            .select("project_id")
+            .eq("session_id", data.id)
+            .returns<{ project_id: string }[]>()
+        project_ids = (links ?? []).map((r) => r.project_id)
+    }
 
     return { session: { ...data, project_ids }, error: null }
 }

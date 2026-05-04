@@ -1,12 +1,28 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Modal } from "@/components/modal"
 import { Spinner } from "@/components/spinner"
 import { compressImage, type CompressedImage } from "@/lib/image-compress"
+import { readName, readReporterId } from "@/lib/public-profile"
 import type { IssuePriority } from "@/lib/supabase/types"
+
+interface RankedProject {
+    project_id: string
+    project_name: string
+    analyser_ready: boolean
+    has_summary: boolean
+    similarity: number
+    breakdown: {
+        overview: number | null
+        features: number | null
+        stack:    number | null
+        modules:  number | null
+    } | null
+}
 
 interface PublicProposal {
     title: string
@@ -71,12 +87,17 @@ function ComposeBody({
     onAccept: (p: PublicProposal) => void
     onCancel: () => void
 }) {
+    const router = useRouter()
     const [paragraph, setParagraph] = useState("")
     const [images, setImages] = useState<CompressedImage[]>([])
     const [imageError, setImageError] = useState<string | null>(null)
     const [composeError, setComposeError] = useState<string | null>(null)
     const [composing, setComposing] = useState(false)
     const [proposal, setProposal] = useState<PublicProposal | null>(null)
+    const [ranking, setRanking] = useState<RankedProject[]>([])
+    const [picked, setPicked] = useState<Set<string>>(new Set())
+    const [submitting, setSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState<string | null>(null)
     const [bodyView, setBodyView] = useState<"edit" | "preview">("preview")
 
     async function handleFiles(fl: FileList | null) {
@@ -119,11 +140,84 @@ function ComposeBody({
                 return
             }
             const data = await res.json()
-            setProposal(data.proposal as PublicProposal)
+            const p = data.proposal as PublicProposal
+            const r = (data.ranking as RankedProject[] | null) ?? []
+            setProposal(p)
+            setRanking(r)
+            // Group-mode default: pre-select the top analyser-ready
+            // project. Manual mode (no ranking) uses the existing
+            // accept-into-form path so picked stays empty.
+            if (r.length > 0) {
+                const top = r.find((x) => x.analyser_ready && x.has_summary)
+                    ?? r.find((x) => x.analyser_ready)
+                setPicked(top ? new Set([top.project_id]) : new Set())
+            }
         } catch (e) {
             setComposeError(e instanceof Error ? e.message : String(e))
         } finally {
             setComposing(false)
+        }
+    }
+
+    function togglePicked(id: string) {
+        setPicked((cur) => {
+            const next = new Set(cur)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    async function submitRouted() {
+        if (!proposal) return
+        const targets = Array.from(picked)
+        if (targets.length === 0) return
+        setSubmitError(null)
+        setSubmitting(true)
+        try {
+            const reporter = readName()
+            const reporter_id = readReporterId()
+            // Fan out one POST per target. Each public submission is
+            // its own row with its own embedding + reporter_id;
+            // sharing the same draft content but routed by the user.
+            const results = await Promise.all(targets.map(async (project_id) => {
+                const res = await fetch("/api/public-issues", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        token,
+                        project_id,
+                        reporter,
+                        reporter_id,
+                        title: proposal.title,
+                        body: proposal.body,
+                        priority: proposal.priority,
+                    }),
+                })
+                if (!res.ok) {
+                    const e = await res.json().catch(() => ({}))
+                    return { project_id, error: e?.error?.message || `Failed (${res.status})` }
+                }
+                const data = await res.json().catch(() => ({}))
+                return { project_id, issueId: data?.issue?.id as string | undefined }
+            }))
+            const failed = results.filter((r): r is { project_id: string; error: string } => "error" in r)
+            const created = results.filter((r): r is { project_id: string; issueId: string } => "issueId" in r && !!r.issueId)
+            if (failed.length > 0 && created.length === 0) {
+                setSubmitError(failed.map((f) => f.error).join("; "))
+                return
+            }
+            // Refresh the parent listing so the new submissions
+            // surface immediately.
+            router.refresh()
+            const first = created[0]
+            if (first) {
+                router.push(`/p/${token}/issues/${first.issueId}`)
+            }
+        } catch (e) {
+            setSubmitError(e instanceof Error ? e.message : String(e))
+        } finally {
+            setSubmitting(false)
         }
     }
 
@@ -296,20 +390,150 @@ function ComposeBody({
                 )}
             </div>
 
+            {/* Group-mode routing panel. Present iff the API returned
+                a ranking — i.e. the session is backed by a project
+                group and find_similar_projects scored each member.
+                Submitter picks one or more targets; the modal owns
+                the fan-out and skips the parent form's flow entirely. */}
+            {ranking.length > 0 && (
+                <RoutingPanel ranking={ranking} picked={picked} onToggle={togglePicked} />
+            )}
+
+            {submitError && (
+                <p role="alert" className="rounded-[10px] bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800">
+                    {submitError}
+                </p>
+            )}
+
             <div className="mt-1 flex flex-wrap justify-between gap-2">
-                <button type="button" onClick={() => setProposal(null)} className="btn-ghost">
-                    ← Back
-                </button>
                 <button
                     type="button"
-                    onClick={() => onAccept(proposal)}
-                    disabled={!proposal.title.trim()}
-                    className="btn-primary"
+                    onClick={() => { setProposal(null); setRanking([]); setPicked(new Set()) }}
+                    disabled={submitting}
+                    className="btn-ghost"
                 >
-                    Use this draft
+                    ← Back
                 </button>
+                {ranking.length > 0 ? (
+                    <button
+                        type="button"
+                        onClick={submitRouted}
+                        disabled={submitting || picked.size === 0 || !proposal.title.trim()}
+                        className="btn-primary"
+                    >
+                        {submitting
+                            ? (<><Spinner />Submitting…</>)
+                            : picked.size > 1
+                                ? `Submit ${picked.size} issues`
+                                : "Submit issue"}
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => onAccept(proposal)}
+                        disabled={!proposal.title.trim()}
+                        className="btn-primary"
+                    >
+                        Use this draft
+                    </button>
+                )}
             </div>
         </div>
+    )
+}
+
+function RoutingPanel({
+    ranking, picked, onToggle,
+}: {
+    ranking: RankedProject[]
+    picked: Set<string>
+    onToggle: (id: string) => void
+}) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                    Route to
+                </span>
+                <span className="text-[10.5px] text-[color:var(--c-text-dim)]">
+                    Modules 40% · Overview 25% · Features 20% · Stack 15%
+                </span>
+            </div>
+            <ul className="flex flex-col gap-1.5">
+                {ranking.map((r) => {
+                    const isPicked = picked.has(r.project_id)
+                    const blocked = !r.analyser_ready
+                    return (
+                        <li key={r.project_id}>
+                            <label
+                                className={
+                                    "flex items-center gap-3 rounded-[10px] border bg-white px-3 py-2 transition-colors " +
+                                    (isPicked
+                                        ? "border-zinc-900 bg-[color:var(--c-surface-2)]"
+                                        : "border-[color:var(--c-border)] hover:border-[color:var(--c-border-strong)]") +
+                                    (blocked ? " opacity-60" : " cursor-pointer")
+                                }
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={isPicked}
+                                    onChange={() => onToggle(r.project_id)}
+                                    disabled={blocked}
+                                    className="h-4 w-4 accent-zinc-900"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="truncate text-[13px] font-semibold">{r.project_name}</span>
+                                        {!r.has_summary && (
+                                            <span
+                                                className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-800"
+                                                title="No summary embedding yet — re-index this project to enable routing scores."
+                                            >
+                                                no summary
+                                            </span>
+                                        )}
+                                        {blocked && (
+                                            <span
+                                                className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-rose-800"
+                                                title="Analyser isn't ready for this project — submission will fail until indexed."
+                                            >
+                                                not indexed
+                                            </span>
+                                        )}
+                                    </div>
+                                    {r.breakdown && (
+                                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-[color:var(--c-text-dim)]">
+                                            <Facet label="modules" value={r.breakdown.modules} />
+                                            <Facet label="overview" value={r.breakdown.overview} />
+                                            <Facet label="features" value={r.breakdown.features} />
+                                            <Facet label="stack" value={r.breakdown.stack} />
+                                        </div>
+                                    )}
+                                </div>
+                                <span className="shrink-0 text-[12px] font-bold tabular-nums text-[color:var(--c-text)]">
+                                    {Math.round(r.similarity * 100)}%
+                                </span>
+                            </label>
+                        </li>
+                    )
+                })}
+            </ul>
+        </div>
+    )
+}
+
+function Facet({ label, value }: { label: string; value: number | null }) {
+    if (value == null) {
+        return (
+            <span className="rounded bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[color:var(--c-text-dim)]">
+                {label} · —
+            </span>
+        )
+    }
+    return (
+        <span className="rounded bg-[color:var(--c-surface-2)] px-1.5 py-[1px]">
+            {label} · <span className="font-semibold text-[color:var(--c-text)]">{Math.round(value * 100)}%</span>
+        </span>
     )
 }
 

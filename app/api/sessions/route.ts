@@ -50,6 +50,18 @@ export async function POST(request: Request) {
 
     const access_mode = body.access_mode === "invite" ? "invite" : "link"
     const submissions_visibility = body.submissions_visibility === "own" ? "own" : "all"
+    const group_id_raw = typeof body.group_id === "string" ? body.group_id : null
+    let group_id: string | null = null
+    if (group_id_raw) {
+        // Verify ownership of the group before persisting the link.
+        const { data: group } = await supabase
+            .from("project_groups")
+            .select("id")
+            .eq("id", group_id_raw)
+            .maybeSingle<{ id: string }>()
+        if (!group) return jsonError("bad_request", "group not found or not yours", 400)
+        group_id = group_id_raw
+    }
 
     const projectIdsIn = Array.isArray(body.project_ids)
         ? body.project_ids.filter((x: unknown): x is string => typeof x === "string")
@@ -63,6 +75,7 @@ export async function POST(request: Request) {
             enabled: true,
             access_mode,
             submissions_visibility,
+            group_id,
             name, title, description, start_at, end_at,
         })
         .select("*")

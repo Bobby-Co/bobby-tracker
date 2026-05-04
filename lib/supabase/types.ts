@@ -181,6 +181,13 @@ export interface PublicSession {
     enabled: boolean
     access_mode: PublicSessionAccessMode
     submissions_visibility: PublicSessionSubmissionsVisibility
+    /** When set, the session's effective project coverage is the
+     *  group's current membership instead of the manual junction
+     *  table. Adding a project to the group expands the session
+     *  automatically; the public AI compose flow uses the group's
+     *  facet embeddings to route incoming issues. Null = manual
+     *  project list (current behaviour). */
+    group_id: string | null
     /** Internal label shown in the owner's session list. */
     name: string
     /** Public heading rendered to submitters (falls back to `name`). */
