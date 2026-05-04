@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation"
 import type { ProjectGroup } from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
 import { MultiDropdown } from "@/components/multi-dropdown"
-import { GroupAiComposeButton } from "@/components/group-ai-compose-button"
 
 interface MemberInfo {
     id: string
@@ -128,29 +127,17 @@ export function GroupManagePanel({
     const indexedMembers = members.filter((m) => m.has_summary).length
 
     return (
-        <div className="mt-4 flex flex-col gap-4">
-            {/* Compose CTA — the primary action on this page. */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <div className="text-[14px] font-bold">Compose with AI</div>
-                        <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
-                            Drop in a paragraph and screenshots. The AI drafts an issue and ranks the group&apos;s projects so you can route it to the best match (or split it across several).
-                        </p>
-                    </div>
-                    <GroupAiComposeButton
-                        groupId={group.id}
-                        members={members}
-                        disabled={members.length === 0}
-                        disabledReason={members.length === 0 ? "Add at least one project to this group first." : undefined}
-                    />
-                </div>
-                {members.length > 0 && indexedMembers < members.length && (
-                    <p className="mt-3 rounded-[10px] bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-                        {members.length - indexedMembers} of {members.length} project{members.length === 1 ? "" : "s"} hasn&apos;t been indexed yet — those will still be selectable but won&apos;t carry a routing score until they get a summary embedding.
-                    </p>
-                )}
-            </div>
+        <div className="flex flex-col gap-4">
+            {/* AI compose lives on the Issues tab now (it's the
+                page-level primary action there); Settings is just
+                config. We surface a small hint when some members
+                lack a summary embedding so the user knows routing
+                will be partial until they re-index. */}
+            {members.length > 0 && indexedMembers < members.length && (
+                <p className="rounded-[10px] bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                    {members.length - indexedMembers} of {members.length} project{members.length === 1 ? "" : "s"} hasn&apos;t been indexed yet — AI compose will still let you route to those, but they won&apos;t carry a routing score until they get a summary embedding.
+                </p>
+            )}
 
             {/* Members */}
             <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
