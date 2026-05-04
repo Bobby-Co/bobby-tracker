@@ -9,6 +9,7 @@ import type {
     PublicSessionSubmissionsVisibility,
 } from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
+import { MultiDropdown } from "@/components/multi-dropdown"
 
 type Action =
     | "save" | "rotate" | "toggle" | "delete"
@@ -72,7 +73,7 @@ export function SessionManagePanel({
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [action, setAction] = useState<Action>(null)
-    const [pendingProjectId, setPendingProjectId] = useState<string>("")
+    const [pendingProjectIds, setPendingProjectIds] = useState<string[]>([])
     const [, startTransition] = useTransition()
 
     useEffect(() => {
@@ -147,14 +148,27 @@ export function SessionManagePanel({
         })
     }
 
-    function addProject() {
-        if (!pendingProjectId) return
+    function addProjects() {
+        const ids = pendingProjectIds.filter(Boolean)
+        if (ids.length === 0) return
         run("addProject", async () => {
-            const ok = await call(`/api/sessions/${session.id}/projects`, "POST", { project_id: pendingProjectId })
-            if (!ok && error) return
-            const proj = allProjects.find((p) => p.id === pendingProjectId)
-            if (proj) setProjects((cur) => [...cur, proj].sort((a, b) => a.name.localeCompare(b.name)))
-            setPendingProjectId("")
+            // Fan out one POST per project. The server endpoint is
+            // single-add; firing in parallel keeps the wall-clock
+            // close to one request even when adding several at once.
+            const results = await Promise.all(
+                ids.map((project_id) =>
+                    call(`/api/sessions/${session.id}/projects`, "POST", { project_id }),
+                ),
+            )
+            const successfullyAdded = ids.filter((_, i) => results[i] !== null || !error)
+            if (successfullyAdded.length > 0) {
+                const fresh = allProjects.filter((p) => successfullyAdded.includes(p.id))
+                setProjects((cur) =>
+                    [...cur, ...fresh.filter((p) => !cur.some((c) => c.id === p.id))]
+                        .sort((a, b) => a.name.localeCompare(b.name)),
+                )
+            }
+            setPendingProjectIds([])
         })
     }
 
@@ -501,24 +515,28 @@ export function SessionManagePanel({
                 )}
 
                 {availableToAdd.length > 0 && (
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <select
-                            value={pendingProjectId}
-                            onChange={(e) => setPendingProjectId(e.target.value)}
-                            disabled={busy}
-                            className="input text-[13px] sm:max-w-xs"
-                        >
-                            <option value="">Add a project…</option>
-                            {availableToAdd.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div className="w-full sm:max-w-xs">
+                            <MultiDropdown<string>
+                                values={pendingProjectIds}
+                                onChange={setPendingProjectIds}
+                                options={availableToAdd.map((p) => ({ value: p.id, label: p.name }))}
+                                placeholder="Add projects…"
+                                searchable={availableToAdd.length > 6}
+                                disabled={busy}
+                                aria-label="Projects to add"
+                            />
+                        </div>
                         <button
-                            onClick={addProject}
-                            disabled={busy || !pendingProjectId}
+                            onClick={addProjects}
+                            disabled={busy || pendingProjectIds.length === 0}
                             className="btn-primary w-full sm:w-auto"
                         >
-                            {action === "addProject" ? (<><Spinner />Adding…</>) : "Add"}
+                            {action === "addProject"
+                                ? (<><Spinner />Adding…</>)
+                                : pendingProjectIds.length > 1
+                                    ? `Add ${pendingProjectIds.length}`
+                                    : "Add"}
                         </button>
                     </div>
                 )}
