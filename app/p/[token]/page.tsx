@@ -8,7 +8,7 @@ import { PublicSessionSubmissions } from "@/components/public-session-submission
 import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
 import { PublicSessionGate } from "@/components/public-session-gate"
 import { checkInviteAccess, getCurrentPublicUser } from "@/lib/public-session"
-import { groupByReporter, type PublicListedIssue } from "@/lib/public-reporter"
+import { groupByParent, type PublicListedIssue } from "@/lib/public-reporter"
 
 export const dynamic = "force-dynamic"
 
@@ -93,11 +93,11 @@ async function PublicSessionContent({
     const projectIds = projects.map((p) => p.id)
     const projectNameById = new Map(projects.map((p) => [p.id, p.name]))
 
-    type ListedIssueRow = Pick<Issue, "id" | "issue_number" | "title" | "project_id" | "created_at">
+    type ListedIssueRow = Pick<Issue, "id" | "issue_number" | "title" | "status" | "project_id" | "duplicate_of_issue_id" | "created_at">
     const { data: issueRows } = projectIds.length
         ? await svc
             .from("issues")
-            .select("id,issue_number,title,project_id,created_at")
+            .select("id,issue_number,title,status,project_id,duplicate_of_issue_id,created_at")
             .in("project_id", projectIds)
             .contains("labels", ["public-session"])
             .order("created_at", { ascending: false })
@@ -139,13 +139,15 @@ async function PublicSessionContent({
             id: r.id,
             issue_number: r.issue_number,
             title: r.title,
+            status: r.status,
             project_name: projectNameById.get(r.project_id) ?? "",
             public_reporter_id: rep?.id ?? null,
             public_reporter_name: rep?.name ?? null,
+            duplicate_of_issue_id: r.duplicate_of_issue_id,
             created_at: r.created_at,
         }
     })
-    const groups = groupByReporter(listedIssues)
+    const parentRows = groupByParent(listedIssues)
 
     const win = session.enabled ? windowState(session) : "closed"
     const heading = session.title || session.name
@@ -207,7 +209,7 @@ async function PublicSessionContent({
                         <PublicIssueForm token={token} projects={projects} />
                         <PublicSessionSubmissions
                             token={token}
-                            groups={groups}
+                            parents={parentRows}
                             restrictToOwn={restrictToOwn}
                             visitorIsAuthenticated={!!visitor}
                         />
