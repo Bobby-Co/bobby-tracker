@@ -2,7 +2,7 @@
 // in the supabase CLI codegen toolchain just for Phase 2; regenerate with
 // `supabase gen types typescript --schema tracker` once the schema settles.
 
-export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived"
+export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
 
@@ -141,7 +141,7 @@ export interface IssueSuggestion {
     created_at: string
 }
 
-export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived"]
+export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived", "duplicated"]
 export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urgent"]
 
 /** Who can open the public link.

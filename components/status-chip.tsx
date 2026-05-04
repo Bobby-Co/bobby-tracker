@@ -7,6 +7,7 @@ const STATUS_STYLES: Record<IssueStatus, string> = {
     blocked:     "bg-red-50 text-red-800 border-red-100",
     done:        "bg-emerald-50 text-emerald-800 border-emerald-100",
     archived:    "bg-zinc-100 text-zinc-600 border-zinc-200",
+    duplicated:  "bg-amber-50 text-amber-800 border-amber-100",
 }
 
 const PRIORITY_STYLES: Record<IssuePriority, string> = {

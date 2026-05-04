@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue, IssueStatus } from "@/lib/supabase/types"
 
 // POST /api/issues/[id]/duplicate-of
 //
@@ -26,13 +26,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     if (targetId) {
-        // Same-project check. The two issues must share a project_id
-        // — duplicates across projects don't make sense here.
+        // Same-project check + reject chains: a duplicate-of-a-
+        // duplicate would either nest indefinitely or have to be
+        // flattened by the UI on every render. Easier to forbid at
+        // write time and keep the tree exactly one level deep.
         const { data: rows, error: lookupErr } = await supabase
             .from("issues")
-            .select("id,project_id")
+            .select("id,project_id,duplicate_of_issue_id")
             .in("id", [id, targetId])
-            .returns<Pick<Issue, "id" | "project_id">[]>()
+            .returns<Pick<Issue, "id" | "project_id" | "duplicate_of_issue_id">[]>()
         if (lookupErr) return jsonError("db_error", lookupErr.message, 500)
         if (!rows || rows.length !== 2) {
             return jsonError("not_found", "issue or target not found", 404)
@@ -40,14 +42,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         if (rows[0].project_id !== rows[1].project_id) {
             return jsonError("bad_request", "Both issues must belong to the same project.", 400)
         }
+        const target = rows.find((r) => r.id === targetId)!
+        if (target.duplicate_of_issue_id) {
+            return jsonError(
+                "bad_request",
+                "That issue is itself a duplicate. Mark this one as a duplicate of the original instead.",
+                400,
+            )
+        }
+    }
+
+    // Marking → status flips to 'duplicated'. Unmarking → revert to
+    // 'open' so the issue rejoins the working set; we don't try to
+    // recover the prior status because that history isn't stored.
+    const patch: { duplicate_of_issue_id: string | null; status?: IssueStatus } = {
+        duplicate_of_issue_id: targetId,
+        status: targetId ? "duplicated" : "open",
     }
 
     const { data, error: upErr } = await supabase
         .from("issues")
-        .update({ duplicate_of_issue_id: targetId })
+        .update(patch)
         .eq("id", id)
-        .select("id,duplicate_of_issue_id")
-        .single<Pick<Issue, "id" | "duplicate_of_issue_id">>()
+        .select("id,duplicate_of_issue_id,status")
+        .single<Pick<Issue, "id" | "duplicate_of_issue_id" | "status">>()
     if (upErr) return jsonError("db_error", upErr.message, 500)
 
     return Response.json({ issue: data })

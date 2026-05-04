@@ -2,9 +2,9 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { NewIssueButton } from "@/components/new-issue-button"
 import { AiComposeButton } from "@/components/ai-compose-button"
+import { IssueList, type ParentRow } from "@/components/issue-list"
 import { IssueTile } from "@/components/issue-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
-import { PriorityChip, StatusChip } from "@/components/status-chip"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
@@ -36,8 +36,42 @@ export default async function IssuesPage({
     ])
 
     const list = issues ?? []
-    const open = list.filter((i) => i.status !== "done" && i.status !== "archived")
-    const closed = list.filter((i) => i.status === "done" || i.status === "archived")
+    // Build a parent → children tree. A "parent" is any issue
+    // that isn't itself a duplicate; its children are the issues
+    // pointing at it via duplicate_of_issue_id. We forbid chains in
+    // the API (one level deep), so this single pass is enough.
+    const childrenByParent = new Map<string, Issue[]>()
+    for (const i of list) {
+        if (!i.duplicate_of_issue_id) continue
+        const arr = childrenByParent.get(i.duplicate_of_issue_id) ?? []
+        arr.push(i)
+        childrenByParent.set(i.duplicate_of_issue_id, arr)
+    }
+    for (const arr of childrenByParent.values()) {
+        arr.sort((a, b) => a.created_at.localeCompare(b.created_at))
+    }
+
+    const parentsAll: ParentRow[] = list
+        .filter((i) => !i.duplicate_of_issue_id)
+        .map((parent) => ({
+            parent,
+            children: childrenByParent.get(parent.id) ?? [],
+        }))
+
+    // Bucketing happens on the parent's own status. Duplicated
+    // children always render under their parent regardless of which
+    // bucket the parent ends up in. "Duplicated" parents shouldn't
+    // exist (chain-prevention in the API), so we don't need to
+    // bucket them as a separate state.
+    const isClosed = (s: Issue["status"]) => s === "done" || s === "archived" || s === "duplicated"
+    const open = parentsAll.filter(({ parent }) => !isClosed(parent.status))
+    const closed = parentsAll.filter(({ parent }) => isClosed(parent.status))
+
+    // Tile view stays a flat grid — duplicates are filtered out
+    // entirely (a duplicate doesn't deserve its own tile).
+    const tileIssues = list.filter((i) => !i.duplicate_of_issue_id)
+    const tileOpen = tileIssues.filter((i) => !isClosed(i.status))
+    const tileClosed = tileIssues.filter((i) => isClosed(i.status))
 
     // A freshly-created project has no analyser row, or one with status
     // pending/indexing/failed and no graph_id. Until the first index
@@ -56,6 +90,15 @@ export default async function IssuesPage({
                 <p className="text-[12px] text-[color:var(--c-text-muted)]">
                     <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
                     <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
+                    {childrenByParent.size > 0 && (
+                        <>
+                            {" · "}
+                            <span className="font-semibold text-[color:var(--c-text)]">
+                                {Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0)}
+                            </span>{" "}
+                            duplicate{Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0) === 1 ? "" : "s"}
+                        </>
+                    )}
                 </p>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} />
@@ -72,8 +115,23 @@ export default async function IssuesPage({
                 </div>
             </div>
 
-            <IssueGroup title="Open" projectId={id} issues={open} view={view} />
-            {closed.length > 0 && <IssueGroup title="Closed" projectId={id} issues={closed} view={view} muted />}
+            <IssueGroup
+                title="Open"
+                projectId={id}
+                parents={open}
+                tileIssues={tileOpen}
+                view={view}
+            />
+            {closed.length > 0 && (
+                <IssueGroup
+                    title="Closed"
+                    projectId={id}
+                    parents={closed}
+                    tileIssues={tileClosed}
+                    view={view}
+                    muted
+                />
+            )}
         </div>
     )
 }
@@ -114,21 +172,24 @@ function KnowledgeRequiredBanner({
 function IssueGroup({
     title,
     projectId,
-    issues,
+    parents,
+    tileIssues,
     view,
     muted,
 }: {
     title: string
     projectId: string
-    issues: Issue[]
+    parents: ParentRow[]
+    tileIssues: Issue[]
     view: IssuesView
     muted?: boolean
 }) {
+    const empty = view === "tile" ? tileIssues.length === 0 : parents.length === 0
     return (
         <section className={muted ? "opacity-90" : ""}>
             <h2 className="h-section mb-3">{title}</h2>
 
-            {issues.length === 0 ? (
+            {empty ? (
                 <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     No issues here.
                 </div>
@@ -140,47 +201,14 @@ function IssueGroup({
                         ["--stagger-step" as string]: "55ms",
                     } as React.CSSProperties}
                 >
-                    {issues.map((i, idx) => (
+                    {tileIssues.map((i, idx) => (
                         <li key={i.id} className={muted ? "opacity-70" : undefined}>
                             <IssueTile issue={i} projectId={projectId} index={idx} />
                         </li>
                     ))}
                 </ul>
             ) : (
-                <ul className="overflow-hidden rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-card)] divide-y divide-[color:var(--c-border)]">
-                    {issues.map((i) => (
-                        <li key={i.id} className={muted ? "opacity-70" : undefined}>
-                            <Link
-                                href={`/projects/${projectId}/issues/${i.id}`}
-                                className="group flex items-center gap-2.5 px-3 py-3 transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-4"
-                            >
-                                <span className="hidden font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)] sm:inline">
-                                    #{i.issue_number}
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium transition-transform group-hover:translate-x-px">
-                                    <span className="mr-1.5 font-mono text-[11px] text-[color:var(--c-text-dim)] sm:hidden">
-                                        #{i.issue_number}
-                                    </span>
-                                    {i.title}
-                                </span>
-                                <div className="flex shrink-0 items-center gap-1.5">
-                                    {i.labels.slice(0, 3).map((l) => (
-                                        <span
-                                            key={l}
-                                            className="hidden rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)] md:inline"
-                                        >
-                                            {l}
-                                        </span>
-                                    ))}
-                                    <span className="hidden sm:inline">
-                                        <PriorityChip priority={i.priority} />
-                                    </span>
-                                    <StatusChip status={i.status} />
-                                </div>
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                <IssueList projectId={projectId} parents={parents} muted={muted} />
             )}
         </section>
     )

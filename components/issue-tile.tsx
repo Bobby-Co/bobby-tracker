@@ -9,6 +9,7 @@ const STATUS_TAB: Record<IssueStatus, { tab: string; label: string }> = {
     blocked:     { tab: "card-tab-rose",    label: "Blocked" },
     done:        { tab: "card-tab-output",  label: "Done" },
     archived:    { tab: "card-tab-muted",   label: "Archived" },
+    duplicated:  { tab: "card-tab-muted",   label: "Duplicated" },
 }
 
 // IssueTile matches the workflow-card pattern from the CI reference image

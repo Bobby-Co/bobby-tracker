@@ -1,4 +1,3 @@
-import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
 import type { Issue, IssueEmbedding } from "@/lib/supabase/types"
