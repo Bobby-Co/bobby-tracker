@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { NewIssueButton } from "@/components/new-issue-button"
+import { AiComposeButton } from "@/components/ai-compose-button"
 import { IssueTile } from "@/components/issue-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import { PriorityChip, StatusChip } from "@/components/status-chip"
@@ -58,6 +59,11 @@ export default async function IssuesPage({
                 </p>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} />
+                    <AiComposeButton
+                        projectId={id}
+                        disabled={!ready}
+                        disabledReason="Enable the analyser and run the first index on the Knowledge tab before creating issues."
+                    />
                     <NewIssueButton
                         projectId={id}
                         disabled={!ready}

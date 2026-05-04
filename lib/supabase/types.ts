@@ -29,6 +29,13 @@ export interface Issue {
     github_issue_number: number | null
     github_node_id: string | null
     issue_number: number
+    /** When this issue was filed via the AI composer flow rather than
+     *  the bare new-issue form. Surfaces an "AI" badge in lists. */
+    ai_proposed: boolean
+    /** When the submitter flagged this as a duplicate of another
+     *  issue at create-time. The original is still persisted (we
+     *  never drop user reports), but UIs treat it as a satellite. */
+    duplicate_of_issue_id: string | null
     created_at: string
     updated_at: string
 }
