@@ -2,10 +2,11 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, Project, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
-import { checkInviteAccess, fetchPublicIssue, resolvePublicSession } from "@/lib/public-session"
+import { checkInviteAccess, fetchPublicIssue, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
 import { PublicIssueView } from "@/components/public-issue-view"
 import { PublicIssueDetailSkeleton } from "@/components/public-issue-detail-skeleton"
 import { PublicSessionGate } from "@/components/public-session-gate"
+import { SimilarIssuesCard } from "@/components/similar-issues-card"
 
 export const dynamic = "force-dynamic"
 
@@ -49,6 +50,9 @@ async function PublicIssueDetailContent({
             )
         }
     }
+
+    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    if (visErr) notFound()
 
     const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
     if (found.error) notFound()
@@ -110,6 +114,12 @@ async function PublicIssueDetailContent({
                     status: analyser?.status ?? "disabled",
                     indexed_sha: analyser?.last_indexed_sha ?? null,
                 }}
+            />
+            <SimilarIssuesCard
+                issueId={issue.id}
+                variant="public"
+                token={token}
+                duplicateOfIssueId={issue.duplicate_of_issue_id}
             />
             <footer className="text-center text-[11px] text-[color:var(--c-text-dim)]">
                 Bobby Tracker · public submission

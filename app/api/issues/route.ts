@@ -1,6 +1,7 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
+import { embedIssueAsync } from "@/lib/issue-embedding"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
@@ -44,6 +45,10 @@ export async function POST(request: Request) {
         ? body.labels.filter((l: unknown): l is string => typeof l === "string")
         : []
     const issueBody = typeof body?.body === "string" ? body.body : ""
+    const ai_proposed = body?.ai_proposed === true
+    const duplicate_of_issue_id = typeof body?.duplicate_of_issue_id === "string"
+        ? body.duplicate_of_issue_id
+        : null
 
     const { data: issue, error: dbErr } = await supabase
         .from("issues")
@@ -55,9 +60,20 @@ export async function POST(request: Request) {
             status,
             priority,
             labels,
+            ai_proposed,
+            duplicate_of_issue_id,
         })
         .select("*")
         .single<Issue>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
+
+    // Best-effort embedding — fire-and-forget so issue creation isn't
+    // blocked on OpenAI. We use the service-role client because the
+    // user's cookie-bound client may be cleaned up before the await
+    // resolves; failures here are silent (the row stays unembedded
+    // until a future edit / sweep fills it in).
+    void embedIssueAsync(issue)
+
     return Response.json({ issue })
 }
+

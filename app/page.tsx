@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/supabase/server"
 
 const BobbyMark = () => (
   <svg viewBox="0 0 106 102" xmlns="http://www.w3.org/2000/svg">
@@ -12,8 +12,7 @@ const BobbyMark = () => (
 )
 
 export default async function Home() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentUser()
     if (user) redirect("/projects")
 
     return (

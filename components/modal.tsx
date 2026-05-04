@@ -25,28 +25,40 @@ const SIZES: Record<NonNullable<ModalProps["size"]>, string> = {
 // the open state.
 export function Modal({ open, onClose, title, description, children, size = "md" }: ModalProps) {
     const cardRef = useRef<HTMLDivElement>(null)
+    // Latest onClose without retriggering the effect. Callers usually
+    // pass an inline arrow (`onClose={() => setOpen(false)}`), which
+    // otherwise re-runs the effect on every parent render — that would
+    // move focus back to the close button and re-lock body scroll on
+    // every keystroke inside the modal.
+    const onCloseRef = useRef(onClose)
+    useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
     useEffect(() => {
         if (!open) return
         function onKey(e: KeyboardEvent) {
-            if (e.key === "Escape") onClose()
+            if (e.key === "Escape") onCloseRef.current()
         }
         document.addEventListener("keydown", onKey)
-        // Lock body scroll while the modal is open.
         const prev = document.body.style.overflow
         document.body.style.overflow = "hidden"
-        // Focus the first focusable element inside the card.
+        // Focus the first non-close focusable inside the card. We
+        // skip the X button so opening doesn't immediately preview
+        // a focus ring on Close, and so we can put focus on whatever
+        // input the form actually wants the user to start with.
         requestAnimationFrame(() => {
-            const focusable = cardRef.current?.querySelector<HTMLElement>(
+            const focusables = cardRef.current?.querySelectorAll<HTMLElement>(
                 "input, textarea, select, button, [tabindex]:not([tabindex='-1'])",
             )
-            focusable?.focus()
+            const target = Array.from(focusables ?? []).find(
+                (el) => el.getAttribute("aria-label") !== "Close",
+            )
+            target?.focus()
         })
         return () => {
             document.removeEventListener("keydown", onKey)
             document.body.style.overflow = prev
         }
-    }, [open, onClose])
+    }, [open])
 
     if (!open) return null
 

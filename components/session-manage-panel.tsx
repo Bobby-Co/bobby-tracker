@@ -2,13 +2,20 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { PublicSession, PublicSessionAccessMode, PublicSessionInvite } from "@/lib/supabase/types"
+import type {
+    PublicSession,
+    PublicSessionAccessMode,
+    PublicSessionInvite,
+    PublicSessionSubmissionsVisibility,
+} from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
+import { MultiDropdown } from "@/components/multi-dropdown"
 
 type Action =
     | "save" | "rotate" | "toggle" | "delete"
     | "addProject" | "removeProject"
     | "setAccessMode" | "addInvite" | "removeInvite"
+    | "setVisibility"
     | null
 
 interface ProjectOption {
@@ -38,11 +45,15 @@ export function SessionManagePanel({
     sessionProjects: initialProjects,
     allProjects,
     invites: initialInvites,
+    ownerEmail,
 }: {
     session: PublicSession
     sessionProjects: ProjectOption[]
     allProjects: ProjectOption[]
     invites: PublicSessionInvite[]
+    /** Lowercased email of the session owner — rendered as a locked
+     *  pill on the invite list and protected from removal. */
+    ownerEmail: string | null
 }) {
     const router = useRouter()
 
@@ -62,7 +73,7 @@ export function SessionManagePanel({
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [action, setAction] = useState<Action>(null)
-    const [pendingProjectId, setPendingProjectId] = useState<string>("")
+    const [pendingProjectIds, setPendingProjectIds] = useState<string[]>([])
     const [, startTransition] = useTransition()
 
     useEffect(() => {
@@ -137,14 +148,27 @@ export function SessionManagePanel({
         })
     }
 
-    function addProject() {
-        if (!pendingProjectId) return
+    function addProjects() {
+        const ids = pendingProjectIds.filter(Boolean)
+        if (ids.length === 0) return
         run("addProject", async () => {
-            const ok = await call(`/api/sessions/${session.id}/projects`, "POST", { project_id: pendingProjectId })
-            if (!ok && error) return
-            const proj = allProjects.find((p) => p.id === pendingProjectId)
-            if (proj) setProjects((cur) => [...cur, proj].sort((a, b) => a.name.localeCompare(b.name)))
-            setPendingProjectId("")
+            // Fan out one POST per project. The server endpoint is
+            // single-add; firing in parallel keeps the wall-clock
+            // close to one request even when adding several at once.
+            const results = await Promise.all(
+                ids.map((project_id) =>
+                    call(`/api/sessions/${session.id}/projects`, "POST", { project_id }),
+                ),
+            )
+            const successfullyAdded = ids.filter((_, i) => results[i] !== null || !error)
+            if (successfullyAdded.length > 0) {
+                const fresh = allProjects.filter((p) => successfullyAdded.includes(p.id))
+                setProjects((cur) =>
+                    [...cur, ...fresh.filter((p) => !cur.some((c) => c.id === p.id))]
+                        .sort((a, b) => a.name.localeCompare(b.name)),
+                )
+            }
+            setPendingProjectIds([])
         })
     }
 
@@ -159,6 +183,26 @@ export function SessionManagePanel({
         if (mode === session.access_mode) return
         run("setAccessMode", async () => {
             const data = await call(`/api/sessions/${session.id}`, "PATCH", { access_mode: mode })
+            if (data?.session) setSession(data.session)
+            // Server auto-adds the owner email when flipping to invite —
+            // mirror that locally so the panel doesn't briefly show an
+            // empty whitelist + scary "no one can access" warning.
+            if (mode === "invite" && ownerEmail) {
+                setInvites((cur) => {
+                    if (cur.some((i) => i.email === ownerEmail)) return cur
+                    return [
+                        ...cur,
+                        { session_id: session.id, email: ownerEmail, created_at: new Date().toISOString() },
+                    ].sort((a, b) => a.email.localeCompare(b.email))
+                })
+            }
+        })
+    }
+
+    function setVisibility(v: PublicSessionSubmissionsVisibility) {
+        if (v === session.submissions_visibility) return
+        run("setVisibility", async () => {
+            const data = await call(`/api/sessions/${session.id}`, "PATCH", { submissions_visibility: v })
             if (data?.session) setSession(data.session)
         })
     }
@@ -193,6 +237,10 @@ export function SessionManagePanel({
     }
 
     function removeInvite(email: string) {
+        // Mirror the server-side guard so the UI never even attempts
+        // to delete the owner row. The button is hidden anyway, but
+        // belt and suspenders.
+        if (ownerEmail && email === ownerEmail) return
         run("removeInvite", async () => {
             await call(
                 `/api/sessions/${session.id}/invites/${encodeURIComponent(email)}`,
@@ -321,25 +369,42 @@ export function SessionManagePanel({
                             </p>
                         ) : (
                             <ul className="mt-2 flex flex-wrap gap-1.5">
-                                {invites.map((i) => (
-                                    <li
-                                        key={i.email}
-                                        className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--c-surface-2)] px-2.5 py-1 text-[12px] font-semibold"
-                                    >
-                                        <span className="truncate font-mono text-[11.5px]">{i.email}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => removeInvite(i.email)}
-                                            disabled={busy}
-                                            aria-label={`Remove ${i.email}`}
-                                            className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                {invites.map((i) => {
+                                    const isOwner = !!ownerEmail && i.email === ownerEmail
+                                    return (
+                                        <li
+                                            key={i.email}
+                                            className={
+                                                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold " +
+                                                (isOwner
+                                                    ? "border border-emerald-200 bg-emerald-50 text-emerald-900"
+                                                    : "bg-[color:var(--c-surface-2)]")
+                                            }
                                         >
-                                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
-                                                <path d="M6 6l12 12M18 6L6 18" />
-                                            </svg>
-                                        </button>
-                                    </li>
-                                ))}
+                                            <span className="truncate font-mono text-[11.5px]">{i.email}</span>
+                                            {isOwner ? (
+                                                <span
+                                                    title="The session owner is always invited and can't be removed."
+                                                    className="rounded-full bg-emerald-200/60 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.08em] text-emerald-900"
+                                                >
+                                                    You
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeInvite(i.email)}
+                                                    disabled={busy}
+                                                    aria-label={`Remove ${i.email}`}
+                                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                                >
+                                                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
+                                                        <path d="M6 6l12 12M18 6L6 18" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </li>
+                                    )
+                                })}
                             </ul>
                         )}
 
@@ -371,6 +436,42 @@ export function SessionManagePanel({
                             Comparison is case-insensitive. Visitors must sign in with the email exactly as written here.
                         </p>
                     </div>
+                )}
+            </div>
+
+            {/* Submissions visibility */}
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-[14px] font-bold">Submissions visibility</div>
+                        <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
+                            Whether submitters can see other people&apos;s submissions in this session.
+                        </p>
+                    </div>
+                </div>
+
+                <fieldset disabled={busy} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <AccessOption
+                        active={session.submissions_visibility === "all"}
+                        title="Everyone sees everything"
+                        description="Useful for shared bug bashes where reporters can avoid duplicates."
+                        onClick={() => setVisibility("all")}
+                        pending={action === "setVisibility" && session.submissions_visibility !== "all"}
+                    />
+                    <AccessOption
+                        active={session.submissions_visibility === "own"}
+                        title="Each submitter only sees their own"
+                        description="Best for private feedback. Strongest when paired with invite-only access."
+                        onClick={() => setVisibility("own")}
+                        pending={action === "setVisibility" && session.submissions_visibility !== "own"}
+                    />
+                </fieldset>
+
+                {session.submissions_visibility === "own" && session.access_mode === "link" && (
+                    <p className="mt-3 rounded-[10px] bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                        On a public link, this is a soft preference — anonymous browsers are filtered by their local
+                        device id, which could be spoofed. Switch to invite-only above for a hard guarantee.
+                    </p>
                 )}
             </div>
 
@@ -414,24 +515,28 @@ export function SessionManagePanel({
                 )}
 
                 {availableToAdd.length > 0 && (
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <select
-                            value={pendingProjectId}
-                            onChange={(e) => setPendingProjectId(e.target.value)}
-                            disabled={busy}
-                            className="input text-[13px] sm:max-w-xs"
-                        >
-                            <option value="">Add a project…</option>
-                            {availableToAdd.map((p) => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div className="w-full sm:max-w-xs">
+                            <MultiDropdown<string>
+                                values={pendingProjectIds}
+                                onChange={setPendingProjectIds}
+                                options={availableToAdd.map((p) => ({ value: p.id, label: p.name }))}
+                                placeholder="Add projects…"
+                                searchable={availableToAdd.length > 6}
+                                disabled={busy}
+                                aria-label="Projects to add"
+                            />
+                        </div>
                         <button
-                            onClick={addProject}
-                            disabled={busy || !pendingProjectId}
+                            onClick={addProjects}
+                            disabled={busy || pendingProjectIds.length === 0}
                             className="btn-primary w-full sm:w-auto"
                         >
-                            {action === "addProject" ? (<><Spinner />Adding…</>) : "Add"}
+                            {action === "addProject"
+                                ? (<><Spinner />Adding…</>)
+                                : pendingProjectIds.length > 1
+                                    ? `Add ${pendingProjectIds.length}`
+                                    : "Add"}
                         </button>
                     </div>
                 )}

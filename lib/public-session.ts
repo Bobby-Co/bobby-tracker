@@ -6,8 +6,13 @@
 // one place.
 
 import { jsonError } from "@/lib/api"
-import { createClient, createServiceClient } from "@/lib/supabase/server"
-import type { Issue, PublicSession, PublicSessionAccessMode } from "@/lib/supabase/types"
+import { createServiceClient, getCurrentUser } from "@/lib/supabase/server"
+import type {
+    Issue,
+    PublicSession,
+    PublicSessionAccessMode,
+    PublicSessionSubmissionsVisibility,
+} from "@/lib/supabase/types"
 
 const PUBLIC_LABEL = "public-session"
 
@@ -15,13 +20,14 @@ export interface ResolvedPublicSession {
     id: string
     enabled: boolean
     access_mode: PublicSessionAccessMode
+    submissions_visibility: PublicSessionSubmissionsVisibility
     start_at: string | null
     end_at: string | null
     /** Project IDs this session covers. */
     project_ids: string[]
 }
 
-type SessionPick = Pick<PublicSession, "id" | "enabled" | "access_mode" | "start_at" | "end_at">
+type SessionPick = Pick<PublicSession, "id" | "enabled" | "access_mode" | "submissions_visibility" | "start_at" | "end_at">
 
 // Resolve a token to a session row. Returns either a session (with
 // the list of covered project IDs) or a pre-built error Response so
@@ -34,7 +40,7 @@ export async function resolvePublicSession(
     if (!token) return { session: null, error: jsonError("bad_request", "token required", 400) }
     const { data } = await svc
         .from("public_sessions")
-        .select("id,enabled,access_mode,start_at,end_at")
+        .select("id,enabled,access_mode,submissions_visibility,start_at,end_at")
         .eq("token", token)
         .maybeSingle<SessionPick>()
     if (!data) return { session: null, error: jsonError("not_found", "this submission link is invalid", 404) }
@@ -85,6 +91,16 @@ export async function fetchPublicIssue(
 
 export const PUBLIC_ISSUE_LABEL = PUBLIC_LABEL
 
+// Read the current request's authenticated user (cookie-bound). Used
+// at submission time to attribute the issue and at read time to
+// enforce 'own'-visibility filters. Returns null for anonymous
+// visitors — never throws.
+export async function getCurrentPublicUser(): Promise<{ id: string; email: string | null } | null> {
+    const user = await getCurrentUser()
+    if (!user) return null
+    return { id: user.id, email: (user.email ?? "").trim().toLowerCase() || null }
+}
+
 // ─── invite-only enforcement ─────────────────────────────────────────────
 
 export type InviteCheck =
@@ -93,6 +109,44 @@ export type InviteCheck =
     | { ok: false; reason: "unauthenticated" }
     /** Signed in but their email isn't on the whitelist. */
     | { ok: false; reason: "not_invited"; email: string }
+
+// Look up an issue's reporter row. Lightweight wrapper around the
+// service client so 'own'-visibility callers don't need to know the
+// table shape.
+export async function getIssueReporter(
+    svc: ReturnType<typeof createServiceClient>,
+    issueId: string,
+): Promise<{ reporter_id: string | null; auth_user_id: string | null } | null> {
+    const { data } = await svc
+        .from("public_issue_reporters")
+        .select("reporter_id,auth_user_id")
+        .eq("issue_id", issueId)
+        .maybeSingle<{ reporter_id: string | null; auth_user_id: string | null }>()
+    return data ?? null
+}
+
+// Enforce 'own'-visibility on a per-issue lookup. Only ever rejects
+// when the session is in 'own' mode AND the visitor is signed in
+// AND the issue's reporter row doesn't carry their auth_user_id.
+//
+// Anonymous visitors on a link-mode 'own' session aren't blocked
+// here: we can't identify them server-side without trusting a
+// client-supplied reporter id, and the listing already filters them
+// down. The per-issue URL is an unguessable UUID, so this matches
+// the threat model of 'own' in link mode (privacy preference, not
+// hard boundary).
+export async function requireOwnVisibility(
+    svc: ReturnType<typeof createServiceClient>,
+    session: Pick<ResolvedPublicSession, "submissions_visibility">,
+    issueId: string,
+): Promise<Response | null> {
+    if (session.submissions_visibility !== "own") return null
+    const visitor = await getCurrentPublicUser()
+    if (!visitor) return null
+    const rep = await getIssueReporter(svc, issueId)
+    if (rep?.auth_user_id && rep.auth_user_id === visitor.id) return null
+    return jsonError("not_found", "issue not found", 404)
+}
 
 // Decide whether the *current request's* visitor is allowed to act on
 // this session. Link-mode sessions are always ok. Invite-mode sessions
@@ -105,11 +159,10 @@ export async function checkInviteAccess(
 ): Promise<InviteCheck> {
     if (session.access_mode === "link") return { ok: true, email: null }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCurrentPublicUser()
     if (!user) return { ok: false, reason: "unauthenticated" }
 
-    const email = (user.email ?? "").trim().toLowerCase()
+    const email = user.email ?? ""
     if (!email) return { ok: false, reason: "not_invited", email: "" }
 
     const svc = createServiceClient()

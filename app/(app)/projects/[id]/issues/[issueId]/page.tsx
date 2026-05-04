@@ -3,6 +3,7 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { IssueDetail } from "@/components/issue-detail"
 import { IssueSuggestions } from "@/components/issue-suggestions"
+import { SimilarIssuesCard } from "@/components/similar-issues-card"
 import type { Issue, IssueSuggestion, Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
@@ -48,6 +49,12 @@ export default async function IssueDetailPage({
                 ← Issues
             </Link>
             <IssueDetail issue={issueRes.data} />
+            <SimilarIssuesCard
+                issueId={issueRes.data.id}
+                variant="auth"
+                projectId={id}
+                duplicateOfIssueId={issueRes.data.duplicate_of_issue_id}
+            />
             <IssueSuggestions
                 issueId={issueRes.data.id}
                 repo={projectRes.data}

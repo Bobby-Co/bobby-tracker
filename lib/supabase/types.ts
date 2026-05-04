@@ -29,6 +29,13 @@ export interface Issue {
     github_issue_number: number | null
     github_node_id: string | null
     issue_number: number
+    /** When this issue was filed via the AI composer flow rather than
+     *  the bare new-issue form. Surfaces an "AI" badge in lists. */
+    ai_proposed: boolean
+    /** When the submitter flagged this as a duplicate of another
+     *  issue at create-time. The original is still persisted (we
+     *  never drop user reports), but UIs treat it as a satellite. */
+    duplicate_of_issue_id: string | null
     created_at: string
     updated_at: string
 }
@@ -43,6 +50,19 @@ export interface ProjectPublicIntegration {
     updated_at: string
 }
 
+/** Embedding vector for an issue. Lives in its own table
+ *  (migration 0015) so the heavy float[] doesn't ride along with
+ *  every issue read, and so a re-embed sweep can target rows by
+ *  model name. One row per indexed issue; rows without an
+ *  embedding simply don't appear here. */
+export interface IssueEmbedding {
+    issue_id: string
+    embedding: number[]
+    model: string
+    created_at: string
+    updated_at: string
+}
+
 /** Reporter identity for a publicly-submitted issue. One row per
  *  public-submission issue; owner-filed issues never have one. */
 export interface PublicIssueReporter {
@@ -50,6 +70,10 @@ export interface PublicIssueReporter {
     reporter_id: string | null
     reporter_name: string | null
     session_id: string | null
+    /** Captured when the submitter was authenticated at submission
+     *  time (always set in invite-mode sessions). Used to enforce the
+     *  'own'-visibility filter across browsers. */
+    auth_user_id: string | null
     created_at: string
 }
 
@@ -125,6 +149,11 @@ export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urge
  *  - 'invite' — only signed-in users whose email is whitelisted */
 export type PublicSessionAccessMode = "link" | "invite"
 
+/** Who can see other submitters' submissions on the public listing.
+ *  - 'all' (default) — everyone sees every submission.
+ *  - 'own' — each submitter only sees their own. */
+export type PublicSessionSubmissionsVisibility = "all" | "own"
+
 /** Standalone shareable session that can cover one or more projects.
  *  Replaces the old per-project ProjectPublicSession (migration 0009). */
 export interface PublicSession {
@@ -133,6 +162,7 @@ export interface PublicSession {
     token: string
     enabled: boolean
     access_mode: PublicSessionAccessMode
+    submissions_visibility: PublicSessionSubmissionsVisibility
     /** Internal label shown in the owner's session list. */
     name: string
     /** Public heading rendered to submitters (falls back to `name`). */

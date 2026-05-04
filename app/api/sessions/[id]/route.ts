@@ -38,7 +38,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -48,6 +48,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.enabled === "boolean") patch.enabled = body.enabled
     if (body.access_mode === "link" || body.access_mode === "invite") {
         patch.access_mode = body.access_mode
+    }
+    if (body.submissions_visibility === "all" || body.submissions_visibility === "own") {
+        patch.submissions_visibility = body.submissions_visibility
     }
     if (typeof body.name === "string") {
         const v = body.name.trim()
@@ -72,6 +75,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         .select("*")
         .single<PublicSession>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
+
+    // When the session flips into invite mode, ensure the owner is on
+    // the whitelist so they don't lock themselves out the moment they
+    // toggle. Idempotent — no-op if it's already there.
+    if (patch.access_mode === "invite") {
+        const ownerEmail = (user.email ?? "").trim().toLowerCase()
+        if (ownerEmail) {
+            await supabase
+                .from("public_session_invites")
+                .upsert(
+                    { session_id: id, email: ownerEmail },
+                    { onConflict: "session_id,email", ignoreDuplicates: true },
+                )
+        }
+    }
+
     return Response.json({ session: data })
 }
 

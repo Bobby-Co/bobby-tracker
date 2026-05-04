@@ -1,47 +1,89 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { ReporterGroup } from "@/lib/public-reporter"
 
-// Client-rendered listing of every public-session submission, grouped
-// by reporter. The grouping is computed on the server and passed in;
-// the client adds a "you" badge to whichever group matches the
-// visitor's localStorage reporter id (purely cosmetic — visibility
-// is already public).
+// Client-rendered listing of public-session submissions, grouped by
+// reporter. The grouping is computed on the server and passed in.
+//
+// Two modes via `restrictToOwn`:
+//   - false (default) — show every reporter, with a "you" badge on
+//     the visitor's own group.
+//   - true — only show the visitor's own submissions. When the visitor
+//     is authenticated the server has already filtered the list, so
+//     we render as-is. When they're anonymous (link-mode session +
+//     'own' visibility), the server passes the full list and we
+//     filter client-side by localStorage reporter id.
 export function PublicSessionSubmissions({
     token,
     groups,
+    restrictToOwn = false,
+    visitorIsAuthenticated = false,
 }: {
     token: string
     groups: ReporterGroup[]
+    restrictToOwn?: boolean
+    visitorIsAuthenticated?: boolean
 }) {
     const [myReporterId, setMyReporterId] = useState<string>("")
+    // Track whether the localStorage read has completed so anonymous
+    // own-mode visitors don't briefly see other people's submissions
+    // during hydration before we filter them out.
+    const [hydrated, setHydrated] = useState(false)
 
     useEffect(() => {
         // Read but don't generate — generating an id here would mark
         // every fresh visitor as a "reporter" before they've actually
         // submitted anything.
         try { setMyReporterId(localStorage.getItem("bobby:public-profile:reporter-id") ?? "") } catch {}
+        setHydrated(true)
     }, [])
 
-    if (groups.length === 0) return null
+    const visibleGroups = useMemo(() => {
+        if (!restrictToOwn) return groups
+        if (visitorIsAuthenticated) return groups // already server-filtered
+        if (!hydrated) return [] // avoid flashing other reporters
+        if (!myReporterId) return []
+        return groups.filter((g) => g.reporter_id === myReporterId)
+    }, [groups, restrictToOwn, visitorIsAuthenticated, hydrated, myReporterId])
 
-    const total = groups.reduce((n, g) => n + g.issues.length, 0)
+    const headingLabel = restrictToOwn ? "Your submissions" : "All submissions"
+
+    if (visibleGroups.length === 0) {
+        if (!restrictToOwn) return null
+        // In own-mode we still want to render a placeholder so the
+        // visitor understands why the page looks empty rather than
+        // wondering whether the link is broken.
+        return (
+            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-center text-[12.5px] text-[color:var(--c-text-muted)] sm:p-6">
+                <div className="text-[13px] font-bold text-[color:var(--c-text)]">{headingLabel}</div>
+                <p className="mt-1">
+                    {visitorIsAuthenticated || hydrated
+                        ? "You haven't filed anything in this session yet. Submissions you make will appear here, and only you can see them."
+                        : "Loading your submissions…"}
+                </p>
+            </section>
+        )
+    }
+
+    const total = visibleGroups.reduce((n, g) => n + g.issues.length, 0)
 
     return (
         <section className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
                 <h2 className="text-[12px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
-                    All submissions
+                    {headingLabel}
                 </h2>
                 <span className="text-[11.5px] tabular-nums text-[color:var(--c-text-dim)]">
-                    {total} from {groups.length} reporter{groups.length === 1 ? "" : "s"}
+                    {restrictToOwn
+                        ? `${total} submission${total === 1 ? "" : "s"}`
+                        : `${total} from ${visibleGroups.length} reporter${visibleGroups.length === 1 ? "" : "s"}`}
                 </span>
             </header>
 
             <div className="mt-3 flex flex-col gap-4">
-                {groups.map((g) => {
+                {visibleGroups.map((g) => {
                     const isMe = !!myReporterId && g.reporter_id === myReporterId
                     return (
                         <div key={g.key} className="flex flex-col gap-1.5">
@@ -52,7 +94,7 @@ export function PublicSessionSubmissions({
                                 <span className="truncate text-[13px] font-bold">
                                     {g.display_name}
                                 </span>
-                                {isMe && (
+                                {isMe && !restrictToOwn && (
                                     <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-800">
                                         You
                                     </span>
