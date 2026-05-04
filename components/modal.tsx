@@ -78,24 +78,30 @@ export function Modal({ open, onClose, title, description, children, size = "md"
             />
 
             {/*
-                card. overflow-hidden is back so the header's
-                surface-2 fill clips cleanly to the card's rounded
-                corners (without it, a 1-px sliver of header bg
-                bled past each top corner). Dropdown / popover
-                panels inside the body escape the clip by rendering
-                via a portal to document.body — see
-                components/dropdown.tsx + components/multi-dropdown.tsx.
+                card.
+                  - flex column + max-h-[90vh] so a tall body (e.g. AI
+                    compose's ranking + markdown preview) scrolls
+                    inside the modal instead of pushing the card off
+                    the viewport. The header pins; only the body
+                    scrolls.
+                  - overflow-hidden stays so the header's surface-2
+                    fill clips cleanly to the card's rounded corners
+                    (without it, a 1-px sliver of header bg bled
+                    past each top corner). Dropdown / popover panels
+                    inside the body escape the clip by rendering via
+                    a portal to document.body — see
+                    components/dropdown.tsx + components/multi-dropdown.tsx.
             */}
             <div
                 ref={cardRef}
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                    "relative anim-rise w-full overflow-hidden rounded-[18px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-pop)]",
+                    "relative anim-rise flex w-full max-h-[90vh] flex-col overflow-hidden rounded-[18px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-pop)]",
                     SIZES[size],
                 )}
             >
                 {(title || description) && (
-                    <header className="flex items-start justify-between gap-4 border-b border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-5 py-4">
+                    <header className="flex shrink-0 items-start justify-between gap-4 border-b border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-5 py-4">
                         <div className="min-w-0">
                             {title && <h2 className="text-[16px] font-bold tracking-[-0.005em]">{title}</h2>}
                             {description && (
@@ -114,7 +120,7 @@ export function Modal({ open, onClose, title, description, children, size = "md"
                         </button>
                     </header>
                 )}
-                <div className="px-5 py-5">{children}</div>
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
             </div>
         </div>
     )
