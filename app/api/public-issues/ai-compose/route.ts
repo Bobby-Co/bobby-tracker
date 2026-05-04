@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { AnalyserError, composeIssue, embedText, issueEmbeddingText } from "@/lib/analyser"
+import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
 import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
 
 // POST /api/public-issues/ai-compose
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     let queryVec: number[]
     try {
-        const embed = await embedText(issueEmbeddingText({ title: proposal.title, body: proposal.body }))
+        const embed = await embedText(routingEmbeddingText(proposal))
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

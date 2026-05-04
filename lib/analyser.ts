@@ -125,6 +125,12 @@ export interface IssueComposeProposal {
     priority:   IssueComposePriority
     labels:     string[]
     confidence: IssueComposeConfidence
+    /** Optional 1–2 sentence domain/surface restatement produced by
+     *  the analyser solely for routing — meant to be embedded and
+     *  compared against project-summary facets. Older analyser
+     *  builds may omit this; callers should fall back to
+     *  issueEmbeddingText(proposal) when it's missing or empty. */
+    routing_summary?: string
     model:      string
     duration_ms: number
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
@@ -184,6 +190,18 @@ export function issueEmbeddingText(issue: { title: string; body: string }): stri
     const body = (issue.body ?? "").trim()
     const title = (issue.title ?? "").trim()
     return `${title}\n\n${body}`.slice(0, 7500)
+}
+
+// Pick the text we should embed for cross-project *routing*. The
+// analyser produces a short domain/surface restatement specifically
+// for this — using it makes routing scores comparable to the project
+// facet vectors instead of being dominated by user prose. Older
+// analyser builds may omit it, in which case we fall back to the
+// title+body blob used for issue-to-issue similarity.
+export function routingEmbeddingText(proposal: IssueComposeProposal): string {
+    const summary = (proposal.routing_summary ?? "").trim()
+    if (summary) return summary.slice(0, 7500)
+    return issueEmbeddingText({ title: proposal.title, body: proposal.body })
 }
 
 // ─── /verify (HTTP, request/response) ──────────────────────────────────────

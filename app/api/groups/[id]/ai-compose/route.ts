@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, composeIssue, embedText, issueEmbeddingText } from "@/lib/analyser"
+import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
 // POST /api/groups/[id]/ai-compose
@@ -88,7 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Step 2: embed the draft so we can score it against each project.
     let queryVec: number[]
     try {
-        const embed = await embedText(issueEmbeddingText({ title: proposal.title, body: proposal.body }))
+        const embed = await embedText(routingEmbeddingText(proposal))
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
