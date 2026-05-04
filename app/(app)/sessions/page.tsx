@@ -1,14 +1,28 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import type { PublicSession } from "@/lib/supabase/types"
 import { NewSessionButton } from "@/components/new-session-button"
+import { SessionsSkeleton } from "@/components/sessions-skeleton"
 
 export const dynamic = "force-dynamic"
 
 // Top-level "Public sessions" list. A session is a shareable submission
 // link that can cover one or more of the user's projects. From here
 // owners create sessions and drill into one to manage it.
-export default async function SessionsPage() {
+//
+// Sync shell wraps a streaming <Suspense> boundary so soft navigations
+// from the sidebar paint the skeleton instantly instead of stalling
+// on the Supabase round-trips.
+export default function SessionsPage() {
+    return (
+        <Suspense fallback={<SessionsSkeleton />}>
+            <SessionsContent />
+        </Suspense>
+    )
+}
+
+async function SessionsContent() {
     const supabase = await createClient()
 
     // Tolerate the table being absent (migration 0009 not yet applied)
