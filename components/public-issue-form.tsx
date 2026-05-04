@@ -7,6 +7,7 @@ import { ISSUE_PRIORITIES } from "@/lib/supabase/types"
 import type { IssuePriority } from "@/lib/supabase/types"
 import { Dropdown } from "@/components/dropdown"
 import { Spinner } from "@/components/spinner"
+import { PublicAiComposeButton } from "@/components/public-ai-compose-button"
 import { readName, readReporterId } from "@/lib/public-profile"
 
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
@@ -148,6 +149,23 @@ export function PublicIssueForm({
                         </span>
                     </div>
                 ) : null}
+
+                {projectId && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2">
+                        <span className="text-[11.5px] text-[color:var(--c-text-muted)]">
+                            Don&apos;t feel like writing it up? Let AI draft from your notes + screenshots.
+                        </span>
+                        <PublicAiComposeButton
+                            token={token}
+                            projectId={projectId}
+                            onAccept={(p) => {
+                                setTitle(p.title.slice(0, MAX_TITLE))
+                                setBody(p.body.slice(0, MAX_BODY))
+                                setPriority(p.priority)
+                            }}
+                        />
+                    </div>
+                )}
 
                 <label className="flex flex-col gap-1">
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">

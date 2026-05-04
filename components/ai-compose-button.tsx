@@ -10,14 +10,6 @@ import { Dropdown } from "@/components/dropdown"
 import { compressImage, type CompressedImage } from "@/lib/image-compress"
 import { ISSUE_PRIORITIES, type IssuePriority } from "@/lib/supabase/types"
 
-interface SimilarIssue {
-    id: string
-    issue_number: number
-    title: string
-    status: string
-    similarity: number
-}
-
 interface IssueProposal {
     title: string
     body: string
@@ -89,36 +81,8 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
     const [composeError, setComposeError] = useState<string | null>(null)
     const [composing, setComposing] = useState(false)
     const [proposal, setProposal] = useState<IssueProposal | null>(null)
-    const [similar, setSimilar] = useState<SimilarIssue[] | null>(null)
-    const [similarLoading, setSimilarLoading] = useState(false)
     const [creating, startCreate] = useTransition()
     const [createError, setCreateError] = useState<string | null>(null)
-
-    // Fetch similar issues for a fresh draft. We don't gate the
-    // review UI on this — the form is editable immediately and the
-    // panel pops in when the embedding lookup returns.
-    async function loadSimilar(p: IssueProposal) {
-        setSimilarLoading(true)
-        try {
-            const res = await fetch("/api/issues/ai-similar", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    project_id: projectId,
-                    title: p.title,
-                    body: p.body,
-                    limit: 5,
-                }),
-            })
-            if (!res.ok) { setSimilar([]); return }
-            const data = await res.json()
-            setSimilar(Array.isArray(data.similar) ? data.similar : [])
-        } catch {
-            setSimilar([])
-        } finally {
-            setSimilarLoading(false)
-        }
-    }
 
     async function handleFiles(fileList: FileList | null) {
         if (!fileList) return
@@ -162,7 +126,6 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
             const data = await res.json()
             const p = data.proposal as IssueProposal
             setProposal(p)
-            void loadSimilar(p)
         } catch (e) {
             setComposeError(e instanceof Error ? e.message : String(e))
         } finally {
@@ -172,10 +135,9 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
 
     function backToCapture() {
         setProposal(null)
-        setSimilar(null)
     }
 
-    function createIssue(opts: { duplicateOf?: SimilarIssue } = {}) {
+    function createIssue() {
         if (!proposal) return
         setCreateError(null)
         startCreate(async () => {
@@ -189,7 +151,6 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
                     priority: proposal.priority,
                     labels: proposal.labels,
                     ai_proposed: true,
-                    duplicate_of_issue_id: opts.duplicateOf?.id ?? null,
                 }),
             })
             if (!res.ok) {
@@ -200,11 +161,11 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
             const { issue } = await res.json()
             onClose()
             router.refresh()
-            // If they marked it as a duplicate, send them to the
-            // original — that's what they care about. Otherwise to
-            // the new issue's detail page so suggestions can auto-fire.
-            const target = opts.duplicateOf?.id ?? issue?.id
-            if (target) router.push(`/projects/${projectId}/issues/${target}`)
+            // Route to the new issue's detail page — the
+            // similar-issues card there will populate as soon as
+            // the embedding lands and the user can mark it as a
+            // duplicate from that surface if appropriate.
+            if (issue?.id) router.push(`/projects/${projectId}/issues/${issue.id}`)
         })
     }
 
@@ -229,11 +190,8 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
         <ReviewStep
             proposal={proposal}
             setProposal={setProposal}
-            similar={similar}
-            similarLoading={similarLoading}
             onBack={backToCapture}
-            onCreate={() => createIssue()}
-            onMarkDuplicate={(d) => createIssue({ duplicateOf: d })}
+            onCreate={createIssue}
             creating={creating}
             createError={createError}
         />
@@ -353,17 +311,13 @@ function CaptureStep({
 
 function ReviewStep({
     proposal, setProposal,
-    similar, similarLoading,
-    onBack, onCreate, onMarkDuplicate,
+    onBack, onCreate,
     creating, createError,
 }: {
     proposal: IssueProposal
     setProposal: (p: IssueProposal) => void
-    similar: SimilarIssue[] | null
-    similarLoading: boolean
     onBack: () => void
     onCreate: () => void
-    onMarkDuplicate: (d: SimilarIssue) => void
     creating: boolean
     createError: string | null
 }) {
@@ -485,13 +439,6 @@ function ReviewStep({
                 </label>
             </div>
 
-            <SimilarPanel
-                similar={similar}
-                loading={similarLoading}
-                onMarkDuplicate={onMarkDuplicate}
-                disabled={creating}
-            />
-
             {createError && (
                 <p role="alert" className="rounded-[10px] bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800">
                     {createError}
@@ -511,58 +458,6 @@ function ReviewStep({
                     {creating ? (<><Spinner />Creating…</>) : "Create issue"}
                 </button>
             </div>
-        </div>
-    )
-}
-
-function SimilarPanel({
-    similar, loading, onMarkDuplicate, disabled,
-}: {
-    similar: SimilarIssue[] | null
-    loading: boolean
-    onMarkDuplicate: (d: SimilarIssue) => void
-    disabled: boolean
-}) {
-    if (loading && similar === null) {
-        return (
-            <div className="rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2.5 text-[12px] text-[color:var(--c-text-muted)]">
-                <Spinner /> Looking for similar issues…
-            </div>
-        )
-    }
-    if (!similar || similar.length === 0) return null
-
-    return (
-        <div className="rounded-[12px] border border-amber-200 bg-amber-50/60 p-3">
-            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-amber-900">
-                Looks similar to
-            </div>
-            <ul className="mt-2 flex flex-col divide-y divide-amber-200/70">
-                {similar.map((s) => (
-                    <li key={s.id} className="flex items-center gap-3 py-2">
-                        <span className="rounded-md bg-white/70 px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-amber-900">
-                            #{s.issue_number}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-[color:var(--c-text)]">
-                            {s.title}
-                        </span>
-                        <span className="shrink-0 text-[10.5px] uppercase tracking-[0.08em] text-amber-800/80">
-                            {Math.round(s.similarity * 100)}%
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => onMarkDuplicate(s)}
-                            disabled={disabled}
-                            className="shrink-0 rounded-[8px] bg-amber-900 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-amber-950 disabled:opacity-60"
-                        >
-                            Mark as duplicate
-                        </button>
-                    </li>
-                ))}
-            </ul>
-            <p className="mt-2 text-[11px] text-amber-900/80">
-                Choose &ldquo;Mark as duplicate&rdquo; to file this report linked to one of the above. The maintainer will see both.
-            </p>
         </div>
     )
 }

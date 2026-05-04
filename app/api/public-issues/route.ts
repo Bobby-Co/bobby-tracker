@@ -2,6 +2,7 @@ import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
 import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
+import { embedIssueAsync } from "@/lib/issue-embedding"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the
@@ -89,6 +90,10 @@ export async function POST(request: Request) {
                 auth_user_id: authUser?.id ?? null,
             })
     }
+
+    // Index the new issue for similarity search alongside owner-filed
+    // ones — same fire-and-forget treatment as POST /api/issues.
+    void embedIssueAsync({ id: issue.id, title: issue.title, body: finalBody })
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).

@@ -50,6 +50,19 @@ export interface ProjectPublicIntegration {
     updated_at: string
 }
 
+/** Embedding vector for an issue. Lives in its own table
+ *  (migration 0015) so the heavy float[] doesn't ride along with
+ *  every issue read, and so a re-embed sweep can target rows by
+ *  model name. One row per indexed issue; rows without an
+ *  embedding simply don't appear here. */
+export interface IssueEmbedding {
+    issue_id: string
+    embedding: number[]
+    model: string
+    created_at: string
+    updated_at: string
+}
+
 /** Reporter identity for a publicly-submitted issue. One row per
  *  public-submission issue; owner-filed issues never have one. */
 export interface PublicIssueReporter {
