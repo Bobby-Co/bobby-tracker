@@ -64,11 +64,11 @@ export function IssueFolderTile({
                     so they paint on top where they overlap. */}
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[6px] right-[-6px] top-[6px] bottom-[-6px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
+                    className="pointer-events-none absolute left-[10px] right-[10px] top-2 bottom-[-6px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
                 />
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[3px] right-[-3px] top-[3px] bottom-[-3px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
+                    className="pointer-events-none absolute left-[5px] right-[5px] top-1 bottom-[-3px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
                 />
 
                 {/* Parent tile renders normally — index passed as 0
