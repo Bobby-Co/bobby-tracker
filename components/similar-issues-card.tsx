@@ -84,18 +84,30 @@ export function SimilarIssuesCard({
                     setStatus("error")
                     return
                 }
-                const data = await res.json() as { similar?: SimilarIssue[]; pending?: boolean }
+                const data = await res.json() as {
+                    similar?: SimilarIssue[]
+                    pending?: boolean
+                    missing?: boolean
+                }
                 const list = Array.isArray(data.similar) ? data.similar : []
+                // Server-decided "missing": the issue is old enough
+                // that no embedding will ever come. Skip the rest of
+                // the polling window — render "not available" right
+                // away instead of sitting on a spinner.
+                if (data.missing) {
+                    setSimilar([])
+                    setStatus("missing")
+                    return
+                }
                 if (list.length > 0 || !data.pending) {
                     setSimilar(list)
                     setStatus("ready")
                     return
                 }
-                // Embedding not ready yet → schedule next attempt.
-                // Once the backoff window is exhausted, treat it as
-                // "missing" — the issue was likely created before
-                // the embedding pipeline existed, so we'd otherwise
-                // poll forever.
+                // Pending: embedder is probably still working.
+                // Schedule next attempt; if the window runs out
+                // without a response, treat as missing too as a
+                // belt-and-suspenders against the server's age check.
                 attempt += 1
                 if (attempt < delays.length) {
                     setTimeout(tick, delays[attempt])
