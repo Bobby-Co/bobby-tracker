@@ -109,6 +109,7 @@ function Body({
     const [composing, setComposing] = useState(false)
     const [proposal, setProposal] = useState<IssueProposal | null>(null)
     const [ranking, setRanking] = useState<RankedProject[]>([])
+    const [routingQuery, setRoutingQuery] = useState<string | null>(null)
     const [picked, setPicked] = useState<Set<string>>(new Set())
     const [creating, startCreate] = useTransition()
     const [createError, setCreateError] = useState<string | null>(null)
@@ -152,6 +153,7 @@ function Body({
             const r = (data.ranking as RankedProject[]) ?? []
             setProposal(p)
             setRanking(r)
+            setRoutingQuery(typeof data.routing_query === "string" ? data.routing_query : null)
             // Default selection: best ranked + analyser-ready project
             // only. The user can opt in to additional or unindexed
             // ones from the panel.
@@ -177,6 +179,7 @@ function Body({
     function backToCapture() {
         setProposal(null)
         setRanking([])
+        setRoutingQuery(null)
         setPicked(new Set())
     }
 
@@ -251,6 +254,7 @@ function Body({
         proposal={proposal}
         setProposal={setProposal}
         ranking={ranking}
+        routingQuery={routingQuery}
         picked={picked}
         onTogglePicked={togglePicked}
         onBack={backToCapture}
@@ -363,12 +367,13 @@ function CaptureStep({
 }
 
 function ReviewStep({
-    proposal, setProposal, ranking, picked, onTogglePicked,
+    proposal, setProposal, ranking, routingQuery, picked, onTogglePicked,
     onBack, onCreate, creating, createError,
 }: {
     proposal: IssueProposal
     setProposal: (p: IssueProposal) => void
     ranking: RankedProject[]
+    routingQuery: string | null
     picked: Set<string>
     onTogglePicked: (id: string) => void
     onBack: () => void
@@ -485,6 +490,15 @@ function ReviewStep({
             </div>
 
             <RankingPanel ranking={ranking} picked={picked} onToggle={onTogglePicked} />
+
+            {routingQuery && (
+                <details className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-bg-soft)] px-3 py-2 text-[12px]">
+                    <summary className="cursor-pointer select-none font-bold uppercase tracking-[0.08em] text-[10.5px] text-[color:var(--c-text-muted)]">
+                        Routing query
+                    </summary>
+                    <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11.5px] leading-snug text-[color:var(--c-text-dim)]">{routingQuery}</pre>
+                </details>
+            )}
 
             {createError && (
                 <p role="alert" className="rounded-[10px] bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800">

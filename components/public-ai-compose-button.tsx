@@ -94,6 +94,7 @@ function ComposeBody({
     const [composing, setComposing] = useState(false)
     const [proposal, setProposal] = useState<PublicProposal | null>(null)
     const [ranking, setRanking] = useState<RankedProject[]>([])
+    const [routingQuery, setRoutingQuery] = useState<string | null>(null)
     const [picked, setPicked] = useState<Set<string>>(new Set())
     const [submitting, setSubmitting] = useState(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
@@ -143,6 +144,7 @@ function ComposeBody({
             const r = (data.ranking as RankedProject[] | null) ?? []
             setProposal(p)
             setRanking(r)
+            setRoutingQuery(typeof data.routing_query === "string" ? data.routing_query : null)
             // Group-mode default: pre-select the top analyser-ready
             // project. Manual mode (no ranking) uses the existing
             // accept-into-form path so picked stays empty.
@@ -398,6 +400,15 @@ function ComposeBody({
                 <RoutingPanel ranking={ranking} picked={picked} onToggle={togglePicked} />
             )}
 
+            {routingQuery && (
+                <details className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-bg-soft)] px-3 py-2 text-[12px]">
+                    <summary className="cursor-pointer select-none font-bold uppercase tracking-[0.08em] text-[10.5px] text-[color:var(--c-text-muted)]">
+                        Routing query
+                    </summary>
+                    <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11.5px] leading-snug text-[color:var(--c-text-dim)]">{routingQuery}</pre>
+                </details>
+            )}
+
             {submitError && (
                 <p role="alert" className="rounded-[10px] bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800">
                     {submitError}
@@ -407,7 +418,7 @@ function ComposeBody({
             <div className="mt-1 flex flex-wrap justify-between gap-2">
                 <button
                     type="button"
-                    onClick={() => { setProposal(null); setRanking([]); setPicked(new Set()) }}
+                    onClick={() => { setProposal(null); setRanking([]); setRoutingQuery(null); setPicked(new Set()) }}
                     disabled={submitting}
                     className="btn-ghost"
                 >

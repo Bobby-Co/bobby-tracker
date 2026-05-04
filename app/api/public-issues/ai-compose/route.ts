@@ -79,9 +79,10 @@ export async function POST(request: Request) {
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
+    const routingQuery = routingEmbeddingText(proposal)
     let queryVec: number[]
     try {
-        const embed = await embedText(routingEmbeddingText(proposal))
+        const embed = await embedText(routingQuery)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
@@ -156,5 +157,5 @@ export async function POST(request: Request) {
             return b.similarity - a.similarity
         })
 
-    return Response.json({ proposal, ranking })
+    return Response.json({ proposal, ranking, routing_query: routingQuery })
 }

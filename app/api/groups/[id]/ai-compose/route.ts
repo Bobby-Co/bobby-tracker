@@ -85,10 +85,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Step 2: embed the single query vector. routingEmbeddingText
     // folds the routing_summary + layer + features into a phrase
     // that lives in the same embedding space as the project's
-    // contextualised tag pool entries.
+    // contextualised tag pool entries. We surface the same string
+    // in the response so the UI can show "this is what we matched
+    // against" for debugging routing decisions.
+    const routingQuery = routingEmbeddingText(proposal)
     let queryVec: number[]
     try {
-        const embed = await embedText(routingEmbeddingText(proposal))
+        const embed = await embedText(routingQuery)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
@@ -143,5 +146,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             return b.similarity - a.similarity
         })
 
-    return Response.json({ proposal, ranking })
+    return Response.json({ proposal, ranking, routing_query: routingQuery })
 }
