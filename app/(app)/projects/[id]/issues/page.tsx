@@ -4,6 +4,7 @@ import { NewIssueButton } from "@/components/new-issue-button"
 import { AiComposeButton } from "@/components/ai-compose-button"
 import { IssueList, type ParentRow } from "@/components/issue-list"
 import { IssueTile } from "@/components/issue-tile"
+import { IssueFolderTile } from "@/components/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
 
@@ -67,12 +68,6 @@ export default async function IssuesPage({
     const open = parentsAll.filter(({ parent }) => !isClosed(parent.status))
     const closed = parentsAll.filter(({ parent }) => isClosed(parent.status))
 
-    // Tile view stays a flat grid — duplicates are filtered out
-    // entirely (a duplicate doesn't deserve its own tile).
-    const tileIssues = list.filter((i) => !i.duplicate_of_issue_id)
-    const tileOpen = tileIssues.filter((i) => !isClosed(i.status))
-    const tileClosed = tileIssues.filter((i) => isClosed(i.status))
-
     // A freshly-created project has no analyser row, or one with status
     // pending/indexing/failed and no graph_id. Until the first index
     // completes, "issues" without graph context aren't useful — the
@@ -119,7 +114,6 @@ export default async function IssuesPage({
                 title="Open"
                 projectId={id}
                 parents={open}
-                tileIssues={tileOpen}
                 view={view}
             />
             {closed.length > 0 && (
@@ -127,7 +121,6 @@ export default async function IssuesPage({
                     title="Closed"
                     projectId={id}
                     parents={closed}
-                    tileIssues={tileClosed}
                     view={view}
                     muted
                 />
@@ -173,23 +166,20 @@ function IssueGroup({
     title,
     projectId,
     parents,
-    tileIssues,
     view,
     muted,
 }: {
     title: string
     projectId: string
     parents: ParentRow[]
-    tileIssues: Issue[]
     view: IssuesView
     muted?: boolean
 }) {
-    const empty = view === "tile" ? tileIssues.length === 0 : parents.length === 0
     return (
         <section className={muted ? "opacity-90" : ""}>
             <h2 className="h-section mb-3">{title}</h2>
 
-            {empty ? (
+            {parents.length === 0 ? (
                 <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     No issues here.
                 </div>
@@ -201,9 +191,18 @@ function IssueGroup({
                         ["--stagger-step" as string]: "55ms",
                     } as React.CSSProperties}
                 >
-                    {tileIssues.map((i, idx) => (
-                        <li key={i.id} className={muted ? "opacity-70" : undefined}>
-                            <IssueTile issue={i} projectId={projectId} index={idx} />
+                    {parents.map(({ parent, children }, idx) => (
+                        <li key={parent.id} className={muted ? "opacity-70" : undefined}>
+                            {children.length > 0 ? (
+                                <IssueFolderTile
+                                    parent={parent}
+                                    duplicates={children}
+                                    projectId={projectId}
+                                    index={idx}
+                                />
+                            ) : (
+                                <IssueTile issue={parent} projectId={projectId} index={idx} />
+                            )}
                         </li>
                     ))}
                 </ul>

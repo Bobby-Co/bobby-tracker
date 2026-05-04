@@ -103,7 +103,7 @@ function ParentRowCard({
                     onClick={onToggle}
                     aria-expanded={open}
                     aria-label={open ? "Collapse duplicates" : "Expand duplicates"}
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-white hover:text-[color:var(--c-text)]"
+                    className="grid h-5 w-5 shrink-0 -mr-2 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-white hover:text-[color:var(--c-text)]"
                 >
                     <svg
                         width="11"
