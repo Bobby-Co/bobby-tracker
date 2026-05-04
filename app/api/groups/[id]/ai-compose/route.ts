@@ -98,15 +98,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    // Step 3: weighted similarity. Defaults match migration 0023:
-    // main 70% + max(layer,feature) 30%.
+    // Step 3: weighted similarity. Defaults match migration 0025:
+    // main 40% + layer 30% + feature 30%, additive.
     interface RankRow {
         project_id:  string
         similarity:  number
         main_sim:    number | null
         layer_sim:   number | null
         feature_sim: number | null
-        tag_sim:     number | null
     }
     const { data: ranked, error: rpcErr } = await supabase
         .rpc("find_similar_projects", {

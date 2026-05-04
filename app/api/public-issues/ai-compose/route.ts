@@ -95,7 +95,6 @@ export async function POST(request: Request) {
         main_sim:    number | null
         layer_sim:   number | null
         feature_sim: number | null
-        tag_sim:     number | null
     }
     const { data: ranked, error: rpcErr } = await svc
         .rpc("find_similar_projects", {
