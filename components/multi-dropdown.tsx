@@ -8,6 +8,7 @@ import {
     useState,
     type ReactNode,
 } from "react"
+import { createPortal } from "react-dom"
 import { cn } from "@/components/cn"
 
 export interface MultiDropdownOption<V extends string = string> {
@@ -56,9 +57,17 @@ export function MultiDropdown<V extends string = string>({
     const [query, setQuery] = useState("")
     const [activeIdx, setActiveIdx] = useState<number>(-1)
     const rootRef = useRef<HTMLDivElement>(null)
+    const panelRef = useRef<HTMLDivElement>(null)
     const searchRef = useRef<HTMLInputElement>(null)
     const triggerRef = useRef<HTMLButtonElement>(null)
     const listboxId = useId()
+    // Portal target — mirrors components/dropdown.tsx. We render the
+    // listbox panel into document.body so it escapes any
+    // overflow:hidden ancestor (notably <Modal>'s rounded card).
+    const [portalReady, setPortalReady] = useState(false)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    useEffect(() => { setPortalReady(true) }, [])
+    const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: 0 })
 
     const filtered = useMemo(() => {
         if (!query.trim()) return options
@@ -89,12 +98,33 @@ export function MultiDropdown<V extends string = string>({
     useEffect(() => {
         if (!open) return
         function onClick(e: MouseEvent) {
-            if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-                close()
-            }
+            // Click-outside has to consider the portal panel since
+            // it lives in document.body, outside of rootRef's tree.
+            const target = e.target as Node
+            if (rootRef.current?.contains(target)) return
+            if (panelRef.current?.contains(target)) return
+            close()
         }
         document.addEventListener("mousedown", onClick)
         return () => document.removeEventListener("mousedown", onClick)
+    }, [open])
+
+    // Track trigger geometry so the portal panel sits exactly under
+    // the trigger and follows it on scroll / resize.
+    useEffect(() => {
+        if (!open) return
+        function update() {
+            const r = triggerRef.current?.getBoundingClientRect()
+            if (!r) return
+            setPanelPos({ top: r.bottom + 6, left: r.left, width: r.width })
+        }
+        update()
+        window.addEventListener("scroll", update, true)
+        window.addEventListener("resize", update)
+        return () => {
+            window.removeEventListener("scroll", update, true)
+            window.removeEventListener("resize", update)
+        }
     }, [open])
 
     function openIt() {
@@ -211,19 +241,25 @@ export function MultiDropdown<V extends string = string>({
                 </svg>
             </button>
 
-            <div
-                id={listboxId}
-                role="listbox"
-                aria-multiselectable
-                className={cn(
-                    "absolute left-0 right-0 z-30 mt-1.5 max-h-80 overflow-auto rounded-[12px] border bg-white p-1.5 shadow-[var(--shadow-pop)]",
-                    "border-[color:var(--c-border)]",
-                    "transition-[opacity,transform] duration-[140ms]",
-                    open
-                        ? "pointer-events-auto opacity-100 translate-y-0 scale-100"
-                        : "pointer-events-none opacity-0 -translate-y-1 scale-[0.98]",
-                )}
-            >
+            {portalReady && open && createPortal(
+                <div
+                    ref={panelRef}
+                    id={listboxId}
+                    role="listbox"
+                    aria-multiselectable
+                    style={{
+                        position: "fixed",
+                        top: panelPos.top,
+                        left: panelPos.left,
+                        width: panelPos.width,
+                        zIndex: 60,
+                    }}
+                    className={cn(
+                        "max-h-80 overflow-auto rounded-[12px] border bg-white p-1.5 shadow-[var(--shadow-pop)]",
+                        "border-[color:var(--c-border)]",
+                        "anim-rise",
+                    )}
+                >
                 {searchable && (
                     <div className="-mx-1.5 -mt-1.5 mb-1 flex items-center gap-2 border-b border-[color:var(--c-border)] px-2.5 pb-1.5 pt-2">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[color:var(--c-text-dim)]" aria-hidden>
@@ -313,7 +349,9 @@ export function MultiDropdown<V extends string = string>({
                         })}
                     </div>
                 ))}
-            </div>
+                </div>,
+                document.body,
+            )}
         </div>
     )
 }

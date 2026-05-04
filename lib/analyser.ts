@@ -118,6 +118,15 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
 
 export type IssueComposePriority = "low" | "medium" | "high" | "urgent"
 export type IssueComposeConfidence = "low" | "medium" | "high"
+/** Architecture boundary the issue sits at. The analyser chooses one
+ *  value from this controlled vocabulary; matched against the project
+ *  layer-tag pool by find_similar_projects. */
+export type IssueComposeLayer =
+    | "frontend" | "backend" | "api"
+    | "database" | "infra" | "mobile" | "shared"
+export type IssueComposeAction =
+    | "bug" | "feature" | "refactor" | "performance" | "security" | "test" | "docs"
+export type IssueComposeScope = "local" | "cross-repo" | "system-wide"
 
 export interface IssueComposeProposal {
     title:      string
@@ -125,6 +134,26 @@ export interface IssueComposeProposal {
     priority:   IssueComposePriority
     labels:     string[]
     confidence: IssueComposeConfidence
+    /** Optional 1–2 sentence domain/surface restatement produced by
+     *  the analyser solely for routing — meant to be embedded and
+     *  compared against project-summary facets. Older analyser
+     *  builds may omit this; callers should fall back to
+     *  issueEmbeddingText(proposal) when it's missing or empty. */
+    routing_summary?: string
+    /** Architecture boundary. Embedded and compared against the
+     *  project's layer-tag pool. Optional only because older analyser
+     *  builds omit it; new builds always set a value. */
+    layer?: IssueComposeLayer | string
+    /** Hierarchical "domain/subdomain" tags (e.g. "auth/login",
+     *  "billing/invoice"). 1-3 entries. Joined for the feature
+     *  embedding query. */
+    features?: string[]
+    /** What kind of work this is. Not currently used in routing
+     *  weights but surfaced for UI display + future filters. */
+    action?: IssueComposeAction | string
+    /** How wide the impact is. Hint for the routing UI to pre-select
+     *  multiple targets when scope = "cross-repo". */
+    scope?: IssueComposeScope | string
     model:      string
     duration_ms: number
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
@@ -184,6 +213,61 @@ export function issueEmbeddingText(issue: { title: string; body: string }): stri
     const body = (issue.body ?? "").trim()
     const title = (issue.title ?? "").trim()
     return `${title}\n\n${body}`.slice(0, 7500)
+}
+
+// Pick the text we embed for cross-project routing. ONE vector per
+// issue, compared against each project's main embedding AND its
+// per-tag embeddings by find_similar_projects.
+//
+// We deliberately shape the text to mirror BOTH targets so a single
+// vector lands well in either subspace:
+//
+//   - First line(s): the analyser's domain/surface routing_summary
+//     in plain maintainer voice. Matches the project's main
+//     embedding (which is itself a prose blob mixing overview +
+//     layer/feature descriptions).
+//
+//   - Then per-dimension lines shaped EXACTLY like the project tag
+//     phrases the analyser produces:
+//
+//         "layer <slug>: <description>"
+//         "feature <slug>: <description>"
+//
+//     Project tags are embedded as "<projectName> — layer <slug>:
+//     <description>" so the trailing "<kind> <slug>: <description>"
+//     n-grams dominate the cosine similarity. Repeating the
+//     routing_summary as the description for each tag dimension
+//     gives the embedding model the shared structure it needs to
+//     pull the issue vector toward the project's tag-pool space.
+//
+// Falls back to title+body when the analyser didn't return any
+// routing fields at all (older analyser builds).
+export function routingEmbeddingText(proposal: IssueComposeProposal): string {
+    const summary = (proposal.routing_summary ?? "").trim()
+    const layer = (proposal.layer ?? "").toString().trim()
+    const features = (proposal.features ?? [])
+        .map((t) => (t ?? "").toString().trim())
+        .filter(Boolean)
+
+    if (!summary && !layer && features.length === 0) {
+        return issueEmbeddingText({ title: proposal.title, body: proposal.body })
+    }
+
+    const lines: string[] = []
+    if (summary) lines.push(summary)
+    // Per-tag-dimension lines that mimic the project tag-pool phrase
+    // shape. The description after the colon is the routing_summary
+    // (or the slug itself when summary is empty) so we never embed
+    // a bare "layer frontend." with no body — that's exactly the
+    // low-context vector the redesign was meant to avoid.
+    const tagDescription = summary || "described above"
+    if (layer) {
+        lines.push(`layer ${layer}: ${tagDescription}`)
+    }
+    for (const feature of features) {
+        lines.push(`feature ${feature}: ${tagDescription}`)
+    }
+    return lines.join("\n").slice(0, 7500)
 }
 
 // ─── /verify (HTTP, request/response) ──────────────────────────────────────

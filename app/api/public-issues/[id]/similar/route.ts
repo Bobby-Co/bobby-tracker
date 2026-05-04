@@ -1,4 +1,3 @@
-import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
 import type { Issue, IssueEmbedding } from "@/lib/supabase/types"
@@ -49,8 +48,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .eq("issue_id", id)
         .maybeSingle<Pick<IssueEmbedding, "embedding">>()
     if (!emb) {
-        // Embedder hasn't caught up yet — tell the client to retry.
-        return Response.json({ similar: [], pending: true })
+        // Pending vs missing — same age cutoff as the auth-side
+        // route. Old issues never embedded should short-circuit
+        // to "missing" so the client doesn't sit on a spinner
+        // for nothing.
+        const PENDING_WINDOW_MS = 30_000
+        const ageMs = Date.now() - Date.parse(issue.created_at)
+        const stillPending = Number.isFinite(ageMs) && ageMs < PENDING_WINDOW_MS
+        return Response.json({
+            similar: [],
+            pending: stillPending,
+            missing: !stillPending,
+        })
     }
 
     // Service-role client bypasses RLS, so we have to scope the
@@ -69,7 +78,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .returns<ProbeIssue[]>()
     const candidateIds = (pool ?? []).map((p) => p.id)
     if (candidateIds.length === 0) {
-        return Response.json({ similar: [], pending: false })
+        return Response.json({ similar: [], pending: false, missing: false })
     }
 
     // pgvector ordering on the candidate set. We keep this scan
@@ -84,7 +93,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .in("issue_id", candidateIds)
         .returns<{ issue_id: string; embedding: number[] }[]>()
     if (!vectors || vectors.length === 0) {
-        return Response.json({ similar: [], pending: false })
+        return Response.json({ similar: [], pending: false, missing: false })
     }
 
     const target = emb.embedding
@@ -101,9 +110,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         })
     }
     ranked.sort((a, b) => b.similarity - a.similarity)
-    const top = ranked.slice(0, 5)
+    // Drop matches below the same floor the auth route uses.
+    // text-embedding-3-small pulls all public-session submissions in
+    // a project tightly together so the cosine top-K otherwise
+    // surfaces low-confidence rows that read as "0% match" to the
+    // submitter — confusing in a public-facing UI. See
+    // app/api/issues/[id]/similar/route.ts for the threshold rationale.
+    const MIN_SIMILARITY = 0.40
+    const top = ranked.filter((r) => r.similarity >= MIN_SIMILARITY).slice(0, 5)
 
-    return Response.json({ similar: top, pending: false })
+    return Response.json({ similar: top, pending: false, missing: false })
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {

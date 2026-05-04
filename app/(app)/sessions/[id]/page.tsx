@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
-import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
+import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
 import { SessionManagePanel } from "@/components/session-manage-panel"
 
 export const dynamic = "force-dynamic"
@@ -55,6 +55,14 @@ export default async function SessionDetailPage({
         .order("created_at", { ascending: true })
         .returns<PublicSessionInvite[]>()
 
+    // Eligible groups for the source picker — owner-only via RLS.
+    const { data: groups } = await supabase
+        .from("project_groups")
+        .select("id,name")
+        .order("name", { ascending: true })
+        .returns<Pick<ProjectGroup, "id" | "name">[]>()
+    const allGroups = (groups ?? []).map((g) => ({ id: g.id, name: g.name }))
+
     return (
         <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
             <Link
@@ -70,6 +78,7 @@ export default async function SessionDetailPage({
                 allProjects={allProjects ?? []}
                 invites={invites ?? []}
                 ownerEmail={ownerEmail}
+                allGroups={allGroups}
             />
         </div>
     )

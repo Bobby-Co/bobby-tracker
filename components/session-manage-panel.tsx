@@ -9,6 +9,7 @@ import type {
     PublicSessionSubmissionsVisibility,
 } from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
+import { Dropdown } from "@/components/dropdown"
 import { MultiDropdown } from "@/components/multi-dropdown"
 
 type Action =
@@ -16,6 +17,7 @@ type Action =
     | "addProject" | "removeProject"
     | "setAccessMode" | "addInvite" | "removeInvite"
     | "setVisibility"
+    | "setSource"
     | null
 
 interface ProjectOption {
@@ -46,6 +48,7 @@ export function SessionManagePanel({
     allProjects,
     invites: initialInvites,
     ownerEmail,
+    allGroups,
 }: {
     session: PublicSession
     sessionProjects: ProjectOption[]
@@ -54,6 +57,9 @@ export function SessionManagePanel({
     /** Lowercased email of the session owner — rendered as a locked
      *  pill on the invite list and protected from removal. */
     ownerEmail: string | null
+    /** Project groups owned by the caller — feeds the "Use a group"
+     *  source picker. Empty when the user has no groups yet. */
+    allGroups: { id: string; name: string }[]
 }) {
     const router = useRouter()
 
@@ -203,6 +209,26 @@ export function SessionManagePanel({
         if (v === session.submissions_visibility) return
         run("setVisibility", async () => {
             const data = await call(`/api/sessions/${session.id}`, "PATCH", { submissions_visibility: v })
+            if (data?.session) setSession(data.session)
+        })
+    }
+
+    // Source toggle. group_id = null → manual project list (the
+    // existing behaviour, controlled by the "Projects" card below).
+    // group_id set → session covers the group's current members,
+    // and AI compose can route across them. The two modes coexist
+    // in storage; the resolver prefers group_id when present.
+    function setSourceToManual() {
+        if (session.group_id == null) return
+        run("setSource", async () => {
+            const data = await call(`/api/sessions/${session.id}`, "PATCH", { group_id: null })
+            if (data?.session) setSession(data.session)
+        })
+    }
+    function setSourceToGroup(groupId: string) {
+        if (!groupId || session.group_id === groupId) return
+        run("setSource", async () => {
+            const data = await call(`/api/sessions/${session.id}`, "PATCH", { group_id: groupId })
             if (data?.session) setSession(data.session)
         })
     }
@@ -475,7 +501,69 @@ export function SessionManagePanel({
                 )}
             </div>
 
-            {/* Projects */}
+            {/* Source toggle: manual project list vs project group.
+                Group-mode gives the public AI compose flow the same
+                routing it does in the auth /groups/[id] page. The
+                manual list stays as a fallback so a user can always
+                drop back without losing their per-project edits. */}
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-[14px] font-bold">Project source</div>
+                        <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
+                            Pick projects manually or have the session follow a project group&apos;s membership.
+                        </p>
+                    </div>
+                </div>
+
+                <fieldset disabled={busy} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <AccessOption
+                        active={session.group_id == null}
+                        title="Manual project list"
+                        description="Pick a fixed set of projects below."
+                        onClick={setSourceToManual}
+                        pending={action === "setSource" && session.group_id != null}
+                    />
+                    <AccessOption
+                        active={session.group_id != null}
+                        title="Project group"
+                        description={allGroups.length === 0
+                            ? "Create a group on the Groups page first."
+                            : "Follow a group's membership; AI compose can auto-route."}
+                        onClick={() => {
+                            const first = allGroups[0]
+                            if (first) setSourceToGroup(first.id)
+                        }}
+                        pending={action === "setSource" && session.group_id == null}
+                    />
+                </fieldset>
+
+                {session.group_id != null && allGroups.length > 0 && (
+                    <div className="mt-3 flex flex-col gap-1.5">
+                        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                            Group
+                        </span>
+                        <div className="max-w-xs">
+                            <Dropdown<string>
+                                value={session.group_id}
+                                onChange={(v) => { if (v) setSourceToGroup(v) }}
+                                options={allGroups.map((g) => ({ value: g.id, label: g.name }))}
+                                searchable={allGroups.length > 6}
+                                disabled={busy}
+                                aria-label="Project group"
+                            />
+                        </div>
+                        <p className="text-[11.5px] text-[color:var(--c-text-dim)]">
+                            Submitters see whichever projects are in the group right now (filtered to those with public submissions enabled). AI compose ranks them on the way in.
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Projects (manual mode only — when group-mode is on,
+                the effective list is owned by the group and we hide
+                this card to avoid implying both can edit it). */}
+            {session.group_id == null && (
             <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
@@ -541,6 +629,7 @@ export function SessionManagePanel({
                     </div>
                 )}
             </div>
+            )}
 
             {/* Details + window */}
             <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">

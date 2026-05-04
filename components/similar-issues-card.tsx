@@ -48,12 +48,23 @@ export function SimilarIssuesCard({
     duplicateOfIssueId?: string | null
 }) {
     const [similar, setSimilar] = useState<SimilarIssue[] | null>(null)
-    const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+    // "missing" — the embedding row never showed up after the
+    // backoff window ran out. Most likely an issue created before
+    // the embedding pipeline existed; we surface that state to the
+    // user instead of silently rendering nothing or spinning forever.
+    const [status, setStatus] = useState<"loading" | "ready" | "error" | "missing">("loading")
     const [marking, setMarking] = useState<string | null>(null)
     const [markErr, setMarkErr] = useState<string | null>(null)
 
     useEffect(() => {
-        if (duplicateOfIssueId) { setStatus("ready"); return }
+        if (duplicateOfIssueId) {
+            // Already a known duplicate — no lookup needed; we render
+            // the banner short-circuit above. Setting status here is
+            // the cleanup path for the polling effect.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setStatus("ready")
+            return
+        }
         let cancelled = false
 
         // Poll: 0s, 1.5s, 4s, 8s. The embedder usually finishes in
@@ -73,20 +84,36 @@ export function SimilarIssuesCard({
                     setStatus("error")
                     return
                 }
-                const data = await res.json() as { similar?: SimilarIssue[]; pending?: boolean }
+                const data = await res.json() as {
+                    similar?: SimilarIssue[]
+                    pending?: boolean
+                    missing?: boolean
+                }
                 const list = Array.isArray(data.similar) ? data.similar : []
+                // Server-decided "missing": the issue is old enough
+                // that no embedding will ever come. Skip the rest of
+                // the polling window — render "not available" right
+                // away instead of sitting on a spinner.
+                if (data.missing) {
+                    setSimilar([])
+                    setStatus("missing")
+                    return
+                }
                 if (list.length > 0 || !data.pending) {
                     setSimilar(list)
                     setStatus("ready")
                     return
                 }
-                // Embedding not ready yet → schedule next attempt.
+                // Pending: embedder is probably still working.
+                // Schedule next attempt; if the window runs out
+                // without a response, treat as missing too as a
+                // belt-and-suspenders against the server's age check.
                 attempt += 1
                 if (attempt < delays.length) {
                     setTimeout(tick, delays[attempt])
                 } else {
                     setSimilar([])
-                    setStatus("ready")
+                    setStatus("missing")
                 }
             } catch {
                 if (!cancelled) setStatus("error")
@@ -151,6 +178,17 @@ export function SimilarIssuesCard({
         return (
             <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <Spinner /> Looking for similar issues…
+            </section>
+        )
+    }
+    if (status === "missing") {
+        // Old issue, never embedded. Tell the user explicitly so
+        // they don't wonder whether the lookup is just slow or
+        // whether there genuinely are no similar issues.
+        return (
+            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                <span className="font-semibold text-[color:var(--c-text)]">Similarity check unavailable.</span>{" "}
+                This issue was filed before similarity indexing was added, so we can&apos;t suggest related issues for it yet.
             </section>
         )
     }

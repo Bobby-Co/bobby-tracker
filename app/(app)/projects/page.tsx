@@ -1,20 +1,45 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { NewProjectButton } from "@/components/new-project-button"
+import { NewGroupButton } from "@/components/new-group-button"
 import { WorkflowCard } from "@/components/workflow-card"
-import type { Project } from "@/lib/supabase/types"
+import type { Project, ProjectGroup } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"
 
 export default async function ProjectsPage() {
     const supabase = await createClient()
-    const { data: projects } = await supabase
-        .from("projects")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .returns<Project[]>()
+    const [{ data: projects }, { data: groups }] = await Promise.all([
+        supabase
+            .from("projects")
+            .select("*")
+            .order("updated_at", { ascending: false })
+            .returns<Project[]>(),
+        supabase
+            .from("project_groups")
+            .select("*")
+            .order("updated_at", { ascending: false })
+            .returns<ProjectGroup[]>(),
+    ])
 
     const list = projects ?? []
+    const groupList = groups ?? []
+
+    // Member counts per group, in one round-trip, so the strip can
+    // show "3 projects" without N+1 queries.
+    const groupIds = groupList.map((g) => g.id)
+    const { data: memberLinks } = groupIds.length
+        ? await supabase
+            .from("project_group_members")
+            .select("group_id,project_id")
+            .in("group_id", groupIds)
+        : { data: [] as { group_id: string; project_id: string }[] }
+    const countByGroup = new Map<string, number>()
+    for (const l of memberLinks ?? []) {
+        countByGroup.set(l.group_id, (countByGroup.get(l.group_id) ?? 0) + 1)
+    }
+
+    const allProjectsForPicker = list.map((p) => ({ id: p.id, name: p.name }))
 
     return (
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -25,10 +50,53 @@ export default async function ProjectsPage() {
                         One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
                     </p>
                 </div>
-                <div className="self-start sm:self-auto">
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <NewGroupButton projects={allProjectsForPicker} />
                     <NewProjectButton />
                 </div>
             </header>
+
+            {/* Groups strip — placed above the projects grid so the
+                cross-project surface (AI routing across a multi-repo
+                product) is discoverable from the page that owns the
+                repos themselves. The create button lives in the page
+                header beside "New project" so the two CTAs sit
+                together; this section just lists existing groups. */}
+            <section className="flex flex-col gap-2">
+                <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 className="h-section">Groups</h2>
+                        <p className="mt-0.5 text-[12px] text-[color:var(--c-text-muted)]">
+                            Bundle related projects so AI compose can route an issue to the best match.
+                        </p>
+                    </div>
+                </div>
+                {groupList.length === 0 ? (
+                    <div className="rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                        No groups yet — create one once you have a couple of related projects to bundle.
+                    </div>
+                ) : (
+                    <ul className="flex flex-wrap gap-2">
+                        {groupList.map((g) => {
+                            const memberCount = countByGroup.get(g.id) ?? 0
+                            return (
+                                <li key={g.id}>
+                                    <Link
+                                        href={`/groups/${g.id}`}
+                                        className="group inline-flex items-center gap-2 rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]"
+                                    >
+                                        <FolderIcon />
+                                        <span className="font-semibold">{g.name}</span>
+                                        <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-0.5 text-[10.5px] font-bold text-[color:var(--c-text-muted)] tabular-nums group-hover:bg-white">
+                                            {memberCount}
+                                        </span>
+                                    </Link>
+                                </li>
+                            )
+                        })}
+                    </ul>
+                )}
+            </section>
 
             {list.length === 0 ? (
                 <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-16 text-center">
@@ -103,6 +171,13 @@ function ClockIcon() {
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 2" />
+        </svg>
+    )
+}
+function FolderIcon() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-[color:var(--c-text-dim)]">
+            <path d="M3 7h7l1.5 2H21v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
         </svg>
     )
 }

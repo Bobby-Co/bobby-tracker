@@ -396,7 +396,7 @@ function ReviewStep({
                         placeholder="Markdown supported. The body should describe the issue itself — priority/labels/confidence are separate fields."
                     />
                 ) : (
-                    <div className="min-h-[180px] rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-3">
+                    <div className="min-h-[180px] max-h-[320px] overflow-y-auto rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-3">
                         {proposal.body.trim() ? (
                             <div className="prose-tracker">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>

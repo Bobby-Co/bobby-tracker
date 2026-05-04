@@ -2,7 +2,7 @@
 // in the supabase CLI codegen toolchain just for Phase 2; regenerate with
 // `supabase gen types typescript --schema tracker` once the schema settles.
 
-export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived"
+export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
 
@@ -102,7 +102,48 @@ export interface ProjectAnalyser {
     last_health_report: unknown | null
     /** Timestamp of the verify run that wrote last_health_report. */
     last_health_check_at: string | null
+    /** Human-readable rollup of the project's stack, modules, and
+     * surfaces. Refreshed by bobby-analyser on every successful
+     * bootstrap / incremental update; powers the project-groups UI
+     * + AI compose's "which project does this issue belong to?"
+     * routing. Null until the first index. */
+    summary_markdown: string | null
+    /** The project's main routing vector. Built from name + summary
+     *  + layers + features + stack + modules concatenated, embedded
+     *  as one rich text by bobby-analyser. Drives 70% of
+     *  find_similar_projects scoring; the layer + feature tag pools
+     *  (see ProjectLayerTag / ProjectFeatureTag) supply the other
+     *  30% via max-cosine refinement. */
+    summary_overview_embedding: number[] | null
+    /** Embedding model that produced summary_overview_embedding +
+     *  the tag-pool vectors. */
+    summary_model: string | null
+    /** When summary_markdown + the embeddings were last refreshed. */
+    summary_updated_at: string | null
     updated_at: string
+}
+
+// Per-project routing tag pools, written by bobby-analyser via the
+// `replace_project_tags` RPC after each successful index. Layer is a
+// short controlled vocabulary (frontend / backend / api / database /
+// infra / mobile / shared); feature is hierarchical free-form
+// ("auth/login", "billing/invoice"). Each row carries its own
+// embedding so find_similar_projects can score "max cosine to any
+// tag" rather than blending all tags into one vector.
+export interface ProjectLayerTag {
+    id: string
+    project_id: string
+    tag: string
+    embedding: number[]
+    created_at: string
+}
+
+export interface ProjectFeatureTag {
+    id: string
+    project_id: string
+    tag: string
+    embedding: number[]
+    created_at: string
 }
 
 export interface IssueFinding {
@@ -141,7 +182,7 @@ export interface IssueSuggestion {
     created_at: string
 }
 
-export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived"]
+export const ISSUE_STATUSES: IssueStatus[] = ["open", "in_progress", "blocked", "done", "archived", "duplicated"]
 export const ISSUE_PRIORITIES: IssuePriority[] = ["low", "medium", "high", "urgent"]
 
 /** Who can open the public link.
@@ -163,6 +204,13 @@ export interface PublicSession {
     enabled: boolean
     access_mode: PublicSessionAccessMode
     submissions_visibility: PublicSessionSubmissionsVisibility
+    /** When set, the session's effective project coverage is the
+     *  group's current membership instead of the manual junction
+     *  table. Adding a project to the group expands the session
+     *  automatically; the public AI compose flow uses the group's
+     *  facet embeddings to route incoming issues. Null = manual
+     *  project list (current behaviour). */
+    group_id: string | null
     /** Internal label shown in the owner's session list. */
     name: string
     /** Public heading rendered to submitters (falls back to `name`). */
@@ -193,4 +241,23 @@ export interface PublicSessionProject {
  *  list of projects it covers (joined via public_session_projects). */
 export interface PublicSessionWithProjects extends PublicSession {
     projects: { id: string; name: string }[]
+}
+
+/** A user-defined collection of related projects. Powers the AI
+ *  compose flow's "which project does this issue belong to?"
+ *  routing — see find_similar_projects RPC + migration 0019. */
+export interface ProjectGroup {
+    id: string
+    user_id: string
+    name: string
+    description: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** Convenience shape for the management UI: a group plus the
+ *  flattened list of projects it covers (joined via
+ *  project_group_members). */
+export interface ProjectGroupWithMembers extends ProjectGroup {
+    members: { id: string; name: string; has_summary: boolean }[]
 }

@@ -52,6 +52,25 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (body.submissions_visibility === "all" || body.submissions_visibility === "own") {
         patch.submissions_visibility = body.submissions_visibility
     }
+    // Source toggle: group_id null clears the group binding (drops
+    // back to manual project list); a non-null value points the
+    // session at a project group. RLS on project_groups (owner-only)
+    // means a non-owner id silently fails the FK check on update.
+    if (body.group_id === null) {
+        patch.group_id = null
+    } else if (typeof body.group_id === "string" && body.group_id.length > 0) {
+        // Confirm the group belongs to the caller before persisting
+        // — clearer than letting the FK error bubble up.
+        const { data: group } = await supabase
+            .from("project_groups")
+            .select("id")
+            .eq("id", body.group_id)
+            .maybeSingle<{ id: string }>()
+        if (!group) {
+            return jsonError("bad_request", "group not found or not yours", 400)
+        }
+        patch.group_id = body.group_id
+    }
     if (typeof body.name === "string") {
         const v = body.name.trim()
         if (!v) return jsonError("bad_request", "name cannot be empty", 400)
