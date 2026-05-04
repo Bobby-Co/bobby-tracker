@@ -52,23 +52,22 @@ export function IssueFolderTile({
                 className="relative anim-rise transition-transform hover:-translate-y-px [&_.card]:rounded-b-none [&_.card-stack:hover]:transform-none!"
                 style={index != null ? ({ ["--i" as string]: index } as React.CSSProperties) : undefined}
             >
-                {/* Two paper layers behind the real tile, offset
-                    down + right so the corners always peek out and
-                    the cell reads as a folder at rest — not just on
-                    hover. Inert so they don't catch focus / clicks.
-                    No negative z-index here: the page's stacking
-                    context (dotted-bg <main>, etc.) would push them
-                    behind it and they'd vanish at rest. We rely on
-                    DOM order instead — backdrops render first, the
-                    tile and footer come after as `relative` siblings
-                    so they paint on top where they overlap. */}
+                {/* Bottom-only "ledges" suggesting a stack of papers
+                    underneath the tile. Earlier we used full-height
+                    backdrops with their top inside the wrapper — the
+                    .card-tab only takes its content width (self-start),
+                    so the empty area beside it leaked the backdrop's
+                    top edge. These are short strips anchored to the
+                    wrapper bottom, so there's no top to leak. They
+                    sit half above (covered by the footer's amber bg)
+                    and half below (the visible peek). */}
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[10px] right-[10px] top-2 bottom-[-6px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
+                    className="pointer-events-none absolute left-[10px] right-[10px] bottom-[-6px] h-[12px] rounded-b-[14px] border border-t-0 border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
                 />
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[5px] right-[5px] top-1 bottom-[-3px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
+                    className="pointer-events-none absolute left-[5px] right-[5px] bottom-[-3px] h-[8px] rounded-b-[15px] border border-t-0 border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
                 />
 
                 {/* Parent tile renders normally — index passed as 0
