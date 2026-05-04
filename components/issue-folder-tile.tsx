@@ -49,28 +49,35 @@ export function IssueFolderTile({
                     descendant hover) so card + footer move together.
             */}
             <div
-                className="relative anim-rise transition-transform hover:-translate-y-px [&_.card]:rounded-b-none [&_.card-stack:hover]:!transform-none"
+                className="relative anim-rise transition-transform hover:-translate-y-px [&_.card]:rounded-b-none [&_.card-stack:hover]:transform-none!"
                 style={index != null ? ({ ["--i" as string]: index } as React.CSSProperties) : undefined}
             >
                 {/* Two paper layers behind the real tile, offset
                     down + right so the corners always peek out and
                     the cell reads as a folder at rest — not just on
                     hover. Inert so they don't catch focus / clicks.
-                    Borders use border-strong + a bit more shadow so
-                    they don't disappear against page backgrounds. */}
+                    No negative z-index here: the page's stacking
+                    context (dotted-bg <main>, etc.) would push them
+                    behind it and they'd vanish at rest. We rely on
+                    DOM order instead — backdrops render first, the
+                    tile and footer come after as `relative` siblings
+                    so they paint on top where they overlap. */}
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[6px] right-[-6px] top-[6px] bottom-[-6px] -z-10 rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
+                    className="pointer-events-none absolute left-[6px] right-[-6px] top-[6px] bottom-[-6px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
                 />
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[3px] right-[-3px] top-[3px] bottom-[-3px] -z-10 rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
+                    className="pointer-events-none absolute left-[3px] right-[-3px] top-[3px] bottom-[-3px] rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
                 />
 
                 {/* Parent tile renders normally — index passed as 0
                     so its own anim-rise stagger doesn't double up
-                    with the wrapper's. */}
-                <IssueTile issue={parent} projectId={projectId} index={0} />
+                    with the wrapper's. `relative` so it paints above
+                    the absolutely-positioned backdrops above. */}
+                <div className="relative">
+                    <IssueTile issue={parent} projectId={projectId} index={0} />
+                </div>
 
                 {/* Folder footer, docked to the tile's bottom edge:
                     border-t-0 + matching border colour avoid a double
@@ -82,7 +89,7 @@ export function IssueFolderTile({
                     type="button"
                     onClick={() => setOpen(true)}
                     aria-label={`Show ${count} duplicate${count === 1 ? "" : "s"}`}
-                    className="flex w-full items-center justify-between gap-2 rounded-b-[16px] border border-t-0 border-[color:var(--c-border)] bg-amber-50 px-3 py-2 text-[11.5px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                    className="relative flex w-full items-center justify-between gap-2 rounded-b-[16px] border border-t-0 border-[color:var(--c-border)] bg-amber-50 px-3 py-2 text-[11.5px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
                 >
                     <span className="inline-flex items-center gap-1.5">
                         <FolderIcon />
