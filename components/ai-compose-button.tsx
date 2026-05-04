@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { Modal } from "@/components/modal"
 import { Spinner } from "@/components/spinner"
 import { Dropdown } from "@/components/dropdown"
@@ -365,6 +367,10 @@ function ReviewStep({
     creating: boolean
     createError: string | null
 }) {
+    // Edit/Preview tab on the body field. Default to Preview because
+    // the AI-drafted markdown is the thing the user wants to verify
+    // first; edits are usually a small touch-up.
+    const [bodyView, setBodyView] = useState<"edit" | "preview">("preview")
     const labelsString = useMemo(() => proposal.labels.join(", "), [proposal.labels])
     return (
         <div className="flex flex-col gap-3">
@@ -387,17 +393,70 @@ function ReviewStep({
                 />
             </label>
 
-            <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
-                    Body
-                </span>
-                <textarea
-                    rows={8}
-                    value={proposal.body}
-                    onChange={(e) => setProposal({ ...proposal, body: e.target.value })}
-                    className="input text-[13px] leading-relaxed"
-                />
-            </label>
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                        Body
+                    </span>
+                    <div
+                        role="tablist"
+                        aria-label="Body view"
+                        className="inline-flex rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-0.5 text-[11.5px] font-semibold"
+                    >
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={bodyView === "edit"}
+                            onClick={() => setBodyView("edit")}
+                            className={
+                                "rounded-[6px] px-2.5 py-1 transition-colors " +
+                                (bodyView === "edit"
+                                    ? "bg-white text-[color:var(--c-text)] shadow-sm"
+                                    : "text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]")
+                            }
+                        >
+                            Edit
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={bodyView === "preview"}
+                            onClick={() => setBodyView("preview")}
+                            className={
+                                "rounded-[6px] px-2.5 py-1 transition-colors " +
+                                (bodyView === "preview"
+                                    ? "bg-white text-[color:var(--c-text)] shadow-sm"
+                                    : "text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]")
+                            }
+                        >
+                            Preview
+                        </button>
+                    </div>
+                </div>
+                {bodyView === "edit" ? (
+                    <textarea
+                        rows={10}
+                        value={proposal.body}
+                        onChange={(e) => setProposal({ ...proposal, body: e.target.value })}
+                        className="input text-[13px] leading-relaxed font-mono"
+                        placeholder="Markdown supported. The body should describe the issue itself — priority/labels/confidence are separate fields."
+                    />
+                ) : (
+                    <div className="min-h-[180px] rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-3">
+                        {proposal.body.trim() ? (
+                            <div className="prose-tracker">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {proposal.body}
+                                </ReactMarkdown>
+                            </div>
+                        ) : (
+                            <p className="text-[12.5px] text-[color:var(--c-text-dim)]">
+                                Empty body — switch to Edit to add details.
+                            </p>
+                        )}
+                    </div>
+                )}
+            </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">
