@@ -108,13 +108,17 @@ export interface ProjectAnalyser {
      * + AI compose's "which project does this issue belong to?"
      * routing. Null until the first index. */
     summary_markdown: string | null
-    /** 1536-dim vector from text-embedding-3-small over
-     *  summary_markdown. Used for cosine similarity against issue-
-     *  draft embeddings inside a project group. */
-    summary_embedding: number[] | null
-    /** Embedding model that produced summary_embedding. */
+    /** Per-facet 1536-dim embeddings used by find_similar_projects.
+     *  Each chunk is embedded independently so AI compose can weight
+     *  the facets (modules + overview > stack) when routing an issue
+     *  to a project inside a group. */
+    summary_overview_embedding: number[] | null
+    summary_features_embedding: number[] | null
+    summary_stack_embedding:    number[] | null
+    summary_modules_embedding:  number[] | null
+    /** Embedding model that produced the four facet vectors. */
     summary_model: string | null
-    /** When summary_markdown + summary_embedding were last refreshed. */
+    /** When summary_markdown + the embeddings were last refreshed. */
     summary_updated_at: string | null
     updated_at: string
 }
