@@ -8,7 +8,7 @@ import { PublicSessionSubmissions } from "@/components/public-session-submission
 import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
 import { PublicSessionGate } from "@/components/public-session-gate"
 import { checkInviteAccess, getCurrentPublicUser } from "@/lib/public-session"
-import { groupByParent, type PublicListedIssue } from "@/lib/public-reporter"
+import { groupByParent, groupParentsByReporter, type PublicListedIssue } from "@/lib/public-reporter"
 
 export const dynamic = "force-dynamic"
 
@@ -148,6 +148,7 @@ async function PublicSessionContent({
         }
     })
     const parentRows = groupByParent(listedIssues)
+    const reporterGroups = groupParentsByReporter(parentRows)
 
     const win = session.enabled ? windowState(session) : "closed"
     const heading = session.title || session.name
@@ -209,7 +210,7 @@ async function PublicSessionContent({
                         <PublicIssueForm token={token} projects={projects} />
                         <PublicSessionSubmissions
                             token={token}
-                            parents={parentRows}
+                            groups={reporterGroups}
                             restrictToOwn={restrictToOwn}
                             visitorIsAuthenticated={!!visitor}
                         />

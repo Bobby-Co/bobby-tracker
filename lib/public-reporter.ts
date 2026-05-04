@@ -27,6 +27,20 @@ export interface PublicParentRow {
     children: PublicListedIssue[]
 }
 
+export interface PublicReporterGroup {
+    /** Stable bucket key — reporter_id when present, "anon-no-id"
+     *  otherwise (legacy rows from before migration 0010). */
+    key: string
+    reporter_id: string | null
+    /** Most recent display name this reporter used. */
+    display_name: string
+    /** Parent rows owned by this reporter. Children may have been
+     *  filed by *other* reporters — they still nest under their
+     *  parent here so each thread reads as one cohesive unit
+     *  under whoever started it. */
+    rows: PublicParentRow[]
+}
+
 // Display label for a reporter on the public listing. Named submitters
 // show their name; anonymous ones show "Anonymous · <short id>" using
 // the first 6 chars of their stable browser id so different anonymous
@@ -78,4 +92,41 @@ export function groupByParent(rows: PublicListedIssue[]): PublicParentRow[] {
     }
     parents.sort((a, b) => b.parent.created_at.localeCompare(a.parent.created_at))
     return parents
+}
+
+// Bucket parent rows by their reporter — the parent's reporter is
+// what dictates which group a thread lives under, even if some of
+// the duplicates inside the thread were filed by other reporters
+// (the alternative — splitting a thread across groups — fragments
+// the conversation). Groups are sorted by most-recent activity.
+//
+// Reporter id is the keying signal; display name uses the most
+// recent label that reporter chose. Anonymous-without-id rows fall
+// into a single "anon-no-id" bucket so legacy submissions stay
+// visible instead of vanishing into singleton groups.
+export function groupParentsByReporter(parents: PublicParentRow[]): PublicReporterGroup[] {
+    const map = new Map<string, PublicReporterGroup>()
+    for (const row of parents) {
+        const it = row.parent
+        const key = it.public_reporter_id ?? "anon-no-id"
+        let g = map.get(key)
+        if (!g) {
+            g = {
+                key,
+                reporter_id: it.public_reporter_id,
+                display_name: reporterDisplay(it.public_reporter_id, it.public_reporter_name),
+                rows: [],
+            }
+            map.set(key, g)
+        } else if (it.public_reporter_name) {
+            // Most recent named submission wins for the label.
+            g.display_name = it.public_reporter_name.trim()
+        }
+        g.rows.push(row)
+    }
+    return Array.from(map.values()).sort((a, b) => {
+        const ta = a.rows[0]?.parent.created_at ?? ""
+        const tb = b.rows[0]?.parent.created_at ?? ""
+        return tb.localeCompare(ta)
+    })
 }

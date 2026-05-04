@@ -2,36 +2,45 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import type { PublicListedIssue, PublicParentRow } from "@/lib/public-reporter"
+import type {
+    PublicListedIssue,
+    PublicParentRow,
+    PublicReporterGroup,
+} from "@/lib/public-reporter"
 import { reporterDisplay } from "@/lib/public-reporter"
 import { StatusChip } from "@/components/status-chip"
 
-// Public-side counterpart to the auth issues list. Same card-row /
-// indented-duplicate hierarchy: each parent issue is its own card,
-// and any duplicates pointing at it render as smaller cards in an
-// indented amber-bordered column underneath. Cross-reporter
-// duplicate links are honored — every issue appears exactly once,
-// either as a top-level parent or as a nested child of one.
+// Public-side counterpart to the auth issues list.
 //
-// Reporter info that the old grouped-by-reporter UI surfaced now
-// rides along on each card as a small chip, with a "you" badge on
-// rows that match the visitor's localStorage reporter id.
+// Layout shape:
+//   1. Top-level grouping is by REPORTER. Each reporter section
+//      gets a header (avatar + name + "you" badge) and a stack of
+//      parent rows below.
+//   2. Inside a reporter section, each parent issue is its own
+//      card. Duplicates of that parent — even when filed by other
+//      reporters — render as smaller indented cards underneath in
+//      an amber-bordered column. The thread stays visually
+//      together under whoever started it.
 //
-// Two modes via `restrictToOwn`:
-//   - false (default) — show every parent row.
+// "you" highlighting is per-reporter (group header) AND per-row
+// (a small chip on any card the visitor authored, including
+// cross-reporter duplicates inside someone else's thread).
+//
+// restrictToOwn:
+//   - false (default) — show every reporter group.
 //   - true — only show rows the visitor owns. When the visitor is
-//     authenticated the server has already filtered the list, so we
-//     render as-is. When they're anonymous (link-mode session +
-//     'own' visibility), the server passes the full list and we
-//     filter client-side by localStorage reporter id.
+//     authenticated the server has already filtered the list. When
+//     they're anonymous (link-mode session + 'own' visibility),
+//     the server passes the full list and we filter client-side
+//     by localStorage reporter id.
 export function PublicSessionSubmissions({
     token,
-    parents,
+    groups,
     restrictToOwn = false,
     visitorIsAuthenticated = false,
 }: {
     token: string
-    parents: PublicParentRow[]
+    groups: PublicReporterGroup[]
     restrictToOwn?: boolean
     visitorIsAuthenticated?: boolean
 }) {
@@ -54,33 +63,41 @@ export function PublicSessionSubmissions({
         setHydrated(true)
     }, [])
 
-    const visibleParents = useMemo(() => {
-        if (!restrictToOwn) return parents
-        if (visitorIsAuthenticated) return parents // already server-filtered
+    const visibleGroups = useMemo(() => {
+        if (!restrictToOwn) return groups
+        if (visitorIsAuthenticated) return groups // already server-filtered
         if (!hydrated) return [] // avoid flashing other reporters
         if (!myReporterId) return []
         // Soft client-side filter for anonymous link-mode 'own' viewers.
-        // A parent stays if the parent OR any of its children matches
-        // the visitor — that way the full thread the user participated
-        // in is preserved. Children are pruned to only the visitor's
-        // own when this filter applies.
-        return parents
-            .map(({ parent, children }) => {
-                const parentMine = parent.public_reporter_id === myReporterId
-                const ownChildren = children.filter((c) => c.public_reporter_id === myReporterId)
-                if (!parentMine && ownChildren.length === 0) return null
-                return { parent, children: parentMine ? children : ownChildren }
+        // Within each group, keep parent rows where the parent OR any
+        // of its children matches the visitor; prune cross-reporter
+        // children when the parent isn't theirs. Empty groups drop out.
+        return groups
+            .map((g) => {
+                const rows = g.rows
+                    .map((r) => {
+                        const parentMine = r.parent.public_reporter_id === myReporterId
+                        const ownChildren = r.children.filter((c) => c.public_reporter_id === myReporterId)
+                        if (!parentMine && ownChildren.length === 0) return null
+                        return { parent: r.parent, children: parentMine ? r.children : ownChildren }
+                    })
+                    .filter((r): r is PublicParentRow => r !== null)
+                if (rows.length === 0) return null
+                return { ...g, rows }
             })
-            .filter((p): p is PublicParentRow => p !== null)
-    }, [parents, restrictToOwn, visitorIsAuthenticated, hydrated, myReporterId])
+            .filter((g): g is PublicReporterGroup => g !== null)
+    }, [groups, restrictToOwn, visitorIsAuthenticated, hydrated, myReporterId])
 
     const headingLabel = restrictToOwn ? "Your submissions" : "All submissions"
     const totalCount = useMemo(
-        () => visibleParents.reduce((n, p) => n + 1 + p.children.length, 0),
-        [visibleParents],
+        () => visibleGroups.reduce(
+            (n, g) => n + g.rows.reduce((m, r) => m + 1 + r.children.length, 0),
+            0,
+        ),
+        [visibleGroups],
     )
 
-    if (visibleParents.length === 0) {
+    if (visibleGroups.length === 0) {
         if (!restrictToOwn) return null
         return (
             <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-center text-[12.5px] text-[color:var(--c-text-muted)] sm:p-6">
@@ -95,28 +112,75 @@ export function PublicSessionSubmissions({
     }
 
     return (
-        <section className="flex flex-col gap-2.5">
+        <section className="flex flex-col gap-4">
             <header className="flex flex-wrap items-baseline justify-between gap-2 px-1">
                 <h2 className="text-[12px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
                     {headingLabel}
                 </h2>
                 <span className="text-[11.5px] tabular-nums text-[color:var(--c-text-dim)]">
-                    {totalCount} submission{totalCount === 1 ? "" : "s"}
+                    {restrictToOwn
+                        ? `${totalCount} submission${totalCount === 1 ? "" : "s"}`
+                        : `${totalCount} from ${visibleGroups.length} reporter${visibleGroups.length === 1 ? "" : "s"}`}
                 </span>
             </header>
 
+            <div className="flex flex-col gap-5">
+                {visibleGroups.map((g) => (
+                    <ReporterSection
+                        key={g.key}
+                        group={g}
+                        token={token}
+                        myReporterId={myReporterId}
+                        restrictToOwn={restrictToOwn}
+                    />
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function ReporterSection({
+    group, token, myReporterId, restrictToOwn,
+}: {
+    group: PublicReporterGroup
+    token: string
+    myReporterId: string
+    restrictToOwn: boolean
+}) {
+    const isMe = !!myReporterId && group.reporter_id === myReporterId
+    const issueCount = group.rows.reduce((n, r) => n + 1 + r.children.length, 0)
+    return (
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-1">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-bold text-white">
+                    {(group.display_name || "?").trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="truncate text-[13px] font-bold">
+                    {group.display_name}
+                </span>
+                {isMe && !restrictToOwn && (
+                    <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-800">
+                        You
+                    </span>
+                )}
+                <span className="grow" />
+                <span className="text-[11px] tabular-nums text-[color:var(--c-text-dim)]">
+                    {issueCount}
+                </span>
+            </div>
+
             <div className="flex flex-col gap-2">
-                {visibleParents.map(({ parent, children }) => (
+                {group.rows.map((row) => (
                     <ParentBlock
-                        key={parent.id}
-                        parent={parent}
-                        duplicates={children}
+                        key={row.parent.id}
+                        parent={row.parent}
+                        duplicates={row.children}
                         token={token}
                         myReporterId={myReporterId}
                     />
                 ))}
             </div>
-        </section>
+        </div>
     )
 }
 
@@ -140,7 +204,6 @@ function ParentBlock({
                 parent={parent}
                 duplicates={duplicates}
                 token={token}
-                myReporterId={myReporterId}
                 open={open}
                 onToggle={() => setOpen((o) => !o)}
             />
@@ -156,18 +219,15 @@ function ParentBlock({
 }
 
 function ParentRowCard({
-    parent, duplicates, token, myReporterId, open, onToggle,
+    parent, duplicates, token, open, onToggle,
 }: {
     parent: PublicListedIssue
     duplicates: PublicListedIssue[]
     token: string
-    myReporterId: string
     open: boolean
     onToggle: () => void
 }) {
     const hasChildren = duplicates.length > 0
-    const isMe = !!myReporterId && parent.public_reporter_id === myReporterId
-    const reporter = reporterDisplay(parent.public_reporter_id, parent.public_reporter_name)
 
     return (
         <div className="flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-white pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3">
@@ -212,8 +272,6 @@ function ParentRowCard({
                     <div className="mt-0.5 truncate text-[11px] text-[color:var(--c-text-dim)]">
                         <span className="font-semibold">{parent.project_name}</span>
                         {" · "}
-                        <span>{reporter}</span>
-                        {" · "}
                         <time dateTime={parent.created_at}>{shortTime(parent.created_at)}</time>
                     </div>
                 </div>
@@ -225,11 +283,6 @@ function ParentRowCard({
                             title={`${duplicates.length} duplicate${duplicates.length === 1 ? "" : "s"}`}
                         >
                             +{duplicates.length}
-                        </span>
-                    )}
-                    {isMe && (
-                        <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-800">
-                            You
                         </span>
                     )}
                     <span className="shrink-0">
@@ -248,8 +301,8 @@ function ChildRowCard({
     token: string
     myReporterId: string
 }) {
+    const childReporter = reporterDisplay(child.public_reporter_id, child.public_reporter_name)
     const isMe = !!myReporterId && child.public_reporter_id === myReporterId
-    const reporter = reporterDisplay(child.public_reporter_id, child.public_reporter_name)
 
     return (
         <Link
@@ -267,7 +320,10 @@ function ChildRowCard({
                     {child.title}
                 </div>
                 <div className="mt-0.5 truncate text-[10.5px] text-[color:var(--c-text-dim)]">
-                    <span>{reporter}</span>
+                    {/* Reporter name on the child card so cross-
+                        reporter duplicates (filed by someone other
+                        than the parent's reporter) are obvious. */}
+                    <span>{childReporter}</span>
                     {" · "}
                     <time dateTime={child.created_at}>{shortTime(child.created_at)}</time>
                 </div>
@@ -284,8 +340,8 @@ function ChildRowCard({
     )
 }
 
-// Compact "5m ago" / "yesterday" / locale fallback for the reporter
-// metadata row. Keeps the chip area lighter than a full timestamp.
+// Compact "5m ago" / "yesterday" / locale fallback for the
+// metadata row. Keeps the card lighter than a full timestamp.
 function shortTime(iso: string): string {
     const t = Date.parse(iso)
     if (Number.isNaN(t)) return ""
