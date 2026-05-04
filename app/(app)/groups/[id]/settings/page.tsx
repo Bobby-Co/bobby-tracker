@@ -1,15 +1,32 @@
+import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import type { ProjectGroup } from "@/lib/supabase/types"
 import { GroupManagePanel } from "@/components/group-manage-panel"
+import { GroupSettingsSkeleton } from "@/components/group-settings-skeleton"
 
 export const dynamic = "force-dynamic"
 
-// Settings tab: name / description / member CRUD / delete. Same
-// content as the original /groups/[id] page, just relocated under
-// the tabbed layout — the header is now owned by the layout, so
-// this page only renders the management panel itself.
-export default async function GroupSettingsPage({
+// Settings tab: name / description / member CRUD / delete. The
+// header is owned by the group layout, so this page only renders
+// the management panel itself.
+//
+// Sync shell wraps a streaming <Suspense> boundary so soft tab
+// switches paint the skeleton immediately instead of waiting on
+// the membership round-trip.
+export default function GroupSettingsPage({
+    params,
+}: {
+    params: Promise<{ id: string }>
+}) {
+    return (
+        <Suspense fallback={<GroupSettingsSkeleton />}>
+            <GroupSettingsContent params={params} />
+        </Suspense>
+    )
+}
+
+async function GroupSettingsContent({
     params,
 }: {
     params: Promise<{ id: string }>

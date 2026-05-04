@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
@@ -8,6 +9,7 @@ import { IssueFolderTile } from "@/components/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import { GroupAiComposeButton } from "@/components/group-ai-compose-button"
 import { GroupNewIssueButton } from "@/components/group-new-issue-button"
+import { GroupIssuesSkeleton } from "@/components/group-issues-skeleton"
 
 export const dynamic = "force-dynamic"
 
@@ -19,7 +21,26 @@ export const dynamic = "force-dynamic"
 //
 // Inside a project section, the duplicate-tree treatment carries
 // over: parents render as cards, children indent underneath.
-export default async function GroupIssuesPage({
+//
+// Sync shell wraps a streaming <Suspense> boundary so soft tab
+// switches (between Issues / Settings, or arriving here from the
+// /groups list) paint the skeleton immediately and only swap in
+// the real content once the cross-project issue query lands.
+export default function GroupIssuesPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ id: string }>
+    searchParams: Promise<{ view?: string }>
+}) {
+    return (
+        <Suspense fallback={<GroupIssuesSkeleton />}>
+            <GroupIssuesContent params={params} searchParams={searchParams} />
+        </Suspense>
+    )
+}
+
+async function GroupIssuesContent({
     params,
     searchParams,
 }: {

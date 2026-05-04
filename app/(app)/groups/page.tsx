@@ -1,7 +1,9 @@
+import { Suspense } from "react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import type { ProjectGroup } from "@/lib/supabase/types"
 import { NewGroupButton } from "@/components/new-group-button"
+import { GroupsListSkeleton } from "@/components/groups-list-skeleton"
 
 export const dynamic = "force-dynamic"
 
@@ -10,7 +12,19 @@ export const dynamic = "force-dynamic"
 // to the right project (or fan it across several) inside a multi-
 // repo product. From here owners create groups and drill into one
 // to manage members + compose group-aware issues.
-export default async function GroupsPage() {
+//
+// Sync shell wraps a streaming <Suspense> boundary so soft sidebar
+// clicks paint the skeleton instantly instead of stalling on the
+// Supabase round-trips.
+export default function GroupsPage() {
+    return (
+        <Suspense fallback={<GroupsListSkeleton />}>
+            <GroupsContent />
+        </Suspense>
+    )
+}
+
+async function GroupsContent() {
     const supabase = await createClient()
 
     const { data: groups } = await supabase
