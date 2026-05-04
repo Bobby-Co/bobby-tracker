@@ -2,7 +2,7 @@ import { jsonError, requireUser } from "@/lib/api"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
 import { createServiceClient } from "@/lib/supabase/server"
-import { embedText, issueEmbeddingText } from "@/lib/openai"
+import { embedText, issueEmbeddingText } from "@/lib/analyser"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
@@ -80,9 +80,9 @@ export async function POST(request: Request) {
 
 async function embedIssueAsync(issue: Pick<Issue, "id" | "title" | "body">) {
     try {
-        const vec = await embedText(issueEmbeddingText(issue))
+        const { vector } = await embedText(issueEmbeddingText(issue))
         const svc = createServiceClient()
-        await svc.from("issues").update({ embedding: vec }).eq("id", issue.id)
+        await svc.from("issues").update({ embedding: vector }).eq("id", issue.id)
     } catch {
         // Intentional: see above.
     }

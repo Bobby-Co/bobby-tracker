@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { OpenAIError, proposeIssue } from "@/lib/openai"
+import { AnalyserError, composeIssue } from "@/lib/analyser"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/issues/ai-compose
@@ -12,10 +12,9 @@ import type { Project } from "@/lib/supabase/types"
 // the compose flow is conversational; the user stays in control of
 // the final shape and the "is this a duplicate?" decision.
 //
-// Project ownership is enforced through the same RLS the rest of the
-// app uses: requireUser() gives us a cookie-bound supabase client,
-// and we look up the project under it before paying for an OpenAI
-// call. A non-owner gets a 404.
+// All AI inference happens in bobby-analyser (POST /issues/compose).
+// The tracker just enforces project ownership and forwards the
+// already-compressed images.
 export async function POST(request: Request) {
     const { supabase, error } = await requireUser()
     if (error) return error
@@ -28,7 +27,7 @@ export async function POST(request: Request) {
     const rawImages = Array.isArray(body?.images) ? body.images : []
     const images = rawImages
         .filter((x: unknown): x is string => typeof x === "string" && x.startsWith("data:image/"))
-        .slice(0, 6) // hard cap — token cost stays bounded even with detail:"low"
+        .slice(0, 6) // hard cap mirrored on the analyser side
 
     if (!project_id) return jsonError("bad_request", "project_id required", 400)
     if (!paragraph.trim() && images.length === 0) {
@@ -43,11 +42,10 @@ export async function POST(request: Request) {
     if (!project) return jsonError("not_found", "project not found", 404)
 
     try {
-        const proposal = await proposeIssue({ paragraph, images })
+        const proposal = await composeIssue({ paragraph, images })
         return Response.json({ proposal })
     } catch (e) {
-        if (e instanceof OpenAIError) return jsonError(e.code, e.message, e.status)
-        const message = e instanceof Error ? e.message : String(e)
-        return jsonError("ai_failed", message, 502)
+        if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
+        return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 }

@@ -114,6 +114,78 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
     return (await res.json()) as IssueAnalysis
 }
 
+// ─── /issues/compose (AI draft from paragraph + images) ───────────────────
+
+export type IssueComposePriority = "low" | "medium" | "high" | "urgent"
+export type IssueComposeConfidence = "low" | "medium" | "high"
+
+export interface IssueComposeProposal {
+    title:      string
+    body:       string
+    priority:   IssueComposePriority
+    labels:     string[]
+    confidence: IssueComposeConfidence
+    model:      string
+    duration_ms: number
+    usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
+}
+
+export interface IssueComposeInput {
+    paragraph: string
+    /** Each image must already be a `data:image/...;base64,…` URI
+     *  (compress on the client first via lib/image-compress.ts). */
+    images?: string[]
+}
+
+export async function composeIssue(input: IssueComposeInput): Promise<IssueComposeProposal> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/issues/compose`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ paragraph: input.paragraph, images: input.images ?? [] }),
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `compose failed: HTTP ${res.status}`, err.code || "compose_failed")
+    }
+    return (await res.json()) as IssueComposeProposal
+}
+
+// ─── /embeddings ──────────────────────────────────────────────────────────
+
+export interface EmbedResult {
+    vector:     number[]
+    dimensions: number
+    model:      string
+    usage: { prompt_tokens: number; total_tokens: number }
+}
+
+export async function embedText(text: string): Promise<EmbedResult> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ text }),
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `embed failed: HTTP ${res.status}`, err.code || "embed_failed")
+    }
+    return (await res.json()) as EmbedResult
+}
+
+// Compose the text we feed to the embedder. We concatenate title +
+// body so similarity reflects what the issue is *about*, not just
+// title overlap. Truncated to a generous slice to stay under the
+// embedding model's input window without a tokenizer.
+export function issueEmbeddingText(issue: { title: string; body: string }): string {
+    const body = (issue.body ?? "").trim()
+    const title = (issue.title ?? "").trim()
+    return `${title}\n\n${body}`.slice(0, 7500)
+}
+
 // ─── /verify (HTTP, request/response) ──────────────────────────────────────
 
 export interface VerifyBrokenCite {

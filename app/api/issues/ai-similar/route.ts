@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { OpenAIError, embedText, issueEmbeddingText } from "@/lib/openai"
+import { AnalyserError, embedText, issueEmbeddingText } from "@/lib/analyser"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/issues/ai-similar
@@ -8,12 +8,9 @@ import type { Project } from "@/lib/supabase/types"
 //
 // Returns up to N already-existing issues in the same project whose
 // stored embeddings are nearest (cosine) to the embedding of the
-// provided draft. Used by the AI composer to surface "looks like
-// you're filing #42" before the user hits Create.
-//
-// We embed the draft on every call instead of caching — cost is a
-// fraction of a cent per request and we don't want stale results if
-// the user edits the proposal before submitting.
+// provided draft. Embedding generation runs in bobby-analyser; the
+// nearest-neighbor query runs in Supabase via the find_similar_issues
+// RPC (migration 0014, pgvector + HNSW).
 export async function POST(request: Request) {
     const { supabase, error } = await requireUser()
     if (error) return error
@@ -33,7 +30,6 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "title or body required", 400)
     }
 
-    // Cheap ownership check before paying OpenAI for an embedding.
     const { data: project } = await supabase
         .from("projects")
         .select("id")
@@ -43,9 +39,10 @@ export async function POST(request: Request) {
 
     let vector: number[]
     try {
-        vector = await embedText(issueEmbeddingText({ title, body: issueBody }))
+        const embed = await embedText(issueEmbeddingText({ title, body: issueBody }))
+        vector = embed.vector
     } catch (e) {
-        if (e instanceof OpenAIError) return jsonError(e.code, e.message, e.status)
+        if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
