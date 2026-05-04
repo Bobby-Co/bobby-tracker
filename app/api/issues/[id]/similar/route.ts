@@ -27,6 +27,22 @@ import type { Issue } from "@/lib/supabase/types"
 // rate-limit / no API key) and won't retry on its own.
 const PENDING_WINDOW_MS = 30_000
 
+// Drop matches below this cosine similarity. text-embedding-3-small
+// pulls everything in the same project tightly together, so the
+// nearest-neighbor search will *always* return rows — sometimes at
+// 5–20% similarity, which the UI honestly reports as "match" and
+// confuses the user. 0.40 is the empirical floor where matches
+// start to be genuinely related rather than just same-domain.
+const MIN_SIMILARITY = 0.40
+
+interface SimilarRow {
+    id: string
+    issue_number: number
+    title: string
+    status: string
+    similarity: number
+}
+
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
@@ -48,7 +64,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
 
     if (emb) {
-        return Response.json({ similar: similar ?? [], pending: false, missing: false })
+        const filtered = ((similar ?? []) as SimilarRow[]).filter((r) => r.similarity >= MIN_SIMILARITY)
+        return Response.json({ similar: filtered, pending: false, missing: false })
     }
     // No embedding row. Decide pending vs missing based on age.
     // Treat unknown issue (RLS dropped it) as missing too — the

@@ -110,7 +110,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         })
     }
     ranked.sort((a, b) => b.similarity - a.similarity)
-    const top = ranked.slice(0, 5)
+    // Drop matches below the same floor the auth route uses.
+    // text-embedding-3-small pulls all public-session submissions in
+    // a project tightly together so the cosine top-K otherwise
+    // surfaces low-confidence rows that read as "0% match" to the
+    // submitter — confusing in a public-facing UI. See
+    // app/api/issues/[id]/similar/route.ts for the threshold rationale.
+    const MIN_SIMILARITY = 0.40
+    const top = ranked.filter((r) => r.similarity >= MIN_SIMILARITY).slice(0, 5)
 
     return Response.json({ similar: top, pending: false, missing: false })
 }
