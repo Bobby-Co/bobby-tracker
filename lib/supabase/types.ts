@@ -102,6 +102,20 @@ export interface ProjectAnalyser {
     last_health_report: unknown | null
     /** Timestamp of the verify run that wrote last_health_report. */
     last_health_check_at: string | null
+    /** Human-readable rollup of the project's stack, modules, and
+     * surfaces. Refreshed by bobby-analyser on every successful
+     * bootstrap / incremental update; powers the project-groups UI
+     * + AI compose's "which project does this issue belong to?"
+     * routing. Null until the first index. */
+    summary_markdown: string | null
+    /** 1536-dim vector from text-embedding-3-small over
+     *  summary_markdown. Used for cosine similarity against issue-
+     *  draft embeddings inside a project group. */
+    summary_embedding: number[] | null
+    /** Embedding model that produced summary_embedding. */
+    summary_model: string | null
+    /** When summary_markdown + summary_embedding were last refreshed. */
+    summary_updated_at: string | null
     updated_at: string
 }
 
