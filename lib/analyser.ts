@@ -118,6 +118,15 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
 
 export type IssueComposePriority = "low" | "medium" | "high" | "urgent"
 export type IssueComposeConfidence = "low" | "medium" | "high"
+/** Architecture boundary the issue sits at. The analyser chooses one
+ *  value from this controlled vocabulary; matched against the project
+ *  layer-tag pool by find_similar_projects. */
+export type IssueComposeLayer =
+    | "frontend" | "backend" | "api"
+    | "database" | "infra" | "mobile" | "shared"
+export type IssueComposeAction =
+    | "bug" | "feature" | "refactor" | "performance" | "security" | "test" | "docs"
+export type IssueComposeScope = "local" | "cross-repo" | "system-wide"
 
 export interface IssueComposeProposal {
     title:      string
@@ -131,6 +140,20 @@ export interface IssueComposeProposal {
      *  builds may omit this; callers should fall back to
      *  issueEmbeddingText(proposal) when it's missing or empty. */
     routing_summary?: string
+    /** Architecture boundary. Embedded and compared against the
+     *  project's layer-tag pool. Optional only because older analyser
+     *  builds omit it; new builds always set a value. */
+    layer?: IssueComposeLayer | string
+    /** Hierarchical "domain/subdomain" tags (e.g. "auth/login",
+     *  "billing/invoice"). 1-3 entries. Joined for the feature
+     *  embedding query. */
+    features?: string[]
+    /** What kind of work this is. Not currently used in routing
+     *  weights but surfaced for UI display + future filters. */
+    action?: IssueComposeAction | string
+    /** How wide the impact is. Hint for the routing UI to pre-select
+     *  multiple targets when scope = "cross-repo". */
+    scope?: IssueComposeScope | string
     model:      string
     duration_ms: number
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
@@ -202,6 +225,31 @@ export function routingEmbeddingText(proposal: IssueComposeProposal): string {
     const summary = (proposal.routing_summary ?? "").trim()
     if (summary) return summary.slice(0, 7500)
     return issueEmbeddingText({ title: proposal.title, body: proposal.body })
+}
+
+// Text we embed for the layer dimension of cross-project routing. The
+// analyser's `layer` is a controlled vocab string ("frontend", etc.);
+// when missing we use a stable empty-fallback that still produces a
+// usable vector — it just won't match anything specific in the
+// project's layer pool.
+export function layerEmbeddingText(proposal: IssueComposeProposal): string {
+    const layer = (proposal.layer ?? "").toString().trim()
+    return layer || "unspecified"
+}
+
+// Text we embed for the feature dimension. The analyser emits 1-3
+// hierarchical "domain/subdomain" tags; we join with newlines so the
+// embedding model treats each as a distinct phrase. Falls back to the
+// routing summary when the analyser didn't tag features — better than
+// embedding empty text.
+export function featureEmbeddingText(proposal: IssueComposeProposal): string {
+    const tags = (proposal.features ?? [])
+        .map((t) => (t ?? "").toString().trim())
+        .filter(Boolean)
+    if (tags.length > 0) return tags.join("\n")
+    const summary = (proposal.routing_summary ?? "").trim()
+    if (summary) return summary.slice(0, 1000)
+    return "unspecified"
 }
 
 // ─── /verify (HTTP, request/response) ──────────────────────────────────────

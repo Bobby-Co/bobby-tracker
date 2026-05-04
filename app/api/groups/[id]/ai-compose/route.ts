@@ -1,29 +1,33 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
+import {
+    AnalyserError, composeIssue, embedText,
+    routingEmbeddingText, layerEmbeddingText, featureEmbeddingText,
+} from "@/lib/analyser"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
 // POST /api/groups/[id]/ai-compose
 //
 // Body: { paragraph, images?: string[] }
 //
-// Two-step flow folded into one round-trip so the client gets back
-// everything it needs to render the routing UI:
+// Compose + route in one round-trip:
 //
-//   1. Forward the paragraph + images to bobby-analyser /issues/compose
-//      to get a structured draft (title / body / priority / labels).
-//   2. Embed the draft (title + body) via bobby-analyser /embeddings.
-//   3. Run tracker.find_similar_projects(embedding, group_member_ids,
-//      …) with the default per-facet weights from migration 0018
-//      (overview 25%, features 20%, stack 15%, modules 40%).
+//   1. Forward paragraph + images to bobby-analyser /issues/compose
+//      → structured draft (title/body/priority/labels) plus the
+//      routing fields the new tag system needs (layer, features,
+//      action, scope, routing_summary).
+//   2. Embed three query vectors in parallel:
+//        - routing_summary  → overview/stack/modules sims
+//        - layer text       → vs project_layer_tags pool
+//        - features text    → vs project_feature_tags pool
+//   3. tracker.find_similar_projects(routing, layer, feature,
+//      group_member_ids) with weights — layer + feature dominate at
+//      60% (30/30), modules 20%, overview/stack 10% each — so the
+//      cross-repo routing the old prose-blend kept missing actually
+//      lands.
 //
-// Returns the proposal alongside a ranking[]: each entry carries the
-// project id + name + the per-facet similarity breakdown so the
-// compose UI can both pre-select the best target and explain *why*.
-//
-// Nothing is persisted here — the user picks one or more target
-// projects in the UI and the issue gets created via the regular
-// POST /api/issues (per project) on confirm. That keeps the
-// analyser-readiness check + duplicate index fill in one place.
+// Returns proposal + ranking[]; each ranking row carries the per-
+// dimension breakdown so the UI can show which signal moved the
+// score.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
@@ -85,31 +89,42 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    // Step 2: embed the draft so we can score it against each project.
-    let queryVec: number[]
+    // Step 2: embed the three query vectors in parallel.
+    let routingVec: number[]
+    let layerVec: number[]
+    let featureVec: number[]
     try {
-        const embed = await embedText(routingEmbeddingText(proposal))
-        queryVec = embed.vector
+        const [routing, layer, feature] = await Promise.all([
+            embedText(routingEmbeddingText(proposal)),
+            embedText(layerEmbeddingText(proposal)),
+            embedText(featureEmbeddingText(proposal)),
+        ])
+        routingVec = routing.vector
+        layerVec   = layer.vector
+        featureVec = feature.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    // Step 3: weighted facet similarity. Defaults match migration 0018:
-    // modules 40%, overview 25%, features 20%, stack 15%.
+    // Step 3: weighted similarity. Defaults match migration 0021:
+    // layer 30%, feature 30%, modules 20%, overview 10%, stack 10%.
     interface RankRow {
-        project_id: string
-        similarity: number
+        project_id:   string
+        similarity:   number
+        layer_sim:    number | null
+        feature_sim:  number | null
         overview_sim: number | null
-        features_sim: number | null
         stack_sim:    number | null
         modules_sim:  number | null
     }
     const { data: ranked, error: rpcErr } = await supabase
         .rpc("find_similar_projects", {
-            p_embedding:   queryVec,
-            p_project_ids: projectIds,
-            p_limit:       projectIds.length,
+            p_routing_embedding: routingVec,
+            p_layer_embedding:   layerVec,
+            p_feature_embedding: featureVec,
+            p_project_ids:       projectIds,
+            p_limit:             projectIds.length,
         })
     if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
 
@@ -117,22 +132,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     for (const r of (ranked as RankRow[] | null) ?? []) {
         rankByProject.set(r.project_id, r)
     }
-    // Project order: ranked first, then any unranked (no summary yet)
-    // appended in alphabetical order so they're still selectable.
     const ranking = members
         .map((m) => {
             const score = rankByProject.get(m.id)
+            const hasAnyDimension = !!score && (
+                (score.layer_sim ?? 0) > 0 ||
+                (score.feature_sim ?? 0) > 0 ||
+                (score.overview_sim ?? 0) > 0 ||
+                (score.stack_sim ?? 0) > 0 ||
+                (score.modules_sim ?? 0) > 0
+            )
             return {
                 project_id:     m.id,
                 project_name:   m.name,
                 analyser_ready: m.analyser_ready,
-                has_summary:    !!score,
+                has_summary:    hasAnyDimension,
                 similarity:     score?.similarity ?? 0,
                 breakdown: score ? {
-                    overview: score.overview_sim,
-                    features: score.features_sim,
-                    stack:    score.stack_sim,
+                    layer:    score.layer_sim,
+                    feature:  score.feature_sim,
                     modules:  score.modules_sim,
+                    overview: score.overview_sim,
+                    stack:    score.stack_sim,
                 } : null,
             }
         })

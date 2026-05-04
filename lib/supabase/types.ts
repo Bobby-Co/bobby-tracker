@@ -109,18 +109,42 @@ export interface ProjectAnalyser {
      * routing. Null until the first index. */
     summary_markdown: string | null
     /** Per-facet 1536-dim embeddings used by find_similar_projects.
-     *  Each chunk is embedded independently so AI compose can weight
-     *  the facets (modules + overview > stack) when routing an issue
-     *  to a project inside a group. */
+     *  Overview / stack / modules stay as single prose vectors; the
+     *  layer + feature dimensions are tag pools (see ProjectLayerTag /
+     *  ProjectFeatureTag) embedded one-tag-per-row so issue compose
+     *  can score "any close match in this project's pool?" rather
+     *  than collapsing everything into one prose embedding. */
     summary_overview_embedding: number[] | null
-    summary_features_embedding: number[] | null
     summary_stack_embedding:    number[] | null
     summary_modules_embedding:  number[] | null
-    /** Embedding model that produced the four facet vectors. */
+    /** Embedding model that produced the facet vectors. */
     summary_model: string | null
     /** When summary_markdown + the embeddings were last refreshed. */
     summary_updated_at: string | null
     updated_at: string
+}
+
+// Per-project routing tag pools, written by bobby-analyser via the
+// `replace_project_tags` RPC after each successful index. Layer is a
+// short controlled vocabulary (frontend / backend / api / database /
+// infra / mobile / shared); feature is hierarchical free-form
+// ("auth/login", "billing/invoice"). Each row carries its own
+// embedding so find_similar_projects can score "max cosine to any
+// tag" rather than blending all tags into one vector.
+export interface ProjectLayerTag {
+    id: string
+    project_id: string
+    tag: string
+    embedding: number[]
+    created_at: string
+}
+
+export interface ProjectFeatureTag {
+    id: string
+    project_id: string
+    tag: string
+    embedding: number[]
+    created_at: string
 }
 
 export interface IssueFinding {

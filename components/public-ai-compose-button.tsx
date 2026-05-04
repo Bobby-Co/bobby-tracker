@@ -17,10 +17,11 @@ interface RankedProject {
     has_summary: boolean
     similarity: number
     breakdown: {
-        overview: number | null
-        features: number | null
-        stack:    number | null
+        layer:    number | null
+        feature:  number | null
         modules:  number | null
+        overview: number | null
+        stack:    number | null
     } | null
 }
 
@@ -503,10 +504,11 @@ function RoutingPanel({
                                     </div>
                                     {r.breakdown && (
                                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-[color:var(--c-text-dim)]">
-                                            <Facet label="modules" value={r.breakdown.modules} />
+                                            <Facet label="layer"    value={r.breakdown.layer} />
+                                            <Facet label="feature"  value={r.breakdown.feature} />
+                                            <Facet label="modules"  value={r.breakdown.modules} />
                                             <Facet label="overview" value={r.breakdown.overview} />
-                                            <Facet label="features" value={r.breakdown.features} />
-                                            <Facet label="stack" value={r.breakdown.stack} />
+                                            <Facet label="stack"    value={r.breakdown.stack} />
                                         </div>
                                     )}
                                 </div>
