@@ -50,7 +50,8 @@ export default async function ProjectsPage() {
                         One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
                     </p>
                 </div>
-                <div className="self-start sm:self-auto">
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <NewGroupButton projects={allProjectsForPicker} />
                     <NewProjectButton />
                 </div>
             </header>
@@ -58,8 +59,9 @@ export default async function ProjectsPage() {
             {/* Groups strip — placed above the projects grid so the
                 cross-project surface (AI routing across a multi-repo
                 product) is discoverable from the page that owns the
-                repos themselves. Empty state is a small dashed CTA
-                rather than a full panel so it doesn't dominate. */}
+                repos themselves. The create button lives in the page
+                header beside "New project" so the two CTAs sit
+                together; this section just lists existing groups. */}
             <section className="flex flex-col gap-2">
                 <div className="flex items-end justify-between gap-3">
                     <div className="min-w-0">
@@ -68,7 +70,6 @@ export default async function ProjectsPage() {
                             Bundle related projects so AI compose can route an issue to the best match.
                         </p>
                     </div>
-                    <NewGroupButton projects={allProjectsForPicker} />
                 </div>
                 {groupList.length === 0 ? (
                     <div className="rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
