@@ -17,6 +17,7 @@ interface SidebarProps {
 export function SidebarContent({ projects, activeProjectId, onNavigate }: SidebarProps) {
     const pathname = usePathname()
     const isInbox = pathname === "/projects"
+    const isGroups = pathname === "/groups" || pathname.startsWith("/groups/")
     const isSessions = pathname === "/sessions" || pathname.startsWith("/sessions/")
 
     return (
@@ -44,6 +45,24 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                     Projects
                 </span>
                 <span className="text-[11px] tabular-nums text-[color:var(--c-text-dim)]">{projects.length}</span>
+            </Link>
+
+            <Link
+                href="/groups"
+                onClick={onNavigate}
+                className={cn(
+                    "flex items-center justify-between rounded-[10px] px-3 py-2 text-sm font-medium transition-colors",
+                    isGroups
+                        ? "bg-zinc-100 text-zinc-900"
+                        : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                )}
+            >
+                <span className="inline-flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M3 7h7l1.5 2H21v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+                    </svg>
+                    Groups
+                </span>
             </Link>
 
             <Link

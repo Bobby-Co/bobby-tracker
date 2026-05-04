@@ -212,3 +212,22 @@ export interface PublicSessionProject {
 export interface PublicSessionWithProjects extends PublicSession {
     projects: { id: string; name: string }[]
 }
+
+/** A user-defined collection of related projects. Powers the AI
+ *  compose flow's "which project does this issue belong to?"
+ *  routing — see find_similar_projects RPC + migration 0019. */
+export interface ProjectGroup {
+    id: string
+    user_id: string
+    name: string
+    description: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** Convenience shape for the management UI: a group plus the
+ *  flattened list of projects it covers (joined via
+ *  project_group_members). */
+export interface ProjectGroupWithMembers extends ProjectGroup {
+    members: { id: string; name: string; has_summary: boolean }[]
+}
