@@ -48,12 +48,23 @@ export function SimilarIssuesCard({
     duplicateOfIssueId?: string | null
 }) {
     const [similar, setSimilar] = useState<SimilarIssue[] | null>(null)
-    const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+    // "missing" — the embedding row never showed up after the
+    // backoff window ran out. Most likely an issue created before
+    // the embedding pipeline existed; we surface that state to the
+    // user instead of silently rendering nothing or spinning forever.
+    const [status, setStatus] = useState<"loading" | "ready" | "error" | "missing">("loading")
     const [marking, setMarking] = useState<string | null>(null)
     const [markErr, setMarkErr] = useState<string | null>(null)
 
     useEffect(() => {
-        if (duplicateOfIssueId) { setStatus("ready"); return }
+        if (duplicateOfIssueId) {
+            // Already a known duplicate — no lookup needed; we render
+            // the banner short-circuit above. Setting status here is
+            // the cleanup path for the polling effect.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setStatus("ready")
+            return
+        }
         let cancelled = false
 
         // Poll: 0s, 1.5s, 4s, 8s. The embedder usually finishes in
@@ -81,12 +92,16 @@ export function SimilarIssuesCard({
                     return
                 }
                 // Embedding not ready yet → schedule next attempt.
+                // Once the backoff window is exhausted, treat it as
+                // "missing" — the issue was likely created before
+                // the embedding pipeline existed, so we'd otherwise
+                // poll forever.
                 attempt += 1
                 if (attempt < delays.length) {
                     setTimeout(tick, delays[attempt])
                 } else {
                     setSimilar([])
-                    setStatus("ready")
+                    setStatus("missing")
                 }
             } catch {
                 if (!cancelled) setStatus("error")
@@ -151,6 +166,17 @@ export function SimilarIssuesCard({
         return (
             <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <Spinner /> Looking for similar issues…
+            </section>
+        )
+    }
+    if (status === "missing") {
+        // Old issue, never embedded. Tell the user explicitly so
+        // they don't wonder whether the lookup is just slow or
+        // whether there genuinely are no similar issues.
+        return (
+            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                <span className="font-semibold text-[color:var(--c-text)]">Similarity check unavailable.</span>{" "}
+                This issue was filed before similarity indexing was added, so we can&apos;t suggest related issues for it yet.
             </section>
         )
     }
