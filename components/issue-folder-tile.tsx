@@ -36,8 +36,20 @@ export function IssueFolderTile({
 
     return (
         <>
+            {/*
+                Wrapper visually stitches the parent tile + the
+                amber footer into one folder element:
+                  - [&_.card]:rounded-b-none flattens the inner tile's
+                    bottom corners so the footer can dock under them.
+                  - [&_.card-stack:hover]:!transform-none suppresses
+                    IssueTile's own hover lift, so the lift only
+                    happens once at the wrapper level — that way the
+                    footer rises in sync with the tile body.
+                  - The wrapper itself lifts on :hover (fires for any
+                    descendant hover) so card + footer move together.
+            */}
             <div
-                className="relative anim-rise"
+                className="relative anim-rise transition-transform hover:-translate-y-px [&_.card]:rounded-b-none [&_.card-stack:hover]:!transform-none"
                 style={index != null ? ({ ["--i" as string]: index } as React.CSSProperties) : undefined}
             >
                 {/* Two paper layers behind the real tile. They're
@@ -58,14 +70,17 @@ export function IssueFolderTile({
                     with the wrapper's. */}
                 <IssueTile issue={parent} projectId={projectId} index={0} />
 
-                {/* Folder footer. Sits visually attached to the tile,
-                    but is its own button so clicking it doesn't
-                    navigate to the parent issue. */}
+                {/* Folder footer, docked to the tile's bottom edge:
+                    border-t-0 + matching border colour avoid a double
+                    line where they meet, rounded-b-[16px] mirrors the
+                    tile's original radius. Outside the IssueTile's
+                    Link so it can be its own click target without
+                    nesting a button inside an <a>. */}
                 <button
                     type="button"
                     onClick={() => setOpen(true)}
                     aria-label={`Show ${count} duplicate${count === 1 ? "" : "s"}`}
-                    className="mt-1.5 flex w-full items-center justify-between gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11.5px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+                    className="flex w-full items-center justify-between gap-2 rounded-b-[16px] border border-t-0 border-[color:var(--c-border)] bg-amber-50 px-3 py-2 text-[11.5px] font-semibold text-amber-900 transition-colors hover:bg-amber-100"
                 >
                     <span className="inline-flex items-center gap-1.5">
                         <FolderIcon />
