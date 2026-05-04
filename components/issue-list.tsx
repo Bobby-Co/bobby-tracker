@@ -55,7 +55,11 @@ function ParentBlock({
     projectId: string
     muted?: boolean
 }) {
-    const [open, setOpen] = useState(false)
+    // Expand the duplicates subtree by default — the user already
+    // chose to navigate to the issues list, surfacing the related
+    // duplicates without an extra click is the more useful default.
+    // Toggle stays so users can collapse a noisy parent.
+    const [open, setOpen] = useState(true)
     const hasChildren = duplicates.length > 0
 
     return (

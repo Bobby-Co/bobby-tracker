@@ -52,17 +52,19 @@ export function IssueFolderTile({
                 className="relative anim-rise transition-transform hover:-translate-y-px [&_.card]:rounded-b-none [&_.card-stack:hover]:!transform-none"
                 style={index != null ? ({ ["--i" as string]: index } as React.CSSProperties) : undefined}
             >
-                {/* Two paper layers behind the real tile. They're
-                    purely decorative and visually peek out the bottom
-                    + right edges to suggest a stack. Inert so they
-                    don't catch hover / focus. */}
+                {/* Two paper layers behind the real tile, offset
+                    down + right so the corners always peek out and
+                    the cell reads as a folder at rest — not just on
+                    hover. Inert so they don't catch focus / clicks.
+                    Borders use border-strong + a bit more shadow so
+                    they don't disappear against page backgrounds. */}
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-2 top-2 bottom-[-6px] -z-10 rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                    className="pointer-events-none absolute left-[6px] right-[-6px] top-[6px] bottom-[-6px] -z-10 rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.10)]"
                 />
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute inset-x-1 top-1 bottom-[-3px] -z-10 rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+                    className="pointer-events-none absolute left-[3px] right-[-3px] top-[3px] bottom-[-3px] -z-10 rounded-[16px] border border-[color:var(--c-border-strong)] bg-white shadow-[0_2px_6px_-2px_rgba(15,23,42,0.08)]"
                 />
 
                 {/* Parent tile renders normally — index passed as 0
