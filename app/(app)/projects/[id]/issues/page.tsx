@@ -96,7 +96,7 @@ export default async function IssuesPage({
                     )}
                 </p>
                 <div className="flex items-center gap-2">
-                    <IssuesViewToggle active={view} />
+                    <IssuesViewToggle active={view} projectId={id} />
                     <AiComposeButton
                         projectId={id}
                         disabled={!ready}
