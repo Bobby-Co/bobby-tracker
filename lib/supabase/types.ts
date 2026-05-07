@@ -36,6 +36,38 @@ export interface Issue {
      *  issue at create-time. The original is still persisted (we
      *  never drop user reports), but UIs treat it as a satellite. */
     duplicate_of_issue_id: string | null
+    /** When the issue is scheduled on the planning timeline. Null
+     *  means "unscheduled" — the issue lives in the tray below the
+     *  canvas until dragged onto it. */
+    starts_at: string | null
+    ends_at:   string | null
+    /** Vertical position on the timeline as a fraction of canvas
+     *  height (0..1). Null = unscheduled. We store fractional rather
+     *  than pixels so the layout survives across screen sizes. */
+    lane_y:    number | null
+    /** Optional per-issue colour override (#rrggbb). Null falls back
+     *  to the project's status palette. */
+    color:     string | null
+    created_at: string
+    updated_at: string
+}
+
+/** Per-project status→colour map. Falls back to the UI defaults
+ *  (see lib/timeline/colors.ts) when a row is missing. */
+export interface ProjectStatusColor {
+    project_id: string
+    status: IssueStatus
+    color: string
+    updated_at: string
+}
+
+/** Per-project label→icon map. Required before a label can render
+ *  on the planning timeline. */
+export interface ProjectLabelIcon {
+    project_id: string
+    label: string
+    icon_name: string
+    color: string | null
     created_at: string
     updated_at: string
 }
