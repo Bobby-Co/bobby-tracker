@@ -13,12 +13,25 @@ const PALETTE = [
     "#ec4899", // pink
 ]
 
+// Same label → same colour, every time, anywhere. We normalise the
+// input (trim + lowercase) so casing or stray whitespace doesn't
+// shift the slot, then hash with FNV-1a 32-bit. FNV-1a beats the
+// older `hash * 31` loop on short similar strings ("auth" vs
+// "auths" no longer collide / fall on adjacent slots).
 export function defaultLabelColor(label: string): string {
-    let hash = 0
-    for (let i = 0; i < label.length; i++) {
-        hash = (hash * 31 + label.charCodeAt(i)) | 0
+    return PALETTE[fnv1a32(label.trim().toLowerCase()) % PALETTE.length]
+}
+
+function fnv1a32(s: string): number {
+    let hash = 0x811c9dc5
+    for (let i = 0; i < s.length; i++) {
+        hash ^= s.charCodeAt(i)
+        // Math.imul keeps the multiply 32-bit-safe — without it,
+        // numeric precision frays past ~2^53 and the hash drifts
+        // off-spec.
+        hash = Math.imul(hash, 0x01000193)
     }
-    return PALETTE[Math.abs(hash) % PALETTE.length]
+    return hash >>> 0
 }
 
 export const LABEL_COLOR_PALETTE: readonly string[] = PALETTE

@@ -1,6 +1,11 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { findIcon } from "@/lib/iconly"
+import { ICONLY_NAMES } from "@/lib/iconly-catalog"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"
+
+function isKnownIconName(name: string): boolean {
+    return ICONLY_NAMES.has(name) || !!findIcon(name)
+}
 
 // GET /api/projects/[id]/label-icons — full map for this project.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +36,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const label = typeof body.label === "string" ? body.label.trim() : ""
     const icon_name = typeof body.icon_name === "string" ? body.icon_name.trim() : ""
     if (!label) return jsonError("bad_request", "label required", 400)
-    if (!findIcon(icon_name)) return jsonError("bad_request", "unknown icon_name", 400)
+    if (!isKnownIconName(icon_name)) return jsonError("bad_request", "unknown icon_name", 400)
 
     let color: string | null = null
     if ("color" in body) {

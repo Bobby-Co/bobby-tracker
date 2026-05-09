@@ -1,0 +1,205 @@
+// Codegen for lib/iconly-catalog.ts.
+//
+// Scans icons/Iconly-<slug>-icon.tsx, extracts the single named
+// export from each file, and emits a registry mapping the
+// canonical kebab-case `<slug>` to a lazy component loader plus a
+// list of search tags.
+//
+// Tag source order:
+//   1. lib/iconly-tags.json — LLM-generated description + tags from
+//      scripts/label-icons.ts. Used when available.
+//   2. Slug words — fallback when no LLM entry exists yet.
+//
+// Re-run after adding/renaming/removing icons OR after re-running
+// the labeller:
+//   bun scripts/build-iconly-catalog.ts
+
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+
+const ICONS_DIR = join(__dirname, "..", "icons")
+const TAGS_FILE = join(__dirname, "..", "lib", "iconly-tags.json")
+const OUT_FILE = join(__dirname, "..", "lib", "iconly-catalog.ts")
+
+interface TagEntry {
+    name: string
+    /** 0-1; how strongly this tag describes the icon. Slug-derived
+     *  tags (no LLM labels yet) default to 1.0 since the slug is
+     *  by definition exact. */
+    confidence: number
+}
+
+interface CatalogEntry {
+    name: string
+    fileBase: string // file name without .tsx
+    exportName: string
+    tags: TagEntry[]
+    description: string | null
+}
+
+// Loose shape for entries from lib/iconly-tags.json — older
+// runs wrote string[] for tags, the new labeller writes
+// {name, confidence}[]. Accept both.
+interface RawLabelEntry {
+    description: string
+    tags?: unknown
+}
+
+function loadLabels(): Record<string, RawLabelEntry> {
+    if (!existsSync(TAGS_FILE)) return {}
+    try {
+        return JSON.parse(readFileSync(TAGS_FILE, "utf8")) as Record<string, RawLabelEntry>
+    } catch {
+        return {}
+    }
+}
+
+function tagsFromLabel(raw: unknown): TagEntry[] {
+    if (!Array.isArray(raw)) return []
+    const out: TagEntry[] = []
+    const seen = new Set<string>()
+    for (const item of raw) {
+        if (typeof item === "string") {
+            // Pre-confidence schema. Accept and treat as solidly
+            // associated (0.8) — they were generated against the
+            // descriptive prompt, before software-context tags
+            // diluted the set.
+            const name = item.trim().toLowerCase()
+            if (!name || seen.has(name)) continue
+            seen.add(name)
+            out.push({ name, confidence: 0.8 })
+            continue
+        }
+        if (item && typeof item === "object") {
+            const obj = item as Record<string, unknown>
+            const name = typeof obj.name === "string" ? obj.name.trim().toLowerCase() : ""
+            if (!name || seen.has(name)) continue
+            seen.add(name)
+            const conf = typeof obj.confidence === "number" ? obj.confidence : 0.6
+            out.push({ name, confidence: Math.max(0, Math.min(1, conf)) })
+        }
+    }
+    return out
+}
+
+function slugFromFile(file: string): string {
+    // "Iconly-add-user-icon.tsx" -> "add-user"
+    const m = file.match(/^Iconly-(.+)-icon\.tsx$/)
+    if (!m) throw new Error(`unexpected icon filename: ${file}`)
+    return m[1]
+}
+
+function exportNameFromSource(src: string, file: string): string {
+    const m = src.match(/export const (Iconly[A-Za-z0-9_]+)\s*=/)
+    if (!m) throw new Error(`no Iconly* export found in ${file}`)
+    return m[1]
+}
+
+function tagsFromSlug(slug: string): TagEntry[] {
+    // Split on dashes, drop empties + pure-number trailing parts
+    // (Iconly ships duplicates like "weight-1"). Confidence 1.0
+    // because by construction the slug exactly names the icon.
+    return slug
+        .split("-")
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.length > 0 && !/^\d+$/.test(s))
+        .map((name) => ({ name, confidence: 1 }))
+}
+
+function main() {
+    const labels = loadLabels()
+
+    const files = readdirSync(ICONS_DIR)
+        .filter((f) => f.endsWith(".tsx") && f.startsWith("Iconly-"))
+        .sort()
+
+    const seen = new Set<string>()
+    const entries: CatalogEntry[] = []
+    for (const file of files) {
+        const slug = slugFromFile(file)
+        if (seen.has(slug)) {
+            throw new Error(`duplicate slug ${slug} (file ${file})`)
+        }
+        seen.add(slug)
+        const src = readFileSync(join(ICONS_DIR, file), "utf8")
+        const exportName = exportNameFromSource(src, file)
+        const label = labels[slug]
+        const labelTags = label ? tagsFromLabel(label.tags) : []
+        entries.push({
+            name: slug,
+            fileBase: file.replace(/\.tsx$/, ""),
+            exportName,
+            tags: labelTags.length > 0 ? labelTags : tagsFromSlug(slug),
+            description: label?.description ?? null,
+        })
+    }
+    const labelled = entries.filter((e) => e.description !== null).length
+
+    // Emit two artifacts in one file:
+    //   - ICONLY_CATALOG: metadata for picker + search
+    //   - ICONLY_LOADERS: lazy importers keyed by slug
+    const lines: string[] = []
+    lines.push(`// AUTO-GENERATED by scripts/build-iconly-catalog.ts. Do not edit by hand.`)
+    lines.push(`// Re-run with: bun scripts/build-iconly-catalog.ts`)
+    lines.push(``)
+    lines.push(`import type { ComponentType } from "react"`)
+    lines.push(``)
+    lines.push(`export interface IconlyComponentProps {`)
+    lines.push(`    size?: number`)
+    lines.push(`    color?: string`)
+    lines.push(`    secondColor?: string`)
+    lines.push(`}`)
+    lines.push(``)
+    lines.push(`export interface IconlyTag {`)
+    lines.push(`    /** lowercase keyword or short phrase. */`)
+    lines.push(`    name: string`)
+    lines.push(`    /** 0-1 — how strongly this tag describes the icon.`)
+    lines.push(`     *  Used by the local picker filter to rank substring matches`)
+    lines.push(`     *  and by scripts/embed-icons.ts to weight embedding text. */`)
+    lines.push(`    confidence: number`)
+    lines.push(`}`)
+    lines.push(``)
+    lines.push(`export interface IconlyCatalogEntry {`)
+    lines.push(`    /** kebab-case canonical name, stored in DB. */`)
+    lines.push(`    name: string`)
+    lines.push(`    /** Search keywords with per-tag confidence. From`)
+    lines.push(`     *  scripts/label-icons.ts when available; otherwise the`)
+    lines.push(`     *  slug words at confidence 1.0. */`)
+    lines.push(`    tags: IconlyTag[]`)
+    lines.push(`    /** Short description from scripts/label-icons.ts, if generated. */`)
+    lines.push(`    description: string | null`)
+    lines.push(`}`)
+    lines.push(``)
+    lines.push(`export const ICONLY_CATALOG: IconlyCatalogEntry[] = [`)
+    for (const e of entries) {
+        const tagsLit = JSON.stringify(e.tags)
+        const descLit = e.description === null ? "null" : JSON.stringify(e.description)
+        lines.push(
+            `    { name: ${JSON.stringify(e.name)}, tags: ${tagsLit}, description: ${descLit} },`,
+        )
+    }
+    lines.push(`]`)
+    lines.push(``)
+    lines.push(`/** Lazy loaders keyed by canonical slug. Each loader resolves to a`)
+    lines.push(` *  module exposing { default } so it plugs straight into React.lazy. */`)
+    lines.push(`export const ICONLY_LOADERS: Record<`)
+    lines.push(`    string,`)
+    lines.push(`    () => Promise<{ default: ComponentType<IconlyComponentProps> }>`)
+    lines.push(`> = {`)
+    for (const e of entries) {
+        lines.push(
+            `    ${JSON.stringify(e.name)}: () => import(${JSON.stringify(`@/icons/${e.fileBase}`)}).then((m) => ({ default: m.${e.exportName} })),`,
+        )
+    }
+    lines.push(`}`)
+    lines.push(``)
+    lines.push(`export const ICONLY_NAMES: ReadonlySet<string> = new Set(ICONLY_CATALOG.map((i) => i.name))`)
+    lines.push(``)
+
+    writeFileSync(OUT_FILE, lines.join("\n"))
+    console.log(
+        `wrote ${OUT_FILE} with ${entries.length} icons (${labelled} with LLM labels)`,
+    )
+}
+
+main()
