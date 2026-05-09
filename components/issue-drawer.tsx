@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { cn } from "@/components/cn"
 import { IconlyIcon } from "@/components/iconly-icon"
 import { defaultLabelColor, softLabelChipStyle } from "@/lib/timeline/labels"
@@ -213,9 +215,11 @@ function DrawerBody({
 
             <div className="min-h-0 flex-1 overflow-y-auto px-7 pt-5 pb-32">
                 {issue.body && (
-                    <p className="whitespace-pre-wrap break-words text-[13.5px] leading-6 text-[color:var(--c-text)]">
-                        {issue.body}
-                    </p>
+                    <div className="prose-tracker text-[13.5px] leading-6 text-[color:var(--c-text)]">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {issue.body}
+                        </ReactMarkdown>
+                    </div>
                 )}
 
                 <SimilarityCard issue={issue} />

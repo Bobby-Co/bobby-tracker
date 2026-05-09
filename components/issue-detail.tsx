@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type {
     Issue,
@@ -129,14 +131,16 @@ export function IssueDetail({
                                 </button>
                             </div>
                         </div>
+                    ) : body ? (
+                        <div className="prose-tracker text-[13px] leading-6 text-[color:var(--c-text)]">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {body}
+                            </ReactMarkdown>
+                        </div>
                     ) : (
-                        <pre className="whitespace-pre-wrap break-words font-sans text-[13px] leading-6 text-[color:var(--c-text)]">
-                            {body || (
-                                <span className="italic text-[color:var(--c-text-dim)]">
-                                    No description yet.
-                                </span>
-                            )}
-                        </pre>
+                        <p className="text-[13px] italic leading-6 text-[color:var(--c-text-dim)]">
+                            No description yet.
+                        </p>
                     )}
                 </section>
             </article>
