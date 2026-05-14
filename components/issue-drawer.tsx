@@ -370,42 +370,98 @@ function AnalyserCard({
                 </div>
             )}
 
-            <CopyFixPromptButton issueId={issueId} hasAnalysis={!!suggestion} />
+            <CopyFixPromptButton
+                issueId={issueId}
+                prompt={suggestion?.data?.fix_prompt ?? null}
+                hasAnalysis={!!suggestion}
+            />
         </section>
     )
 }
 
 type CopyState = "idle" | "loading" | "copied" | "error"
 
-// CopyFixPromptButton — fetches /api/issues/[id]/fix-prompt, copies
-// the composed markdown to the clipboard, and cycles through visual
-// states (idle → loading → copied → idle). The button bundles the
-// project's stack rollup, the issue body, and the cached analyser
-// findings into one paste-ready prompt for an external coding AI.
+// CopyFixPromptButton — copies the analyser's pre-baked "fix this
+// issue" prompt (data.fix_prompt) to the clipboard. The prompt is
+// composed at /api/issues/[id]/suggest time so the click handler
+// can call writeText synchronously — Safari/Firefox both revoke the
+// user-gesture token across an awaited fetch, which used to make
+// this fail intermittently.
+//
+// Legacy rows (analysed before fix_prompt was added) fall back to
+// fetching /api/issues/[id]/fix-prompt; we accept the occasional
+// gesture-loss there because re-running the analyser would rewrite
+// the row with a baked prompt anyway.
 function CopyFixPromptButton({
     issueId,
+    prompt,
     hasAnalysis,
 }: {
     issueId: string
+    prompt: string | null
     hasAnalysis: boolean
 }) {
     const [state, setState] = useState<CopyState>("idle")
     const [meta, setMeta] = useState<{ chars: number } | null>(null)
 
+    function flash(next: CopyState, ms: number) {
+        setState(next)
+        setTimeout(() => setState("idle"), ms)
+    }
+
+    async function writeToClipboard(text: string): Promise<boolean> {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text)
+                return true
+            }
+        } catch {
+            // fall through to legacy path
+        }
+        // Legacy fallback for non-secure contexts (rare in dev/prod
+        // here, but cheap insurance): a hidden textarea + execCommand.
+        try {
+            const ta = document.createElement("textarea")
+            ta.value = text
+            ta.style.position = "fixed"
+            ta.style.opacity = "0"
+            document.body.appendChild(ta)
+            ta.select()
+            const ok = document.execCommand("copy")
+            document.body.removeChild(ta)
+            return ok
+        } catch {
+            return false
+        }
+    }
+
     async function run() {
         if (state === "loading") return
+        // Fast path: prompt is already on the client. Copy
+        // synchronously inside the click handler so the user-gesture
+        // is still alive when writeText runs.
+        if (prompt) {
+            const ok = await writeToClipboard(prompt)
+            if (ok) {
+                setMeta({ chars: prompt.length })
+                flash("copied", 1800)
+            } else {
+                flash("error", 2200)
+            }
+            return
+        }
+        // Slow path (legacy rows): fetch, then copy.
         setState("loading")
         try {
             const res = await fetch(`/api/issues/${issueId}/fix-prompt`)
             if (!res.ok) throw new Error("fetch failed")
             const j = (await res.json()) as { prompt: string }
-            await navigator.clipboard.writeText(j.prompt)
+            const ok = await writeToClipboard(j.prompt)
+            if (!ok) throw new Error("clipboard rejected")
             setMeta({ chars: j.prompt.length })
-            setState("copied")
-            setTimeout(() => setState("idle"), 1800)
+            flash("copied", 1800)
         } catch {
-            setState("error")
-            setTimeout(() => setState("idle"), 2200)
+            flash("error", 2200)
         }
     }
 
@@ -415,9 +471,10 @@ function CopyFixPromptButton({
         : state === "error"  ? "Couldn't copy — try again"
         : "Copy AI fix prompt"
 
-    const sub = hasAnalysis
-        ? "Bundles project, issue, and analyser findings."
-        : "Bundles project + issue. Run analyser for richer context."
+    const sub =
+        !hasAnalysis ? "Bundles project + issue. Run analyser for richer context."
+        : prompt ? "Pre-composed at analyser time — paste-ready."
+        : "Bundles project, issue, and analyser findings."
 
     return (
         <div className="mt-4">

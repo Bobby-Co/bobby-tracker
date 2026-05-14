@@ -196,6 +196,11 @@ export interface IssueAnalysisData {
     duration_ms?: number
     tool_calls?: number
     markdown?: string
+    /** Pre-composed "fix this issue" prompt, baked at analyser time
+     *  by /api/issues/[id]/suggest so the drawer can copy it to the
+     *  clipboard synchronously on click (no awaited fetch — avoids
+     *  Safari/Firefox losing the user-gesture token mid-await). */
+    fix_prompt?: string
 }
 
 export interface IssueSuggestion {
