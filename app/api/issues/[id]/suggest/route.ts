@@ -84,7 +84,6 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
             ...result,
             fix_prompt: composeIssueFixPrompt({
                 project,
-                analyser,
                 issue,
                 suggestion: {
                     id: "",

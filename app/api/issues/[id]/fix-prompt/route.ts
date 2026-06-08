@@ -1,19 +1,17 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { composeIssueFixPrompt } from "@/lib/issue-prompt"
-import type {
-    Issue,
-    IssueSuggestion,
-    Project,
-    ProjectAnalyser,
-} from "@/lib/supabase/types"
+import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
 
 // GET /api/issues/[id]/fix-prompt
 //
-// Bundles the issue, its parent project's stack rollup, and the latest
-// cached analyser run into a single markdown prompt the user can paste
-// into another coding AI. Pure read — never triggers a fresh analyser
-// run. If no suggestion exists yet the prompt is still composed from
-// the issue + project context alone.
+// Bundles the issue and the latest cached analyser run into a single
+// markdown prompt the user can paste into another coding AI. Pure read
+// — never triggers a fresh analyser run. If no suggestion exists yet
+// the prompt is still composed from the issue + project context alone.
+//
+// The prompt deliberately omits the project's stack/architecture
+// rollup (`project_analyser.summary_markdown`) — the receiving AI
+// rediscovers that from the repo faster than it can read it.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
@@ -21,7 +19,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const { data: issue, error: iErr } = await supabase
         .from("issues")
-        .select("id,project_id,issue_number,title,body,status,priority,labels,created_at,updated_at")
+        .select("id,project_id,issue_number,title,body,status,priority,labels")
         .eq("id", id)
         .single<
             Pick<
@@ -34,23 +32,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
                 | "status"
                 | "priority"
                 | "labels"
-                | "created_at"
-                | "updated_at"
             >
         >()
     if (iErr || !issue) return jsonError("not_found", "issue not found", 404)
 
-    const [{ data: project }, { data: analyser }, { data: suggestion }] = await Promise.all([
+    const [{ data: project }, { data: suggestion }] = await Promise.all([
         supabase
             .from("projects")
             .select("name,repo_url,repo_full_name,description")
             .eq("id", issue.project_id)
             .single<Pick<Project, "name" | "repo_url" | "repo_full_name" | "description">>(),
-        supabase
-            .from("project_analyser")
-            .select("summary_markdown")
-            .eq("project_id", issue.project_id)
-            .maybeSingle<Pick<ProjectAnalyser, "summary_markdown">>(),
         supabase
             .from("issue_suggestions")
             .select("*")
@@ -63,7 +54,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const prompt = composeIssueFixPrompt({
         project,
-        analyser: analyser ?? null,
         issue,
         suggestion: suggestion ?? null,
     })
