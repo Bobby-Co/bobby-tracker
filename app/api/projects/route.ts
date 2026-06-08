@@ -11,11 +11,18 @@ export async function POST(request: Request) {
     const name = String(body?.name ?? "").trim()
     const repo_url = String(body?.repo_url ?? "").trim()
     const description = body?.description ? String(body.description) : null
+    const repo_full_name_from_client =
+        typeof body?.repo_full_name === "string" && body.repo_full_name
+            ? String(body.repo_full_name).trim()
+            : null
 
     if (!name) return jsonError("bad_request", "name is required", 400)
     if (!/^https?:\/\//.test(repo_url)) return jsonError("bad_request", "repo_url must be https://", 400)
 
-    const repo_full_name = inferGithubFullName(repo_url)
+    // Trust the picker's owner/repo when it sent one (saves a re-parse
+    // and works for repo URLs that the regex below doesn't match, like
+    // GitHub Enterprise hosts); otherwise fall back to URL inference.
+    const repo_full_name = repo_full_name_from_client ?? inferGithubFullName(repo_url)
 
     const { data: project, error: dbErr } = await supabase
         .from("projects")

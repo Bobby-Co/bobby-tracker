@@ -34,7 +34,11 @@ function LoginInner() {
             provider: "github",
             options: {
                 redirectTo: `${getUrl()}?next=${encodeURIComponent(next)}`,
-                scopes: "read:user user:email",
+                // `repo` is required so the user can pick from + analyse
+                // their private repositories. GitHub treats the broader
+                // scope as a superset of public-repo access, so this
+                // covers public projects too.
+                scopes: "repo read:user user:email",
             },
         })
         if (error) {

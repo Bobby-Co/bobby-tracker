@@ -17,6 +17,36 @@ export interface Project {
     updated_at: string
 }
 
+/** GitHub OAuth provider token captured at sign-in. One row per user;
+ *  upserted by the auth callback. Used to list the user's repos in the
+ *  add-project picker and to authorise the analyser's git clone for
+ *  private repos. */
+export interface GithubToken {
+    user_id: string
+    access_token: string
+    refresh_token: string | null
+    scopes: string | null
+    provider_user_id: string | null
+    provider_login: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** Shape returned by GET /api/github/repos — a flattened subset of the
+ *  GitHub `/user/repos` payload. `private` decides whether the picker
+ *  shows a lock icon and whether the analyser kickoff needs to attach
+ *  git_auth. */
+export interface GithubRepoSummary {
+    full_name: string       // "owner/repo"
+    name: string
+    private: boolean
+    description: string | null
+    default_branch: string
+    clone_url: string       // https://github.com/owner/repo.git
+    html_url: string        // https://github.com/owner/repo
+    updated_at: string
+}
+
 export interface Issue {
     id: string
     project_id: string
