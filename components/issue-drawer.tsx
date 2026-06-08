@@ -369,7 +369,194 @@ function AnalyserCard({
                     )}
                 </div>
             )}
+
+            <CopyFixPromptButton
+                issueId={issueId}
+                prompt={suggestion?.data?.fix_prompt ?? null}
+                hasAnalysis={!!suggestion}
+            />
         </section>
+    )
+}
+
+type CopyState = "idle" | "loading" | "copied" | "error"
+
+// CopyFixPromptButton — copies the analyser's pre-baked "fix this
+// issue" prompt (data.fix_prompt) to the clipboard. The prompt is
+// composed at /api/issues/[id]/suggest time so the click handler
+// can call writeText synchronously — Safari/Firefox both revoke the
+// user-gesture token across an awaited fetch, which used to make
+// this fail intermittently.
+//
+// Legacy rows (analysed before fix_prompt was added) fall back to
+// fetching /api/issues/[id]/fix-prompt; we accept the occasional
+// gesture-loss there because re-running the analyser would rewrite
+// the row with a baked prompt anyway.
+function CopyFixPromptButton({
+    issueId,
+    prompt,
+    hasAnalysis,
+}: {
+    issueId: string
+    prompt: string | null
+    hasAnalysis: boolean
+}) {
+    const [state, setState] = useState<CopyState>("idle")
+    const [meta, setMeta] = useState<{ chars: number } | null>(null)
+
+    function flash(next: CopyState, ms: number) {
+        setState(next)
+        setTimeout(() => setState("idle"), ms)
+    }
+
+    async function writeToClipboard(text: string): Promise<boolean> {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text)
+                return true
+            }
+        } catch {
+            // fall through to legacy path
+        }
+        // Legacy fallback for non-secure contexts (rare in dev/prod
+        // here, but cheap insurance): a hidden textarea + execCommand.
+        try {
+            const ta = document.createElement("textarea")
+            ta.value = text
+            ta.style.position = "fixed"
+            ta.style.opacity = "0"
+            document.body.appendChild(ta)
+            ta.select()
+            const ok = document.execCommand("copy")
+            document.body.removeChild(ta)
+            return ok
+        } catch {
+            return false
+        }
+    }
+
+    async function run() {
+        if (state === "loading") return
+        // Fast path: prompt is already on the client. Copy
+        // synchronously inside the click handler so the user-gesture
+        // is still alive when writeText runs.
+        if (prompt) {
+            const ok = await writeToClipboard(prompt)
+            if (ok) {
+                setMeta({ chars: prompt.length })
+                flash("copied", 1800)
+            } else {
+                flash("error", 2200)
+            }
+            return
+        }
+        // Slow path (legacy rows): fetch, then copy.
+        setState("loading")
+        try {
+            const res = await fetch(`/api/issues/${issueId}/fix-prompt`)
+            if (!res.ok) throw new Error("fetch failed")
+            const j = (await res.json()) as { prompt: string }
+            const ok = await writeToClipboard(j.prompt)
+            if (!ok) throw new Error("clipboard rejected")
+            setMeta({ chars: j.prompt.length })
+            flash("copied", 1800)
+        } catch {
+            flash("error", 2200)
+        }
+    }
+
+    const label =
+        state === "loading" ? "Composing prompt…"
+        : state === "copied" ? "Copied — paste into your AI"
+        : state === "error"  ? "Couldn't copy — try again"
+        : "Copy AI fix prompt"
+
+    const sub =
+        !hasAnalysis ? "Bundles project + issue. Run analyser for richer context."
+        : prompt ? "Pre-composed at analyser time — paste-ready."
+        : "Bundles project, issue, and analyser findings."
+
+    return (
+        <div className="mt-4">
+            <button
+                type="button"
+                onClick={run}
+                disabled={state === "loading"}
+                aria-live="polite"
+                className={cn(
+                    "group relative flex w-full items-center gap-3 overflow-hidden rounded-[12px] border px-3.5 py-3 text-left transition-all duration-300",
+                    state === "copied"
+                        ? "border-emerald-300 bg-gradient-to-br from-emerald-50 to-white shadow-[0_2px_0_rgba(16,185,129,0.18)]"
+                    : state === "error"
+                        ? "border-rose-300 bg-rose-50"
+                        : "border-[color:var(--c-border)] bg-gradient-to-br from-violet-50/70 via-white to-white hover:border-violet-300 hover:from-violet-50 hover:shadow-[0_2px_0_rgba(139,92,246,0.16)]",
+                    state === "loading" && "opacity-90",
+                )}
+            >
+                <span
+                    className={cn(
+                        "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-all duration-300",
+                        state === "copied" ? "bg-emerald-500 text-white scale-105"
+                        : state === "error" ? "bg-rose-500 text-white"
+                        : "bg-violet-500 text-white group-hover:scale-105",
+                    )}
+                >
+                    <CopyStateIcon state={state} />
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className={cn(
+                        "block text-[12.5px] font-bold leading-tight transition-colors",
+                        state === "copied" ? "text-emerald-800"
+                        : state === "error" ? "text-rose-800"
+                        : "text-[color:var(--c-text)]",
+                    )}>
+                        {label}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-tight text-[color:var(--c-text-muted)]">
+                        {state === "copied" && meta
+                            ? `${meta.chars.toLocaleString()} chars on your clipboard`
+                            : sub}
+                    </span>
+                </span>
+                <span
+                    aria-hidden
+                    className={cn(
+                        "pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700",
+                        state === "loading" ? "translate-x-0" : "-translate-x-full",
+                    )}
+                />
+            </button>
+        </div>
+    )
+}
+
+function CopyStateIcon({ state }: { state: CopyState }) {
+    if (state === "loading") {
+        return (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="animate-spin" aria-hidden>
+                <path d="M21 12a9 9 0 1 1-3-6.7" />
+            </svg>
+        )
+    }
+    if (state === "copied") {
+        return (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M5 12.5l4.5 4.5L19 7" />
+            </svg>
+        )
+    }
+    if (state === "error") {
+        return (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+        )
+    }
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <rect x="8" y="8" width="12" height="12" rx="2.4" />
+            <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </svg>
     )
 }
 

@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, IssueSuggestion } from "@/lib/supabase/types"
 import { Spinner } from "@/components/spinner"
 import { reporterDisplay } from "@/lib/public-reporter"
+import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client"
+import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 
 interface PublicIssue {
     id: string
@@ -87,28 +89,35 @@ export function PublicIssueView({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [analyser.ready, suggestion?.id])
 
-    // Polling fallback for the long-running suggest call. The auth
-    // path uses Supabase realtime here; we don't grant anon realtime
-    // on issue_suggestions, so plain HTTP polling is the simpler
-    // contract. Bounded to `pending` so it stops the moment any path
-    // delivers the row.
+    // Push delivery via Supabase Realtime broadcast. Anon role
+    // doesn't get postgres_changes on tracker tables (by design — it
+    // would require an RLS policy joining through public-session
+    // membership, and the public-session token isn't a Supabase JWT
+    // so the policy couldn't read it), so /api/public-issues/[id]/
+    // suggest emits a broadcast on a per-issue channel after the
+    // insert and we listen for it here.
+    //
+    // The /suggest POST also returns the row directly, so this
+    // subscription is the resilience layer for the case where the
+    // POST connection drops (edge timeouts etc.) but the server
+    // completed the insert. Whichever path delivers first wins —
+    // setSuggestion is idempotent.
     useEffect(() => {
-        if (!pending) return
-        let cancelled = false
-        const tick = async () => {
-            try {
-                const res = await fetch(
-                    `/api/public-issues/${issue.id}?token=${encodeURIComponent(token)}`,
-                    { cache: "no-store" },
-                )
-                if (!res.ok || cancelled) return
-                const data = await res.json()
-                if (data?.suggestion && !cancelled) setSuggestion(data.suggestion)
-            } catch {}
-        }
-        const id = setInterval(tick, 3000)
-        return () => { cancelled = true; clearInterval(id) }
-    }, [pending, issue.id, token])
+        if (suggestion) return
+        const supabase = createSupabaseBrowserClient()
+        const channel = supabase
+            .channel(publicIssueSuggestionChannel(issue.id))
+            .on(
+                "broadcast",
+                { event: "ready" },
+                (msg: { payload?: { suggestion?: IssueSuggestion } }) => {
+                    const next = msg.payload?.suggestion
+                    if (next) setSuggestion(next)
+                },
+            )
+            .subscribe()
+        return () => { void supabase.removeChannel(channel) }
+    }, [issue.id, suggestion])
 
     // Strip the "> Submitted via public link by …" stamp prefix when
     // displaying — the metadata is already shown above the body, so

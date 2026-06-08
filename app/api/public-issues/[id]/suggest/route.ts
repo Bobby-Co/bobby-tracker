@@ -1,5 +1,6 @@
 import { analyseIssue, AnalyserError } from "@/lib/analyser"
 import { jsonError } from "@/lib/api"
+import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
 import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
@@ -72,6 +73,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .select("*")
             .single<IssueSuggestion>()
         if (insErr) return jsonError("db_error", insErr.message, 500)
+
+        // Push the row to anyone watching this issue's broadcast
+        // channel. Public visitors can't read issue_suggestions over
+        // postgres_changes (anon role doesn't get realtime SELECT on
+        // tracker tables, by design), so a broadcast channel scoped
+        // to the issue id is the safe push path: no DB exposure, the
+        // server controls exactly what's emitted.
+        //
+        // Best-effort: the suggestion is already persisted and the
+        // HTTP response below carries it too, so a broadcast failure
+        // just means the client has to wait for the POST response
+        // instead of getting a push.
+        try {
+            const channel = svc.channel(publicIssueSuggestionChannel(issue.id))
+            await channel.send({
+                type: "broadcast",
+                event: "ready",
+                payload: { suggestion: row },
+            })
+            await svc.removeChannel(channel)
+        } catch {
+            // swallow — see comment above
+        }
+
         return Response.json({ suggestion: row })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"

@@ -1,6 +1,6 @@
 import { kickoffJob, AnalyserError } from "@/lib/analyser"
 import { jsonError, requireUser } from "@/lib/api"
-import type { AnalyserProgress, Project } from "@/lib/supabase/types"
+import type { AnalyserProgress, GithubToken, Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/analyser/index
 //
@@ -26,12 +26,12 @@ import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 //   4. Return 202
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
 
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch {}
-    const gitToken = typeof body?.git_token === "string" && body.git_token ? body.git_token : undefined
+    const bodyToken = typeof body?.git_token === "string" && body.git_token ? body.git_token : undefined
     const jobType: "bootstrap" | "incremental" =
         body?.job_type === "incremental" ? "incremental" : "bootstrap"
 
@@ -41,6 +41,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .eq("id", id)
         .single<Project>()
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
+
+    // Fall back to the user's stored GitHub token when the caller
+    // didn't supply one inline. The picker flow never sends a token
+    // from the browser — handing it to the analyser is server-only so
+    // the credential never has to round-trip through the client.
+    let gitToken = bodyToken
+    if (!gitToken) {
+        const { data: tokRow } = await supabase
+            .from("github_tokens")
+            .select("access_token")
+            .eq("user_id", user.id)
+            .maybeSingle<Pick<GithubToken, "access_token">>()
+        if (tokRow?.access_token) gitToken = tokRow.access_token
+    }
 
     // Flip the UI to "Indexing…" right away. Realtime delivers this
     // to subscribers instantly; the analyser will overwrite progress
