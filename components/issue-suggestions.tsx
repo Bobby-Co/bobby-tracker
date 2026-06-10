@@ -2,30 +2,76 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { cn } from "@/components/cn"
+import { EffortControl, EFFORT_LABEL } from "@/components/effort-control"
 import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/github"
+import type { AnalyseEffort } from "@/lib/analyser"
 import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/supabase/types"
 
 interface Props {
     issueId: string
+    projectId: string
     repo: RepoRef
     indexedSha: string | null
     initial: IssueSuggestion | null
     analyserReady: boolean
+    /** The issue's stored per-issue effort (create-time advanced setting).
+     *  Seeds the popover unless the user overrides it this session. */
+    issueEffort: AnalyseEffort | null
 }
 
-export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserReady }: Props) {
+export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial, analyserReady, issueEffort }: Props) {
     const [suggestion, setSuggestion] = useState<IssueSuggestion | null>(initial)
     const [error, setError] = useState<string | null>(null)
     const [errorCode, setErrorCode] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
     const autoFiredRef = useRef(false)
 
+    // Effort the popover shows + sends. `effort` is the user's explicit pick
+    // this session (null until they touch the slider). The control displays
+    // the first of (explicit pick → the issue's stored effort → project
+    // default → "medium"). We forward an effort ONLY when the user explicitly
+    // picked one — otherwise the request omits it so the server resolves the
+    // chain itself (issue's stored effort → project default → server default).
+    const [effort, setEffort] = useState<AnalyseEffort | null>(null)
+    const [projectDefault, setProjectDefault] = useState<AnalyseEffort | null>(null)
+    const [effortOpen, setEffortOpen] = useState(false)
+    const effortRef = useRef<HTMLDivElement>(null)
+    const displayEffort: AnalyseEffort = effort ?? issueEffort ?? projectDefault ?? "medium"
+
+    // The effort control morphs by animating the surface's real width/height
+    // (NOT a transform scale — scale distorts the content). We measure the
+    // chip and the panel so the surface can size to either exactly, and the
+    // content cross-fades on top. A ResizeObserver keeps the measurements
+    // live as the label or the (level-dependent) disclaimer text changes.
+    const chipRef = useRef<HTMLButtonElement>(null)
+    const panelRef = useRef<HTMLDivElement>(null)
+    const [chipSize, setChipSize] = useState({ w: 116, h: 32 })
+    const [panelSize, setPanelSize] = useState({ w: 320, h: 150 })
+    useEffect(() => {
+        const ro = new ResizeObserver((entries) => {
+            for (const e of entries) {
+                const el = e.target as HTMLElement
+                const size = { w: el.offsetWidth, h: el.offsetHeight }
+                if (el === chipRef.current) setChipSize(size)
+                else if (el === panelRef.current) setPanelSize(size)
+            }
+        })
+        if (chipRef.current) ro.observe(chipRef.current)
+        if (panelRef.current) ro.observe(panelRef.current)
+        return () => ro.disconnect()
+    }, [])
+
     function regenerate() {
         setError(null)
         setErrorCode(null)
+        setEffortOpen(false)
         startTransition(async () => {
-            const res = await fetch(`/api/issues/${issueId}/suggest`, { method: "POST" })
+            const res = await fetch(`/api/issues/${issueId}/suggest`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(effort ? { effort } : {}),
+            })
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}))
                 setError(body?.error?.message || `Failed (${res.status})`)
@@ -44,6 +90,40 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
     useEffect(() => {
         setSuggestion(initial)
     }, [initial])
+
+    // Fetch the project's saved default effort so the slider pre-selects it.
+    // Display-only: it never forces an effort onto a request (see `effort`).
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            try {
+                const res = await fetch(`/api/projects/${projectId}/issue-preferences`, { cache: "no-store" })
+                if (!res.ok || cancelled) return
+                const { effort: def } = (await res.json()) as { effort: AnalyseEffort | "" }
+                if (!cancelled && def) setProjectDefault(def)
+            } catch {}
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [projectId])
+
+    // Dismiss the effort popover on outside click or Escape.
+    useEffect(() => {
+        if (!effortOpen) return
+        function onDown(e: MouseEvent) {
+            if (effortRef.current && !effortRef.current.contains(e.target as Node)) setEffortOpen(false)
+        }
+        function onKey(e: KeyboardEvent) {
+            if (e.key === "Escape") setEffortOpen(false)
+        }
+        document.addEventListener("mousedown", onDown)
+        document.addEventListener("keydown", onKey)
+        return () => {
+            document.removeEventListener("mousedown", onDown)
+            document.removeEventListener("keydown", onKey)
+        }
+    }, [effortOpen])
 
     // Auto-trigger when the issue lands on this page with no cached
     // suggestion AND the analyser is ready. Fires once per mount so a
@@ -112,7 +192,8 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
     }, [pending, issueId])
 
     return (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 transition-colors dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="rainbow-glow rounded-xl">
+        <section className="rounded-xl border border-transparent bg-white p-4 transition-colors dark:bg-zinc-950">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-medium">
@@ -127,22 +208,112 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
                                 : "Ask the indexed graph which files and lines to look at first."}
                     </p>
                 </div>
-                <button
-                    onClick={regenerate}
-                    disabled={pending || !analyserReady}
-                    className="btn-primary group relative overflow-hidden"
-                    title={!analyserReady ? "Enable and index the project first" : undefined}
-                >
-                    <span className={pending ? "opacity-0" : "opacity-100 transition-opacity"}>
-                        {suggestion ? "Regenerate" : "Investigate"}
-                    </span>
-                    {pending && (
-                        <span className="absolute inset-0 flex items-center justify-center gap-2 anim-fade">
-                            <SmallSpinner />
-                            <span>Investigating…</span>
+                <div className="flex shrink-0 items-center gap-2">
+                    {/* Effort selector. ONE surface whose BACKGROUND grows/shrinks
+                        by animating real width + height (no transform scale, so
+                        nothing distorts); the chip and panel are layered on top and
+                        cross-fade — content fades IN after the box has grown, and
+                        OUT before it shrinks. Sizes come from measuring each layer
+                        (see chipSize/panelSize) so it's exact at any content size.
+                        The invisible placeholder holds the chip's footprint so the
+                        absolutely-positioned surface never shifts Regenerate. */}
+                    <div className="relative" ref={effortRef}>
+                        <span
+                            aria-hidden
+                            className="pointer-events-none inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] opacity-0"
+                        >
+                            <SlidersIcon />
+                            <span className="hidden sm:inline">{EFFORT_LABEL[displayEffort]}</span>
+                            <ChevronIcon />
                         </span>
-                    )}
-                </button>
+                        <div
+                            className="absolute right-0 top-0 z-20 overflow-hidden bg-white ring-1 ring-inset ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800"
+                            style={{
+                                width: effortOpen ? panelSize.w : chipSize.w,
+                                height: effortOpen ? panelSize.h : chipSize.h,
+                                borderRadius: effortOpen ? 12 : 8,
+                                boxShadow: effortOpen ? "0 12px 32px rgba(0,0,0,0.16)" : "0 1px 2px rgba(0,0,0,0.06)",
+                                transition:
+                                    "width .26s cubic-bezier(.22,.8,.26,1), height .26s cubic-bezier(.22,.8,.26,1), border-radius .2s ease, box-shadow .26s ease",
+                            }}
+                        >
+                            {/* Chip layer — fades out immediately on open, in after
+                                the box has finished shrinking on close. */}
+                            <button
+                                ref={chipRef}
+                                type="button"
+                                onClick={() => setEffortOpen(true)}
+                                disabled={pending}
+                                aria-haspopup="dialog"
+                                aria-expanded={effortOpen}
+                                title="Choose how thorough the analyser is for this issue"
+                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900"
+                                style={{
+                                    opacity: effortOpen ? 0 : 1,
+                                    pointerEvents: effortOpen ? "none" : "auto",
+                                    transition: "opacity .14s ease",
+                                    transitionDelay: effortOpen ? "0s" : ".16s",
+                                }}
+                            >
+                                <SlidersIcon />
+                                <span className="hidden sm:inline">{EFFORT_LABEL[displayEffort]}</span>
+                                <ChevronIcon open={effortOpen} />
+                            </button>
+
+                            {/* Panel layer — fades in after the box has grown,
+                                out immediately on close. */}
+                            <div
+                                ref={panelRef}
+                                role="dialog"
+                                aria-label="Analyser effort"
+                                className="absolute left-0 top-0 w-80 p-3.5"
+                                style={{
+                                    opacity: effortOpen ? 1 : 0,
+                                    pointerEvents: effortOpen ? "auto" : "none",
+                                    transition: "opacity .14s ease",
+                                    transitionDelay: effortOpen ? ".16s" : "0s",
+                                }}
+                            >
+                                <div className="mb-2 flex items-center justify-between">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                                        Analyser effort
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEffortOpen(false)}
+                                        tabIndex={effortOpen ? 0 : -1}
+                                        className="-mr-1 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                                        aria-label="Close effort picker"
+                                    >
+                                        <CloseIcon />
+                                    </button>
+                                </div>
+                                <EffortControl
+                                    value={displayEffort}
+                                    onChange={setEffort}
+                                    disabled={pending}
+                                    ariaLabel="Analyser effort for this issue"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        onClick={regenerate}
+                        disabled={pending || !analyserReady}
+                        className="btn-primary group relative overflow-hidden"
+                        title={!analyserReady ? "Enable and index the project first" : undefined}
+                    >
+                        <span className={pending ? "opacity-0" : "opacity-100 transition-opacity"}>
+                            {suggestion ? "Regenerate" : "Investigate"}
+                        </span>
+                        {pending && (
+                            <span className="absolute inset-0 flex items-center justify-center gap-2 anim-fade">
+                                <SmallSpinner />
+                                <span>Investigating…</span>
+                            </span>
+                        )}
+                    </button>
+                </div>
             </div>
 
             {!analyserReady && !suggestion && !pending && <NeedsIndexing />}
@@ -158,6 +329,7 @@ export function IssueSuggestions({ issueId, repo, indexedSha, initial, analyserR
                 <SuggestionBody key={suggestion.id} suggestion={suggestion} repo={repo} indexedSha={indexedSha} />
             )}
         </section>
+        </div>
     )
 }
 
@@ -452,6 +624,31 @@ function ExternalLinkIcon({ className = "" }: { className?: string }) {
             className={className}
         >
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+        </svg>
+    )
+}
+function SlidersIcon() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+        </svg>
+    )
+}
+function ChevronIcon({ open }: { open?: boolean }) {
+    return (
+        <svg
+            width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+            className={cn("transition-transform duration-200", open && "rotate-180")}
+        >
+            <path d="M6 9l6 6 6-6" />
+        </svg>
+    )
+}
+function CloseIcon() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+            <path d="M6 6l12 12M18 6L6 18" />
         </svg>
     )
 }

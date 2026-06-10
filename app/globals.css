@@ -216,7 +216,80 @@ html, body {
 @keyframes fade    { from { opacity: 0; } to { opacity: 1; } }
 @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 
+/* Rainbow glow — rotating conic gradient drives both a blurred flare and a crisp border ring */
+@property --rainbow-angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+}
+@keyframes rainbow-spin  { to { --rainbow-angle: 360deg; } }
+/* Breathing: the cast shadow swells (more spread + blur, brighter) and recedes on a slow
+   pulse. Blur/opacity — not scale — do the swelling so a wide card never clips its halo. */
+@keyframes rainbow-breathe {
+    0%, 100% { opacity: 0.42; filter: blur(9px);  }
+    50%      { opacity: 0.6;  filter: blur(13px); }
+}
+
+.rainbow-glow {
+    --rainbow: conic-gradient(
+        from var(--rainbow-angle),
+        #ff0080, #ff8c00, #ffe600, #00ff66, #00d4ff, #7a5cff, #ff00c8, #ff0080
+    );
+    position: relative;
+    isolation: isolate;
+}
+/* Keep the actual card content (the opaque white panel) above the shadow, below the ring */
+.rainbow-glow > * {
+    position: relative;
+    z-index: 1;
+}
+/* Rainbow cast shadow + orbiting flare bloom. A wide, heavily-blurred conic rainbow bleeds
+   well past the card edge so it reads as a real cast shadow on the page — not a thin outline.
+   CRUCIAL: NO mask here. A mask bounds the paint to its box, which clips the blur into a hard
+   rectangle (the bug that cropped the old shadow). Instead the flare is a white-hot lobe baked
+   straight INTO the gradient as a second conic layer keyed to --rainbow-angle — so it orbits
+   as the gradient spins, and because the layer is blurred it blooms softly. Spin (5s) and
+   breathe (3.4s) periods are out of sync so the motion never settles into an obvious loop.
+   Static blur/opacity = the reduced-motion fallback. */
+.rainbow-glow::before {
+    content: "";
+    position: absolute;
+    inset: -5px;
+    z-index: 0;
+    border-radius: 1.1rem;
+    background:
+        conic-gradient(from var(--rainbow-angle),
+            rgba(255,255,255,0.65) 0deg, rgba(255,255,255,0.28) 35deg, rgba(255,255,255,0) 80deg,
+            rgba(255,255,255,0) 168deg,
+            rgba(255,255,255,0.65) 180deg, rgba(255,255,255,0.28) 215deg, rgba(255,255,255,0) 260deg,
+            rgba(255,255,255,0) 348deg,
+            rgba(255,255,255,0.65) 360deg),
+        var(--rainbow);
+    filter: blur(11px);
+    opacity: 0.5;
+    animation: rainbow-spin 18s linear infinite, rainbow-breathe 6s ease-in-out infinite;
+}
+/* Border ring: a STATIC rainbow outline. No animation — only the shadow below moves. The
+   flare lobes live solely on the ::before bloom, so the two streaks sweep within the cast
+   shadow while the crisp border edge holds still. --rainbow-angle stays at its 0deg initial
+   value here (this element has no rainbow-spin), so the gradient is frozen. */
+.rainbow-glow::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--rainbow);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .anim-rise, .anim-fade { animation: none; }
     .skeleton::after        { animation: none; }
+    .rainbow-glow::before, .rainbow-glow::after { animation: none; }
 }

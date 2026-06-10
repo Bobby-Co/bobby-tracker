@@ -1,4 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
+import { isAnalyseEffort } from "@/lib/analyser"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issue-embedding"
@@ -49,6 +50,10 @@ export async function POST(request: Request) {
     const duplicate_of_issue_id = typeof body?.duplicate_of_issue_id === "string"
         ? body.duplicate_of_issue_id
         : null
+    // Per-issue analyser effort from the create modal's advanced settings.
+    // Null unless a real level was chosen, so untouched issues inherit the
+    // project default (and then the analyser's own default) at analyse time.
+    const analyse_effort = isAnalyseEffort(body?.analyse_effort) ? body.analyse_effort : null
 
     const { data: issue, error: dbErr } = await supabase
         .from("issues")
@@ -62,6 +67,7 @@ export async function POST(request: Request) {
             labels,
             ai_proposed,
             duplicate_of_issue_id,
+            analyse_effort,
         })
         .select("*")
         .single<Issue>()

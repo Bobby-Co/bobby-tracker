@@ -2,6 +2,10 @@
 // in the supabase CLI codegen toolchain just for Phase 2; regenerate with
 // `supabase gen types typescript --schema tracker` once the schema settles.
 
+// Type-only import — elided at compile, so the server-only analyser module
+// (which pulls in `ws`) never reaches client bundles through this file.
+import type { AnalyseEffort } from "@/lib/analyser"
+
 export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
@@ -78,6 +82,11 @@ export interface Issue {
     /** Optional per-issue colour override (#rrggbb). Null falls back
      *  to the project's status palette. */
     color:     string | null
+    /** How thorough the analyser should be on THIS issue, chosen at
+     *  create time (advanced settings) and overridable per-run. Null =
+     *  no per-issue choice, so the analyse call omits effort and the
+     *  analyser falls back to the project default → its own default. */
+    analyse_effort: AnalyseEffort | null
     created_at: string
     updated_at: string
 }

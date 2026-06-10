@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { createClient } from "@/lib/supabase/server"
 import { AnalyserPanel } from "@/components/analyser-panel"
+import { AnalyserDefaultEffort } from "@/components/analyser-default-effort"
 import { VerifyPanel } from "@/components/verify-panel"
 import { KnowledgeSkeleton } from "@/components/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
@@ -51,6 +52,9 @@ async function KnowledgeContent({ params }: { params: Promise<{ id: string }> })
                 </p>
             </header>
             <AnalyserPanel projectId={id} state={state ?? null} />
+            {/* Default effort lives with the analyser settings. Only meaningful
+                once the project has an indexed graph the preference keys to. */}
+            {state?.graph_id && <AnalyserDefaultEffort projectId={id} />}
             <VerifyPanel
                 projectId={id}
                 repo={project ? { repo_url: project.repo_url, repo_full_name: project.repo_full_name } : null}

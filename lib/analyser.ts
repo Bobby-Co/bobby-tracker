@@ -63,6 +63,19 @@ export async function ask(repoId: string, question: string, maxBudgetUsd?: numbe
 
 // ─── /issues/analyse (structured) ──────────────────────────────────────────
 
+// How thorough the analyser is when investigating an issue. Higher levels
+// explore more before answering: slower + more expensive, but better on hard
+// multi-file bugs. These exact lowercase strings are the wire values the
+// analyser expects on /issues/analyse and /issues/preferences. NB: distinct
+// from the indexing `effort` ("low"|"medium"|"high") on KickoffJobInput.
+export type AnalyseEffort = "fast" | "medium" | "high" | "veryhigh"
+
+export const ANALYSE_EFFORTS: AnalyseEffort[] = ["fast", "medium", "high", "veryhigh"]
+
+export function isAnalyseEffort(v: unknown): v is AnalyseEffort {
+    return typeof v === "string" && (ANALYSE_EFFORTS as string[]).includes(v)
+}
+
 export interface IssueFinding {
     file:        string
     line?:       number
@@ -90,6 +103,9 @@ export interface IssueAnalyseInput {
     labels?:       string[]
     priority?:     string
     maxBudgetUsd?: number
+    /** Thoroughness level. Omit to let the analyser fall back to the
+     *  project's saved default, then its own server default. */
+    effort?:       AnalyseEffort
 }
 
 export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnalysis> {
@@ -97,6 +113,9 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
     const res = await fetch(`${http}/issues/analyse`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
+        // `effort` is undefined unless the caller set it; JSON.stringify drops
+        // undefined keys, so an omitted effort never reaches the wire and the
+        // analyser applies its own fallback chain (project default → default).
         body: JSON.stringify({
             repo_id: input.repoId,
             title:   input.title,
@@ -104,6 +123,7 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
             labels:  input.labels,
             priority: input.priority,
             max_budget_usd: input.maxBudgetUsd,
+            effort:  input.effort,
         }),
     })
     if (!res.ok) {
@@ -112,6 +132,49 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
         throw new AnalyserError(err.message || `analyse failed: HTTP ${res.status}`, err.code || "analyse_failed")
     }
     return (await res.json()) as IssueAnalysis
+}
+
+// ─── /issues/preferences (per-project analyse defaults) ─────────────────────
+
+export interface IssuePreferences {
+    repo_id: string
+    /** The saved default effort, or "" when no default has been set (in
+     *  which case the analyser uses its own server default per request). */
+    effort:  AnalyseEffort | ""
+}
+
+// GET the project's saved default effort. `effort` comes back "" when unset.
+export async function getIssuePreferences(repoId: string): Promise<IssuePreferences> {
+    const { http } = assertConfigured()
+    const url = new URL(`${http}/issues/preferences`)
+    url.searchParams.set("repo_id", repoId)
+    const res = await fetch(url.toString(), {
+        method: "GET",
+        headers: { ...authHeader() },
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `preferences fetch failed: HTTP ${res.status}`, err.code || "preferences_failed")
+    }
+    return (await res.json()) as IssuePreferences
+}
+
+// PUT the project's default effort. Pass "" to clear the default (falls back
+// to the analyser's own server default on subsequent analyses).
+export async function setIssuePreferences(repoId: string, effort: AnalyseEffort | ""): Promise<IssuePreferences> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/issues/preferences`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ repo_id: repoId, effort }),
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `preferences save failed: HTTP ${res.status}`, err.code || "preferences_failed")
+    }
+    return (await res.json()) as IssuePreferences
 }
 
 // ─── /issues/compose (AI draft from paragraph + images) ───────────────────
@@ -332,6 +395,12 @@ export interface VerifyInput {
     repoUrl: string
     repoId: string
     repoRef?: string
+    /** auth.users UUID whose stored GitHub token the analyser worker
+     * fetches from tracker.github_tokens to clone private repos. The
+     * preferred path — the token never crosses the wire. */
+    userId?: string
+    /** Optional explicit clone credential. Honored over userId by the
+     * analyser; kept only as an escape hatch — normally omit it. */
     gitToken?: string
     /** Cap on the per-note BrokenCitations sample. Total counts are exact regardless. */
     maxBrokenSamples?: number
@@ -349,6 +418,7 @@ export async function verifyGraph(input: VerifyInput): Promise<VerifyReport> {
     }
     if (input.repoRef) body.repo_ref = input.repoRef
     if (input.maxBrokenSamples) body.max_broken_samples = input.maxBrokenSamples
+    if (input.userId) body.user_id = input.userId
     if (input.gitToken) {
         body.git_auth = { token: input.gitToken, username: "x-access-token", scheme: "basic" }
     }
@@ -389,6 +459,12 @@ export interface KickoffJobInput {
     only_lang?: string[]
     max_budget_usd?: number
     concurrency?: number
+    /** auth.users UUID whose stored GitHub token the analyser worker
+     * fetches from tracker.github_tokens to clone private repos. Preferred
+     * over git_auth — the token never crosses the wire. */
+    user_id?: string
+    /** Optional explicit clone credential. Honored over user_id by the
+     * analyser; kept only as an escape hatch — normally omit it. */
     git_auth?: { token: string; username?: string; scheme?: "basic" | "bearer" }
     supabase_progress: SupabaseProgressTarget
 }
