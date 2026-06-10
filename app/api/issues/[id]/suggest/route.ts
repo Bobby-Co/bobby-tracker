@@ -1,4 +1,4 @@
-import { analyseIssue, AnalyserError } from "@/lib/analyser"
+import { analyseIssue, AnalyserError, isAnalyseEffort } from "@/lib/analyser"
 import { jsonError, requireUser } from "@/lib/api"
 import { composeIssueFixPrompt } from "@/lib/issue-prompt"
 import type {
@@ -21,14 +21,24 @@ import type {
 // On success we also pre-compose the "fix this issue" prompt (project
 // context + issue + analyser findings) and store it inside data.fix_prompt
 // so the drawer can copy it synchronously on click.
-export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()
     if (error) return error
 
+    // Per-issue effort, resolved in priority order:
+    //   1. explicit override in this request (the suggestions popover), then
+    //   2. the issue's stored analyse_effort (chosen at create time), then
+    //   3. omitted — so the analyser falls back to the project default and
+    //      finally its own server default.
+    // Only (1) is read here; (2) is folded in once the issue row is loaded.
+    let body: Record<string, unknown> = {}
+    try { body = await request.json() } catch {}
+    const overrideEffort = isAnalyseEffort(body?.effort) ? body.effort : undefined
+
     const { data: issue, error: iErr } = await supabase
         .from("issues")
-        .select("id,project_id,issue_number,title,body,status,priority,labels,created_at,updated_at")
+        .select("id,project_id,issue_number,title,body,status,priority,labels,analyse_effort,created_at,updated_at")
         .eq("id", id)
         .single<
             Pick<
@@ -41,11 +51,16 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
                 | "status"
                 | "priority"
                 | "labels"
+                | "analyse_effort"
                 | "created_at"
                 | "updated_at"
             >
         >()
     if (iErr || !issue) return jsonError("not_found", "issue not found", 404)
+
+    // Resolve effort: explicit request override → issue's stored choice →
+    // undefined (analyser falls back to project default → server default).
+    const effort = overrideEffort ?? (isAnalyseEffort(issue.analyse_effort) ? issue.analyse_effort : undefined)
 
     const { data: analyser, error: aErr } = await supabase
         .from("project_analyser")
@@ -75,6 +90,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
             body:     issue.body || "",
             labels:   issue.labels,
             priority: issue.priority,
+            effort,
         })
 
         // Bake the paste-ready fix prompt into the stored row so the

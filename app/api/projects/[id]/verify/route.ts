@@ -13,7 +13,7 @@ import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 // isn't ready.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
 
     let body: Record<string, unknown> = {}
@@ -45,6 +45,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const report = await verifyGraph({
             repoUrl: project.repo_url,
             repoId: analyser.graph_id,
+            // The analyser worker fetches this user's GitHub token from
+            // tracker.github_tokens to clone private repos — no token over
+            // the wire. gitToken stays as an optional explicit override.
+            userId: user.id,
             gitToken,
         })
         // Persist the latest report on the project_analyser row so:

@@ -75,7 +75,7 @@ export default async function IssueDetailPage({
     const ready = !!analyser?.enabled && analyser?.status === "ready" && !!analyser?.graph_id
 
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 px-4">
             <Link href={`/projects/${id}/issues`} className="text-xs text-zinc-500 hover:underline">
                 ← Issues
             </Link>
@@ -94,10 +94,12 @@ export default async function IssueDetailPage({
             />
             <IssueSuggestions
                 issueId={issueRes.data.id}
+                projectId={id}
                 repo={projectRes.data}
                 indexedSha={analyser?.last_indexed_sha ?? null}
                 initial={suggestionRes.data ?? null}
                 analyserReady={ready}
+                issueEffort={issueRes.data.analyse_effort ?? null}
             />
         </div>
     )
