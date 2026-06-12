@@ -45,6 +45,10 @@ function pairOrigin(request: Request): string {
     const origin = request.headers.get("origin")
     if (origin) return origin.replace(/\/+$/, "")
     const host = request.headers.get("host")
-    if (host) return `https://${host}`
+    if (host) {
+        // localhost dev runs over http; everything else is https.
+        const scheme = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) ? "http" : "https"
+        return `${scheme}://${host}`
+    }
     return (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "")
 }
