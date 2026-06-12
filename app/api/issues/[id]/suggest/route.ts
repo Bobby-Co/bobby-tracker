@@ -23,7 +23,7 @@ import type {
 // so the drawer can copy it synchronously on click.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
 
     // Per-issue effort, resolved in priority order:
@@ -91,6 +91,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             labels:   issue.labels,
             priority: issue.priority,
             effort,
+            userId:   user.id,
         })
 
         // Bake the paste-ready fix prompt into the stored row so the

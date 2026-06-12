@@ -94,6 +94,12 @@ export interface IssueAnalysis {
     duration_ms:  number
     tool_calls?:  number
     markdown?:    string
+    /** True when the swarm that produced these suggestions ran on a
+     *  locally-served model; false for cloud/remote. Always present on
+     *  the wire (defaults false) — do NOT infer from cost_usd: free
+     *  remotes (Ollama-cloud) report $0 and hybrid runs cost > 0 while
+     *  still local. */
+    local:        boolean
 }
 
 export interface IssueAnalyseInput {
@@ -106,13 +112,21 @@ export interface IssueAnalyseInput {
     /** Thoroughness level. Omit to let the analyser fall back to the
      *  project's saved default, then its own server default. */
     effort?:       AnalyseEffort
+    /** Authenticated user id. Sent as the X-Bobby-User header so the analyser
+     *  can route the ensemble swarm to this user's connected local-model relay
+     *  worker (ADR-0035) when one is linked; ignored when no worker is connected. */
+    userId?:       string
 }
 
 export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnalysis> {
     const { http } = assertConfigured()
     const res = await fetch(`${http}/issues/analyse`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader() },
+        headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+            ...(input.userId ? { "X-Bobby-User": input.userId } : {}),
+        },
         // `effort` is undefined unless the caller set it; JSON.stringify drops
         // undefined keys, so an omitted effort never reaches the wire and the
         // analyser applies its own fallback chain (project default → default).
