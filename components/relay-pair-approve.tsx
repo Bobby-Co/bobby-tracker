@@ -143,6 +143,11 @@ export function RelayPairApprove({
                     </p>
                 )}
 
+                <p className="rounded-[10px] bg-[color:var(--c-warn-bg)] px-3 py-2 text-[12px] leading-[1.45] text-[color:var(--c-warn)]">
+                    Only approve a code you see on <span className="font-semibold">your own Mac</span>. Approving links
+                    that device to your account and lets it run your analyses — never enter a code someone sent you.
+                </p>
+
                 <div className="flex flex-col gap-2 sm:flex-row-reverse">
                     <button type="submit" disabled={!canSubmit} className="btn-primary w-full sm:w-auto">
                         {phase === "approving" ? (<><Spinner />Linking…</>) : "Approve & link"}
