@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { genDeviceCode, genUserCode } from "@/lib/relay"
+import { genDeviceCode, genUserCode, normalizeUserCode } from "@/lib/relay"
 
 // PUBLIC. Called by the bobby-relay app (no Supabase session) to start a
 // device-pairing handshake. Mints a (device_code, user_code) pair and
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const name = typeof body?.name === "string" ? body.name.trim() : ""
 
     const deviceCode = genDeviceCode()
-    const userCode = genUserCode()
+    const userCode = genUserCode() // dashed, for display
     const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()
 
     const svc = createServiceClient()
@@ -21,7 +21,9 @@ export async function POST(request: Request) {
         .from("relay_pairings")
         .insert({
             device_code: deviceCode,
-            user_code: userCode,
+            // Store the canonical (dashless, upper) form so approve/deny — which
+            // normalize the user's input — match regardless of how it's typed.
+            user_code: normalizeUserCode(userCode),
             status: "pending",
             worker_name: name || null,
             expires_at: expiresAt,
