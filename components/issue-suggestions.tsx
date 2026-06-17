@@ -191,16 +191,26 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
         }
     }, [pending, issueId])
 
+    // Rainbow glow blooms in only once a suggestion is ready — while the
+    // analyser is still running we keep the card calm (no glow), so the glow
+    // becomes the reward for the wait rather than ambient noise. The class
+    // toggle remounts the ::before/::after pseudo-elements, which replays
+    // their one-shot glow-bloom-in / glow-ring-in entrance.
     return (
-        <div className="rainbow-glow rounded-xl">
+        <div className={cn("rounded-xl", !pending && suggestion && "rainbow-glow")}>
         <section className="rounded-xl border border-transparent bg-white p-4 transition-colors dark:bg-zinc-950">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h2 className="flex items-center gap-2 text-sm font-medium">
+                    <h2 className="flex items-center gap-2 text-sm dark:text-red-50 font-medium">
                         <SparklesIcon spinning={pending} />
                         Investigate with analyser
+                        {/* Shown only when the analyser reports the swarm ran on a
+                            locally-served model. Read straight from the persisted
+                            `local` flag — older cached rows lack it, so `=== true`
+                            treats missing as not-local. Never inferred from cost. */}
+                        {suggestion?.data?.local === true && <LocalChip />}
                     </h2>
-                    <p className="mt-0.5 text-xs text-zinc-500 transition-opacity">
+                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-white transition-opacity">
                         {pending
                             ? "Reading the graph and source — typically 10–30s."
                             : suggestion
@@ -227,7 +237,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                             <ChevronIcon />
                         </span>
                         <div
-                            className="absolute right-0 top-0 z-20 overflow-hidden bg-white ring-1 ring-inset ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800"
+                            className="absolute right-0 top-0 z-20 overflow-hidden bg-white ring-1 ring-inset ring-zinc-200 dark:bg-red-50/90 backdrop-blur-xl dark:ring-zinc-800"
                             style={{
                                 width: effortOpen ? panelSize.w : chipSize.w,
                                 height: effortOpen ? panelSize.h : chipSize.h,
@@ -247,7 +257,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                                 aria-haspopup="dialog"
                                 aria-expanded={effortOpen}
                                 title="Choose how thorough the analyser is for this issue"
-                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900"
+                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-50/90"
                                 style={{
                                     opacity: effortOpen ? 0 : 1,
                                     pointerEvents: effortOpen ? "none" : "auto",
@@ -324,7 +334,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                 </div>
             )}
 
-            {pending && <SuggestionsSkeleton />}
+            {pending && <Analysing />}
             {!pending && suggestion && (
                 <SuggestionBody key={suggestion.id} suggestion={suggestion} repo={repo} indexedSha={indexedSha} />
             )}
@@ -487,6 +497,20 @@ function FindingCard({
     )
 }
 
+// Marks a suggestion whose swarm ran on a locally-served model. Driven by
+// the analyser's `local` flag — see the IssueAnalysis type. Styling mirrors
+// ConfidenceBadge so it reads as a sibling chip.
+function LocalChip() {
+    return (
+        <span
+            title="Produced by a locally-served model"
+            className="shrink-0 rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-700 transition-colors dark:bg-indigo-950 dark:text-indigo-300"
+        >
+            Local
+        </span>
+    )
+}
+
 function ConfidenceBadge({ value }: { value: string }) {
     const v = value.toLowerCase()
     const cls =
@@ -522,34 +546,142 @@ function MetaRow({
     )
 }
 
-function SuggestionsSkeleton() {
+// The phases the analyser walks through, surfaced as a ticker so the wait
+// reads as visible progress rather than a dead spinner. The analyser POST is
+// synchronous (no streamed progress events), so these are time-paced rather
+// than wired to real telemetry — hence the last phase deliberately LINGERS
+// until the row actually lands, so we never claim "done" ahead of the result.
+const ANALYSING_PHASES = [
+    "Reading the codebase graph",
+    "Locating relevant files",
+    "Tracing call paths & symbols",
+    "Ranking the likeliest suspects",
+    "Composing the fix prompt",
+]
+
+function Analysing() {
+    const [phase, setPhase] = useState(0)
+
+    useEffect(() => {
+        // Stop on the final phase — it holds until the real suggestion arrives
+        // and this whole component unmounts. Each step is a touch slower than
+        // the last so early steps feel snappy and the tail doesn't outrun a
+        // fast response.
+        if (phase >= ANALYSING_PHASES.length - 1) return
+        const id = setTimeout(() => setPhase((p) => p + 1), 3000 + phase * 700)
+        return () => clearTimeout(id)
+    }, [phase])
+
     return (
-        <div className="mt-4 flex flex-col gap-5 anim-fade">
-            <div>
-                <SectionLabel>Summary</SectionLabel>
-                <div className="mt-2 flex flex-col gap-1.5">
-                    <div className="skeleton h-3 w-full" />
-                    <div className="skeleton h-3 w-11/12" />
-                    <div className="skeleton h-3 w-2/3" />
-                </div>
-            </div>
-            <div>
-                <SectionLabel>Files to investigate</SectionLabel>
-                <ul className="mt-2 flex flex-col gap-1.5">
-                    {[0, 1, 2].map((i) => (
-                        <li
-                            key={i}
-                            className="rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
-                        >
-                            <div className="flex items-center justify-between gap-2 px-3 py-2">
-                                <div className="skeleton h-3 w-1/3" />
-                                <div className="skeleton h-3 w-12" />
-                            </div>
-                        </li>
-                    ))}
-                </ul>
+        <div className="mt-4 anim-fade flex flex-col items-center gap-4 py-6">
+            <GraphScan />
+            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-600 dark:text-zinc-300">
+                <SmallSpinner />
+                {/* keyed so anim-fade replays on every phase change → soft crossfade */}
+                <span key={phase} className="anim-fade">{ANALYSING_PHASES[phase]}…</span>
             </div>
         </div>
+    )
+}
+
+// Static graph layout for the scan visual. A connected graph stands in for
+// "the codebase graph being read"; ALL motion lives in CSS (see .graph-scan in
+// globals.css): nodes pulse, sonar rings expand, glints run along edges, and a
+// two-layer camera rig flies over the whole thing — zoom → pan → tilt → zoom
+// out. Coordinates are tuned to the 400×200 viewBox; the camera keyframes are
+// derived from these node positions, so retuning the layout means retuning the
+// pan keyframes too (t = scale × (centre − focal point)).
+const GRAPH_NODES = [
+    { x: 45, y: 95 },
+    { x: 95, y: 52 },
+    { x: 90, y: 145 },
+    { x: 135, y: 100 },
+    { x: 175, y: 65 },
+    { x: 205, y: 120 },
+    { x: 235, y: 42 },
+    { x: 225, y: 165 },
+    { x: 270, y: 105 },
+    { x: 305, y: 70 },
+    { x: 350, y: 115 },
+    { x: 320, y: 165 },
+    { x: 368, y: 52 },
+]
+const GRAPH_EDGES: [number, number][] = [
+    [0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [3, 5], [4, 6], [5, 7], [5, 8],
+    [7, 8], [8, 9], [8, 10], [9, 12], [10, 11], [10, 12], [6, 9],
+]
+
+function GraphScan() {
+    return (
+        <svg
+            className="graph-scan w-full max-w-[360px]"
+            viewBox="0 0 400 200"
+            fill="none"
+            role="img"
+            aria-label="Analysing the codebase graph"
+        >
+            <defs>
+                <linearGradient id="graph-accent" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#d946ef" />
+                    <stop offset="50%" stopColor="#0ea5e9" />
+                    <stop offset="100%" stopColor="#10b981" />
+                </linearGradient>
+                {/* Vignette: keeps the centre crisp and fades the edges out so the
+                    camera framing reads as a viewport and blends into the card on
+                    any background. Lives OUTSIDE the animated groups, so it stays
+                    fixed to the frame while the graph flies behind it. */}
+                <radialGradient id="graph-fade" cx="50%" cy="50%" r="60%">
+                    <stop offset="52%" stopColor="#fff" />
+                    <stop offset="100%" stopColor="#000" />
+                </radialGradient>
+                <mask id="graph-mask">
+                    <rect width="400" height="200" fill="url(#graph-fade)" />
+                </mask>
+            </defs>
+
+            <g mask="url(#graph-mask)">
+                {/* Outer = tilt (rotates the scene around centre); inner = pan/zoom
+                    (centres a focal point and scales in). Splitting them keeps each
+                    motion's maths independent and lets the two run on out-of-sync
+                    periods so the tour never settles into an obvious loop. */}
+                <g className="graph-tilt">
+                    <g className="graph-pan">
+                        {/* Faint static skeleton of the graph */}
+                        {GRAPH_EDGES.map(([a, b], i) => (
+                            <line
+                                key={`base-${i}`}
+                                x1={GRAPH_NODES[a].x} y1={GRAPH_NODES[a].y}
+                                x2={GRAPH_NODES[b].x} y2={GRAPH_NODES[b].y}
+                                className="stroke-zinc-200 dark:stroke-zinc-800"
+                                strokeWidth={1.5}
+                            />
+                        ))}
+
+                        {/* Glints travelling along each edge — staggered via --i */}
+                        {GRAPH_EDGES.map(([a, b], i) => (
+                            <line
+                                key={`flow-${i}`}
+                                x1={GRAPH_NODES[a].x} y1={GRAPH_NODES[a].y}
+                                x2={GRAPH_NODES[b].x} y2={GRAPH_NODES[b].y}
+                                className="gedge-flow"
+                                stroke="url(#graph-accent)"
+                                strokeWidth={1.75}
+                                strokeLinecap="round"
+                                style={{ ["--i" as string]: i } as React.CSSProperties}
+                            />
+                        ))}
+
+                        {/* Nodes: a pulsing dot wrapped in an expanding sonar ring */}
+                        {GRAPH_NODES.map((n, i) => (
+                            <g key={`node-${i}`} style={{ ["--i" as string]: i } as React.CSSProperties}>
+                                <circle className="gsonar" cx={n.x} cy={n.y} r={5} fill="none" stroke="url(#graph-accent)" strokeWidth={1.25} />
+                                <circle className="gnode" cx={n.x} cy={n.y} r={4} fill="url(#graph-accent)" />
+                            </g>
+                        ))}
+                    </g>
+                </g>
+            </g>
+        </svg>
     )
 }
 

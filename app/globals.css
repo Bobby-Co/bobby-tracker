@@ -229,6 +229,69 @@ html, body {
     0%, 100% { opacity: 0.42; filter: blur(9px);  }
     50%      { opacity: 0.6;  filter: blur(13px); }
 }
+/* One-shot entrance played when the glow first mounts — i.e. the moment the
+   suggestion is ready and the .rainbow-glow class is applied. Listed LAST in
+   each element's animation list so it owns the opacity channel during the
+   entry window, then hands control back to the infinite breathe/static ring. */
+@keyframes glow-bloom-in { from { opacity: 0; } to { opacity: 0.5; } }
+@keyframes glow-ring-in  { from { opacity: 0; transform: scale(1.015); } to { opacity: 1; transform: scale(1); } }
+
+/* Graph scan — the "reading the codebase graph" visual shown while the analyser
+   runs. All motion is CSS; the SVG markup is static (see GraphScan). Nodes
+   pulse, a sonar ring expands out of each, and a coloured glint travels along
+   every edge. Per-element --i staggers everything so the graph reads as a
+   wave sweeping across, not a synchronised blink. */
+@keyframes graph-node-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.82); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes graph-sonar      { 0% { opacity: 0.55; transform: scale(0.6); } 70%, 100% { opacity: 0; transform: scale(2.6); } }
+@keyframes graph-edge-flow  { to { stroke-dashoffset: -64; } }
+
+/* Camera rig. The pan layer centres a focal point and zooms in; translate is
+   derived per keyframe as t = scale × (viewBox-centre − focal) so the target
+   lands dead centre. 0% and 100% are identical (whole graph) for a seamless
+   loop. The tilt layer just rotates the scene a few degrees around centre on a
+   slower, out-of-phase clock. Both use transform-box: view-box so "center"
+   resolves to the 200,100 midpoint of the viewBox. */
+@keyframes graph-pan-tour {
+    0%   { transform: translate(0px, 0px) scale(1); }
+    10%  { transform: translate(0px, 0px) scale(1); }
+    26%  { transform: translate(271px, 7px) scale(2.2); }   /* zoom: left cluster */
+    44%  { transform: translate(0px, 0px) scale(2.0); }      /* pan: centre cluster */
+    62%  { transform: translate(-299px, -12px) scale(2.3); } /* pan: right cluster */
+    78%  { transform: translate(-487px, 139px) scale(2.9); } /* close-up: a single node */
+    100% { transform: translate(0px, 0px) scale(1); }        /* zoom out to whole graph */
+}
+@keyframes graph-tilt-tour {
+    0%   { transform: rotate(0deg); }
+    25%  { transform: rotate(-3deg); }
+    50%  { transform: rotate(2.6deg); }
+    75%  { transform: rotate(-2deg); }
+    100% { transform: rotate(0deg); }
+}
+
+.graph-scan .graph-pan {
+    transform-box: view-box; transform-origin: center;
+    animation: graph-pan-tour 22s ease-in-out infinite;
+}
+.graph-scan .graph-tilt {
+    transform-box: view-box; transform-origin: center;
+    animation: graph-tilt-tour 17s ease-in-out infinite;
+}
+
+.graph-scan .gnode {
+    transform-box: fill-box; transform-origin: center;
+    animation: graph-node-pulse 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 180ms);
+}
+.graph-scan .gsonar {
+    transform-box: fill-box; transform-origin: center;
+    animation: graph-sonar 2.8s ease-out infinite;
+    animation-delay: calc(var(--i, 0) * 180ms);
+}
+.graph-scan .gedge-flow {
+    stroke-dasharray: 8 56;
+    animation: graph-edge-flow 1.7s linear infinite;
+    animation-delay: calc(var(--i, 0) * 120ms);
+}
 
 .rainbow-glow {
     --rainbow: conic-gradient(
@@ -267,7 +330,7 @@ html, body {
         var(--rainbow);
     filter: blur(11px);
     opacity: 0.5;
-    animation: rainbow-spin 18s linear infinite, rainbow-breathe 6s ease-in-out infinite;
+    animation: rainbow-spin 18s linear infinite, rainbow-breathe 6s ease-in-out infinite, glow-bloom-in 700ms ease-out;
 }
 /* Border ring: a STATIC rainbow outline. No animation — only the shadow below moves. The
    flare lobes live solely on the ::before bloom, so the two streaks sweep within the cast
@@ -286,10 +349,13 @@ html, body {
     -webkit-mask-composite: xor;
             mask-composite: exclude;
     pointer-events: none;
+    animation: glow-ring-in 600ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .anim-rise, .anim-fade { animation: none; }
     .skeleton::after        { animation: none; }
     .rainbow-glow::before, .rainbow-glow::after { animation: none; }
+    .graph-scan .gnode, .graph-scan .gsonar, .graph-scan .gedge-flow { animation: none; }
+    .graph-scan .graph-pan, .graph-scan .graph-tilt { animation: none; transform: none; }
 }
