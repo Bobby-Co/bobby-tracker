@@ -235,6 +235,10 @@ export interface IssueAnalysisData {
     duration_ms?: number
     tool_calls?: number
     markdown?: string
+    /** True when the swarm ran on a locally-served model. Carried over
+     *  from the analyse response. Optional here because rows cached
+     *  before this field shipped won't have it — treat missing as false. */
+    local?: boolean
     /** Pre-composed "fix this issue" prompt, baked at analyser time
      *  by /api/issues/[id]/suggest so the drawer can copy it to the
      *  clipboard synchronously on click (no awaited fetch — avoids

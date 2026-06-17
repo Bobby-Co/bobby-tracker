@@ -37,6 +37,15 @@ export async function proxy(request: NextRequest) {
         path.startsWith("/p/") ||
         path === "/api/public-issues" ||
         path.startsWith("/api/public-issues/") ||
+        // Relay device-flow endpoints the bobby-relay app calls WITHOUT a
+        // Supabase session — they must not be redirected to /login. Each does
+        // its own auth: pair/start is public, pair/poll requires the secret
+        // device_code, resolve requires the shared analyser bearer token. The
+        // authed relay routes (pair/approve, pair/deny, workers*) are NOT listed
+        // here, so they stay session-gated.
+        path === "/api/relay/pair/start" ||
+        path === "/api/relay/pair/poll" ||
+        path === "/api/relay/resolve" ||
         path === "/favicon.ico"
 
     const allCookies = request.cookies.getAll()
