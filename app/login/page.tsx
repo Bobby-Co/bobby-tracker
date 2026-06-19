@@ -79,7 +79,7 @@ function LoginShell({
                         <div className="text-[10.5px] font-bold uppercase tracking-[0.18em] text-[color:var(--c-text-muted)]">
                             Bobby
                         </div>
-                        <div className="text-[16px] font-bold leading-tight">Tracker</div>
+                        <div className="text-[16px] font-bold leading-tight">Ucelot</div>
                     </div>
                 </div>
 

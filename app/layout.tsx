@@ -9,8 +9,8 @@ const nunito = Nunito({
 })
 
 export const metadata: Metadata = {
-    title: "Bobby Tracker",
-    description: "Smart issue tracker for Bobby projects.",
+    title: "Ucelot by Bobby",
+    description: "Smart issue tracker for your projects.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
