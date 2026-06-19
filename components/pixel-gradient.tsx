@@ -123,6 +123,7 @@ export default function PixelGradient({
     tiltDeg = 18, // diamond: rotation (0 axis-aligned, ~45 square). linear: gradient direction
     tilePx = 26, // approx tile width in CSS px (bigger = chunkier)
     tileAspect = 1.35, // tile height / width (>1 = taller than wide)
+    mirror = false, // linear only: mirror the ramp so pos 0 lands at BOTH ends of the axis
     className = "",
 }: {
     stops?: Stop[]
@@ -130,6 +131,7 @@ export default function PixelGradient({
     tiltDeg?: number
     tilePx?: number
     tileAspect?: number
+    mirror?: boolean
     className?: string
 }) {
     const ref = useRef<HTMLCanvasElement>(null)
@@ -173,9 +175,12 @@ export default function PixelGradient({
                     const oy = fy - 0.5
                     let t: number
                     if (variant === "linear") {
-                        // project onto the (cosA, sinA) axis → an even corner-to-corner ramp.
-                        // pos 0 sits opposite the axis direction; pos 1 in the axis direction.
-                        t = 0.5 + (ox * cosA + oy * sinA) / (2 * maxP)
+                        // project onto the (cosA, sinA) axis → a corner-to-corner ramp.
+                        const proj = (ox * cosA + oy * sinA) / maxP // -1..1 along the axis
+                        // mirror: pos 0 at BOTH ends (|proj|→1), pos 1 in the middle — so a
+                        // corner glow appears at the start corner AND its diagonal opposite.
+                        // normal: a single ramp, pos 0 at the start corner → pos 1 opposite.
+                        t = mirror ? 1 - Math.abs(proj) : 0.5 + proj / 2
                     } else {
                         const rx = ox * cosA + oy * sinA // rotate → tilt
                         const ry = -ox * sinA + oy * cosA
@@ -197,7 +202,7 @@ export default function PixelGradient({
         const ro = new ResizeObserver(draw)
         ro.observe(host)
         return () => ro.disconnect()
-    }, [stops, variant, tiltDeg, tilePx, tileAspect])
+    }, [stops, variant, tiltDeg, tilePx, tileAspect, mirror])
 
     return (
         <canvas

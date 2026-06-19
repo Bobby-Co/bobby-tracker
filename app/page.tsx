@@ -18,7 +18,7 @@ export default async function Home() {
 
     return (
         <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#fffdf8] px-6">
-            <PixelGradient stops={GOLD_CORNER_STOPS} variant="linear" tilePx={48} tileAspect={1} tiltDeg={-45} />
+            <PixelGradient stops={GOLD_CORNER_STOPS} variant="linear" tilePx={48} tileAspect={1} tiltDeg={-45} mirror />
             <div className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
                 <div
                     className="anim-rise size-12 rounded-xl bg-black p-2 pt-2.5 text-white shadow-[0_12px_34px_-10px_rgba(202,138,4,0.35)]"
