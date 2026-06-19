@@ -30,34 +30,43 @@ export default async function Home() {
             />
             <div className="relative z-10 flex w-full max-w-xl flex-col items-start text-left">
                 <div className="anim-rise flex items-center gap-4" style={{ animationDelay: "0ms" }}>
-                    <div className="size-14 shrink-0 rounded-2xl bg-black p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
+                    <div className="size-14 shrink-0 rounded-2xl bg-red-950 p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
                         <BobbyMark />
                     </div>
-                    <div className="flex flex-col items-start">
+                    <div className="flex flex-col items-start text-red-950 ">
                         <h1
-                            className="text-[44px] font-extrabold leading-none tracking-[-0.035em] text-[color:var(--c-text)]"
+                            className="text-[44px] font-extrabold leading-none tracking-[-0.035em]"
                             style={{ textShadow: "0 2px 26px rgba(255,251,235,0.75)" }}
                         >
                             Ucelot
                         </h1>
-                        <span className="mt-2 text-[11px] font-bold uppercase tracking-[0.3em] text-[#a16207]">
+                        <span className="ml-1 text-[11px] font-extrabold uppercase tracking-[0.3em] ">
                             by Bobby
                         </span>
                     </div>
                 </div>
                 <p
-                    className="anim-rise mt-7 max-w-md text-[15.5px] leading-7 text-zinc-700"
+                    className="anim-rise mt-20 max-w-md font-medium text-[15.5px] leading-7 text-amber-950"
                     style={{ animationDelay: "120ms", textShadow: "0 1px 16px rgba(255,251,235,0.7)" }}
                 >
                     Smart issue tracker for your projects. Issues come with the files and lines worth investigating.
                 </p>
-                <Link
-                    href="/login"
-                    className="btn-primary anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
-                    style={{ animationDelay: "200ms" }}
-                >
-                    Sign in
-                </Link>
+                <div className="flex items-center space-x-4">
+                    <Link
+                        href="/login"
+                        className="btn-primary rounded-2xl bg-red-950 font-bold anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                        style={{ animationDelay: "200ms" }}
+                    >
+                        Start Now
+                    </Link>
+                    <Link
+                        href="/login"
+                        className="btn-primary bg-white rounded-2xl text-red-950 font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                        style={{ animationDelay: "200ms" }}
+                    >
+                        Documentation
+                    </Link>
+                </div>
             </div>
         </section>
     )
