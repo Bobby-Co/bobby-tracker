@@ -17,7 +17,7 @@ export default async function Home() {
     if (user) redirect("/projects")
 
     return (
-        <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#fffdf8] px-6">
+        <section className="relative flex min-h-screen flex-col items-start justify-center overflow-hidden bg-[#fffae8] px-8 sm:px-16 lg:px-24">
             <PixelGradient
                 stops={EMBER_STOPS}
                 variant="linear"
@@ -26,31 +26,35 @@ export default async function Home() {
                 tiltDeg={-45}
                 mirror
                 mirrorBias={0.22}
+                animate
             />
-            <div className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
-                <div
-                    className="anim-rise size-12 rounded-xl bg-black p-2 pt-2.5 text-white shadow-[0_12px_34px_-10px_rgba(202,138,4,0.35)]"
-                    style={{ animationDelay: "0ms" }}
-                >
-                    <BobbyMark />
+            <div className="relative z-10 flex w-full max-w-xl flex-col items-start text-left">
+                <div className="anim-rise flex items-center gap-4" style={{ animationDelay: "0ms" }}>
+                    <div className="size-14 shrink-0 rounded-2xl bg-black p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
+                        <BobbyMark />
+                    </div>
+                    <div className="flex flex-col items-start">
+                        <h1
+                            className="text-[44px] font-extrabold leading-none tracking-[-0.035em] text-[color:var(--c-text)]"
+                            style={{ textShadow: "0 2px 26px rgba(255,251,235,0.75)" }}
+                        >
+                            Ucelot
+                        </h1>
+                        <span className="mt-2 text-[11px] font-bold uppercase tracking-[0.3em] text-[#a16207]">
+                            by Bobby
+                        </span>
+                    </div>
                 </div>
-                <h1
-                    className="anim-rise mt-6 text-[34px] font-extrabold leading-tight tracking-[-0.02em] text-[color:var(--c-text)]"
-                    style={{ animationDelay: "70ms", textShadow: "0 2px 24px rgba(255,253,245,0.7)" }}
-                >
-                    Bobby Tracker
-                </h1>
                 <p
-                    className="anim-rise mt-3 text-[15px] leading-6 text-zinc-800"
-                    style={{ animationDelay: "140ms", textShadow: "0 1px 16px rgba(255,253,245,0.75)" }}
+                    className="anim-rise mt-7 max-w-md text-[15.5px] leading-7 text-zinc-700"
+                    style={{ animationDelay: "120ms", textShadow: "0 1px 16px rgba(255,251,235,0.7)" }}
                 >
-                    Smart issue tracker for your Bobby projects.<br />
-                    Issues come with the files and lines worth investigating.
+                    Smart issue tracker for your projects. Issues come with the files and lines worth investigating.
                 </p>
                 <Link
                     href="/login"
-                    className="btn-primary anim-rise mt-8 px-6 py-2.5 text-[14px] shadow-[0_10px_34px_-8px_rgba(202,138,4,0.35)]"
-                    style={{ animationDelay: "210ms" }}
+                    className="btn-primary anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                    style={{ animationDelay: "200ms" }}
                 >
                     Sign in
                 </Link>

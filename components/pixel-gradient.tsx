@@ -119,17 +119,19 @@ export const GOLD_CORNER_STOPS: Stop[] = [
 // so it stays a corner glow, just a richer ramp than the single-hue gold.
 export const EMBER_STOPS: Stop[] = [
     { pos: 0.0, c: [233, 116, 18] }, // deep amber-orange — darkest, at the corner
-    { pos: 0.12, c: [246, 150, 22] }, // orange
-    { pos: 0.26, c: [250, 182, 30] }, // golden-orange
-    { pos: 0.4, c: [252, 210, 70] }, // gold
-    { pos: 0.55, c: [254, 234, 156] }, // light gold
-    { pos: 0.72, c: [255, 247, 214] }, // pale
-    { pos: 1.0, c: [255, 253, 248] }, // warm white
+    { pos: 0.15, c: [245, 152, 30] }, // orange
+    { pos: 0.32, c: [249, 184, 58] }, // golden-orange
+    { pos: 0.5, c: [251, 210, 106] }, // gold
+    { pos: 0.7, c: [253, 230, 162] }, // light gold (colour still spreads through here)
+    { pos: 0.86, c: [254, 243, 206] }, // pale cream
+    { pos: 1.0, c: [255, 250, 232] }, // lightest = soft warm white (wide range → tiles pop)
 ]
 
 // Tiny canvas (cols × rows) stretched to fill its parent with
 // `image-rendering: pixelated` → the browser nearest-neighbour-upscales each
-// source pixel into a crisp block. No per-frame work: we only redraw on resize.
+// source pixel into a crisp block. Static by default (redraw on resize only);
+// `animate` adds occasional ripples — a tile flashes to rippleColor and the
+// flash spreads outward to adjacent tiles, then fades.
 export default function PixelGradient({
     stops = BLUE_STOPS,
     variant = "diamond", // "diamond" = radial bloom; "linear" = corner-to-corner wash
@@ -138,6 +140,12 @@ export default function PixelGradient({
     tileAspect = 1.35, // tile height / width (>1 = taller than wide)
     mirror = false, // linear only: mirror the ramp so pos 0 lands at BOTH ends of the axis
     mirrorBias = 0, // mirror only: -0.5..0.5 — shifts glow reach between the two ends (asymmetry)
+    animate = false, // occasional ripples: a wavefront arcs in from beyond the bottom-left
+    // or top-right corner (origin off-frame), crosses the frame, then fades (off for reduced motion)
+    rippleSpeed = 4, // how fast a ripple front expands, in tiles/second (lower = slower)
+    rippleInterval = 3000, // average ms between ripple spawns
+    rippleColor = [255, 255, 255], // the colour a tile flashes to
+    rippleStrength = 0.55, // max blend toward rippleColor (caps the crest so it's a soft wash, not solid)
     className = "",
 }: {
     stops?: Stop[]
@@ -147,6 +155,11 @@ export default function PixelGradient({
     tileAspect?: number
     mirror?: boolean
     mirrorBias?: number
+    animate?: boolean
+    rippleSpeed?: number
+    rippleInterval?: number
+    rippleColor?: RGB
+    rippleStrength?: number
     className?: string
 }) {
     const ref = useRef<HTMLCanvasElement>(null)
@@ -156,18 +169,28 @@ export default function PixelGradient({
         const host = canvas?.parentElement
         if (!canvas || !host) return
 
-        const draw = () => {
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+
+        const reduce =
+            typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+
+        let cols = 0
+        let rows = 0
+        let base: Uint8ClampedArray | null = null // static RGB per tile (cols*rows*3)
+        let img: ImageData | null = null
+
+        // (re)build the static colours for the current size and paint them. This
+        // is also the frame shown when nothing is rippling / reduced motion.
+        const computeBase = () => {
             const w = host.clientWidth,
                 h = host.clientHeight
             if (!w || !h) return
 
-            const cols = Math.max(8, Math.round(w / tilePx))
-            const rows = Math.max(8, Math.round(h / (tilePx * tileAspect)))
+            cols = Math.max(8, Math.round(w / tilePx))
+            rows = Math.max(8, Math.round(h / (tilePx * tileAspect)))
             canvas.width = cols
             canvas.height = rows
-
-            const ctx = canvas.getContext("2d")
-            if (!ctx) return
 
             const ang = (tiltDeg * Math.PI) / 180
             const cosA = Math.cos(ang),
@@ -178,10 +201,12 @@ export default function PixelGradient({
             const c1 = Math.abs(0.5 * asp * cosA + 0.5 * sinA) + Math.abs(-0.5 * asp * sinA + 0.5 * cosA)
             const c2 = Math.abs(0.5 * asp * cosA - 0.5 * sinA) + Math.abs(-0.5 * asp * sinA - 0.5 * cosA)
             const maxR = Math.max(c1, c2)
-            // linear: max projection onto the gradient axis (at a corner), to map t→[0,1]
-            const maxP = Math.abs(0.5 * asp * cosA) + Math.abs(0.5 * sinA)
+            const maxP = Math.abs(0.5 * asp * cosA) + Math.abs(0.5 * sinA) // linear normaliser
 
-            const img = ctx.createImageData(cols, rows)
+            const n = cols * rows
+            const baseArr = new Uint8ClampedArray(n * 3)
+            const imgLocal = ctx.createImageData(cols, rows)
+
             for (let y = 0; y < rows; y++) {
                 for (let x = 0; x < cols; x++) {
                     const fx = cols === 1 ? 0 : x / (cols - 1)
@@ -190,12 +215,8 @@ export default function PixelGradient({
                     const oy = fy - 0.5
                     let t: number
                     if (variant === "linear") {
-                        // project onto the (cosA, sinA) axis → a corner-to-corner ramp.
                         const proj = (ox * cosA + oy * sinA) / maxP // -1..1 along the axis
                         if (mirror) {
-                            // a glow at each end; mirrorBias makes their reach unequal
-                            // (bias>0 → the start-corner glow is larger, opposite smaller).
-                            // bias 0 → t = 1 - |proj|, the symmetric mirror.
                             const dStart = (proj + 1) / 2 // 0 at the start corner
                             const dOpp = (1 - proj) / 2 // 0 at the opposite corner
                             const gStart = Math.max(0, 1 - dStart / Math.max(0.05, 0.5 + mirrorBias))
@@ -211,21 +232,137 @@ export default function PixelGradient({
                         t = smoothstep(0.05, 1.0, r)
                     }
                     const c = sampleStops(stops, t)
-                    const i = (y * cols + x) * 4
-                    img.data[i] = c[0]
-                    img.data[i + 1] = c[1]
-                    img.data[i + 2] = c[2]
-                    img.data[i + 3] = 255
+                    const idx = y * cols + x
+                    const b = idx * 3
+                    baseArr[b] = c[0]
+                    baseArr[b + 1] = c[1]
+                    baseArr[b + 2] = c[2]
+                    const di = idx * 4
+                    imgLocal.data[di] = c[0]
+                    imgLocal.data[di + 1] = c[1]
+                    imgLocal.data[di + 2] = c[2]
+                    imgLocal.data[di + 3] = 255
                 }
             }
-            ctx.putImageData(img, 0, 0)
+
+            base = baseArr
+            img = imgLocal
+            ctx.putImageData(imgLocal, 0, 0) // static frame
         }
 
-        draw()
-        const ro = new ResizeObserver(draw)
+        computeBase()
+        const ro = new ResizeObserver(computeBase)
         ro.observe(host)
-        return () => ro.disconnect()
-    }, [stops, variant, tiltDeg, tilePx, tileAspect, mirror, mirrorBias])
+
+        let raf = 0
+        if (animate && !reduce) {
+            // Each ripple's origin sits OFF the frame, diagonally beyond the bottom-left
+            // or top-right corner, so the wavefront arcs in from that corner and sweeps to
+            // the opposite one. `near` is the off-frame offset; `maxDist` the far reach.
+            const ripples: { ox: number; oy: number; t0: number; maxDist: number; near: number }[] = []
+            const wr = rippleColor
+            const ringWidth = 0.9
+            let nextSpawn = 0
+            let wasActive = false
+
+            const spawn = (now: number) => {
+                // origin sits OFF the frame, `off` tiles diagonally beyond either the
+                // bottom-left or top-right corner, so the wave arcs in from that corner.
+                const off = Math.max(cols, rows) * (0.4 + Math.random() * 0.4)
+                const k = Math.SQRT1_2 // diagonal unit component (1/√2)
+                let ox: number, oy: number
+                if (Math.random() < 0.5) {
+                    ox = -k * off // beyond bottom-left, arcing toward top-right
+                    oy = rows - 1 + k * off
+                } else {
+                    ox = cols - 1 + k * off // beyond top-right, arcing toward bottom-left
+                    oy = -k * off
+                }
+                // farthest corner → how far the front travels to clear the whole frame
+                const cs = [
+                    [0, 0],
+                    [cols - 1, 0],
+                    [0, rows - 1],
+                    [cols - 1, rows - 1],
+                ]
+                let maxDist = 0
+                for (let i = 0; i < 4; i++) {
+                    const d = Math.hypot(cs[i][0] - ox, cs[i][1] - oy)
+                    if (d > maxDist) maxDist = d
+                }
+                // back-date t0 so the front starts just shy of the near edge — skips the
+                // invisible off-frame travel so the arc enters almost immediately.
+                const t0 = now - ((off - ringWidth * 2) / rippleSpeed) * 1000
+                ripples.push({ ox, oy, t0, maxDist, near: off })
+            }
+
+            const paint = (now: number) => {
+                const baseArr = base,
+                    imgLocal = img
+                if (!baseArr || !imgLocal) return
+                const data = imgLocal.data
+                for (let y = 0; y < rows; y++) {
+                    for (let x = 0; x < cols; x++) {
+                        let w = 0 // strongest ripple flash on this tile
+                        for (let k = 0; k < ripples.length; k++) {
+                            const rp = ripples[k]
+                            const front = (now - rp.t0) * 0.001 * rippleSpeed
+                            const dx = x - rp.ox,
+                                dy = y - rp.oy
+                            const e = (Math.sqrt(dx * dx + dy * dy) - front) / ringWidth
+                            // fade across the visible span (near edge → far corner): the
+                            // arc enters bright and dissipates as it crosses.
+                            const span = rp.maxDist - rp.near
+                            // cap the blend at rippleStrength so even the entry crest is a
+                            // soft wash, not solid white; the faint tail stays unchanged.
+                            const fade = span > 0 ? Math.max(0, Math.min(rippleStrength, 1 - (front - rp.near) / span)) : 0
+                            const v = Math.exp(-e * e) * fade
+                            if (v > w) w = v
+                        }
+                        if (w > 1) w = 1
+                        const idx = y * cols + x
+                        const b = idx * 3,
+                            di = idx * 4
+                        data[di] = baseArr[b] + (wr[0] - baseArr[b]) * w
+                        data[di + 1] = baseArr[b + 1] + (wr[1] - baseArr[b + 1]) * w
+                        data[di + 2] = baseArr[b + 2] + (wr[2] - baseArr[b + 2]) * w
+                    }
+                }
+                ctx.putImageData(imgLocal, 0, 0)
+            }
+
+            const frame = (now: number) => {
+                if (cols && rows && base && img) {
+                    // expire the ripple once its front has crossed the whole frame
+                    for (let i = ripples.length - 1; i >= 0; i--) {
+                        const rp = ripples[i]
+                        const front = (now - rp.t0) * 0.001 * rippleSpeed
+                        if (front > rp.maxDist + ringWidth * 2) ripples.splice(i, 1)
+                    }
+                    if (ripples.length > 0) {
+                        paint(now) // a ripple is crossing — only ever one at a time
+                        wasActive = true
+                    } else if (wasActive) {
+                        // it just finished → wait an interval before the next, clear the frame
+                        nextSpawn = now + rippleInterval * (0.6 + Math.random() * 0.8)
+                        paint(now)
+                        wasActive = false
+                    } else if (now >= nextSpawn) {
+                        spawn(now) // gap elapsed, nothing active → start the next one
+                        paint(now)
+                        wasActive = true
+                    }
+                }
+                raf = requestAnimationFrame(frame)
+            }
+            raf = requestAnimationFrame(frame)
+        }
+
+        return () => {
+            ro.disconnect()
+            if (raf) cancelAnimationFrame(raf)
+        }
+    }, [stops, variant, tiltDeg, tilePx, tileAspect, mirror, mirrorBias, animate, rippleSpeed, rippleInterval, rippleColor, rippleStrength])
 
     return (
         <canvas
