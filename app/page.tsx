@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/supabase/server"
-import PixelGradient, { GOLD_CORNER_STOPS } from "@/components/pixel-gradient"
+import PixelGradient, { EMBER_STOPS } from "@/components/pixel-gradient"
 
 const BobbyMark = () => (
   <svg viewBox="0 0 106 102" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -18,7 +18,15 @@ export default async function Home() {
 
     return (
         <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[#fffdf8] px-6">
-            <PixelGradient stops={GOLD_CORNER_STOPS} variant="linear" tilePx={48} tileAspect={1} tiltDeg={-45} mirror />
+            <PixelGradient
+                stops={EMBER_STOPS}
+                variant="linear"
+                tilePx={48}
+                tileAspect={1}
+                tiltDeg={-45}
+                mirror
+                mirrorBias={0.22}
+            />
             <div className="relative z-10 flex w-full max-w-md flex-col items-center text-center">
                 <div
                     className="anim-rise size-12 rounded-xl bg-black p-2 pt-2.5 text-white shadow-[0_12px_34px_-10px_rgba(202,138,4,0.35)]"

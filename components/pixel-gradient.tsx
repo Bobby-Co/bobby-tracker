@@ -114,6 +114,19 @@ export const GOLD_CORNER_STOPS: Stop[] = [
     { pos: 1.0, c: [255, 253, 248] }, // …and warm white the rest of the way
 ]
 
+// Ember: the gold corner glow with more colour — the deepest point leans
+// orange, then warms back up through gold to white. Same front-loaded falloff
+// so it stays a corner glow, just a richer ramp than the single-hue gold.
+export const EMBER_STOPS: Stop[] = [
+    { pos: 0.0, c: [233, 116, 18] }, // deep amber-orange — darkest, at the corner
+    { pos: 0.12, c: [246, 150, 22] }, // orange
+    { pos: 0.26, c: [250, 182, 30] }, // golden-orange
+    { pos: 0.4, c: [252, 210, 70] }, // gold
+    { pos: 0.55, c: [254, 234, 156] }, // light gold
+    { pos: 0.72, c: [255, 247, 214] }, // pale
+    { pos: 1.0, c: [255, 253, 248] }, // warm white
+]
+
 // Tiny canvas (cols × rows) stretched to fill its parent with
 // `image-rendering: pixelated` → the browser nearest-neighbour-upscales each
 // source pixel into a crisp block. No per-frame work: we only redraw on resize.
@@ -124,6 +137,7 @@ export default function PixelGradient({
     tilePx = 26, // approx tile width in CSS px (bigger = chunkier)
     tileAspect = 1.35, // tile height / width (>1 = taller than wide)
     mirror = false, // linear only: mirror the ramp so pos 0 lands at BOTH ends of the axis
+    mirrorBias = 0, // mirror only: -0.5..0.5 — shifts glow reach between the two ends (asymmetry)
     className = "",
 }: {
     stops?: Stop[]
@@ -132,6 +146,7 @@ export default function PixelGradient({
     tilePx?: number
     tileAspect?: number
     mirror?: boolean
+    mirrorBias?: number
     className?: string
 }) {
     const ref = useRef<HTMLCanvasElement>(null)
@@ -177,10 +192,18 @@ export default function PixelGradient({
                     if (variant === "linear") {
                         // project onto the (cosA, sinA) axis → a corner-to-corner ramp.
                         const proj = (ox * cosA + oy * sinA) / maxP // -1..1 along the axis
-                        // mirror: pos 0 at BOTH ends (|proj|→1), pos 1 in the middle — so a
-                        // corner glow appears at the start corner AND its diagonal opposite.
-                        // normal: a single ramp, pos 0 at the start corner → pos 1 opposite.
-                        t = mirror ? 1 - Math.abs(proj) : 0.5 + proj / 2
+                        if (mirror) {
+                            // a glow at each end; mirrorBias makes their reach unequal
+                            // (bias>0 → the start-corner glow is larger, opposite smaller).
+                            // bias 0 → t = 1 - |proj|, the symmetric mirror.
+                            const dStart = (proj + 1) / 2 // 0 at the start corner
+                            const dOpp = (1 - proj) / 2 // 0 at the opposite corner
+                            const gStart = Math.max(0, 1 - dStart / Math.max(0.05, 0.5 + mirrorBias))
+                            const gOpp = Math.max(0, 1 - dOpp / Math.max(0.05, 0.5 - mirrorBias))
+                            t = 1 - Math.max(gStart, gOpp)
+                        } else {
+                            t = 0.5 + proj / 2 // single ramp, pos 0 at the start corner
+                        }
                     } else {
                         const rx = ox * cosA + oy * sinA // rotate → tilt
                         const ry = -ox * sinA + oy * cosA
@@ -202,7 +225,7 @@ export default function PixelGradient({
         const ro = new ResizeObserver(draw)
         ro.observe(host)
         return () => ro.disconnect()
-    }, [stops, variant, tiltDeg, tilePx, tileAspect, mirror])
+    }, [stops, variant, tiltDeg, tilePx, tileAspect, mirror, mirrorBias])
 
     return (
         <canvas
