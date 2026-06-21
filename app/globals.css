@@ -111,11 +111,17 @@ html, body {
    NOTE: component classes that get their radius via `@apply rounded-full`
    (.mini-icon, .pill, .chip-min, .card-tag) carry no literal `rounded-full`
    class, so they're listed explicitly alongside the utility. */
-* {
+*,
+*::before,
+*::after {
     corner-shape: superellipse(4);
 }
+/* Only true circles, capsules and thin tracks stay round — squircling a
+   fully-round shape yields a lumpy rounded-square. These use the
+   rounded-full utility (avatars, status dots, progress tracks) or the
+   capsule component classes (.pill / .chip-min / .card-tag). Everything
+   else squircles, INCLUDING the square glyph .mini-icon (→ app-icon look). */
 [class*="rounded-full"],
-.mini-icon,
 .pill,
 .chip-min,
 .card-tag {
