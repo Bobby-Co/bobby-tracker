@@ -35,7 +35,7 @@ export function AppShell({
                             type="search"
                             aria-label="Search"
                             placeholder="Search…"
-                            className="h-9 w-[160px] rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-9 pr-3 text-[13px] text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,background-color,border-color] duration-200 hover:border-[color:var(--c-border-strong)] focus:w-[220px] focus:border-zinc-900 focus:outline-none focus:ring-[3px] focus:ring-zinc-900/8 sm:w-[200px] sm:focus:w-[260px]"
+                            className="h-9 w-[160px] rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-9 pr-3 text-[13px] text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,background-color,border-color] duration-200 hover:border-[color:var(--c-border-strong)] focus:w-[220px] focus:border-[color:var(--c-primary)] focus:outline-none focus:ring-[3px] focus:ring-[color:var(--c-ring)] sm:w-[200px] sm:focus:w-[260px]"
                         />
                     </label>
                 </header>

@@ -34,8 +34,15 @@
     --c-warn-bg:       #fffbeb;
     --c-error:         #b91c1c;
     --c-error-bg:      #fef2f2;
-    --c-accent:        #4f46e5;
-    --c-accent-2:      #4338ca;
+    /* brand — Ucelot ember (gold→orange). primary = warm CTA / active /
+       focus; accent = a readable deep ember for links + selected glyphs;
+       ring = the focus halo; tint = a soft wash for branded surfaces. */
+    --c-primary:       #e9730f;
+    --c-primary-hover: #cf6310;
+    --c-primary-tint:  #fff3e6;
+    --c-ring:          rgba(233,115,15,0.22);
+    --c-accent:        #c2410c;
+    --c-accent-2:      #9a3412;
 
     --r-sm:  8px;
     --r-md:  12px;
@@ -96,19 +103,31 @@ html, body {
 
 /* ─── reusable element classes ──────────────────────────────────────── */
 @layer components {
+    /* Brand focus colours are set as plain CSS, NOT @apply: Tailwind v4
+       chokes on arbitrary var() colours under variants inside @apply (same
+       failure mode as responsive variants), which silently staled the whole
+       components layer. */
     .input {
-        @apply w-full rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-sm
+        @apply w-full rounded-[12px] border bg-white px-3 py-2 text-sm
             text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)]
-            transition-colors duration-[140ms]
-            hover:border-[color:var(--c-border-strong)]
-            focus:border-zinc-900 focus:outline-none focus:ring-[3px] focus:ring-zinc-900/8;
+            transition-colors duration-[140ms];
+        border-color: var(--c-border);
+    }
+    .input:hover { border-color: var(--c-border-strong); }
+    .input:focus {
+        outline: none;
+        border-color: var(--c-primary);
+        box-shadow: 0 0 0 3px var(--c-ring);
     }
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-zinc-900 px-3.5 py-2
-            text-[13px] font-semibold text-white shadow-sm transition
-            hover:bg-zinc-800 active:scale-[0.98]
-            disabled:opacity-50 disabled:hover:bg-zinc-900 disabled:active:scale-100;
+        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-2
+            text-[13px] font-semibold text-white transition
+            active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100;
+        background-image: linear-gradient(180deg, #ef8b18 0%, #d9650d 100%);
+        box-shadow: 0 1px 2px rgba(180,83,9,0.30), inset 0 1px 0 rgba(255,255,255,0.22);
     }
+    .btn-primary:hover { background-image: linear-gradient(180deg, #ea8011 0%, #c95d0c 100%); }
+    .btn-primary:disabled:hover { background-image: linear-gradient(180deg, #ef8b18 0%, #d9650d 100%); }
     .btn-ghost {
         @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)]
             bg-white px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]

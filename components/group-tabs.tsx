@@ -31,7 +31,7 @@ export function GroupTabs({ groupId }: { groupId: string }) {
                         )}
                     >
                         {t.label}
-                        {active && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-zinc-900" />}
+                        {active && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-[color:var(--c-primary)]" />}
                     </Link>
                 )
             })}
