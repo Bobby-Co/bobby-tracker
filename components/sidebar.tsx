@@ -7,6 +7,7 @@ import { cn } from "@/components/cn"
 import { useAuth } from "@/lib/auth/auth-context"
 import { MiniIcon, toneFromString } from "@/components/field-card"
 import PixelGradient, { DARK_EMBER_STOPS } from "@/components/pixel-gradient"
+import PixelScatter from "@/components/pixel-scatter"
 import type { Project } from "@/lib/supabase/types"
 
 interface SidebarProps {
@@ -73,6 +74,14 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                 aria-hidden
                 className="pointer-events-none absolute -left-6 -top-8 h-40 w-56 bg-[radial-gradient(58%_58%_at_20%_16%,rgba(234,88,12,0.20),rgba(245,158,11,0.12)_45%,transparent_74%)] blur-[16px]"
             />
+            {/* Ember pixel bloom from the bottom-left corner — the landing's
+                scatter, anchored under the account card so the rail is
+                book-ended by the Ucelot identity (pixel logo at the top). */}
+            <div aria-hidden className="pointer-events-none absolute bottom-0 left-0 h-56 w-full overflow-hidden">
+                <PixelScatter corners={["bl"]} cell={20} fill={0.5} animate={false} className="opacity-90" />
+            </div>
+            {/* Content sits above the decorative ember layers (logo + blooms). */}
+            <div className="relative flex min-h-0 flex-1 flex-col">
             {/* Workspace header */}
             <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
                 <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[#0b090b] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-amber-900/40">
@@ -194,6 +203,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                         <LogoutIcon />
                     </button>
                 </div>
+            </div>
             </div>
         </nav>
     )

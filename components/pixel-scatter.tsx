@@ -20,13 +20,21 @@ const rand = (s: number) => {
 // bottom-right corners and fade to white toward the centre, so most of the
 // page stays clean for the copy. Tiles are seamless (no grid outline) and a
 // few flicker occasionally. Static frame under prefers-reduced-motion.
+type Corner = "tl" | "tr" | "bl" | "br"
+
 export default function PixelScatter({
     cell = 48,
     fill = 0.13,
+    corners = ["tl", "br"],
+    animate = true,
     className = "",
 }: {
     cell?: number
     fill?: number
+    /** Which corner(s) the ember glows from (default: the landing's TL + BR). */
+    corners?: Corner[]
+    /** When false, paint one static frame (no rAF) — use in always-on chrome. */
+    animate?: boolean
     className?: string
 }) {
     const ref = useRef<HTMLCanvasElement>(null)
@@ -77,12 +85,15 @@ export default function PixelScatter({
                     const fx = cols > 1 ? c / (cols - 1) : 0
                     const fy = rows > 1 ? r / (rows - 1) : 0
 
-                    // Corner weight: a pixelated gradient glowing from the
-                    // top-left and bottom-right corners, fading to white toward
-                    // the centre so most of the page stays clean for the copy.
-                    const pTL = 1 - Math.min(1, Math.hypot(fx, fy) / reach)
-                    const pBR = 1 - Math.min(1, Math.hypot(1 - fx, 1 - fy) / reach)
-                    const cw = Math.max(pTL, pBR)
+                    // Corner weight: a pixelated gradient glowing from each
+                    // selected corner (1 at the corner, 0 once `reach` of the
+                    // diagonal away), fading out toward the rest of the canvas.
+                    let cw = 0
+                    for (const k of corners) {
+                        const cx = k[1] === "l" ? 0 : 1
+                        const cy = k[0] === "t" ? 0 : 1
+                        cw = Math.max(cw, 1 - Math.min(1, Math.hypot(fx - cx, fy - cy) / reach))
+                    }
 
                     // Faint gray base only where the glow reaches; pure white
                     // (baseOp 0) through the centre.
@@ -144,7 +155,7 @@ export default function PixelScatter({
         render(0)
 
         let raf = 0
-        if (!reduce) {
+        if (!reduce && animate) {
             const loop = (t: number) => {
                 render(t * 0.001)
                 raf = requestAnimationFrame(loop)
@@ -154,7 +165,9 @@ export default function PixelScatter({
 
         const ro = new ResizeObserver(() => {
             build()
-            if (reduce) render(0)
+            // Repaint the static frame after a resize whenever the rAF loop
+            // isn't running (reduced-motion OR animate=false).
+            if (reduce || !animate) render(0)
         })
         ro.observe(host)
 
@@ -162,7 +175,7 @@ export default function PixelScatter({
             ro.disconnect()
             if (raf) cancelAnimationFrame(raf)
         }
-    }, [cell, fill])
+    }, [cell, fill, animate, corners.join(",")])
 
     return (
         <canvas
