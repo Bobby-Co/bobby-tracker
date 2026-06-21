@@ -6,6 +6,7 @@ import { useState } from "react"
 import { cn } from "@/components/cn"
 import { useAuth } from "@/lib/auth/auth-context"
 import { MiniIcon, toneFromString } from "@/components/field-card"
+import PixelGradient, { DARK_EMBER_STOPS } from "@/components/pixel-gradient"
 import type { Project } from "@/lib/supabase/types"
 
 interface SidebarProps {
@@ -18,7 +19,7 @@ interface SidebarProps {
 // raised white pill (hairline ring + soft shadow); idle rows are quiet
 // and lift on hover with a translucent overlay.
 const ROW_ACTIVE =
-    "bg-[color:var(--c-surface)] font-semibold text-zinc-900 shadow-[0_1px_2px_rgba(17,24,39,0.06)] ring-1 ring-[color:var(--c-border)]"
+    "bg-[color:var(--c-surface)] font-semibold text-zinc-900 shadow-[0_1px_3px_rgba(180,83,9,0.12)] ring-1 ring-amber-200/80"
 const ROW_IDLE = "text-zinc-600 hover:bg-[color:var(--c-overlay)] bg-zinc-200/50 hover:text-zinc-900"
 
 // SidebarContent mirrors the reference rail top-to-bottom: a workspace
@@ -65,11 +66,22 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
     }
 
     return (
-        <nav className="flex h-full flex-col pt-2 pl-2">
+        <nav className="relative flex h-full flex-col pt-2 pl-2">
+            {/* Faint ember brand bloom at the top — echoes the login panel so
+                the rail reads as the same warm Ucelot identity. */}
+            <div
+                aria-hidden
+                className="pointer-events-none absolute -left-6 -top-8 h-40 w-56 bg-[radial-gradient(58%_58%_at_20%_16%,rgba(234,88,12,0.20),rgba(245,158,11,0.12)_45%,transparent_74%)] blur-[16px]"
+            />
             {/* Workspace header */}
             <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-zinc-900 text-white">
-                    <BobbyMark />
+                <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[#0b090b] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-amber-900/40">
+                    {/* Brand ember — the same dark-ember pixel gradient as the login panel,
+                        glowing from the top-left corner behind the mark. */}
+                    <PixelGradient stops={DARK_EMBER_STOPS} variant="linear" tiltDeg={45} tilePx={8} tileAspect={1} />
+                    <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+                        <BobbyMark />
+                    </span>
                 </span>
                 <span className="min-w-0 flex-1 truncate text-[14px] font-bold tracking-[-0.01em]">
                     Ucelot
@@ -210,7 +222,7 @@ function NavItem({
                 active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
-            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-zinc-900" : "text-zinc-400")}>
+            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-amber-500" : "text-zinc-400")}>
                 {icon}
             </span>
             <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -245,7 +257,7 @@ function TeamLeaf({ icon, label, active }: { icon: React.ReactNode; label: strin
                 active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
-            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-zinc-900" : "text-zinc-400")}>
+            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-amber-500" : "text-zinc-400")}>
                 {icon}
             </span>
             <span className="min-w-0 flex-1 truncate text-left">{label}</span>
