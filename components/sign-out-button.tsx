@@ -1,19 +1,38 @@
 "use client"
 
-export function SignOutButton({ email }: { email?: string | null }) {
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth/auth-context"
+
+// Client sign-out: clears the session via the browser Supabase client
+// (which removes the auth cookie and notifies the auth context), then
+// sends the user to /login. Replaces the old POST to /auth/sign-out.
+export function SignOutButton() {
+    const { user, signOut } = useAuth()
+    const router = useRouter()
+    const [pending, setPending] = useState(false)
+
+    async function onClick() {
+        setPending(true)
+        await signOut()
+        router.replace("/login")
+    }
+
     return (
-        <form action="/auth/sign-out" method="post" className="flex items-center gap-2.5">
-            {email && (
+        <div className="flex items-center gap-2.5">
+            {user?.email && (
                 <span className="hidden truncate text-[12px] text-[color:var(--c-text-muted)] sm:inline">
-                    {email}
+                    {user.email}
                 </span>
             )}
             <button
-                type="submit"
-                className="rounded-[8px] border border-[color:var(--c-border)] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)]"
+                type="button"
+                onClick={onClick}
+                disabled={pending}
+                className="rounded-[8px] border border-[color:var(--c-border)] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)] disabled:opacity-60"
             >
-                Sign out
+                {pending ? "Signing out…" : "Sign out"}
             </button>
-        </form>
+        </div>
     )
 }

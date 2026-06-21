@@ -1,42 +1,44 @@
+"use client"
+
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
+import { useParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
 import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
 import { PublicIntegrationPanel } from "@/components/public-integration-panel"
-
-export const dynamic = "force-dynamic"
+import IntegrationsLoading from "./loading"
 
 // Integrations tab — external-service syncs and the per-project
 // public-submissions toggle. Session management itself lives at
 // /sessions/[id]; this surface only manages the integration flag
 // and shows which sessions cover this project.
-export default async function IntegrationsPage({
-    params,
-}: {
-    params: Promise<{ id: string }>
-}) {
-    const { id } = await params
-    const supabase = await createClient()
 
-    // All three queries can fail independently when migrations haven't
-    // landed (0009 introduces public_session_projects, 0011 introduces
-    // project_public_integration). Tolerate that with a single banner.
-    const [{ data: integration, error: intErr }, { data: links, error: linkErr }] = await Promise.all([
-        supabase
-            .from("project_public_integration")
-            .select("*")
-            .eq("project_id", id)
-            .maybeSingle<ProjectPublicIntegration>(),
-        supabase
-            .from("public_session_projects")
-            .select("session_id,public_sessions(id,name,enabled,submission_count)")
-            .eq("project_id", id),
-    ])
-    const tableMissing = !!intErr || !!linkErr
+type SessionRow = Pick<PublicSession, "id" | "name" | "enabled" | "submission_count">
 
-    type LinkRow = { session_id: string; public_sessions: Pick<PublicSession, "id" | "name" | "enabled" | "submission_count"> | Pick<PublicSession, "id" | "name" | "enabled" | "submission_count">[] | null }
-    const sessions = ((links as unknown as LinkRow[]) ?? [])
-        .map((r) => Array.isArray(r.public_sessions) ? r.public_sessions[0] : r.public_sessions)
-        .filter((s): s is NonNullable<typeof s> => !!s)
+type IntegrationsData = {
+    integration: ProjectPublicIntegration | null
+    sessions: SessionRow[]
+    tableMissing: boolean
+}
+
+export default function IntegrationsPage() {
+    const { id } = useParams<{ id: string }>()
+    const { data, error, loading } = useApi<IntegrationsData>(
+        id ? `/api/projects/${id}/sessions` : null,
+    )
+
+    if (loading) return <IntegrationsLoading />
+
+    if (error) {
+        return (
+            <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                {error}
+            </div>
+        )
+    }
+
+    const integration = data?.integration ?? null
+    const sessions = data?.sessions ?? []
+    const tableMissing = data?.tableMissing ?? false
 
     return (
         <div className="flex flex-col gap-4">

@@ -1,34 +1,26 @@
 import { cn } from "@/components/cn"
 import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import { PRIORITY_META, STATUS_META } from "@/components/issue-meta"
 
-const STATUS_STYLES: Record<IssueStatus, string> = {
-    open:        "bg-blue-50 text-blue-800 border-blue-100",
-    in_progress: "bg-amber-50 text-amber-800 border-amber-100",
-    blocked:     "bg-red-50 text-red-800 border-red-100",
-    done:        "bg-emerald-50 text-emerald-800 border-emerald-100",
-    archived:    "bg-zinc-100 text-zinc-600 border-zinc-200",
-    duplicated:  "bg-amber-50 text-amber-800 border-amber-100",
-}
-
-const PRIORITY_STYLES: Record<IssuePriority, string> = {
-    low:    "bg-zinc-50 text-zinc-600 border-zinc-200",
-    medium: "bg-zinc-100 text-zinc-700 border-zinc-200",
-    high:   "bg-orange-50 text-orange-800 border-orange-100",
-    urgent: "bg-rose-50 text-rose-800 border-rose-100",
-}
-
+// Minimal inline chips — a coloured dot + label. Status carries a soft
+// tinted background; priority stays neutral-bordered so the two read as
+// distinct registers without shouting.
 export function StatusChip({ status }: { status: IssueStatus }) {
+    const m = STATUS_META[status]
     return (
-        <span className={cn("inline-flex items-center rounded-full border px-2 py-[2px] text-[11px] font-semibold", STATUS_STYLES[status])}>
-            {status.replace(/_/g, " ")}
+        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-[2px] text-[11px] font-semibold", m.chip)}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", m.dot)} />
+            {m.label}
         </span>
     )
 }
 
 export function PriorityChip({ priority }: { priority: IssuePriority }) {
+    const m = PRIORITY_META[priority]
     return (
-        <span className={cn("inline-flex items-center rounded-full border px-2 py-[2px] text-[11px] font-semibold", PRIORITY_STYLES[priority])}>
-            {priority}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]">
+            <span className={cn("h-1.5 w-1.5 rounded-full", m.dot)} />
+            {m.label}
         </span>
     )
 }

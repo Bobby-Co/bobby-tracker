@@ -1,18 +1,31 @@
-import { RelayPairApprove } from "@/components/relay-pair-approve"
+"use client"
 
-export const dynamic = "force-dynamic"
+import { Suspense } from "react"
+import { useSearchParams } from "next/navigation"
+import { RelayPairApprove } from "@/components/relay-pair-approve"
 
 // The page the Bobby Relay app opens (pairUrl = /link?code=XXXX). It
 // lives under (app) so the layout's auth gate sends a logged-out user
 // through /login?next=… and lands them back here with the code intact.
 // Renders a focused centred card rather than the full workers manager.
-export default async function LinkPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ code?: string }>
-}) {
-    const { code } = await searchParams
+//
+// useSearchParams must sit inside a Suspense boundary so the page can
+// still be prerendered (see node_modules/next/dist/docs — a static page
+// calling it without a boundary fails the production build).
+export default function LinkPage() {
+    return (
+        <Suspense fallback={<LinkCard />}>
+            <LinkInner />
+        </Suspense>
+    )
+}
 
+function LinkInner() {
+    const code = useSearchParams().get("code") ?? undefined
+    return <LinkCard initialCode={code} />
+}
+
+function LinkCard({ initialCode }: { initialCode?: string }) {
     return (
         <div className="flex min-h-full items-center justify-center px-6 py-12">
             <div className="w-full max-w-md rounded-[20px] border border-[color:var(--c-border)] bg-white p-7 shadow-[var(--shadow-card)]">
@@ -31,7 +44,7 @@ export default async function LinkPage({
                 </p>
 
                 <div className="mt-5">
-                    <RelayPairApprove initialCode={code} />
+                    <RelayPairApprove initialCode={initialCode} />
                 </div>
             </div>
         </div>

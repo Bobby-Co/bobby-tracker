@@ -1,13 +1,23 @@
 import type { ReactNode } from "react"
-import { cn } from "@/components/cn"
+import { MiniCard, type Tone } from "@/components/field-card"
 
 type Tag = "trigger" | "action" | "output" | "info" | "rose" | "muted"
 
+const TAG_TONE: Record<Tag, Tone> = {
+    trigger: "amber",
+    action:  "blue",
+    output:  "emerald",
+    info:    "violet",
+    rose:    "rose",
+    muted:   "zinc",
+}
+
 interface WorkflowCardProps {
     tag?: Tag
-    tagLabel?: string
+    tone?: Tone
     icon?: ReactNode
     title?: ReactNode
+    subtitle?: ReactNode
     menu?: ReactNode
     footer?: ReactNode
     className?: string
@@ -15,69 +25,44 @@ interface WorkflowCardProps {
     interactive?: boolean
 }
 
-// Reusable card primitive matching the CI reference image. The status tag
-// is rendered as a folder-tab outside the card body (rounded top corners,
-// flush bottom that tucks under the card border) so the two read as one
-// unit. Body holds the title row + content + optional footer slot.
+// Thin compatibility wrapper over the shared <MiniCard> primitive. Older
+// callers passed a CI-style status `tag`; that now just picks the tinted
+// tone for the circular glyph. New callers should prefer MiniCard / a
+// `tone` directly.
 export function WorkflowCard({
     tag,
-    tagLabel,
+    tone,
     icon,
     title,
+    subtitle,
     menu,
     footer,
     className,
     children,
     interactive = true,
 }: WorkflowCardProps) {
+    const resolvedTone: Tone = tone ?? (tag ? TAG_TONE[tag] : "zinc")
     return (
-        <div className={cn("card-stack", className)}>
-            {tag && (
-                <span className={cn("card-tab", `card-tab-${tag}`)}>
-                    <BoltDot />
-                    {tagLabel ?? defaultTagLabel(tag)}
-                </span>
-            )}
-            <article className={cn("card flex flex-1 flex-col", interactive && "card-hover")}>
-                {title && (
-                    <div className="card-title">
-                        {icon && (
-                            <span className="grid h-[18px] w-[18px] shrink-0 place-items-center text-[color:var(--c-text)]">
-                                {icon}
-                            </span>
-                        )}
-                        <span className="min-w-0 truncate">{title}</span>
-                        {menu ?? <DefaultMenuButton />}
-                    </div>
-                )}
-                {children && <div className="mt-2.5 flex flex-1 flex-col gap-2">{children}</div>}
-                {footer && <div className="card-footer">{footer}</div>}
-            </article>
-        </div>
+        <MiniCard
+            tone={resolvedTone}
+            icon={icon ?? <Dot />}
+            title={title}
+            subtitle={subtitle}
+            menu={menu}
+            footer={footer}
+            className={className}
+            interactive={interactive}
+        >
+            {children}
+        </MiniCard>
     )
 }
 
-function defaultTagLabel(t: Tag) {
-    return t.charAt(0).toUpperCase() + t.slice(1)
-}
-
-function BoltDot() {
+function Dot() {
     return (
         <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
             <circle cx="12" cy="12" r="4" />
         </svg>
-    )
-}
-
-function DefaultMenuButton() {
-    return (
-        <button type="button" className="card-menu-btn" aria-label="More">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <circle cx="6" cy="12" r="1.6" />
-                <circle cx="12" cy="12" r="1.6" />
-                <circle cx="18" cy="12" r="1.6" />
-            </svg>
-        </button>
     )
 }
 

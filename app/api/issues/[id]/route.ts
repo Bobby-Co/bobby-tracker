@@ -2,6 +2,23 @@ import { jsonError, requireUser } from "@/lib/api"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue } from "@/lib/supabase/types"
 
+// GET /api/issues/[id]?project_id=... — single issue. The optional
+// project_id query param scopes the lookup to a project (matching the
+// issue detail page's read). Shape: { issue: Issue | null }.
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    const { supabase, error } = await requireUser()
+    if (error) return error
+
+    const projectId = new URL(request.url).searchParams.get("project_id")
+    let query = supabase.from("issues").select("*").eq("id", id)
+    if (projectId) query = query.eq("project_id", projectId)
+
+    const { data, error: dbErr } = await query.maybeSingle<Issue>()
+    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    return Response.json({ issue: data })
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()

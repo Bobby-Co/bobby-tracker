@@ -22,6 +22,7 @@ export function GroupTabs({ groupId }: { groupId: string }) {
                     <Link
                         key={t.href}
                         href={t.href}
+                        prefetch={false} // see ProjectTabs — avoid per-tab cold-isolate fan-out
                         className={cn(
                             "relative px-3 py-2 text-[13px] font-semibold transition-colors",
                             active

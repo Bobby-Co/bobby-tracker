@@ -69,11 +69,28 @@ export async function GET() {
                 Authorization: `Bearer ${tokenRow.access_token}`,
                 Accept: "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
+                // GitHub 403s any request without a User-Agent. Node/undici
+                // (our previous host) added one automatically; Cloudflare
+                // Workers' fetch does NOT — so we set it explicitly.
+                "User-Agent": "ucelot-tracker",
             },
             // Don't let Next.js cache repo lists across users.
             cache: "no-store",
         })
         if (resp.status === 401 || resp.status === 403) {
+            // Surface GitHub's *actual* reason in the Worker tail instead of
+            // a generic "rejected". The body / headers distinguish: bad
+            // credentials (token invalid/expired/wrong app), SAML SSO
+            // enforcement (org needs authorization), or rate limiting.
+            const detail = await resp.text().catch(() => "")
+            const tok = tokenRow.access_token ?? ""
+            console.error(
+                `[github/repos] GitHub ${resp.status} rejected token ` +
+                `(prefix=${tok.slice(0, 4)}, len=${tok.length}) ` +
+                `sso=${resp.headers.get("x-github-sso") ?? "none"} ` +
+                `www-auth=${resp.headers.get("www-authenticate") ?? "none"} ` +
+                `body=${detail.slice(0, 300)}`,
+            )
             return jsonError(
                 "github_reauth_required",
                 "GitHub rejected the stored token. Reconnect to continue.",

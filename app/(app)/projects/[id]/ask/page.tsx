@@ -1,41 +1,35 @@
-import { Suspense } from "react"
+"use client"
+
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
+import { useParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
 import { AskPanel } from "@/components/ask-panel"
 import { AskSkeleton } from "@/components/ask-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
-export const dynamic = "force-dynamic"
-
-// Synchronous shell wraps a streaming <Suspense> boundary so the
-// skeleton renders the moment the user lands on this tab — soft
-// navigations between project tabs no longer wait on the Supabase
-// round-trip before showing anything.
-export default function AskPage({ params }: { params: Promise<{ id: string }> }) {
-    return (
-        <Suspense fallback={<AskSkeleton />}>
-            <AskContent params={params} />
-        </Suspense>
-    )
+type KnowledgeData = {
+    project: Pick<Project, "id" | "repo_url" | "repo_full_name"> | null
+    analyser: ProjectAnalyser | null
 }
 
-async function AskContent({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
-    const supabase = await createClient()
+export default function AskPage() {
+    const { id } = useParams<{ id: string }>()
+    const { data, error, loading } = useApi<KnowledgeData>(
+        id ? `/api/projects/${id}/knowledge` : null,
+    )
 
-    const [{ data: project }, { data: analyser }] = await Promise.all([
-        supabase
-            .from("projects")
-            .select("id,repo_url,repo_full_name")
-            .eq("id", id)
-            .single<Pick<Project, "id" | "repo_url" | "repo_full_name">>(),
-        supabase
-            .from("project_analyser")
-            .select("*")
-            .eq("project_id", id)
-            .maybeSingle<ProjectAnalyser>(),
-    ])
+    if (loading) return <AskSkeleton />
 
+    if (error) {
+        return (
+            <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                {error}
+            </div>
+        )
+    }
+
+    const project = data?.project ?? null
+    const analyser = data?.analyser ?? null
     const ready =
         !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
 

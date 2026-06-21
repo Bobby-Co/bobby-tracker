@@ -1,64 +1,27 @@
-import { Suspense } from "react"
+"use client"
+
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import { useApi } from "@/lib/hooks/use-api"
+import type { Project, ProjectGroup } from "@/lib/supabase/types"
 import { NewGroupButton } from "@/components/new-group-button"
 import { GroupsListSkeleton } from "@/components/groups-list-skeleton"
+import { MiniCard, toneFromString } from "@/components/field-card"
 
-export const dynamic = "force-dynamic"
+type GroupWithMembers = ProjectGroup & { member_count: number; member_names: string[] }
 
 // Top-level "Groups" list. A group is a user-defined collection of
 // related projects so the AI compose flow can route an inbound issue
-// to the right project (or fan it across several) inside a multi-
-// repo product. From here owners create groups and drill into one
-// to manage members + compose group-aware issues.
-//
-// Sync shell wraps a streaming <Suspense> boundary so soft sidebar
-// clicks paint the skeleton instantly instead of stalling on the
-// Supabase round-trips.
+// to the right project (or fan it across several) inside a multi-repo
+// product. From here owners create groups and drill into one to manage
+// members + compose group-aware issues.
 export default function GroupsPage() {
-    return (
-        <Suspense fallback={<GroupsListSkeleton />}>
-            <GroupsContent />
-        </Suspense>
-    )
-}
+    const groupsQ = useApi<{ groups: GroupWithMembers[] }>("/api/groups")
+    const projectsQ = useApi<{ projects: Project[] }>("/api/projects")
 
-async function GroupsContent() {
-    const supabase = await createClient()
+    if (groupsQ.loading) return <GroupsListSkeleton />
 
-    const { data: groups } = await supabase
-        .from("project_groups")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .returns<ProjectGroup[]>()
-
-    // Eligible projects for picker = anything the user owns. Members
-    // get RLS-filtered automatically.
-    const { data: projects } = await supabase
-        .from("projects")
-        .select("id,name")
-        .order("name", { ascending: true })
-    const allProjects = (projects ?? []).map((p) => ({ id: p.id, name: p.name }))
-
-    // Member counts per group, grouped client-side from one round-trip.
-    const groupIds = (groups ?? []).map((g) => g.id)
-    const { data: links } = groupIds.length
-        ? await supabase
-            .from("project_group_members")
-            .select("group_id,project_id,projects(name)")
-            .in("group_id", groupIds)
-        : { data: [] as { group_id: string; project_id: string; projects: { name: string } | { name: string }[] | null }[] }
-
-    const namesByGroup = new Map<string, string[]>()
-    for (const l of links ?? []) {
-        const proj = Array.isArray(l.projects) ? l.projects[0] : l.projects
-        const name = proj && typeof proj === "object" && "name" in proj ? proj.name : ""
-        if (!name) continue
-        const list = namesByGroup.get(l.group_id) ?? []
-        list.push(name)
-        namesByGroup.set(l.group_id, list)
-    }
+    const groups = groupsQ.data?.groups ?? []
+    const allProjects = (projectsQ.data?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))
 
     return (
         <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -72,48 +35,57 @@ async function GroupsContent() {
                 <NewGroupButton projects={allProjects} />
             </header>
 
-            {(groups?.length ?? 0) === 0 ? (
+            {groupsQ.error && (
+                <div className="mt-6 rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                    {groupsQ.error}
+                </div>
+            )}
+
+            {groups.length === 0 ? (
                 <div className="mt-8 rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     <div className="text-[14px] font-bold text-[color:var(--c-text)]">No groups yet</div>
                     <p className="mt-1">Create one and pick a few related projects — the AI router needs at least two indexed projects to be useful.</p>
                 </div>
             ) : (
-                <ul className="mt-6 flex flex-col gap-3">
-                    {(groups ?? []).map((g) => {
-                        const names = namesByGroup.get(g.id) ?? []
+                <ul
+                    className="mt-6 grid gap-3"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
+                >
+                    {groups.map((g) => {
+                        const names = g.member_names ?? []
                         return (
                             <li key={g.id}>
-                                <Link
-                                    href={`/groups/${g.id}`}
-                                    className="block rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 transition-colors hover:border-[color:var(--c-border-strong)]"
-                                >
-                                    <div className="flex flex-wrap items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="truncate text-[15px] font-bold">{g.name}</div>
-                                            {g.description && (
-                                                <p className="mt-1 line-clamp-2 text-[12.5px] text-[color:var(--c-text-muted)]">
-                                                    {g.description}
-                                                </p>
+                                <Link href={`/groups/${g.id}`} prefetch={false} className="block">
+                                    <MiniCard
+                                        tone={toneFromString(g.name)}
+                                        icon={<FolderIcon />}
+                                        title={g.name}
+                                        subtitle={`${names.length} project${names.length === 1 ? "" : "s"}`}
+                                    >
+                                        {g.description && (
+                                            <p className="line-clamp-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
+                                                {g.description}
+                                            </p>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {names.length === 0 ? (
+                                                <span className="text-[11.5px] text-[color:var(--c-text-dim)]">
+                                                    No projects yet
+                                                </span>
+                                            ) : (
+                                                names.slice(0, 4).map((n) => (
+                                                    <span key={n} className="chip-min max-w-[140px] truncate">
+                                                        {n}
+                                                    </span>
+                                                ))
+                                            )}
+                                            {names.length > 4 && (
+                                                <span className="text-[11px] text-[color:var(--c-text-dim)]">
+                                                    +{names.length - 4}
+                                                </span>
                                             )}
                                         </div>
-                                        <span className="text-[11.5px] tabular-nums text-[color:var(--c-text-muted)]">
-                                            {names.length} project{names.length === 1 ? "" : "s"}
-                                        </span>
-                                    </div>
-                                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11.5px]">
-                                        {names.length === 0 ? (
-                                            <span className="text-[color:var(--c-text-dim)]">No projects yet</span>
-                                        ) : (
-                                            names.map((n) => (
-                                                <span
-                                                    key={n}
-                                                    className="rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 font-semibold text-[color:var(--c-text)]"
-                                                >
-                                                    {n}
-                                                </span>
-                                            ))
-                                        )}
-                                    </div>
+                                    </MiniCard>
                                 </Link>
                             </li>
                         )
@@ -121,5 +93,13 @@ async function GroupsContent() {
                 </ul>
             )}
         </div>
+    )
+}
+
+function FolderIcon() {
+    return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+        </svg>
     )
 }

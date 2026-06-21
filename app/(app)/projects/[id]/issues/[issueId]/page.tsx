@@ -1,6 +1,8 @@
-import { notFound } from "next/navigation"
+"use client"
+
+import { notFound, useParams } from "next/navigation"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
+import { useApi } from "@/lib/hooks/use-api"
 import { IssueDetail } from "@/components/issue-detail"
 import { IssueSuggestions } from "@/components/issue-suggestions"
 import { SimilarIssuesCard } from "@/components/similar-issues-card"
@@ -13,65 +15,55 @@ import type {
     ProjectStatusColor,
 } from "@/lib/supabase/types"
 
-export const dynamic = "force-dynamic"
+interface IssueView {
+    issue: Issue | null
+    project: Project | null
+    analyser: ProjectAnalyser | null
+    suggestion: IssueSuggestion | null
+    peekOthers: Issue[]
+    labelIcons: ProjectLabelIcon[]
+    statusColors: ProjectStatusColor[]
+}
 
-export default async function IssueDetailPage({
-    params,
-}: {
-    params: Promise<{ id: string; issueId: string }>
-}) {
-    const { id, issueId } = await params
-    const supabase = await createClient()
+export default function IssueDetailPage() {
+    const { id, issueId } = useParams<{ id: string; issueId: string }>()
 
-    const [
-        issueRes,
-        projectRes,
-        analyserRes,
-        suggestionRes,
-        peekIssuesRes,
-        labelIconsRes,
-        statusColorsRes,
-    ] = await Promise.all([
-        supabase.from("issues")
-            .select("*")
-            .eq("id", issueId)
-            .eq("project_id", id)
-            .single<Issue>(),
-        supabase.from("projects")
-            .select("repo_url,repo_full_name")
-            .eq("id", id)
-            .single<Pick<Project, "repo_url" | "repo_full_name">>(),
-        supabase.from("project_analyser")
-            .select("*")
-            .eq("project_id", id)
-            .maybeSingle<ProjectAnalyser>(),
-        supabase.from("issue_suggestions")
-            .select("*")
-            .eq("issue_id", issueId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle<IssueSuggestion>(),
-        // Other scheduled issues in the same project — used to
-        // render neighbouring tiles in the timeline peek card.
-        supabase.from("issues")
-            .select("id,issue_number,title,status,priority,labels,starts_at,ends_at,lane_y,color,project_id,user_id,body,github_issue_number,github_node_id,ai_proposed,duplicate_of_issue_id,created_at,updated_at")
-            .eq("project_id", id)
-            .not("starts_at", "is", null)
-            .not("ends_at", "is", null)
-            .returns<Issue[]>(),
-        supabase.from("project_label_icons")
-            .select("*")
-            .eq("project_id", id)
-            .returns<ProjectLabelIcon[]>(),
-        supabase.from("project_status_colors")
-            .select("*")
-            .eq("project_id", id)
-            .returns<ProjectStatusColor[]>(),
-    ])
+    // One consolidated fetch instead of 7 parallel ones — the route
+    // handler does the Promise.all server-side (1 Worker invocation).
+    const { data, loading, error } = useApi<IssueView>(
+        `/api/projects/${id}/issues/${issueId}`,
+    )
 
-    if (!issueRes.data || !projectRes.data) notFound()
+    if (loading) {
+        return (
+            <div className="flex flex-col gap-4 px-4">
+                <div className="skeleton h-4 w-16 rounded-[8px]" />
+                <div className="skeleton h-64 w-full rounded-[16px]" />
+                <div className="skeleton h-32 w-full rounded-[16px]" />
+                <div className="skeleton h-40 w-full rounded-[16px]" />
+            </div>
+        )
+    }
 
-    const analyser = analyserRes.data
+    if (error) {
+        return (
+            <div className="flex flex-col gap-4 px-4">
+                <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                    {error}
+                </div>
+            </div>
+        )
+    }
+
+    const issue = data?.issue ?? null
+    const project = data?.project ?? null
+    if (!issue || !project) notFound()
+
+    const analyser = data?.analyser ?? null
+    const peekOthers = data?.peekOthers ?? []
+    const labelIcons = data?.labelIcons ?? []
+    const statusColors = data?.statusColors ?? []
+    const suggestion = data?.suggestion ?? null
     const ready = !!analyser?.enabled && analyser?.status === "ready" && !!analyser?.graph_id
 
     return (
@@ -80,26 +72,26 @@ export default async function IssueDetailPage({
                 ← Issues
             </Link>
             <IssueDetail
-                issue={issueRes.data}
+                issue={issue}
                 projectId={id}
-                peekOthers={peekIssuesRes.data ?? []}
-                labelIcons={labelIconsRes.data ?? []}
-                statusColors={statusColorsRes.data ?? []}
+                peekOthers={peekOthers}
+                labelIcons={labelIcons}
+                statusColors={statusColors}
             />
             <SimilarIssuesCard
-                issueId={issueRes.data.id}
+                issueId={issue.id}
                 variant="auth"
                 projectId={id}
-                duplicateOfIssueId={issueRes.data.duplicate_of_issue_id}
+                duplicateOfIssueId={issue.duplicate_of_issue_id}
             />
             <IssueSuggestions
-                issueId={issueRes.data.id}
+                issueId={issue.id}
                 projectId={id}
-                repo={projectRes.data}
+                repo={project}
                 indexedSha={analyser?.last_indexed_sha ?? null}
-                initial={suggestionRes.data ?? null}
+                initial={suggestion}
                 analyserReady={ready}
-                issueEffort={issueRes.data.analyse_effort ?? null}
+                issueEffort={issue.analyse_effort ?? null}
             />
         </div>
     )

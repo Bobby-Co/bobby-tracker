@@ -1,5 +1,8 @@
+"use client"
+
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
+import { useParams, useSearchParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
 import { NewIssueButton } from "@/components/new-issue-button"
 import { AiComposeButton } from "@/components/ai-compose-button"
 import { IssueList, type ParentRow } from "@/components/issue-list"
@@ -8,35 +11,20 @@ import { IssueFolderTile } from "@/components/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
 
-export const dynamic = "force-dynamic"
+export default function IssuesPage() {
+    const { id } = useParams<{ id: string }>()
+    const searchParams = useSearchParams()
+    const view: IssuesView = searchParams.get("view") === "tile" ? "tile" : "list"
 
-export default async function IssuesPage({
-    params,
-    searchParams,
-}: {
-    params: Promise<{ id: string }>
-    searchParams: Promise<{ view?: string }>
-}) {
-    const { id } = await params
-    const { view: viewParam } = await searchParams
-    const view: IssuesView = viewParam === "tile" ? "tile" : "list"
+    const issuesQ = useApi<{ issues: Issue[] }>(`/api/projects/${id}/issues`)
+    const analyserQ = useApi<{ analyser: ProjectAnalyser | null }>(`/api/projects/${id}/analyser/status`)
 
-    const supabase = await createClient()
-    const [{ data: issues }, { data: analyser }] = await Promise.all([
-        supabase
-            .from("issues")
-            .select("*")
-            .eq("project_id", id)
-            .order("updated_at", { ascending: false })
-            .returns<Issue[]>(),
-        supabase
-            .from("project_analyser")
-            .select("*")
-            .eq("project_id", id)
-            .maybeSingle<ProjectAnalyser>(),
-    ])
+    const loading = issuesQ.loading || analyserQ.loading
+    const error = issuesQ.error || analyserQ.error
 
-    const list = issues ?? []
+    const list = issuesQ.data?.issues ?? []
+    const analyser = analyserQ.data?.analyser ?? null
+
     // Build a parent → children tree. A "parent" is any issue
     // that isn't itself a duplicate; its children are the issues
     // pointing at it via duplicate_of_issue_id. We forbid chains in
@@ -75,6 +63,40 @@ export default async function IssuesPage({
     // direct the user to the Knowledge tab.
     const ready =
         !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
+
+    if (loading) {
+        return (
+            <div className="flex flex-col gap-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="skeleton h-4 w-32 rounded-[8px]" />
+                    <div className="flex items-center gap-2">
+                        <div className="skeleton h-9 w-24 rounded-[12px]" />
+                        <div className="skeleton h-9 w-28 rounded-[12px]" />
+                        <div className="skeleton h-9 w-24 rounded-[12px]" />
+                    </div>
+                </div>
+                <div className="skeleton h-5 w-16 rounded-[8px]" />
+                <ul
+                    className="grid gap-3"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
+                >
+                    {[0, 1, 2, 3].map((i) => (
+                        <li key={i} className="skeleton h-28 w-full rounded-[16px]" />
+                    ))}
+                </ul>
+            </div>
+        )
+    }
+
+    if (error) {
+        return (
+            <div className="flex flex-col gap-6">
+                <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                    {error}
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="flex flex-col gap-6">
@@ -177,7 +199,12 @@ function IssueGroup({
 }) {
     return (
         <section className={muted ? "opacity-90" : ""}>
-            <h2 className="h-section mb-3">{title}</h2>
+            <div className="mb-3 flex items-center gap-2">
+                <h2 className="h-section">{title}</h2>
+                <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[11px] font-bold tabular-nums text-[color:var(--c-text-muted)]">
+                    {parents.length}
+                </span>
+            </div>
 
             {parents.length === 0 ? (
                 <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">

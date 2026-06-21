@@ -20,6 +20,12 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
                     <Link
                         key={t.href}
                         href={t.href}
+                        // No eager prefetch: these pages fetch their own data
+                        // client-side, so prefetching only buys the RSC shell
+                        // while spinning up an extra Worker invocation (cold
+                        // isolate) per tab on every project page. That fan-out
+                        // is what amplifies the cold-start CPU storm.
+                        prefetch={false}
                         className={cn(
                             "relative px-3 py-2 text-[13px] font-semibold transition-colors",
                             active
