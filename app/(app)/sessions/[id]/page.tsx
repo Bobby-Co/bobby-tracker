@@ -1,67 +1,34 @@
+"use client"
+
 import Link from "next/link"
-import { notFound } from "next/navigation"
-import { createClient, getCurrentUser } from "@/lib/supabase/server"
-import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
+import { useParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
+import { useAuth } from "@/lib/auth/auth-context"
+import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
 import { SessionManagePanel } from "@/components/session-manage-panel"
 
-export const dynamic = "force-dynamic"
+interface ProjectOption {
+    id: string
+    name: string
+}
 
 // Per-session management page. Owners edit the public title/description,
 // time window, project membership, and toggle pause/regenerate/delete
 // from here. The single "session shape" (one or many projects) lives
 // entirely in this view; the project's Integrations tab only links
 // back to the sessions covering it.
-export default async function SessionDetailPage({
-    params,
-}: {
-    params: Promise<{ id: string }>
-}) {
-    const { id } = await params
-    // Run auth + client setup in parallel — they're independent.
-    const [user, supabase] = await Promise.all([getCurrentUser(), createClient()])
+export default function SessionDetailPage() {
+    const { id } = useParams<{ id: string }>()
+    const { user } = useAuth()
     const ownerEmail = (user?.email ?? "").trim().toLowerCase() || null
 
-    const { data: session } = await supabase
-        .from("public_sessions")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle<PublicSession>()
-    if (!session) notFound()
-
-    const { data: links } = await supabase
-        .from("public_session_projects")
-        .select("project_id,projects(id,name)")
-        .eq("session_id", id)
-    const sessionProjects = (links ?? [])
-        .map((r: { project_id: string; projects: unknown }) => {
-            const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
-            const name = (proj && typeof proj === "object" && "name" in proj) ? (proj as { name: string }).name : ""
-            return { id: r.project_id, name }
-        })
-        .filter((p) => p.name)
-
-    const { data: enabledProjects } = await supabase
-        .from("projects")
-        .select("id,name,project_public_integration!inner(enabled)")
-        .eq("project_public_integration.enabled", true)
-        .order("name", { ascending: true })
-    const allProjects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
-        .map((p) => ({ id: p.id, name: p.name }))
-
-    const { data: invites } = await supabase
-        .from("public_session_invites")
-        .select("session_id,email,created_at")
-        .eq("session_id", id)
-        .order("created_at", { ascending: true })
-        .returns<PublicSessionInvite[]>()
-
-    // Eligible groups for the source picker — owner-only via RLS.
-    const { data: groups } = await supabase
-        .from("project_groups")
-        .select("id,name")
-        .order("name", { ascending: true })
-        .returns<Pick<ProjectGroup, "id" | "name">[]>()
-    const allGroups = (groups ?? []).map((g) => ({ id: g.id, name: g.name }))
+    const { data, error, loading } = useApi<{
+        session: PublicSession
+        projects: ProjectOption[]
+        allProjects: ProjectOption[]
+        invites: PublicSessionInvite[]
+        allGroups: { id: string; name: string }[]
+    }>(`/api/sessions/${id}`)
 
     return (
         <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -71,15 +38,30 @@ export default async function SessionDetailPage({
             >
                 ← Sessions
             </Link>
-            <h1 className="mt-2 truncate text-[22px] font-bold tracking-[-0.012em]">{session.name}</h1>
-            <SessionManagePanel
-                session={session}
-                sessionProjects={sessionProjects}
-                allProjects={allProjects ?? []}
-                invites={invites ?? []}
-                ownerEmail={ownerEmail}
-                allGroups={allGroups}
-            />
+
+            {loading ? (
+                <div aria-busy className="mt-2 flex flex-col gap-4">
+                    <div className="skeleton h-7 w-64 max-w-full rounded-[6px]" />
+                    <div className="skeleton h-40 w-full rounded-[16px]" />
+                    <div className="skeleton h-40 w-full rounded-[16px]" />
+                </div>
+            ) : error || !data ? (
+                <div className="mt-3 rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                    {error ?? "Session not found."}
+                </div>
+            ) : (
+                <>
+                    <h1 className="mt-2 truncate text-[22px] font-bold tracking-[-0.012em]">{data.session.name}</h1>
+                    <SessionManagePanel
+                        session={data.session}
+                        sessionProjects={data.projects}
+                        allProjects={data.allProjects ?? []}
+                        invites={data.invites ?? []}
+                        ownerEmail={ownerEmail}
+                        allGroups={data.allGroups}
+                    />
+                </>
+            )}
         </div>
     )
 }

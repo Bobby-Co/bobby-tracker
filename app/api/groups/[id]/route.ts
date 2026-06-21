@@ -38,7 +38,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
     members.sort((a, b) => a.name.localeCompare(b.name))
 
-    return Response.json({ group: data, members })
+    // Full project list (id+name, alphabetical) for the settings
+    // panel's "add member" picker.
+    const { data: projects } = await supabase
+        .from("projects")
+        .select("id,name")
+        .order("name", { ascending: true })
+    const allProjects = (projects ?? []).map((p) => ({ id: p.id, name: p.name }))
+
+    return Response.json({ group: data, members, allProjects })
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

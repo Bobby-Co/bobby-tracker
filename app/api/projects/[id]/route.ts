@@ -1,6 +1,20 @@
 import { jsonError, requireUser } from "@/lib/api"
 import type { Project } from "@/lib/supabase/types"
 
+// GET /api/projects/[id] — single project. Shape: { project: Project | null }.
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    const { supabase, error } = await requireUser()
+    if (error) return error
+    const { data, error: dbErr } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle<Project>()
+    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    return Response.json({ project: data })
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, error } = await requireUser()

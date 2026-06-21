@@ -23,7 +23,11 @@ export async function createClient() {
                     try {
                         toSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
                     } catch {
-                        // Server Components can't set cookies — proxy.ts handles refresh there.
+                        // Server Components can't set cookies, so a refresh
+                        // triggered during RSC render is dropped here. That's
+                        // fine: the browser Supabase client (AuthProvider) owns
+                        // refresh now, and route handlers — which CAN set
+                        // cookies — persist any refresh they trigger.
                     }
                 },
             },

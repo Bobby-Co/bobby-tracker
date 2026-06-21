@@ -1,6 +1,20 @@
 import { jsonError, requireUser } from "@/lib/api"
 import type { Project } from "@/lib/supabase/types"
 
+// GET — list the current user's projects, newest first. Backs the app
+// sidebar and the /projects grid. RLS scopes rows to the signed-in user.
+export async function GET() {
+    const { supabase, error } = await requireUser()
+    if (error) return error
+    const { data, error: dbErr } = await supabase
+        .from("projects")
+        .select("*")
+        .order("updated_at", { ascending: false })
+        .returns<Project[]>()
+    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    return Response.json({ projects: data ?? [] })
+}
+
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
     if (error) return error

@@ -1,8 +1,9 @@
-import { Suspense } from "react"
+"use client"
+
 import Link from "next/link"
-import { notFound } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
-import type { Issue, ProjectAnalyser, ProjectGroup } from "@/lib/supabase/types"
+import { useParams, useSearchParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
+import type { Issue } from "@/lib/supabase/types"
 import { IssueList, type ParentRow } from "@/components/issue-list"
 import { IssueTile } from "@/components/issue-tile"
 import { IssueFolderTile } from "@/components/issue-folder-tile"
@@ -11,7 +12,12 @@ import { GroupAiComposeButton } from "@/components/group-ai-compose-button"
 import { GroupNewIssueButton } from "@/components/group-new-issue-button"
 import { GroupIssuesSkeleton } from "@/components/group-issues-skeleton"
 
-export const dynamic = "force-dynamic"
+interface MemberInfo {
+    id: string
+    name: string
+    analyser_ready: boolean
+    has_summary: boolean
+}
 
 // Group Issues tab — same row/tile UI a single project gets, but
 // the list is grouped by project (each member project becomes its
@@ -21,98 +27,34 @@ export const dynamic = "force-dynamic"
 //
 // Inside a project section, the duplicate-tree treatment carries
 // over: parents render as cards, children indent underneath.
-//
-// Sync shell wraps a streaming <Suspense> boundary so soft tab
-// switches (between Issues / Settings, or arriving here from the
-// /groups list) paint the skeleton immediately and only swap in
-// the real content once the cross-project issue query lands.
-export default function GroupIssuesPage({
-    params,
-    searchParams,
-}: {
-    params: Promise<{ id: string }>
-    searchParams: Promise<{ view?: string }>
-}) {
-    return (
-        <Suspense fallback={<GroupIssuesSkeleton />}>
-            <GroupIssuesContent params={params} searchParams={searchParams} />
-        </Suspense>
-    )
-}
+export default function GroupIssuesPage() {
+    const { id } = useParams<{ id: string }>()
+    const searchParams = useSearchParams()
+    const view: IssuesView = searchParams.get("view") === "tile" ? "tile" : "list"
 
-async function GroupIssuesContent({
-    params,
-    searchParams,
-}: {
-    params: Promise<{ id: string }>
-    searchParams: Promise<{ view?: string }>
-}) {
-    const { id } = await params
-    const { view: viewParam } = await searchParams
-    const view: IssuesView = viewParam === "tile" ? "tile" : "list"
+    const { data, error, loading } = useApi<{
+        group: { id: string; name: string }
+        members: MemberInfo[]
+        issues: Issue[]
+    }>(`/api/groups/${id}/issues`)
 
-    const supabase = await createClient()
-    const { data: group } = await supabase
-        .from("project_groups")
-        .select("id,name")
-        .eq("id", id)
-        .maybeSingle<Pick<ProjectGroup, "id" | "name">>()
-    if (!group) notFound()
+    if (loading) return <GroupIssuesSkeleton />
 
-    // Members + their analyser readiness + summary state in one
-    // round-trip. Membership rows are RLS-gated through the group
-    // so we trust the join shape here.
-    const { data: links } = await supabase
-        .from("project_group_members")
-        .select("project_id,projects(id,name,project_analyser(status,enabled,graph_id,summary_overview_embedding))")
-        .eq("group_id", id)
-    type Link = { project_id: string; projects: unknown }
-    interface MemberInfo {
-        id: string
-        name: string
-        analyser_ready: boolean
-        has_summary: boolean
+    if (error || !data) {
+        return (
+            <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                {error ?? "Group not found."}
+            </div>
+        )
     }
-    const members: MemberInfo[] = []
-    for (const r of (links as Link[] | null) ?? []) {
-        const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
-        if (!proj || typeof proj !== "object") continue
-        const p = proj as { id: string; name: string; project_analyser?: unknown }
-        const analyser = Array.isArray(p.project_analyser) ? p.project_analyser[0] : p.project_analyser
-        const a = (analyser && typeof analyser === "object")
-            ? analyser as Pick<ProjectAnalyser, "status" | "enabled" | "graph_id"> & {
-                summary_overview_embedding?: unknown
-            }
-            : null
-        members.push({
-            id: p.id,
-            name: p.name,
-            analyser_ready: !!a && a.enabled === true && a.status === "ready" && !!a.graph_id,
-            has_summary: !!a && a.summary_overview_embedding != null,
-        })
-    }
-    members.sort((a, b) => a.name.localeCompare(b.name))
 
-    const memberIds = members.map((m) => m.id)
-
-    // Pull every issue across the member projects in one shot, then
-    // bucket client-side. Single round-trip is cheaper than a query
-    // per project, and the count cap (200 per group) keeps the
-    // payload bounded for big groups.
-    const { data: allIssues } = memberIds.length
-        ? await supabase
-            .from("issues")
-            .select("*")
-            .in("project_id", memberIds)
-            .order("updated_at", { ascending: false })
-            .limit(500)
-            .returns<Issue[]>()
-        : { data: [] as Issue[] }
+    const members = data.members
+    const allIssues = data.issues
 
     // Bucket by project, then derive parent/child trees per bucket
     // — same shape the per-project Issues page uses.
     const issuesByProject = new Map<string, Issue[]>()
-    for (const it of allIssues ?? []) {
+    for (const it of allIssues) {
         const arr = issuesByProject.get(it.project_id) ?? []
         arr.push(it)
         issuesByProject.set(it.project_id, arr)

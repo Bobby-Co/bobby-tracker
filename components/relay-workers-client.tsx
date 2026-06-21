@@ -5,6 +5,7 @@ import { Modal } from "@/components/modal"
 import { Spinner } from "@/components/spinner"
 import { RelayStatusDot } from "@/components/relay-status-dot"
 import { RelayPairApprove } from "@/components/relay-pair-approve"
+import { MiniIcon } from "@/components/field-card"
 
 // Mirror of the frozen GET /api/relay/workers contract. Kept local —
 // lib/relay.ts is owned by the backend agent and not imported here.
@@ -163,10 +164,10 @@ function WorkerCard({
     return (
         <div className="card flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    <MiniIcon tone={worker.online ? "emerald" : "zinc"} size={36}>
                         <ChipIcon />
-                    </span>
+                    </MiniIcon>
                     <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                             <span className="truncate text-[14px] font-bold">{worker.name}</span>
@@ -406,8 +407,8 @@ function SkeletonRows() {
         <ul className="flex flex-col gap-3" aria-busy>
             {[0, 1, 2].map((i) => (
                 <li key={i} className="card flex flex-col gap-3">
-                    <div className="flex items-center gap-2">
-                        <div className="skeleton h-8 w-8 rounded-[9px]" />
+                    <div className="flex items-center gap-2.5">
+                        <div className="skeleton h-9 w-9 rounded-full" />
                         <div className="flex flex-col gap-1.5">
                             <div className="skeleton h-3.5 w-40" />
                             <div className="skeleton h-2.5 w-28" />

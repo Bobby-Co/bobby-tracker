@@ -1,12 +1,12 @@
-import { Suspense } from "react"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
+import { useParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
 import { AnalyserPanel } from "@/components/analyser-panel"
 import { AnalyserDefaultEffort } from "@/components/analyser-default-effort"
 import { VerifyPanel } from "@/components/verify-panel"
 import { KnowledgeSkeleton } from "@/components/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
-
-export const dynamic = "force-dynamic"
 
 // Knowledge tab — single home for everything that drives the project's
 // analyser-backed knowledge graph: indexing controls (AnalyserPanel) +
@@ -14,33 +14,30 @@ export const dynamic = "force-dynamic"
 // "Integrations" alongside GitHub-sync stubs; that conflation made
 // the tab feel like a junk drawer. Knowledge keeps the cognitive
 // model clear: this is where the graph is born and inspected.
-//
-// Synchronous shell + <Suspense> so soft tab switches paint the
-// skeleton instantly instead of stalling on the project_analyser fetch.
-export default function KnowledgePage({ params }: { params: Promise<{ id: string }> }) {
-    return (
-        <Suspense fallback={<KnowledgeSkeleton />}>
-            <KnowledgeContent params={params} />
-        </Suspense>
-    )
+
+type KnowledgeData = {
+    project: Pick<Project, "id" | "repo_url" | "repo_full_name"> | null
+    analyser: ProjectAnalyser | null
 }
 
-async function KnowledgeContent({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
-    const supabase = await createClient()
-    const [{ data: project }, { data: state }] = await Promise.all([
-        supabase
-            .from("projects")
-            .select("id,repo_url,repo_full_name")
-            .eq("id", id)
-            .single<Pick<Project, "id" | "repo_url" | "repo_full_name">>(),
-        supabase
-            .from("project_analyser")
-            .select("*")
-            .eq("project_id", id)
-            .maybeSingle<ProjectAnalyser>(),
-    ])
+export default function KnowledgePage() {
+    const { id } = useParams<{ id: string }>()
+    const { data, error, loading } = useApi<KnowledgeData>(
+        id ? `/api/projects/${id}/knowledge` : null,
+    )
 
+    if (loading) return <KnowledgeSkeleton />
+
+    if (error) {
+        return (
+            <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                {error}
+            </div>
+        )
+    }
+
+    const project = data?.project ?? null
+    const state = data?.analyser ?? null
     const ready = !!state?.enabled && state.status === "ready" && !!state.graph_id
 
     return (

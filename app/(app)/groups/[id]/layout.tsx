@@ -1,37 +1,22 @@
-import { Suspense } from "react"
-import Link from "next/link"
-import { notFound } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+"use client"
+
+import { useParams } from "next/navigation"
+import { useApi } from "@/lib/hooks/use-api"
 import type { ProjectGroup } from "@/lib/supabase/types"
 import { GroupTabs } from "@/components/group-tabs"
+import { MiniIcon, toneFromString } from "@/components/field-card"
 
-// Group layout — mirror of the project layout pattern. Header
-// (group name + member count) is rendered inside <Suspense> so the
-// tabs paint immediately and the data fetch streams underneath.
-// Tabs route between Issues (default landing) and Settings (the
-// management panel that used to be the entire page).
-export default async function GroupLayout({
-    children,
-    params,
-}: {
-    children: React.ReactNode
-    params: Promise<{ id: string }>
-}) {
-    const { id } = await params
+// Group detail shell — mirror of the project layout. Header (name +
+// member count) loads via /api/groups/[id]; tabs paint immediately and
+// route between Issues (default) and Settings.
+export default function GroupLayout({ children }: { children: React.ReactNode }) {
+    const { id } = useParams<{ id: string }>()
     return (
         <div className="flex min-h-full flex-col">
             <div className="border-b border-[color:var(--c-border)] bg-white">
                 <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-4 px-4 pt-5 sm:px-6 sm:pt-6">
                     <div className="min-w-0 max-w-full">
-                        <Link
-                            href="/groups"
-                            className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]"
-                        >
-                            ← Groups
-                        </Link>
-                        <Suspense fallback={<HeaderSkeleton />}>
-                            <GroupHeader id={id} />
-                        </Suspense>
+                        <GroupHeader id={id} />
                     </div>
                 </div>
                 <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
@@ -43,43 +28,61 @@ export default async function GroupLayout({
     )
 }
 
-async function GroupHeader({ id }: { id: string }) {
-    const supabase = await createClient()
-    const [{ data: group }, { count }] = await Promise.all([
-        supabase
-            .from("project_groups")
-            .select("id,name,description")
-            .eq("id", id)
-            .maybeSingle<Pick<ProjectGroup, "id" | "name" | "description">>(),
-        supabase
-            .from("project_group_members")
-            .select("group_id", { count: "exact", head: true })
-            .eq("group_id", id),
-    ])
-    if (!group) notFound()
-    return (
-        <>
+function GroupHeader({ id }: { id: string }) {
+    const { data, loading } = useApi<{
+        group: Pick<ProjectGroup, "id" | "name" | "description"> | null
+        members: unknown[]
+    }>(`/api/groups/${id}`)
+
+    if (loading) return <HeaderSkeleton />
+    const group = data?.group
+    if (!group) {
+        return (
             <h1 className="mt-1 truncate text-[20px] font-bold tracking-[-0.012em] sm:text-[22px]">
-                {group.name}
+                Group not found
             </h1>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--c-text-muted)]">
-                <span>{count ?? 0} project{(count ?? 0) === 1 ? "" : "s"}</span>
-                {group.description && (
-                    <>
-                        <span className="text-[color:var(--c-text-dim)]">·</span>
-                        <span className="truncate">{group.description}</span>
-                    </>
-                )}
+        )
+    }
+    const count = data?.members?.length ?? 0
+    return (
+        <div className="mt-1.5 flex items-center gap-3">
+            <MiniIcon tone={toneFromString(group.name)} size={40}>
+                <FolderIcon size={19} />
+            </MiniIcon>
+            <div className="min-w-0">
+                <h1 className="truncate text-[20px] font-bold tracking-[-0.012em] sm:text-[22px]">
+                    {group.name}
+                </h1>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--c-text-muted)]">
+                    <span>{count} project{count === 1 ? "" : "s"}</span>
+                    {group.description && (
+                        <>
+                            <span className="text-[color:var(--c-text-dim)]">·</span>
+                            <span className="truncate">{group.description}</span>
+                        </>
+                    )}
+                </div>
             </div>
-        </>
+        </div>
+    )
+}
+
+function FolderIcon({ size = 13 }: { size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+        </svg>
     )
 }
 
 function HeaderSkeleton() {
     return (
-        <>
-            <div className="skeleton mt-1 h-6 w-48 rounded-[6px] sm:h-7" />
-            <div className="skeleton mt-1.5 h-3 w-64 max-w-full rounded-[4px]" />
-        </>
+        <div className="mt-1.5 flex items-center gap-3">
+            <div className="skeleton h-10 w-10 rounded-full" />
+            <div className="min-w-0">
+                <div className="skeleton h-6 w-48 rounded-[6px] sm:h-7" />
+                <div className="skeleton mt-1.5 h-3 w-64 max-w-full rounded-[4px]" />
+            </div>
+        </div>
     )
 }

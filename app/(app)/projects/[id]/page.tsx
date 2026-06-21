@@ -1,6 +1,15 @@
-import { redirect } from "next/navigation"
+"use client"
 
-export default async function ProjectIndex({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params
-    redirect(`/projects/${id}/issues`)
+import { useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
+
+export default function ProjectIndex() {
+    const { id } = useParams<{ id: string }>()
+    const router = useRouter()
+
+    useEffect(() => {
+        router.replace(`/projects/${id}/issues`)
+    }, [id, router])
+
+    return null
 }

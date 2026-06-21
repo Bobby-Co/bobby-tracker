@@ -4,6 +4,8 @@ import Link from "next/link"
 import { useState } from "react"
 import type { Issue } from "@/lib/supabase/types"
 import { PriorityChip, StatusChip } from "@/components/status-chip"
+import { STATUS_META } from "@/components/issue-meta"
+import { cn } from "@/components/cn"
 
 // Hierarchical list view of issues.
 //
@@ -127,8 +129,14 @@ function ParentRowCard({
 
             <Link
                 href={`/projects/${projectId}/issues/${parent.id}`}
+                prefetch={false}
                 className="group flex min-w-0 flex-1 items-center gap-2 py-2.5 sm:gap-3"
             >
+                <span
+                    className={cn("h-2 w-2 shrink-0 rounded-full", STATUS_META[parent.status].dot)}
+                    title={STATUS_META[parent.status].label}
+                    aria-hidden
+                />
                 <span className="hidden shrink-0 font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)] sm:inline">
                     #{parent.issue_number}
                 </span>
@@ -182,6 +190,7 @@ function ChildRowCard({
     return (
         <Link
             href={`/projects/${projectId}/issues/${child.id}`}
+            prefetch={false}
             className={
                 "group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5" +
                 (muted ? " opacity-80" : "")

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Nunito } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/lib/auth/auth-context"
 
 const nunito = Nunito({
     variable: "--font-nunito",
@@ -16,7 +17,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (
         <html lang="en" className={`${nunito.variable} h-full antialiased`}>
-            <body className="min-h-full font-sans">{children}</body>
+            <body className="min-h-full font-sans">
+                <AuthProvider>{children}</AuthProvider>
+            </body>
         </html>
     )
 }

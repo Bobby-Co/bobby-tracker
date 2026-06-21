@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import type { PublicSession } from "@/lib/supabase/types"
+import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
 
 function parseWindow(v: unknown): string | null | undefined {
     if (v === undefined) return undefined
@@ -33,7 +33,39 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             return { id: r.project_id, name }
         })
 
-    return Response.json({ session: data, projects })
+    // Projects eligible to be added to a session — only those with the
+    // public submissions integration enabled.
+    const { data: enabledProjects } = await supabase
+        .from("projects")
+        .select("id,name,project_public_integration!inner(enabled)")
+        .eq("project_public_integration.enabled", true)
+        .order("name", { ascending: true })
+    const allProjects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
+        .map((p) => ({ id: p.id, name: p.name }))
+
+    // Whitelisted invite emails for this session.
+    const { data: invites } = await supabase
+        .from("public_session_invites")
+        .select("session_id,email,created_at")
+        .eq("session_id", id)
+        .order("created_at", { ascending: true })
+        .returns<PublicSessionInvite[]>()
+
+    // Eligible groups for the source picker — owner-only via RLS.
+    const { data: groups } = await supabase
+        .from("project_groups")
+        .select("id,name")
+        .order("name", { ascending: true })
+        .returns<Pick<ProjectGroup, "id" | "name">[]>()
+    const allGroups = (groups ?? []).map((g) => ({ id: g.id, name: g.name }))
+
+    return Response.json({
+        session: data,
+        projects,
+        allProjects,
+        invites: invites ?? [],
+        allGroups,
+    })
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

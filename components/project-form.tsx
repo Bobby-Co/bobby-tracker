@@ -72,14 +72,18 @@ export function ProjectForm() {
 
     async function reconnect() {
         const supabase = createClient()
-        const base =
-            typeof window !== "undefined" && window.location.hostname === "localhost"
-                ? `${window.location.protocol}//${window.location.host}`
-                : "https://track.bobby.host"
+        // Return to the projects list after re-authorizing GitHub. There
+        // is NO /projects/new route — the new-project form is a modal on
+        // /projects — so sending the user there fell through to
+        // /projects/[id] (id="new") and redirected to /projects/new/issues,
+        // which errored. window.location.origin keeps the callback on
+        // whatever host we're actually on (ucelot.com, localhost, a preview).
+        const redirectTo = new URL("/auth/callback", window.location.origin)
+        redirectTo.searchParams.set("next", "/projects")
         await supabase.auth.signInWithOAuth({
             provider: "github",
             options: {
-                redirectTo: `${base}/auth/callback?next=${encodeURIComponent("/projects/new")}`,
+                redirectTo: redirectTo.href,
                 scopes: "repo read:user user:email",
             },
         })

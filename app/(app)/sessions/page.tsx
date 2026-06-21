@@ -1,39 +1,34 @@
-import { Suspense } from "react"
+"use client"
+
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/server"
+import { useApi } from "@/lib/hooks/use-api"
 import type { PublicSession } from "@/lib/supabase/types"
 import { NewSessionButton } from "@/components/new-session-button"
 import { SessionsSkeleton } from "@/components/sessions-skeleton"
-
-export const dynamic = "force-dynamic"
+import { MiniCard } from "@/components/field-card"
 
 // Top-level "Public sessions" list. A session is a shareable submission
 // link that can cover one or more of the user's projects. From here
 // owners create sessions and drill into one to manage it.
 //
-// Sync shell wraps a streaming <Suspense> boundary so soft navigations
-// from the sidebar paint the skeleton instantly instead of stalling
-// on the Supabase round-trips.
+// Client component: data comes from the cookie-authed GET
+// /api/sessions/overview route handler, which returns the same three
+// datasets the old server component read directly.
 export default function SessionsPage() {
-    return (
-        <Suspense fallback={<SessionsSkeleton />}>
-            <SessionsContent />
-        </Suspense>
-    )
-}
+    const overview = useApi<{
+        sessions: PublicSession[]
+        projects: { id: string; name: string }[]
+        projectsBySession: Record<string, string[]>
+    }>("/api/sessions/overview")
 
-async function SessionsContent() {
-    const supabase = await createClient()
+    if (overview.loading) {
+        return <SessionsSkeleton />
+    }
 
-    // Tolerate the table being absent (migration 0009 not yet applied)
-    // — better to render a hint than 500 the page.
-    const { data: sessions, error: sessErr } = await supabase
-        .from("public_sessions")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .returns<PublicSession[]>()
-
-    if (sessErr) {
+    // The route handler returns a `pending_migration` error (503) when the
+    // public_sessions table is absent. Render the same hint the server
+    // component used to, rather than a generic error banner.
+    if (overview.error) {
         return (
             <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
                 <header>
@@ -49,36 +44,9 @@ async function SessionsContent() {
         )
     }
 
-    // Only enabled-integration projects are eligible for new sessions —
-    // the inner-join filter via !inner ensures projects without a
-    // matching project_public_integration row are excluded.
-    const { data: enabledProjects } = await supabase
-        .from("projects")
-        .select("id,name,project_public_integration!inner(enabled)")
-        .eq("project_public_integration.enabled", true)
-        .order("name", { ascending: true })
-    const projects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
-        .map((p) => ({ id: p.id, name: p.name }))
-
-    // Pull project counts per session via the junction. One round-trip;
-    // we group client-side in this server component for simplicity.
-    const sessionIds = (sessions ?? []).map((s) => s.id)
-    const { data: links } = sessionIds.length
-        ? await supabase
-            .from("public_session_projects")
-            .select("session_id,project_id,projects(name)")
-            .in("session_id", sessionIds)
-        : { data: [] as { session_id: string; project_id: string; projects: { name: string } | { name: string }[] | null }[] }
-
-    const projectsBySession = new Map<string, string[]>()
-    for (const link of links ?? []) {
-        const proj = Array.isArray(link.projects) ? link.projects[0] : link.projects
-        const name = proj && typeof proj === "object" && "name" in proj ? proj.name : ""
-        if (!name) continue
-        const list = projectsBySession.get(link.session_id) ?? []
-        list.push(name)
-        projectsBySession.set(link.session_id, list)
-    }
+    const sessions = overview.data?.sessions ?? []
+    const projects = overview.data?.projects ?? []
+    const projectsBySession = overview.data?.projectsBySession ?? {}
 
     return (
         <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -98,53 +66,56 @@ async function SessionsContent() {
                     <p className="mt-1">Create one to get a public link you can share.</p>
                 </div>
             ) : (
-                <ul className="mt-6 flex flex-col gap-3">
+                <ul
+                    className="mt-6 grid gap-3"
+                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
+                >
                     {(sessions ?? []).map((s) => {
-                        const projNames = projectsBySession.get(s.id) ?? []
+                        const projNames = projectsBySession[s.id] ?? []
                         return (
                             <li key={s.id}>
-                                <Link
-                                    href={`/sessions/${s.id}`}
-                                    className="block rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 transition-colors hover:border-[color:var(--c-border-strong)]"
-                                >
-                                    <div className="flex flex-wrap items-start justify-between gap-2">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="truncate text-[15px] font-bold">{s.name}</span>
-                                                <span
-                                                    className={
-                                                        s.enabled
-                                                            ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-emerald-800"
-                                                            : "rounded-full bg-zinc-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-zinc-700"
-                                                    }
-                                                >
-                                                    {s.enabled ? "Live" : "Paused"}
+                                <Link href={`/sessions/${s.id}`} className="block">
+                                    <MiniCard
+                                        tone={s.enabled ? "emerald" : "zinc"}
+                                        icon={<ShareIcon />}
+                                        title={s.name}
+                                        subtitle={`${s.submission_count} submission${s.submission_count === 1 ? "" : "s"}`}
+                                        badge={
+                                            <span
+                                                className={
+                                                    s.enabled
+                                                        ? "shrink-0 rounded-full bg-emerald-50 px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-emerald-700"
+                                                        : "shrink-0 rounded-full bg-zinc-100 px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-zinc-600"
+                                                }
+                                            >
+                                                {s.enabled ? "Live" : "Paused"}
+                                            </span>
+                                        }
+                                    >
+                                        {s.description && (
+                                            <p className="line-clamp-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
+                                                {s.description}
+                                            </p>
+                                        )}
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            {projNames.length === 0 ? (
+                                                <span className="text-[11.5px] text-[color:var(--c-text-dim)]">
+                                                    No projects yet
                                                 </span>
-                                            </div>
-                                            {s.description && (
-                                                <p className="mt-1 line-clamp-2 text-[12.5px] text-[color:var(--c-text-muted)]">
-                                                    {s.description}
-                                                </p>
+                                            ) : (
+                                                projNames.slice(0, 4).map((n) => (
+                                                    <span key={n} className="chip-min max-w-[140px] truncate">
+                                                        {n}
+                                                    </span>
+                                                ))
+                                            )}
+                                            {projNames.length > 4 && (
+                                                <span className="text-[11px] text-[color:var(--c-text-dim)]">
+                                                    +{projNames.length - 4}
+                                                </span>
                                             )}
                                         </div>
-                                        <span className="text-[11.5px] tabular-nums text-[color:var(--c-text-muted)]">
-                                            {s.submission_count} submission{s.submission_count === 1 ? "" : "s"}
-                                        </span>
-                                    </div>
-                                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11.5px]">
-                                        {projNames.length === 0 ? (
-                                            <span className="text-[color:var(--c-text-dim)]">No projects yet</span>
-                                        ) : (
-                                            projNames.map((n) => (
-                                                <span
-                                                    key={n}
-                                                    className="rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 font-semibold text-[color:var(--c-text)]"
-                                                >
-                                                    {n}
-                                                </span>
-                                            ))
-                                        )}
-                                    </div>
+                                    </MiniCard>
                                 </Link>
                             </li>
                         )
@@ -152,5 +123,16 @@ async function SessionsContent() {
                 </ul>
             )}
         </div>
+    )
+}
+
+function ShareIcon() {
+    return (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+        </svg>
     )
 }
