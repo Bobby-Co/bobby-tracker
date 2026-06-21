@@ -127,6 +127,23 @@ export const EMBER_STOPS: Stop[] = [
     { pos: 1.0, c: [255, 250, 232] }, // lightest = soft warm white (wide range → tiles pop)
 ]
 
+// Dark ember (brand gold/amber on dark): the hero ember palette pulled down
+// into a dark register — a glowing gold-amber core ramps fast through burnt
+// amber into warm near-black corners. Built as a single-hue lightness ramp so
+// the pixel tiles stay crisp, and the last stop matches the dark login panel
+// background (#0b090b) so the diamond/linear glow blends out at the edges.
+// Front-loaded so the glow stays a tight corner bloom and the bulk of the
+// canvas reads near-black — a dark panel with a warm light source, not a wash.
+export const DARK_EMBER_STOPS: Stop[] = [
+    { pos: 0.0, c: [255, 188, 86] }, // glowing warm gold core (at the corner)
+    { pos: 0.08, c: [238, 142, 46] }, // amber-orange
+    { pos: 0.18, c: [178, 90, 28] }, // burnt amber
+    { pos: 0.3, c: [104, 52, 22] }, // ember-brown
+    { pos: 0.44, c: [54, 28, 18] }, // dark warm
+    { pos: 0.6, c: [26, 16, 14] }, // near-black warm
+    { pos: 1.0, c: [11, 9, 11] }, // panel background (= the dark left panel bg)
+]
+
 // Tiny canvas (cols × rows) stretched to fill its parent with
 // `image-rendering: pixelated` → the browser nearest-neighbour-upscales each
 // source pixel into a crisp block. Static by default (redraw on resize only);
