@@ -3,6 +3,10 @@
 /* ─── tokens (light-mode-first, mirrors ci/tokens.json) ─────────────── */
 :root {
     --c-page:          #fbfbfc;
+    /* shell — the tinted "desk" the floating content panel + sidebar sit on
+       (reference: white panel floating on a soft neutral). A hair warm so the
+       Ucelot ember identity reads even in the chrome. */
+    --c-shell:         #f1efec;
     --c-surface:       #ffffff;
     --c-surface-2:     #f7f7f8;
     --c-border:        #ececef;
@@ -40,6 +44,9 @@
 
     --shadow-card: 0 1px 1px rgba(17,24,39,0.025), 0 1px 2px rgba(17,24,39,0.02);
     --shadow-pop:  0 12px 32px -8px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06);
+    /* floating content panel — a crisp hairline ring plus a soft halo that
+       bleeds up/left onto the shell so the white panel reads as raised. */
+    --shadow-panel: 0 0 0 1px var(--c-border), -10px -8px 28px -18px rgba(17,24,39,0.16);
 
     --t-fast: 140ms cubic-bezier(0.22, 1, 0.36, 1);
     --t-mid:  220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -65,6 +72,26 @@ html, body {
 .dotted-bg {
     background-image: radial-gradient(circle at 1px 1px, rgba(17,24,39,0.02) 1px, transparent 0);
     background-size: 22px 22px;
+}
+
+/* floating content panel — the white "page" that floats on the tinted shell.
+   Rounds only its top-left corner (the edge meeting the sidebar + topbar) and
+   bleeds off the right/bottom of the viewport, exactly like the reference.
+   overflow-y makes it the scroll container so the rounded corner cleanly clips
+   the content (incl. sub-headers) inside. Plain CSS + unlayered on purpose:
+   Tailwind v4 rejects responsive variants inside @apply, so the md treatment
+   is a hand-written media query rather than md: utilities. */
+.app-panel {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    background-color: var(--c-surface);
+}
+@media (min-width: 768px) {
+    .app-panel {
+        border-top-left-radius: 22px;
+        box-shadow: var(--shadow-panel);
+    }
 }
 
 /* ─── reusable element classes ──────────────────────────────────────── */
@@ -185,14 +212,17 @@ html, body {
         @apply grid shrink-0 place-items-center rounded-full;
     }
 
-    /* segmented progress — discrete ticks like the ref's "12/32" bars.
-       Empty ticks are faint; filled ticks use the warm accent. */
+    /* segmented progress — chunky vertical ticks like the ref's "12/32" bars.
+       Empty ticks are faint; filled ticks glow the warm ember accent. */
     .seg-track { @apply flex items-center gap-[3px]; }
     .seg {
-        @apply h-[6px] w-[7px] shrink-0 rounded-[2px];
+        @apply h-[13px] w-[5px] shrink-0 rounded-[2px];
         background: var(--c-border-strong);
     }
-    .seg-on { background: #f59e0b; }
+    .seg-on {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0.5px rgba(180,83,9,0.18);
+    }
 
     /* minimal chip — calmer than .pill, used for inline meta + filters */
     .chip-min {
@@ -216,8 +246,8 @@ html, body {
     .pill-warn    { background: var(--c-warn-bg);    border-color: rgba(180,83,9,0.20);  color: var(--c-warn); }
     .pill-error   { background: var(--c-error-bg);   border-color: rgba(185,28,28,0.18); color: var(--c-error); }
 
-    /* Headings */
-    .h-page    { @apply text-[22px] font-bold tracking-[-0.012em]; }
+    /* Headings — see .app-panel below (defined unlayered, plain CSS). */
+    .h-page    { @apply text-[26px] font-extrabold tracking-[-0.02em]; }
     .h-section { @apply text-[13px] font-semibold uppercase tracking-[0.05em] text-[color:var(--c-text-muted)]; }
 
     /* GitHub-issue-style markdown for analyser suggestions. */

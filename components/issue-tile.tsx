@@ -40,6 +40,7 @@ export function IssueTile({
             <MiniCard
                 interactive={interactive}
                 tone={meta.tone}
+                iconSolid
                 icon={<StatusGlyph status={issue.status} />}
                 title={issue.title}
                 subtitle={`#${issue.issue_number}`}

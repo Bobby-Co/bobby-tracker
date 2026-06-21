@@ -14,16 +14,16 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     return (
         <div className="flex min-h-full flex-col">
             <div className="border-b border-[color:var(--c-border)] bg-white">
-                <div className="mx-auto flex w-full max-w-5xl items-start justify-between gap-4 px-4 pt-5 sm:px-6 sm:pt-6">
+                <div className="flex w-full max-w-5xl items-start justify-between gap-4 px-4 pt-5 sm:px-6 sm:pt-6">
                     <div className="min-w-0 max-w-full">
                         <GroupHeader id={id} />
                     </div>
                 </div>
-                <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
+                <div className="w-full max-w-5xl px-4 sm:px-6">
                     <GroupTabs groupId={id} />
                 </div>
             </div>
-            <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</div>
+            <div className="w-full max-w-5xl flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</div>
         </div>
     )
 }

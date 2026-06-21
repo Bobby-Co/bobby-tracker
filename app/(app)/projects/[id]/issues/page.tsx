@@ -9,6 +9,7 @@ import { IssueList, type ParentRow } from "@/components/issue-list"
 import { IssueTile } from "@/components/issue-tile"
 import { IssueFolderTile } from "@/components/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
+import { SegBar } from "@/components/field-card"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
 
 export default function IssuesPage() {
@@ -104,19 +105,31 @@ export default function IssuesPage() {
                 <KnowledgeRequiredBanner projectId={id} state={analyser ?? null} />
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-[12px] text-[color:var(--c-text-muted)]">
-                    <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
-                    <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
-                    {childrenByParent.size > 0 && (
-                        <>
-                            {" · "}
-                            <span className="font-semibold text-[color:var(--c-text)]">
-                                {Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0)}
-                            </span>{" "}
-                            duplicate{Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0) === 1 ? "" : "s"}
-                        </>
-                    )}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {/* Completion glance (reference: "12 / 32" + segmented ticks).
+                        "Closed" counts done/archived/duplicated parents. */}
+                    <div className="flex items-center gap-2.5">
+                        <span className="text-[17px] font-extrabold tabular-nums tracking-[-0.01em]">
+                            {closed.length}
+                            <span className="text-[color:var(--c-text-dim)]"> / {open.length + closed.length}</span>
+                        </span>
+                        <SegBar value={closed.length} total={Math.max(open.length + closed.length, 1)} max={14} />
+                    </div>
+                    <span className="hidden h-4 w-px bg-[color:var(--c-border)] sm:block" />
+                    <p className="text-[12px] text-[color:var(--c-text-muted)]">
+                        <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
+                        <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
+                        {childrenByParent.size > 0 && (
+                            <>
+                                {" · "}
+                                <span className="font-semibold text-[color:var(--c-text)]">
+                                    {Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0)}
+                                </span>{" "}
+                                duplicate{Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0) === 1 ? "" : "s"}
+                            </>
+                        )}
+                    </p>
+                </div>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} projectId={id} />
                     <AiComposeButton

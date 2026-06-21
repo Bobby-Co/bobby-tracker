@@ -21,7 +21,7 @@ export default function ProjectsPage() {
     const error = projectsQ.error || groupsQ.error
 
     return (
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+        <div className="flex w-full flex-col gap-6 px-5 py-6 sm:px-7 sm:py-7">
             <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
                 <div className="min-w-0">
                     <h1 className="h-page">Projects</h1>
@@ -128,6 +128,7 @@ export default function ProjectsPage() {
                                 <MiniCard
                                     tone={toneFromString(p.name)}
                                     icon={<RepoIcon />}
+                                    iconSolid
                                     title={p.name}
                                     footer={
                                         <span className="ml-auto inline-flex items-center gap-1">

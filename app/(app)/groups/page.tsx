@@ -24,7 +24,7 @@ export default function GroupsPage() {
     const allProjects = (projectsQ.data?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="w-full px-5 py-6 sm:px-7 sm:py-7">
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-[22px] font-bold tracking-[-0.012em]">Groups</h1>

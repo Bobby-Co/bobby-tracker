@@ -14,6 +14,13 @@ interface SidebarProps {
     onNavigate?: () => void
 }
 
+// Shared row states. On the tinted shell, an active row reads as a
+// raised white pill (hairline ring + soft shadow); idle rows are quiet
+// and lift on hover with a translucent overlay.
+const ROW_ACTIVE =
+    "bg-[color:var(--c-surface)] font-semibold text-zinc-900 shadow-[0_1px_2px_rgba(17,24,39,0.06)] ring-1 ring-[color:var(--c-border)]"
+const ROW_IDLE = "text-zinc-600 hover:bg-[color:var(--c-overlay)] bg-zinc-200/50 hover:text-zinc-900"
+
 // SidebarContent mirrors the reference rail top-to-bottom: a workspace
 // header (logo + name + panel toggle), a flat icon nav, collapsible
 // sentence-case sections with down-carets — "Projects" (the user's real
@@ -58,7 +65,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
     }
 
     return (
-        <nav className="flex h-full flex-col">
+        <nav className="flex h-full flex-col pt-2 pl-2">
             {/* Workspace header */}
             <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
                 <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-zinc-900 text-white">
@@ -79,8 +86,8 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
             </div>
 
             {/* Scrollable nav body */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3">
-                <div className="flex flex-col gap-0.5">
+            <div className="flex-1 overflow-y-auto px-2.5 pb-3 pt-4">
+                <div className="flex flex-col gap-[4px]">
                     <NavItem href="/projects" active={isInbox} onNavigate={onNavigate} icon={<RepoIcon />} label="Projects" />
                     <NavItem href="/groups" active={isGroups} onNavigate={onNavigate} icon={<GroupsIcon />} label="Groups" />
                     <NavItem href="/sessions" active={isSessions} onNavigate={onNavigate} icon={<SessionsIcon />} label="Public sessions" />
@@ -90,7 +97,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                 {/* Projects — real, collapsible, colourful circle items */}
                 <SectionHeader label="Projects" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} />
                 {projectsOpen && (
-                    <div className="mt-0.5 flex flex-col gap-0.5">
+                    <div className="mt-0.5 flex flex-col gap-[4px] pl-3">
                         {projects.length === 0 ? (
                             <p className="px-2 py-1.5 text-[12px] text-[color:var(--c-text-dim)]">No projects yet.</p>
                         ) : (
@@ -103,13 +110,11 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                         prefetch={false}
                                         onClick={onNavigate}
                                         className={cn(
-                                            "group flex items-center gap-2.5 rounded-[9px] px-2 py-[7px] text-[13px] transition-colors",
-                                            active
-                                                ? "bg-zinc-100 font-semibold text-zinc-900"
-                                                : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                                            "group flex items-center w-max gap-2.5 rounded-[9px] px-2.5 py-[3px] text-[13px] transition-colors",
+                                            active ? ROW_ACTIVE : ROW_IDLE,
                                         )}
                                     >
-                                        <MiniIcon tone={toneFromString(p.name)} size={20}>
+                                        <MiniIcon tone={toneFromString(p.name)} size={18}>
                                             <span className="text-[9px] font-bold uppercase">{p.name[0] ?? "?"}</span>
                                         </MiniIcon>
                                         <span className="truncate">{p.name}</span>
@@ -123,21 +128,21 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                 {/* Teams — stubbed nested tree mirroring the reference. */}
                 <SectionHeader label="Teams" open={teamsOpen} onToggle={() => setTeamsOpen((o) => !o)} />
                 {teamsOpen && (
-                    <div className="mt-0.5 flex flex-col gap-0.5">
+                    <div className="mt-0.5 flex flex-col gap-[2px]">
                         <button
                             type="button"
                             onClick={() => setEngOpen((o) => !o)}
                             aria-expanded={engOpen}
-                            className="flex items-center gap-2.5 rounded-[9px] px-2 py-[7px] text-[13px] font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+                            className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-[3px] text-[13px] font-medium text-zinc-700 transition-colors hover:bg-[color:var(--c-overlay)]"
                         >
-                            <span className="grid h-[20px] w-[20px] shrink-0 place-items-center rounded-[6px] bg-emerald-50 text-emerald-600">
+                            <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[6px] bg-emerald-50 text-emerald-600">
                                 <CodeBadgeIcon />
                             </span>
                             <span className="min-w-0 flex-1 truncate text-left">Engineering</span>
                             <Caret open={engOpen} />
                         </button>
                         {engOpen && (
-                            <div className="ml-[19px] flex flex-col gap-0.5 border-l border-[color:var(--c-border)] pl-2.5">
+                            <div className="mt-0.5 flex flex-col pl-3 gap-[4px]">
                                 <TeamLeaf icon={<WorkstreamsIcon />} label="Workstreams" active />
                                 <TeamLeaf icon={<ReviewsIcon />} label="Code Reviews" />
                                 <TeamLeaf icon={<ModulesIcon />} label="Modules" />
@@ -201,8 +206,8 @@ function NavItem({
             prefetch={false}
             onClick={onNavigate}
             className={cn(
-                "flex items-center gap-2.5 rounded-[9px] px-2 py-[7px] text-[13px] font-medium transition-colors",
-                active ? "bg-zinc-100 text-zinc-900" : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                "flex items-center w-max gap-2 rounded-[9px] pl-2.5 pr-4 py-[3px] text-[13px] font-medium transition-colors",
+                active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
             <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-zinc-900" : "text-zinc-400")}>
@@ -221,7 +226,7 @@ function SectionHeader({ label, open, onToggle }: { label: string; open: boolean
             type="button"
             onClick={onToggle}
             aria-expanded={open}
-            className="mt-4 mb-0.5 flex w-full items-center gap-1.5 px-2 py-1 text-[12px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
+            className="mt-[14px] mb-px flex w-full items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-semibold tracking-[0.01em] text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
         >
             <span>{label}</span>
             <Caret open={open} />
@@ -236,8 +241,8 @@ function TeamLeaf({ icon, label, active }: { icon: React.ReactNode; label: strin
         <button
             type="button"
             className={cn(
-                "flex items-center gap-2.5 rounded-[9px] px-2 py-[7px] text-[13px] transition-colors",
-                active ? "bg-zinc-100 font-semibold text-zinc-900" : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900",
+                "flex items-center gap-2.5 w-max rounded-[9px] pl-2.5 pr-3 py-[3px] text-[13px] transition-colors",
+                active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
             <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-zinc-900" : "text-zinc-400")}>
@@ -271,7 +276,7 @@ function Caret({ open }: { open: boolean }) {
 // MobileSidebar handles those.
 export function Sidebar({ projects, activeProjectId }: SidebarProps) {
     return (
-        <aside className="hidden h-full w-64 shrink-0 border-r border-[color:var(--c-border)] bg-white md:block">
+        <aside className="hidden h-full w-64 shrink-0 bg-[color:var(--c-shell)] md:block">
             <SidebarContent projects={projects} activeProjectId={activeProjectId} />
         </aside>
     )

@@ -30,7 +30,7 @@ export default function SessionsPage() {
     // component used to, rather than a generic error banner.
     if (overview.error) {
         return (
-            <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+            <div className="w-full px-5 py-6 sm:px-7 sm:py-7">
                 <header>
                     <h1 className="text-[22px] font-bold tracking-[-0.012em]">Public sessions</h1>
                 </header>
@@ -49,7 +49,7 @@ export default function SessionsPage() {
     const projectsBySession = overview.data?.projectsBySession ?? {}
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="w-full px-5 py-6 sm:px-7 sm:py-7">
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-[22px] font-bold tracking-[-0.012em]">Public sessions</h1>

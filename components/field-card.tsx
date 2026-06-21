@@ -23,6 +23,20 @@ const TONE: Record<Tone, string> = {
     zinc:    "bg-zinc-100 text-zinc-500",
 }
 
+// Solid, saturated fill with a white glyph — the bolder avatar treatment
+// from the reference board (a vermilion / ink circle with a white mark).
+// A faint same-tone ring + inner highlight gives the disc a little depth.
+const TONE_SOLID: Record<Tone, string> = {
+    blue:    "bg-blue-500 text-white ring-1 ring-inset ring-white/15",
+    amber:   "bg-amber-500 text-white ring-1 ring-inset ring-white/15",
+    rose:    "bg-rose-500 text-white ring-1 ring-inset ring-white/15",
+    emerald: "bg-emerald-500 text-white ring-1 ring-inset ring-white/15",
+    violet:  "bg-violet-500 text-white ring-1 ring-inset ring-white/15",
+    indigo:  "bg-indigo-500 text-white ring-1 ring-inset ring-white/15",
+    cyan:    "bg-cyan-500 text-white ring-1 ring-inset ring-white/15",
+    zinc:    "bg-zinc-900 text-white ring-1 ring-inset ring-white/10",
+}
+
 // Deterministic tone from a seed string (e.g. a project name) so each
 // card gets a stable, colourful glyph like the reference board — without
 // hand-assigning colours.
@@ -36,17 +50,20 @@ export function toneFromString(seed: string): Tone {
 export function MiniIcon({
     tone = "zinc",
     size = 36,
+    solid = false,
     className,
     children,
 }: {
     tone?: Tone
     size?: number
+    /** Bold reference treatment: saturated fill + white glyph. */
+    solid?: boolean
     className?: string
     children: ReactNode
 }) {
     return (
         <span
-            className={cn("mini-icon", TONE[tone], className)}
+            className={cn("mini-icon", (solid ? TONE_SOLID : TONE)[tone], className)}
             style={{ width: size, height: size }}
             aria-hidden
         >
@@ -114,6 +131,7 @@ export function MiniCard({
     tone = "zinc",
     icon,
     iconSize,
+    iconSolid = false,
     title,
     subtitle,
     badge,
@@ -126,6 +144,8 @@ export function MiniCard({
     tone?: Tone
     icon: ReactNode
     iconSize?: number
+    /** Render the glyph as a bold saturated disc (reference style). */
+    iconSolid?: boolean
     title: ReactNode
     subtitle?: ReactNode
     badge?: ReactNode
@@ -138,7 +158,7 @@ export function MiniCard({
     return (
         <article className={cn("card flex h-full flex-col", interactive && "card-hover", className)}>
             <div className="flex items-start gap-3">
-                <MiniIcon tone={tone} size={iconSize}>
+                <MiniIcon tone={tone} size={iconSize} solid={iconSolid}>
                     {icon}
                 </MiniIcon>
                 <div className="min-w-0 flex-1">
