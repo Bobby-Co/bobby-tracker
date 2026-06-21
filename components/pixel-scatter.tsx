@@ -15,11 +15,11 @@ const rand = (s: number) => {
     return x - Math.floor(x)
 }
 
-// A full-bleed pixel field on a 48px lattice (same cell size as the landing's
-// pixel gradient): a scattered subset of cells filled in yellow-amber tones —
-// some gently twinkling — with every other cell left transparent (the page
-// white shows through). No grid outline. Fills thin out toward the centre so
-// centred copy stays readable. Static frame under prefers-reduced-motion.
+// A pixelated corner gradient on a 48px lattice (same cell size as the
+// landing's pixel gradient): ember tiles glow from the top-left and
+// bottom-right corners and fade to white toward the centre, so most of the
+// page stays clean for the copy. Tiles are seamless (no grid outline) and a
+// few flicker occasionally. Static frame under prefers-reduced-motion.
 export default function PixelScatter({
     cell = 48,
     fill = 0.13,
@@ -66,35 +66,36 @@ export default function PixelScatter({
 
             const cols = Math.ceil(w / cell) + 1
             const rows = Math.ceil(h / cell) + 1
-            const cx = (cols - 1) / 2
-            const cy = (rows - 1) / 2
-            const maxd = Math.hypot(cx, cy) || 1
+            // How far the glow reaches along the diagonal from each lit corner
+            // (0 = corner only, 1 = all the way across).
+            const reach = 0.72
 
             cells = []
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     const seed = r * 73.13 + c * 19.71 + 1
-                    const d = Math.hypot(c - cx, r - cy) / maxd
+                    const fx = cols > 1 ? c / (cols - 1) : 0
+                    const fy = rows > 1 ? r / (rows - 1) : 0
 
-                    // Faint warm-gray base for EVERY cell: a per-cell jitter
-                    // makes the pixel lattice legible, and a gentle ramp toward
-                    // the edges reads as a soft gray gradient. Kept lightest in
-                    // the centre so the copy stays clean.
-                    const baseOp = Math.min(0.12, 0.03 + d * 0.055 + rand(seed * 11.3) * 0.04)
+                    // Corner weight: a pixelated gradient glowing from the
+                    // top-left and bottom-right corners, fading to white toward
+                    // the centre so most of the page stays clean for the copy.
+                    const pTL = 1 - Math.min(1, Math.hypot(fx, fy) / reach)
+                    const pBR = 1 - Math.min(1, Math.hypot(1 - fx, 1 - fy) / reach)
+                    const cw = Math.max(pTL, pBR)
 
-                    // A scattered subset also gets a vivid ember tile on top.
-                    // Tiles thin out toward the centre by COUNT (lower spawn
-                    // chance), not by fading — so the ones that appear stay
-                    // saturated like the landing rather than washing out.
+                    // Faint gray base only where the glow reaches; pure white
+                    // (baseOp 0) through the centre.
+                    const baseOp = cw * (0.05 + rand(seed * 11.3) * 0.05)
+
+                    // Vivid ember tiles, denser toward the lit corners.
                     let amber: Amber | null = null
-                    const centre = Math.min(1, Math.max(0, (d - 0.14) / 0.3))
-                    if (centre > 0 && rand(seed) <= fill * (0.2 + 0.8 * centre)) {
+                    if (cw > 0.04 && rand(seed) <= fill * cw) {
                         amber = {
                             col: COLORS[Math.floor(rand(seed * 1.7) * COLORS.length)],
-                            op: 0.62 + rand(seed * 2.3) * 0.38,
-                            // Only a few tiles flicker, and each just briefly
-                            // dips once every `period` seconds (staggered by
-                            // `phase`) — an occasional blink, not constant noise.
+                            op: (0.5 + rand(seed * 2.3) * 0.45) * Math.min(1, 0.45 + cw),
+                            // Only a few tiles flicker, each briefly dipping once
+                            // every `period`s (staggered) — an occasional blink.
                             tw: rand(seed * 3.9) < 0.28,
                             amp: 0.45 + rand(seed * 5.1) * 0.4,
                             phase: rand(seed * 6.7),

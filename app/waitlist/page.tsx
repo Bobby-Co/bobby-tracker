@@ -92,17 +92,16 @@ export default function WaitlistPage() {
         <main className="relative grid min-h-screen place-items-center overflow-hidden bg-white px-6">
             <style>{WAITLIST_CSS}</style>
 
-            {/* Full-page pixel field — same cell size + palette as the landing,
-                a scattered subset of cells filled with vivid ember + twinkling. */}
-            <PixelScatter cell={48} fill={0.24} />
-            {/*<div className="fixed top-0 left-0 w-full min-h-screen backdrop-blur-[2px]"/>*/}
-            <div className="anim-rise relative z-10 rounded-full py-32 px-32 backdrop-blur-[2px] flex flex-col justify-center items-center text-center">
+            {/* Pixelated corner gradient — same cell size + palette as the
+                landing, glowing from the corners and fading to white centre. */}
+            <PixelScatter cell={48} fill={0.4} />
+            <div className="anim-rise relative z-10 flex flex-col items-center justify-center rounded-[40px] px-6 py-14 text-center backdrop-blur-[1px] sm:px-16 sm:py-24 lg:rounded-full lg:px-32 lg:py-32">
                 <div className="flex justify-center">
                     <BrandLockup />
                 </div>
 
 
-                <h1 className="mt-6 text-[44px] font-extrabold leading-[1.05] tracking-[-0.035em] text-red-950 sm:text-[56px]">
+                <h1 className="mt-6 text-[34px] font-extrabold leading-[1.05] tracking-[-0.035em] text-red-950 sm:text-[48px] lg:text-[56px]">
                     Something great
                     <br />
                     is brewing.
@@ -110,7 +109,7 @@ export default function WaitlistPage() {
 
                 <p className="mt-5 max-w-md text-[15px] leading-7 text-amber-950">
                     Thank you for your interest in Ucelot. We&apos;re putting the final polish on the
-                    the product. See you very soon.
+                    product. See you very soon.
                 </p>
 
                 {/* CTA / success */}
