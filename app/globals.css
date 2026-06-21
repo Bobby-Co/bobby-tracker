@@ -101,6 +101,27 @@ html, body {
     }
 }
 
+/* ─── squircle corners ───────────────────────────────────────────────
+   Every rounded RECTANGLE gets a superellipse (squircle) corner instead of
+   the default quarter-ellipse — a softer, iOS-like shape. The existing
+   border-radius still sets the corner *size*; corner-shape only changes the
+   curve. Fully-round things (rounded-full: avatars, dots, pills) are reset to
+   true round so they stay circles/stadiums, not rounded squares. Browsers
+   without `corner-shape` simply ignore it and keep normal border-radius.
+   NOTE: component classes that get their radius via `@apply rounded-full`
+   (.mini-icon, .pill, .chip-min, .card-tag) carry no literal `rounded-full`
+   class, so they're listed explicitly alongside the utility. */
+* {
+    corner-shape: superellipse(4);
+}
+[class*="rounded-full"],
+.mini-icon,
+.pill,
+.chip-min,
+.card-tag {
+    corner-shape: round;
+}
+
 /* ─── reusable element classes ──────────────────────────────────────── */
 @layer components {
     /* Brand focus colours are set as plain CSS, NOT @apply: Tailwind v4
