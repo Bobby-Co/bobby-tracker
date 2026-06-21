@@ -75,6 +75,7 @@ function LoginShell({
             <button
                 onClick={() => onSignIn?.("github")}
                 disabled={busy}
+                style={{background: '#000'}}
                 className="btn-primary mt-7 w-full py-3 text-[14px]"
             >
                 <GithubMark />
