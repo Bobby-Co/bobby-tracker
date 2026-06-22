@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/supabase/server"
+import { isAllowed } from "@/lib/auth/access"
 import PixelGradient, { EMBER_STOPS } from "@/components/pixel-gradient"
 
 const BobbyMark = () => (
@@ -13,8 +14,11 @@ const BobbyMark = () => (
 )
 
 export default async function Home() {
+    // Only whitelisted users are sent into the app. Signed-in users who
+    // aren't on the beta list stay on the landing (they reach the waitlist
+    // through sign-in, not by being bounced off this page).
     const user = await getCurrentUser()
-    if (user) redirect("/projects")
+    if (user && isAllowed(user)) redirect("/projects")
 
     return (
         <section className="relative flex min-h-screen flex-col items-start justify-center overflow-hidden bg-[#fffae8] px-8 sm:px-16 lg:px-24">

@@ -27,7 +27,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             router.replace(`/login?next=${next}`)
             return
         }
-        // Signed in but not on the beta whitelist → coming-soon page.
+        // Onboard before the beta gate, so the waitlist is only ever reached
+        // after onboarding is complete.
+        if (!user.user_metadata?.onboarded) {
+            router.replace(`/onboarding?next=${encodeURIComponent(pathname || "/projects")}`)
+            return
+        }
+        // Onboarded but not on the beta whitelist → coming-soon page.
         if (!isAllowed(user)) router.replace("/waitlist")
     }, [loading, user, pathname, router])
 
@@ -38,9 +44,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     })
     const projects = data?.projects ?? []
 
-    // Still resolving the session, or mid-redirect to /login or /waitlist.
-    // Show the shell skeleton rather than flashing protected content.
-    if (loading || !user || !isAllowed(user)) {
+    // Still resolving the session, or mid-redirect to /login, /onboarding or
+    // /waitlist. Show the shell skeleton rather than flashing protected content.
+    if (loading || !user || !user.user_metadata?.onboarded || !isAllowed(user)) {
         return <ShellSkeleton />
     }
 

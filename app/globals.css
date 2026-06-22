@@ -153,6 +153,11 @@ html, body {
         --corner-shape: squircle;
     }
 
+    .rounded-sq-t-xl {
+        border-radius: calc(32px * var(--corner-scale, 1)) calc(32px * var(--corner-scale, 1)) 0 0;
+        --corner-shape: squircle;
+    }
+
     .rounded-sq-xl {
         border-radius: calc(32px * var(--corner-scale, 1));
         --corner-shape: squircle;
@@ -220,7 +225,7 @@ html, body {
         border-top-left-radius: 0;
     }
     .card-hover:hover {
-        @apply -translate-y-px border-[color:var(--c-border-strong)];
+        @apply border-[color:var(--c-border-strong)];
         box-shadow: 0 1px 2px rgba(17,24,39,0.03), 0 10px 24px -12px rgba(17,24,39,0.10);
     }
     /* When the hoverable card lives inside a stack with a tab, lift the

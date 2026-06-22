@@ -4,8 +4,7 @@ import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
 import { NewProjectButton } from "@/components/new-project-button"
 import { NewGroupButton } from "@/components/new-group-button"
-import { MiniCard, FieldTable, FieldRow, toneFromString } from "@/components/field-card"
-import { shortDate, timeAgo } from "@/components/issue-meta"
+import { ProjectTile } from "@/components/project-tile"
 import type { Project, ProjectGroup } from "@/lib/supabase/types"
 
 type GroupWithCount = ProjectGroup & { member_count: number }
@@ -124,36 +123,7 @@ export default function ProjectsPage() {
                             className="anim-rise"
                             style={{ ["--i" as string]: i } as React.CSSProperties}
                         >
-                            <Link href={`/projects/${p.id}/issues`} prefetch={false} className="block">
-                                <MiniCard
-                                    tone={toneFromString(p.name)}
-                                    icon={<RepoIcon />}
-                                    iconSolid
-                                    title={p.name}
-                                    footer={
-                                        <span className="ml-auto inline-flex items-center gap-1">
-                                            <ClockIcon />
-                                            {timeAgo(p.updated_at)}
-                                        </span>
-                                    }
-                                >
-                                    <FieldTable>
-                                        <FieldRow icon={<RepoMiniIcon />} label="Repo">
-                                            <span className="font-mono text-[11.5px]">
-                                                {p.repo_full_name ? p.repo_full_name : p.repo_url}
-                                            </span>
-                                        </FieldRow>
-                                        <FieldRow icon={<ClockIcon />} label="Updated">
-                                            {shortDate(p.updated_at)}
-                                        </FieldRow>
-                                    </FieldTable>
-                                    {p.description && (
-                                        <p className="line-clamp-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
-                                            {p.description}
-                                        </p>
-                                    )}
-                                </MiniCard>
-                            </Link>
+                            <ProjectTile project={p} />
                         </li>
                     ))}
                 </ul>
@@ -162,30 +132,6 @@ export default function ProjectsPage() {
     )
 }
 
-function RepoIcon() {
-    return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M4 4h12a4 4 0 014 4v12H8a4 4 0 01-4-4V4z" />
-            <path d="M4 16a4 4 0 014-4h12" />
-        </svg>
-    )
-}
-function RepoMiniIcon() {
-    return (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M4 4h12a4 4 0 014 4v12H8a4 4 0 01-4-4V4z" />
-            <path d="M4 16a4 4 0 014-4h12" />
-        </svg>
-    )
-}
-function ClockIcon() {
-    return (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-        </svg>
-    )
-}
 function FolderIcon() {
     return (
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-[color:var(--c-text-dim)]">

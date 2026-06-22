@@ -20,7 +20,7 @@ const rand = (seed: number) => {
 
 export default function WaitlistPage() {
     const router = useRouter()
-    const { user, loading } = useAuth()
+    const { user, loading, signOut } = useAuth()
     const supabase = useMemo(() => createClient(), [])
     const [status, setStatus] = useState<"idle" | "joining" | "joined">("idle")
     const [error, setError] = useState<string | null>(null)
@@ -76,6 +76,13 @@ export default function WaitlistPage() {
         setStatus("joined")
     }
 
+    // Let a waitlisted user leave / switch accounts. signOut clears the
+    // session; the gate effect above then routes the now-anonymous visitor
+    // to /login (avoids racing two redirects).
+    async function handleSignOut() {
+        await signOut()
+    }
+
     // Resolving the session or mid-redirect (whitelisted users bounce to the
     // app) — hold a warm brand splash so nothing flashes.
     if (loading || !user || isAllowed(user)) {
@@ -95,6 +102,18 @@ export default function WaitlistPage() {
             {/* Pixelated corner gradient — same cell size + palette as the
                 landing, glowing from the corners and fading to white centre. */}
             <PixelScatter cell={48} fill={0.4} />
+
+            {/* Sign out — lets a waitlisted user leave or switch accounts. */}
+            <button
+                onClick={handleSignOut}
+                className="absolute right-5 top-5 z-20 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-amber-900/70 transition-colors hover:bg-amber-900/5 hover:text-amber-900"
+            >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <path d="M16 17l5-5-5-5M21 12H9" />
+                </svg>
+                Sign out
+            </button>
             <div className="anim-rise relative z-10 flex flex-col items-center justify-center rounded-[40px] text-center px-4 sm:px-16 sm:py-24 lg:rounded-full lg:px-32 lg:py-32">
                 <div className="flex justify-center">
                     <BrandLockup tone={"dark"} />

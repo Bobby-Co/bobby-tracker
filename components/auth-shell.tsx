@@ -34,7 +34,7 @@ export function AuthShell({
                 <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
 
                 <div className="relative z-10 flex h-full flex-col justify-between p-12">
-                    <BrandLockup tone="dark" />
+                    <BrandLockup tone="dark" text={"inverted"} />
                     <div>
                         <h2
                             className="max-w-sm text-[30px] font-extrabold leading-[1.15] tracking-[-0.025em] text-white"
@@ -58,7 +58,7 @@ export function AuthShell({
                 <div className={`anim-rise w-full ${contentClassName}`}>
                     {/* Brand shows here on mobile, where the left panel is hidden */}
                     <div className="mb-10 lg:hidden">
-                        <BrandLockup />
+                        <BrandLockup tone="dark" />
                     </div>
                     {children}
                 </div>

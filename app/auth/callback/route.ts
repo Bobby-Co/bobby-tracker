@@ -125,21 +125,22 @@ export async function GET(request: Request) {
         }
     }
 
-    // Beta gate (outermost): anyone not on the whitelist lands on the
-    // coming-soon page instead of the app, no matter where they were headed.
-    if (user && !isAllowed(user)) {
-        return NextResponse.redirect(new URL("/waitlist", url.origin))
-    }
-
-    // Brand-new users (no `onboarded` flag in their metadata yet) get the
-    // in-panel onboarding before landing in the app; returning users skip
-    // straight through. The wizard persists the flag, so this only fires
-    // once. `next` is carried through so onboarding can hand off where the
-    // user was originally headed.
+    // Onboarding comes first — before the beta gate — so every brand-new
+    // user (no `onboarded` flag yet) completes the in-panel wizard, even the
+    // ones who'll land on the waitlist afterwards. The wizard persists the
+    // flag (so this only fires once) and then routes on to the app or the
+    // waitlist. `next` is carried through so it can hand off where the user
+    // was originally headed.
     if (user && !user.user_metadata?.onboarded) {
         const dest = new URL("/onboarding", url.origin)
         dest.searchParams.set("next", next)
         return NextResponse.redirect(dest)
+    }
+
+    // Beta gate: onboarded users who aren't on the whitelist land on the
+    // coming-soon page instead of the app.
+    if (user && !isAllowed(user)) {
+        return NextResponse.redirect(new URL("/waitlist", url.origin))
     }
 
     return NextResponse.redirect(new URL(next, url.origin))

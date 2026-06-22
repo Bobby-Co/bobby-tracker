@@ -9,23 +9,23 @@ const BobbyMark = ({ size = 36 }: { size?: number }) => (
     </svg>
 )
 
-export function BrandLockup({ tone = "light" }: { tone?: "light" | "dark" }) {
+export function BrandLockup({ tone = "light", text = "default" }: { tone?: "light" | "dark", text?: "default" | "inverted" }) {
     return (
         <div className="flex items-center gap-3">
-            <div className={`grid size-11 shrink-0 place-items-center rounded-sq-xl ${tone !== "dark" ? "bg-white text-[color:var(--c-text)]" : "bg-[color:var(--c-text)] text-white"} shadow-[0_10px_30px_-8px_rgba(234,88,12,0.6)]`} suppressHydrationWarning>
+            <div className={`grid size-11 shrink-0 place-items-center rounded-sq-xl ${tone !== "dark" ? "bg-white text-[color:var(--c-text)]" : "bg-[color:var(--c-text)] text-white"} `} suppressHydrationWarning>
                 <BobbyMark size={30} />
             </div>
             <div className="flex flex-col leading-none">
                 <span
                     className={`text-[20px] text-start font-extrabold tracking-[-0.02em] ${
-                        "text-[color:var(--c-text)]"
+                        text !== "inverted" ? "text-[color:var(--c-text)]" : "text-white"
                     }`}
                 >
                     Ucelot
                 </span>
                 <span
                     className={`mt-1 text-[10px] font-extrabold uppercase tracking-[0.3em] ${
-                        "text-[color:var(--c-text-muted)]"
+                        text !== "inverted" ? "text-[color:var(--c-text-muted)]" : "text-white"
                     }`}
                 >
                     by Bobby
