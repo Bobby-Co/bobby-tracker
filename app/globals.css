@@ -114,7 +114,10 @@ html, body {
 *,
 *::before,
 *::after {
-    corner-shape: superellipse(4);
+    /* The canonical squircle (= superellipse(2)). NOTE the scale:
+       superellipse(1)=round, (2)=squircle, higher=squarer — so superellipse(4)
+       reads as nearly-square ("no radius") at small radii. */
+    corner-shape: squircle;
 }
 /* Only true circles, capsules and thin tracks stay round — squircling a
    fully-round shape yields a lumpy rounded-square. These use the
