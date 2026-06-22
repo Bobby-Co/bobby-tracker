@@ -9,6 +9,7 @@ import { MiniIcon, toneFromString } from "@/components/field-card"
 import PixelGradient, { DARK_EMBER_STOPS } from "@/components/pixel-gradient"
 import PixelScatter from "@/components/pixel-scatter"
 import type { Project } from "@/lib/supabase/types"
+import { motion } from "framer-motion"
 
 interface SidebarProps {
     projects: Project[]
@@ -118,11 +119,11 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                 {/* Projects — real, collapsible, colourful circle items */}
                 <SectionHeader label="Projects" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} />
                 {projectsOpen && (
-                    <div className="mt-0.5 flex flex-col gap-[4px] pl-3">
+                    <motion.div layout="position" className="mt-0.5 flex flex-col gap-[4px] pl-3">
                         {projects.length === 0 ? (
                             <p className="px-2 py-1.5 text-[12px] text-[color:var(--c-text-dim)]">No projects yet.</p>
                         ) : (
-                            projects.map((p) => {
+                            projects.map((p, i) => {
                                 const active = p.id === activeProj
                                 return (
                                     <Link
@@ -130,26 +131,27 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                         href={`/projects/${p.id}/issues`}
                                         prefetch={false}
                                         onClick={onNavigate}
-                                        className={cn(
+                                    >
+                                        <motion.div  initial={{ opacity: 0 }} animate={{ opacity: 1 }}  transition={{delay:0.02*i}}    className={cn(
                                             "group flex items-center w-max gap-2.5 rounded-[9px] px-2.5 py-[3px] text-[13px] transition-colors",
                                             active ? ROW_ACTIVE : ROW_IDLE,
-                                        )}
-                                    >
-                                        <MiniIcon tone={toneFromString(p.name)} size={18}>
-                                            <span className="text-[9px] font-bold uppercase">{p.name[0] ?? "?"}</span>
-                                        </MiniIcon>
-                                        <span className="truncate">{p.name}</span>
+                                        )}>
+                                            <MiniIcon tone={toneFromString(p.name)} size={18}>
+                                                <span className="text-[9px] font-bold uppercase">{p.name[0] ?? "?"}</span>
+                                            </MiniIcon>
+                                            <span className="truncate">{p.name}</span>
+                                        </motion.div>
                                     </Link>
                                 )
                             })
                         )}
-                    </div>
+                    </motion.div>
                 )}
 
                 {/* Teams — stubbed nested tree mirroring the reference. */}
                 <SectionHeader label="Teams" open={teamsOpen} onToggle={() => setTeamsOpen((o) => !o)} />
                 {teamsOpen && (
-                    <div className="mt-0.5 flex flex-col gap-[2px]">
+                    <motion.div layout="position" className="mt-0.5 flex flex-col gap-[2px]">
                         <button
                             type="button"
                             onClick={() => setEngOpen((o) => !o)}
@@ -169,7 +171,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                 <TeamLeaf icon={<ModulesIcon />} label="Modules" />
                             </div>
                         )}
-                    </div>
+                    </motion.div>
                 )}
             </div>
 
@@ -244,7 +246,8 @@ function NavItem({
 // the reference's "Starred" / "Teams".
 function SectionHeader({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
     return (
-        <button
+        <motion.button
+            layout="position"
             type="button"
             onClick={onToggle}
             aria-expanded={open}
@@ -252,7 +255,7 @@ function SectionHeader({ label, open, onToggle }: { label: string; open: boolean
         >
             <span>{label}</span>
             <Caret open={open} />
-        </button>
+        </motion.button>
     )
 }
 

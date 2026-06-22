@@ -28,7 +28,7 @@ export default function ProjectsPage() {
                         One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <div className="flex flex-wrap items-center justify-end gap-2 self-start sm:self-auto">
                     <NewGroupButton projects={allProjectsForPicker} />
                     <NewProjectButton />
                 </div>
@@ -111,9 +111,9 @@ export default function ProjectsPage() {
                 </div>
             ) : (
                 <ul
-                    className="grid gap-3 stagger"
+                    className="grid gap-4 stagger"
                     style={{
-                        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
                         ["--stagger-step" as string]: "60ms",
                     } as React.CSSProperties}
                 >

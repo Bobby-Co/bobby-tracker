@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { Sidebar } from "@/components/sidebar"
 import { MobileSidebar } from "@/components/mobile-sidebar"
+import { NotificationPopover } from "@/components/notification-popover"
 import type { Project } from "@/lib/supabase/types"
 
 // Presentational app shell — the chrome shared by every signed-in route
@@ -24,20 +25,23 @@ export function AppShell({
         <div className="flex h-screen w-full bg-[color:var(--c-shell)] text-[color:var(--c-text)]">
             <Sidebar projects={projects} />
             <div className="flex min-w-0 flex-1 flex-col pt-2">
-                <header className="flex h-14 shrink-0 items-center gap-2.5 px-3 sm:gap-3 sm:px-5">
+                <header className="relative z-30 flex h-14 shrink-0 items-center gap-2.5 px-3 sm:gap-3 sm:px-5">
                     <MobileSidebar projects={projects} />
                     <TopBreadcrumb projects={projects} />
-                    <label className="relative ml-auto flex shrink-0 items-center">
-                        <span className="pointer-events-none absolute left-3 grid place-items-center text-[color:var(--c-text-dim)]">
-                            <SearchIcon />
-                        </span>
-                        <input
-                            type="search"
-                            aria-label="Search"
-                            placeholder="Search…"
-                            className="h-9 w-[160px] rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-9 pr-3 text-[13px] text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,background-color,border-color] duration-200 hover:border-[color:var(--c-border-strong)] focus:w-[220px] focus:border-[color:var(--c-primary)] focus:outline-none focus:ring-[3px] focus:ring-[color:var(--c-ring)] sm:w-[200px] sm:focus:w-[260px]"
-                        />
-                    </label>
+                    <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
+                        <label className="relative flex items-center">
+                            <span className="pointer-events-none absolute left-3 grid place-items-center text-[color:var(--c-text-dim)]">
+                                <SearchIcon />
+                            </span>
+                            <input
+                                type="search"
+                                aria-label="Search"
+                                placeholder="Search…"
+                                className="h-9 w-[160px] rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-9 pr-3 text-[13px] text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,background-color,border-color] duration-200 hover:border-[color:var(--c-border-strong)] focus:w-[220px] focus:border-[color:var(--c-primary)] focus:outline-none focus:ring-[3px] focus:ring-[color:var(--c-ring)] sm:w-[200px] sm:focus:w-[260px]"
+                            />
+                        </label>
+                        <NotificationPopover />
+                    </div>
                 </header>
                 <main className="min-h-0 flex-1">
                     <div className="app-panel">{children}</div>
