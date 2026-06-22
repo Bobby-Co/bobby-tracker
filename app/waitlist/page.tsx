@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth/auth-context"
 import { isAllowed } from "@/lib/auth/access"
-import { BrandLockup } from "@/components/auth-shell"
+import { BrandLockup } from "@/components/BrandLockup"
 import PixelScatter from "@/components/pixel-scatter"
 
 // Warm tones that read on the cream background (no white — it'd vanish).
@@ -95,9 +95,9 @@ export default function WaitlistPage() {
             {/* Pixelated corner gradient — same cell size + palette as the
                 landing, glowing from the corners and fading to white centre. */}
             <PixelScatter cell={48} fill={0.4} />
-            <div className="anim-rise relative z-10 flex flex-col items-center justify-center rounded-[40px] px-6 py-14 text-center backdrop-blur-[1px] sm:px-16 sm:py-24 lg:rounded-full lg:px-32 lg:py-32">
+            <div className="anim-rise relative z-10 flex flex-col items-center justify-center rounded-[40px] text-center px-4 sm:px-16 sm:py-24 lg:rounded-full lg:px-32 lg:py-32">
                 <div className="flex justify-center">
-                    <BrandLockup />
+                    <BrandLockup tone={"dark"} />
                 </div>
 
 
@@ -139,7 +139,7 @@ export default function WaitlistPage() {
                     )}
 
                     {!joined ? (
-                        <button onClick={join} disabled={status === "joining"} className="wl-cta">
+                        <button onClick={join} disabled={status === "joining"} className="wl-cta rounded-sq-3xl transition-transform">
                             {status === "joining" ? (
                                 <span className="wl-spinner" aria-label="Joining" />
                             ) : (
@@ -159,7 +159,7 @@ export default function WaitlistPage() {
                         </button>
                     ) : (
                         <div className="wl-joined relative z-10 flex flex-col items-center">
-                            <div className="wl-check-badge">
+                            <div className="wl-check-badge rounded-sq-3xl">
                                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden>
                                     <path
                                         className="wl-check"
@@ -173,9 +173,6 @@ export default function WaitlistPage() {
                             </div>
                             <p className="mt-4 text-[18px] font-bold tracking-[-0.01em] text-red-950">
                                 You&apos;re on the list!
-                            </p>
-                            <p className="mt-1.5 text-[13.5px] text-amber-950/70">
-                                We&apos;ll email you the moment your spot opens.
                             </p>
                         </div>
                     )}
@@ -200,10 +197,10 @@ export default function WaitlistPage() {
 const WAITLIST_CSS = `
 .wl-cta {
     display: inline-flex; align-items: center; gap: 8px;
-    border-radius: 9999px; padding: 14px 28px;
+    padding: 14px 28px;
     font-size: 15px; font-weight: 800; letter-spacing: -0.01em;
     color: #4a1d05;
-    background: linear-gradient(135deg, #fde047 0%, #f59e0b 52%, #ea580c 100%);
+    background:  #f59e0b;
     box-shadow: 0 14px 38px -10px rgba(234,88,12,0.5), inset 0 1px 0 rgba(255,255,255,0.45);
     transition: transform 180ms cubic-bezier(0.22,1,0.36,1), box-shadow 180ms ease, filter 180ms ease;
     cursor: pointer;
@@ -245,7 +242,7 @@ const WAITLIST_CSS = `
 
 .wl-check-badge {
     display: grid; place-items: center;
-    width: 58px; height: 58px; border-radius: 9999px;
+    width: 58px; height: 58px;
     color: white;
     background: #f59e0b;
     box-shadow: 0 12px 30px -8px rgba(234,88,12,0.55);

@@ -228,7 +228,7 @@ function NavItem({
             prefetch={false}
             onClick={onNavigate}
             className={cn(
-                "flex items-center w-max gap-2 rounded-[9px] pl-2.5 pr-4 py-[3px] text-[13px] font-medium transition-colors",
+                "flex items-center w-max gap-2 rounded-sq-l pl-2.5 pr-4 py-[3px] text-[13px] font-medium",
                 active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
@@ -263,7 +263,7 @@ function TeamLeaf({ icon, label, active }: { icon: React.ReactNode; label: strin
         <button
             type="button"
             className={cn(
-                "flex items-center gap-2.5 w-max rounded-[9px] pl-2.5 pr-3 py-[3px] text-[13px] transition-colors",
+                "flex items-center gap-2.5 w-max rounded-sq-l pl-2.5 pr-3 py-[3px] text-[13px]",
                 active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >

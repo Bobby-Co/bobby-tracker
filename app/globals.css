@@ -142,6 +142,38 @@ html, body {
         --corner-shape: squircle;
         border-radius: calc(40px * var(--corner-scale, 1));
     }
+
+    .rounded-sq {
+        border-radius: calc(16px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-l {
+        border-radius: calc(24px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-xl {
+        border-radius: calc(32px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-2xl {
+        border-radius: calc(120px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+
+    .rounded-sq-3xl {
+        border-radius: calc(200px * var(--corner-scale, 1));
+        --corner-shape: superellipse(1.5);
+    }
+
+    .rounded-sq-4xl {
+        border-radius: calc(200px * var(--corner-scale, 1));
+        --corner-shape: superellipse(1.2);
+    }
+
     .input:hover { border-color: var(--c-border-strong); }
     .input:focus {
         outline: none;

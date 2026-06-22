@@ -30,7 +30,7 @@ export default async function Home() {
             />
             <div className="relative z-10 flex w-full max-w-xl flex-col items-start text-left">
                 <div className="anim-rise flex items-center gap-4" style={{ animationDelay: "0ms" }}>
-                    <div className="size-14 shrink-0 rounded-2xl bg-[#383838] p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
+                    <div className="size-14 shrink-0 rounded-sq-2xl bg-[#383838] p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
                         <BobbyMark />
                     </div>
                     <div className="flex flex-col items-start text-[#383838]">
@@ -54,14 +54,14 @@ export default async function Home() {
                 <div className="flex items-center space-x-4">
                     <Link
                         href="/login"
-                        className="text-white rounded-xl bg-[#383838] font-bold anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                        className="text-white rounded-sq-xl bg-[#383838] font-bold anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                         style={{ animationDelay: "200ms" }}
                     >
                         Start Now
                     </Link>
                     <Link
                         href="/login"
-                        className="bg-white rounded-xl text-[#383838] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                        className="bg-white rounded-sq-xl text-[#383838] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                         style={{ animationDelay: "200ms" }}
                     >
                         Documentation
