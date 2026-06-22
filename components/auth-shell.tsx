@@ -90,7 +90,7 @@ export function AuthShell({
 
             {/* Right content panel — on desktop it overlaps the dark panel with a
                 rounded left edge, so the gradient curves out from behind it. */}
-            <main className="relative z-10 flex flex-1 items-center justify-center bg-white px-6 py-12 lg:-ml-8 lg:rounded-l-[16px] lg:shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.45)]">
+            <main className="relative z-10 flex flex-1 items-center justify-center bg-white px-6 py-12 lg:-ml-8 squircle-card lg:shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.45)]" suppressHydrationWarning>
                 <div className={`anim-rise w-full ${contentClassName}`}>
                     {/* Brand shows here on mobile, where the left panel is hidden */}
                     <div className="mb-10 lg:hidden">

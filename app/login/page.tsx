@@ -1,9 +1,10 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import {Suspense, useEffect, useState} from "react"
 import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { AuthShell } from "@/components/auth-shell"
+import {registerHyperellipse} from "hyperellipse";
 
 type Provider = "github" | "google" | "apple"
 
@@ -75,8 +76,8 @@ function LoginShell({
             <button
                 onClick={() => onSignIn?.("github")}
                 disabled={busy}
-                style={{background: '#000'}}
-                className="btn-primary mt-7 w-full py-3 text-[14px]"
+                suppressHydrationWarning
+                className="btn-primary btn-github mt-7 w-full py-3 text-[14px]"
             >
                 <GithubMark />
                 <span>{pending === "github" ? "Redirecting…" : "Continue with GitHub"}</span>
@@ -94,6 +95,7 @@ function LoginShell({
                 <button
                     onClick={() => onSignIn?.("google")}
                     disabled={busy}
+                    suppressHydrationWarning
                     className="btn-ghost w-full py-3 text-[13.5px]"
                 >
                     <GoogleMark />
@@ -102,6 +104,7 @@ function LoginShell({
                 <button
                     onClick={() => onSignIn?.("apple")}
                     disabled={busy}
+                    suppressHydrationWarning
                     className="btn-ghost w-full py-3 text-[13.5px]"
                 >
                     <AppleMark />

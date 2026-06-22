@@ -111,25 +111,19 @@ html, body {
    NOTE: component classes that get their radius via `@apply rounded-full`
    (.mini-icon, .pill, .chip-min, .card-tag) carry no literal `rounded-full`
    class, so they're listed explicitly alongside the utility. */
-*,
-*::before,
-*::after {
-    /* The canonical squircle (= superellipse(2)). NOTE the scale:
-       superellipse(1)=round, (2)=squircle, higher=squarer — so superellipse(4)
-       reads as nearly-square ("no radius") at small radii. */
-    corner-shape: squircle;
-}
-/* Only true circles, capsules and thin tracks stay round — squircling a
-   fully-round shape yields a lumpy rounded-square. These use the
-   rounded-full utility (avatars, status dots, progress tracks) or the
-   capsule component classes (.pill / .chip-min / .card-tag). Everything
-   else squircles, INCLUDING the square glyph .mini-icon (→ app-icon look). */
-[class*="rounded-full"],
-.pill,
-.chip-min,
-.card-tag {
-    corner-shape: round;
-}
+/* ─── squircle corners (cross-browser) ───────────────────────────────
+   Driven by the hyperellipse polyfill (components/hyperellipse-setup.tsx).
+   We set the custom --corner-shape property: in Chrome the polyfill bridges
+   it to the native corner-shape; in Safari/Firefox it renders the squircle
+   with a clip-path fallback — so both browsers match. `corner-shape` is set
+   too so Chrome squircles immediately pre-hydration (no flash).
+
+   OPT-IN per element, scoped to rounded RECTANGLES + the square glyph. Capsules
+   (.pill/.chip-min/.card-tag), circles (avatars/dots), and the scroll panel are
+   intentionally left out, so they stay round in BOTH browsers. Add the
+   `.squircle` class or `data-squircle` attr to opt extra elements in. */
+
+@import "hyperellipse/css";
 
 /* ─── reusable element classes ──────────────────────────────────────── */
 @layer components {
@@ -143,6 +137,11 @@ html, body {
             transition-colors duration-[140ms];
         border-color: var(--c-border);
     }
+
+    .squircle-card {
+        --corner-shape: squircle;
+        border-radius: calc(40px * var(--corner-scale, 1));
+    }
     .input:hover { border-color: var(--c-border-strong); }
     .input:focus {
         outline: none;
@@ -151,19 +150,30 @@ html, body {
     }
     /* Flat brand ember — solid fill, no gradient. */
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-2
-            text-[13px] font-semibold text-white transition
-            active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100;
+        @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-2
+            text-[13px] font-semibold text-white disabled:opacity-50;
+        /* radius via calc + --corner-scale so the squircle polyfill softens the
+           pre-hydration flash; no color transition (it glitches the fallback). */
+        border-radius: calc(10px * var(--corner-scale, 1));
+        --corner-shape: squircle;
         background-color: var(--c-primary);
         box-shadow: 0 1px 2px rgba(180,83,9,0.22);
     }
+
     .btn-primary:hover { background-color: var(--c-primary-hover); }
     .btn-primary:disabled:hover { background-color: var(--c-primary); }
+    /* GitHub provider button — brand-black. Set in CSS (not an inline style)
+       so the hyperellipse squircle fallback can read it from the stylesheet
+       and bake it into the SVG layer; inline backgrounds render grey. */
+    .btn-primary.btn-github { background-color: #18181b; }
+    .btn-primary.btn-github:hover { background-color: #000; }
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)]
+        @apply inline-flex items-center justify-center gap-1.5 border border-[color:var(--c-border)]
             bg-white px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]
-            transition hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]
+            hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]
             disabled:opacity-50;
+        border-radius: calc(10px * var(--corner-scale, 1));
+        --corner-shape: squircle;
     }
 
     /* CI workflow card — fully rounded by default. The tabbed variant

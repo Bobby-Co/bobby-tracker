@@ -10,6 +10,7 @@ import {
 } from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
+import {registerHyperellipse} from "hyperellipse";
 
 // Client-side auth context. This replaces the old server/middleware
 // scheme: the browser Supabase client owns the session (stored in the
