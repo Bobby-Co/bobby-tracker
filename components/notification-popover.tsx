@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { motion, useSpring, useTransform } from "framer-motion"
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion"
 import { MiniIcon, type Tone } from "@/components/field-card"
 
 // Notification popover for the topbar. The bell "chip" MORPHS into the panel
@@ -58,14 +58,21 @@ export function NotificationPopover() {
     const [chipSize, setChipSize] = useState({ w: 36, h: 36 })
     const [panelSize, setPanelSize] = useState({ w: 340, h: 420 })
 
-    // Width/height ride springs (open AND close), then get CLAMPED to the bell's
-    // footprint so the box can bounce but never shrinks below it — otherwise the
-    // close spring undershoots well past 36 and the icon spills out. The hidden
-    // below-floor part turns the close into a springy settle AT button size.
-    const wSpring = useSpring(open ? panelSize.w : chipSize.w, SIZE_SPRING)
-    const hSpring = useSpring(open ? panelSize.h : chipSize.h, SIZE_SPRING)
+    // Width/height ride springs (open AND close), CLAMPED to the bell's footprint
+    // so the box can bounce but never shrinks below it. useSpring reads a raw
+    // number arg only ONCE (as its initial) — a changing `open ? a : b` never
+    // re-targets, so the box never grew on open. Feed it motion-value TARGETS and
+    // .set() them on open/close instead, which makes the spring re-animate.
+    const wTarget = useMotionValue(FLOOR)
+    const hTarget = useMotionValue(FLOOR)
+    const wSpring = useSpring(wTarget, SIZE_SPRING)
+    const hSpring = useSpring(hTarget, SIZE_SPRING)
     const width = useTransform(wSpring, (v) => (v < FLOOR ? FLOOR : v))
     const height = useTransform(hSpring, (v) => (v < FLOOR ? FLOOR : v))
+    useEffect(() => {
+        wTarget.set(open ? panelSize.w : chipSize.w)
+        hTarget.set(open ? panelSize.h : chipSize.h)
+    }, [open, panelSize.w, panelSize.h, chipSize.w, chipSize.h, wTarget, hTarget])
 
     // Measure the chip + panel so the surface morphs to either exactly, and
     // stays correct if content reflows.

@@ -57,6 +57,56 @@
 
     --t-fast: 140ms cubic-bezier(0.22, 1, 0.36, 1);
     --t-mid:  220ms cubic-bezier(0.22, 1, 0.36, 1);
+
+    /* ─── app palette — colour chips (light -bg paired with a saturated tone) ─
+       Hashed onto project tiles; reusable anywhere a colour chip is needed. */
+    /* reds & pinks */
+    --app-crimson-bg: #FADFE0;  --app-crimson: #C0394A;
+    --app-rose-bg:    #FBE2E7;  --app-rose:    #CB4668;
+    --app-pink-bg:    #FBE3EF;  --app-pink:    #C84C86;
+    --app-blush-bg:   #FCE6EC;  --app-blush:   #D2698D;
+    --app-magenta-bg: #F8E0F0;  --app-magenta: #BC3F94;
+    --app-fuchsia-bg: #F7E2F5;  --app-fuchsia: #B642AC;
+    /* purples */
+    --app-orchid-bg:     #F2E4F7;  --app-orchid:     #9D4DBB;
+    --app-purple-bg:     #EEE6FA;  --app-purple:     #8A4FCE;
+    --app-violet-bg:     #EAE6FB;  --app-violet:     #7350D6;
+    --app-lavender-bg:   #EBEAFC;  --app-lavender:   #6257D4;
+    --app-periwinkle-bg: #E6E9FC;  --app-periwinkle: #5566D6;
+    /* blues */
+    --app-indigo-bg: #E2E8FB;  --app-indigo: #3F5BCC;
+    --app-blue-bg:   #E0EBFD;  --app-blue:   #3370D4;
+    --app-azure-bg:  #DEEDFC;  --app-azure:  #2484CC;
+    --app-sky-bg:    #DBF0FB;  --app-sky:    #1B91C2;
+    --app-cyan-bg:   #D8F3F4;  --app-cyan:   #0E9AA4;
+    /* greens & teals */
+    --app-teal-bg:    #D7F2EC;  --app-teal:    #10917F;
+    --app-mint-bg:    #DDF5EB;  --app-mint:    #1FA06E;
+    --app-spruce-bg:  #DBF1E6;  --app-spruce:  #1C8F66;
+    --app-emerald-bg: #DCF4E4;  --app-emerald: #1E9C58;
+    --app-green-bg:   #E0F4DC;  --app-green:   #3D9A37;
+    --app-fern-bg:    #E5F3D6;  --app-fern:    #57962A;
+    --app-sage-bg:    #E9F0DE;  --app-sage:    #6E8A4E;
+    --app-lime-bg:    #EDF5CE;  --app-lime:    #7C9011;
+    /* yellows & gold */
+    --app-olive-bg:  #F0EFD2;  --app-olive:  #8C8520;
+    --app-citron-bg: #F6F2C9;  --app-citron: #9A8C0E;
+    --app-gold-bg:   #FBF1CC;  --app-gold:   #B8930C;
+    --app-yellow-bg: #FBEFCB;  --app-yellow: #C28E0A;
+    --app-amber-bg:  #FBE9C9;  --app-amber:  #C57F0C;
+    --app-honey-bg:  #FCEAC9;  --app-honey:  #CC8A22;
+    /* oranges & earth */
+    --app-tangerine-bg: #FDE7C9;  --app-tangerine: #CE7A12;
+    --app-orange-bg:    #FCE3D0;  --app-orange:    #D26B26;
+    --app-peach-bg:     #FCE6D8;  --app-peach:     #D27C40;
+    --app-coral-bg:     #FCE3DD;  --app-coral:     #D45441;
+    --app-clay-bg:      #F4E4DA;  --app-clay:      #A86A48;
+    --app-brown-bg:     #F0E7DE;  --app-brown:     #8E6648;
+    --app-sand-bg:      #F3EEE1;  --app-sand:      #897A3D;
+    /* neutrals */
+    --app-slate-bg:    #E7ECF1;  --app-slate:    #566377;
+    --app-stone-bg:    #EEEBE6;  --app-stone:    #786F63;
+    --app-graphite-bg: #EAEAEC;  --app-graphite: #5C5C63;
 }
 
 @theme inline {
