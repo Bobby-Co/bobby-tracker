@@ -4,6 +4,7 @@ import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
 import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
+import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // POST /api/public-issues/[id]/suggest
 //
@@ -15,6 +16,10 @@ import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePub
 // `needs_indexing` if the project's graph isn't ready — the public
 // detail page renders that as a "still preparing" state.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    // Triggers analyser inference — rate limit per IP to cap LLM spend.
+    const limited = await enforceRateLimit("PUBLIC_RL", clientKey(request, "public-suggest"))
+    if (limited) return limited
+
     const { id } = await params
 
     let body: Record<string, unknown> = {}

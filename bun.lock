@@ -27,7 +27,6 @@
         "eslint-config-next": "16.2.4",
         "tailwindcss": "^4",
         "typescript": "^5",
-        "wangler": "^0.0.8",
         "wrangler": "^4.103.0",
       },
     },
@@ -1584,8 +1583,6 @@
     "vfile": ["vfile@6.0.3", "", { "dependencies": { "@types/unist": "^3.0.0", "vfile-message": "^4.0.0" } }, ""],
 
     "vfile-message": ["vfile-message@4.0.3", "", { "dependencies": { "@types/unist": "^3.0.0", "unist-util-stringify-position": "^4.0.0" } }, ""],
-
-    "wangler": ["wangler@0.0.8", "", { "dependencies": { "dotenv": "^16.5.0" }, "peerDependencies": { "wrangler": "*" }, "bin": "dist/index.js" }, ""],
 
     "web-streams-polyfill": ["web-streams-polyfill@4.0.0-beta.3", "", {}, "sha512-QW95TCTaHmsYfHDybGMwO5IJIM93I/6vTRk+daHTWFPhwh+C8Cg7j7XyKrwrj8Ib6vYXe0ocYNrmzY4xAAN6ug=="],
 

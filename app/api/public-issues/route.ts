@@ -1,8 +1,10 @@
+import { after } from "next/server"
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
 import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
 import { embedIssueAsync } from "@/lib/issue-embedding"
+import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the
@@ -16,6 +18,11 @@ import { embedIssueAsync } from "@/lib/issue-embedding"
 // triggered separately via /api/public-issues/[id]/suggest, which the
 // public detail page auto-fires on mount.
 export async function POST(request: Request) {
+    // Anonymous write — rate limit per client IP before doing any work, to
+    // cap issue-spam and the per-submission embedding pipeline.
+    const limited = await enforceRateLimit("PUBLIC_RL", clientKey(request, "public-submit"))
+    if (limited) return limited
+
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
@@ -92,8 +99,9 @@ export async function POST(request: Request) {
     }
 
     // Index the new issue for similarity search alongside owner-filed
-    // ones — same fire-and-forget treatment as POST /api/issues.
-    void embedIssueAsync({ id: issue.id, title: issue.title, body: finalBody })
+    // ones. after() (not a bare `void`) so the Worker isn't frozen
+    // before the embed completes — see POST /api/issues for why.
+    after(() => embedIssueAsync({ id: issue.id, title: issue.title, body: finalBody }))
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).

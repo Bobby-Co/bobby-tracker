@@ -1,12 +1,17 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { genDeviceCode, genUserCode, normalizeUserCode } from "@/lib/relay"
+import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // PUBLIC. Called by the bobby-relay app (no Supabase session) to start a
 // device-pairing handshake. Mints a (device_code, user_code) pair and
 // returns the URL the user should open while signed into the tracker to
 // approve it. The relay then polls /api/relay/pair/poll with device_code.
 export async function POST(request: Request) {
+    // Unauthenticated — cap pairing-row creation per IP to stop spam.
+    const limited = await enforceRateLimit("RELAY_RL", clientKey(request, "relay-start"))
+    if (limited) return limited
+
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch { /* empty body is fine */ }
 
@@ -40,10 +45,14 @@ export async function POST(request: Request) {
     })
 }
 
-// Resolve the public origin to build the approval link: prefer the
-// request's Origin header, then reconstruct from the Host header, then
-// fall back to the configured app URL.
+// Resolve the public origin to build the approval link. Prefer the
+// operator-configured NEXT_PUBLIC_APP_URL so a spoofed Origin/Host header
+// can't redirect the approval link to an attacker domain. Fall back to the
+// request headers only when no app URL is configured (e.g. local dev).
 function pairOrigin(request: Request): string {
+    const configured = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "")
+    if (configured) return configured
+
     const origin = request.headers.get("origin")
     if (origin) return origin.replace(/\/+$/, "")
     const host = request.headers.get("host")
@@ -52,5 +61,5 @@ function pairOrigin(request: Request): string {
         const scheme = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host) ? "http" : "https"
         return `${scheme}://${host}`
     }
-    return (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "")
+    return ""
 }

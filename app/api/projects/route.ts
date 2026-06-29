@@ -1,4 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
+import { validateRepoUrl } from "@/lib/repo-url"
 import type { Project } from "@/lib/supabase/types"
 
 // GET — list the current user's projects, newest first. Backs the app
@@ -31,7 +32,10 @@ export async function POST(request: Request) {
             : null
 
     if (!name) return jsonError("bad_request", "name is required", 400)
-    if (!/^https?:\/\//.test(repo_url)) return jsonError("bad_request", "repo_url must be https://", 400)
+    // repo_url is cloned server-side by the analyser — validate against SSRF
+    // (internal/loopback hosts) and non-https transports before storing it.
+    const repoCheck = validateRepoUrl(repo_url)
+    if (!repoCheck.ok) return jsonError("bad_request", repoCheck.message, 400)
 
     // Trust the picker's owner/repo when it sent one (saves a re-parse
     // and works for repo URLs that the regex below doesn't match, like

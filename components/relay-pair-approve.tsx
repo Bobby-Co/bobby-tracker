@@ -3,14 +3,19 @@
 import { useState } from "react"
 import { Spinner } from "@/components/spinner"
 
-// Normalise a raw device code into the displayed XXXX-XXXX form: strip
-// everything that isn't an alnum, uppercase, then hyphenate after the
-// first four chars. Cap at 8 significant chars so a paste of a longer
+// Significant characters in a pairing code — keep in sync with
+// USER_CODE_LEN in lib/relay.ts.
+const CODE_LEN = 10
+const CODE_HALF = CODE_LEN / 2
+
+// Normalise a raw device code into the displayed XXXXX-XXXXX form: strip
+// everything that isn't an alnum, uppercase, then hyphenate at the
+// midpoint. Cap at CODE_LEN significant chars so a paste of a longer
 // string doesn't trail garbage.
 function formatCode(raw: string): string {
-    const clean = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 8)
-    if (clean.length <= 4) return clean
-    return `${clean.slice(0, 4)}-${clean.slice(4)}`
+    const clean = raw.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, CODE_LEN)
+    if (clean.length <= CODE_HALF) return clean
+    return `${clean.slice(0, CODE_HALF)}-${clean.slice(CODE_HALF)}`
 }
 
 type Phase = "idle" | "approving" | "denying" | "done"
@@ -34,7 +39,7 @@ export function RelayPairApprove({
 
     const userCode = code.replace(/-/g, "")
     const busy = phase === "approving" || phase === "denying"
-    const canSubmit = userCode.length >= 8 && !busy
+    const canSubmit = userCode.length >= CODE_LEN && !busy
 
     async function approve() {
         if (!canSubmit) return

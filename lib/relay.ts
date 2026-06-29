@@ -51,15 +51,23 @@ export function genDeviceCode(): string {
     return randomBytes(32).toString("base64url")
 }
 
-// 8 chars from the unambiguous alphabet, formatted "XXXX-XXXX" for the
+// Number of significant characters in a user code. 10 chars over the 31-symbol
+// alphabet is ~50 bits of entropy. Combined with the 10-minute expiry, the
+// single-use consumption, and the per-IP rate limit on approve/deny, this puts
+// online brute force far out of reach. Keep CODE_LEN in sync with the client
+// formatter in components/relay-pair-approve.tsx.
+export const USER_CODE_LEN = 10
+
+// 10 chars from the unambiguous alphabet, formatted "XXXXX-XXXXX" for the
 // user to read aloud / type while signed into the tracker.
 export function genUserCode(): string {
-    const buf = randomBytes(8)
+    const buf = randomBytes(USER_CODE_LEN)
     let out = ""
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < USER_CODE_LEN; i++) {
         out += USER_CODE_ALPHABET[buf[i] % USER_CODE_ALPHABET.length]
     }
-    return `${out.slice(0, 4)}-${out.slice(4)}`
+    const half = USER_CODE_LEN / 2
+    return `${out.slice(0, half)}-${out.slice(half)}`
 }
 
 // base64url of 32 random bytes — the opaque worker bearer token the relay

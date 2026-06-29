@@ -2,6 +2,7 @@ import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
 import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
+import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // POST /api/public-issues/ai-compose
 //
@@ -24,6 +25,11 @@ import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
 // session resolution + invite-mode access before paying for any
 // upstream call so a stranger can't burn quota.
 export async function POST(request: Request) {
+    // Each call pays for upstream LLM inference — rate limit per IP to cap
+    // "denial of wallet" abuse from anyone holding a public link.
+    const limited = await enforceRateLimit("PUBLIC_RL", clientKey(request, "public-compose"))
+    if (limited) return limited
+
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
