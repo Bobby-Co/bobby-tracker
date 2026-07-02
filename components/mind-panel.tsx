@@ -24,8 +24,7 @@ interface ChatResult {
 }
 interface Progress {
     stage: string // planning | exploring | grounding | pinpointing | synthesizing
-    detail: string
-    files: string[]
+    detail: string // the single "current state" line shown while thinking
 }
 type Message =
     | { id: string; role: "user"; text: string }
@@ -34,7 +33,6 @@ type Message =
           role: "assistant"
           streaming: boolean
           progress: Progress
-          seenStages: string[]
           result?: ChatResult
           error?: string
       }
@@ -102,8 +100,7 @@ export function MindPanel({
                     id: botId,
                     role: "assistant",
                     streaming: true,
-                    progress: { stage: "planning", detail: "Starting…", files: [] },
-                    seenStages: [],
+                    progress: { stage: "planning", detail: "Waking up…" },
                 },
             ])
 
@@ -119,19 +116,13 @@ export function MindPanel({
                 }
                 await readSSE(res.body, (ev) => {
                     if (ev.type === "stage" || ev.type === "activity") {
-                        patchAssistant(botId, (m) => {
-                            const stage = ev.stage || m.progress.stage
-                            const files =
-                                ev.file && !m.progress.files.includes(ev.file)
-                                    ? [...m.progress.files, ev.file].slice(-6)
-                                    : m.progress.files
-                            const seen = m.seenStages.includes(stage) ? m.seenStages : [...m.seenStages, stage]
-                            return {
-                                ...m,
-                                progress: { stage, detail: ev.detail || m.progress.detail, files },
-                                seenStages: seen,
-                            }
-                        })
+                        patchAssistant(botId, (m) => ({
+                            ...m,
+                            progress: {
+                                stage: ev.stage || m.progress.stage,
+                                detail: ev.detail || m.progress.detail,
+                            },
+                        }))
                     } else if (ev.type === "answer" && ev.answer) {
                         const answer = ev.answer
                         patchAssistant(botId, (m) => ({ ...m, streaming: false, result: answer }))
@@ -269,7 +260,7 @@ function AssistantBubble({
                 ) : msg.error ? (
                     <div className="rounded-[14px] bg-rose-50 px-3.5 py-2.5 text-[12.5px] text-rose-800">{msg.error}</div>
                 ) : (
-                    <ProgressCard progress={msg.progress} seenStages={msg.seenStages} />
+                    <ThinkingCard progress={msg.progress} />
                 )}
             </div>
         </motion.div>
@@ -278,70 +269,78 @@ function AssistantBubble({
 
 // ── Live progress ("thinking") ──────────────────────────────────────────────────
 
-function ProgressCard({ progress, seenStages }: { progress: Progress; seenStages: string[] }) {
-    const currentIdx = STAGES.findIndex((s) => s.key === progress.stage)
+// ThinkingCard is the "alive" state shown while Bobby works: a Siri-style
+// animated orb + a single evolving current-state line (no timeline). The card
+// breathes with a soft ember ring to signal ongoing thought.
+function ThinkingCard({ progress }: { progress: Progress }) {
+    const text = progress.detail || stageLabel(progress.stage)
     return (
-        <div className="card">
-            <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[color:var(--c-primary)] opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[color:var(--c-primary)]" />
-                </span>
-                <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">{stageLabel(progress.stage)}</span>
+        <motion.div
+            className="card flex items-center gap-3"
+            animate={{
+                boxShadow: [
+                    "0 0 0 0 rgba(233,115,15,0.0)",
+                    "0 0 0 3px rgba(233,115,15,0.10)",
+                    "0 0 0 0 rgba(233,115,15,0.0)",
+                ],
+            }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
+        >
+            <ThinkingOrb />
+            <div className="min-w-0 flex-1">
                 <AnimatePresence mode="wait">
-                    <motion.span
-                        key={progress.detail}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.18 }}
-                        className="truncate text-[12px] text-[color:var(--c-text-muted)]"
+                    <motion.p
+                        key={text}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        className="truncate text-[13px] font-medium text-[color:var(--c-text)]"
                     >
-                        {progress.detail}
-                    </motion.span>
+                        {text}
+                    </motion.p>
                 </AnimatePresence>
+                <div className="mt-0.5 text-[10.5px] uppercase tracking-[0.12em] text-[color:var(--c-text-dim)]">
+                    {stageLabel(progress.stage)}
+                </div>
             </div>
+        </motion.div>
+    )
+}
 
-            {/* Stage rail */}
-            <div className="mt-3 flex items-center gap-1.5">
-                {STAGES.map((s, i) => {
-                    const done = seenStages.includes(s.key) && i < currentIdx
-                    const active = i === currentIdx
-                    return (
-                        <div key={s.key} className="flex items-center gap-1.5">
-                            <motion.span
-                                animate={{
-                                    backgroundColor: done || active ? "var(--c-primary)" : "var(--c-border)",
-                                    scale: active ? 1.15 : 1,
-                                }}
-                                transition={{ duration: 0.25 }}
-                                className="h-1.5 w-1.5 rounded-full"
-                            />
-                            {i < STAGES.length - 1 && <span className="h-px w-4 bg-[color:var(--c-border)]" />}
-                        </div>
-                    )
-                })}
-            </div>
-
-            {/* Files surfaced so far */}
-            {progress.files.length > 0 && (
-                <ul className="mt-3 flex flex-col gap-1">
-                    <AnimatePresence initial={false}>
-                        {progress.files.map((f) => (
-                            <motion.li
-                                key={f}
-                                initial={{ opacity: 0, x: -6 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="truncate font-mono text-[11px] text-[color:var(--c-text-muted)]"
-                            >
-                                <span className="text-[color:var(--c-primary)]">✦</span> {f}
-                            </motion.li>
-                        ))}
-                    </AnimatePresence>
-                </ul>
-            )}
-        </div>
+// ThinkingOrb is a Siri-like living gradient orb: two counter-rotating conic
+// gradients (a blurred glow + a crisp core) that breathe, with a glossy
+// highlight. Pure motion — no external assets.
+function ThinkingOrb() {
+    const grad = "conic-gradient(from 0deg, #e9730f, #f59e0b, #f4b183, #c2410c, #e9730f)"
+    return (
+        <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center">
+            <motion.span
+                aria-hidden
+                className="absolute inset-0 rounded-full blur-[7px] opacity-70"
+                style={{ background: grad }}
+                animate={{ rotate: 360, scale: [1, 1.18, 1] }}
+                transition={{
+                    rotate: { repeat: Infinity, duration: 5, ease: "linear" },
+                    scale: { repeat: Infinity, duration: 1.9, ease: "easeInOut" },
+                }}
+            />
+            <motion.span
+                aria-hidden
+                className="relative h-[18px] w-[18px] rounded-full"
+                style={{ background: grad }}
+                animate={{ rotate: -360, scale: [1, 1.12, 1] }}
+                transition={{
+                    rotate: { repeat: Infinity, duration: 4, ease: "linear" },
+                    scale: { repeat: Infinity, duration: 1.6, ease: "easeInOut" },
+                }}
+            />
+            <span
+                aria-hidden
+                className="absolute h-[18px] w-[18px] rounded-full"
+                style={{ background: "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.65), transparent 45%)" }}
+            />
+        </span>
     )
 }
 
