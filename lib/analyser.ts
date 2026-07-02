@@ -69,9 +69,23 @@ export interface ChatCitation {
     valid: boolean
 }
 
+// ChatIssue is a tracker issue the analyser's finaliser surfaced/cited for a
+// turn (analyser ADR-0048). `cited` marks the ones referenced inline; the UI
+// loads the issue by `id` (uuid) and shows `#number`.
+export interface ChatIssue {
+    id: string
+    number?: number
+    title: string
+    status?: string
+    similarity?: number
+    cited: boolean
+}
+
 export interface ChatResult {
     answer_markdown: string
     citations: ChatCitation[]
+    issues?: ChatIssue[] // related/cited tracker issues (ADR-0048)
+    route?: string[] // actions the thinker chose: answer|codebase|issues
     confidence: string
     cost_usd: number
     duration_ms: number
@@ -93,6 +107,7 @@ export async function chatStream(
     question: string,
     history?: ChatHistoryMsg[],
     maxBudgetUsd?: number,
+    projectId?: string,
 ): Promise<Response> {
     const { http } = assertConfigured()
     const res = await fetch(`${http}/chat`, {
@@ -102,7 +117,15 @@ export async function chatStream(
             Accept: "text/event-stream",
             ...authHeader(),
         },
-        body: JSON.stringify({ repo_id: repoId, question, history, max_budget_usd: maxBudgetUsd }),
+        // project_id scopes the thinker's "issues" action to this project's
+        // embedded issues (analyser ADR-0048). Distinct from repo_id (graph id).
+        body: JSON.stringify({
+            repo_id: repoId,
+            project_id: projectId,
+            question,
+            history,
+            max_budget_usd: maxBudgetUsd,
+        }),
     })
     if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}))

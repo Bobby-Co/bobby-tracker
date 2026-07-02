@@ -1,19 +1,33 @@
 "use client"
 
-import { useParams } from "next/navigation"
+import { useParams, usePathname } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { Project } from "@/lib/supabase/types"
 import { ProjectTabs } from "@/components/project-tabs"
 import { MiniIcon, toneFromString } from "@/components/field-card"
+import { cn } from "@/components/cn"
+import { isImmersiveMind } from "@/components/immersive"
 
 // Project detail shell. The header (name + repo link) loads the
 // project via /api/projects/[id]; the tabs render immediately from the
 // URL param and children render in parallel.
+//
+// On the Mind tab the shell goes "immersive": the header + tabs collapse away
+// and the content fills the full height/width so the chat can take over the
+// window (see components/immersive.ts). Layouts persist across tab changes, so
+// toggling this animates via the CSS transitions below.
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
     const { id } = useParams<{ id: string }>()
+    const pathname = usePathname()
+    const immersive = isImmersiveMind(pathname)
     return (
-        <div className="flex min-h-full flex-col">
-            <div className="border-b border-[color:var(--c-border)] bg-white">
+        <div className={cn("flex flex-col", immersive ? "h-full min-h-0" : "min-h-full")}>
+            <div
+                className={cn(
+                    "overflow-hidden border-[color:var(--c-border)] bg-white transition-all duration-500",
+                    immersive ? "max-h-0 border-b-0 opacity-0" : "max-h-[400px] border-b opacity-100",
+                )}
+            >
                 <div className="flex w-full max-w-5xl items-start justify-between gap-4 px-4 pt-5 sm:px-6 sm:pt-6">
                     <div className="min-w-0 max-w-full">
                         <ProjectHeader id={id} />
@@ -23,7 +37,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
                     <ProjectTabs projectId={id} />
                 </div>
             </div>
-            <div className="w-full max-w-5xl flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</div>
+            <div className={cn("flex-1", immersive ? "min-h-0 w-full" : "w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-6")}>{children}</div>
         </div>
     )
 }

@@ -28,6 +28,7 @@ export default function PixelScatter({
     corners = ["tl", "br"],
     animate = true,
     className = "",
+    onReady,
 }: {
     cell?: number
     fill?: number
@@ -36,8 +37,16 @@ export default function PixelScatter({
     /** When false, paint one static frame (no rAF) — use in always-on chrome. */
     animate?: boolean
     className?: string
+    /** Fires once after the first real draw (non-zero canvas size) — lets callers
+        delay an entry animation until there are actually pixels to reveal. */
+    onReady?: () => void
 }) {
     const ref = useRef<HTMLCanvasElement>(null)
+    // Keep the latest onReady in a ref so it isn't an effect dependency (an inline
+    // callback would otherwise rebuild the whole scatter every render).
+    const onReadyRef = useRef(onReady)
+    onReadyRef.current = onReady
+    const firedRef = useRef(false)
 
     useEffect(() => {
         const canvas = ref.current
@@ -151,8 +160,18 @@ export default function PixelScatter({
             }
         }
 
+        // Fires onReady once the canvas actually has a size + a drawn frame, so a
+        // caller's entry animation reveals real pixels rather than an empty box.
+        const fireReady = () => {
+            if (!firedRef.current && w && h) {
+                firedRef.current = true
+                onReadyRef.current?.()
+            }
+        }
+
         build()
         render(0)
+        fireReady()
 
         let raf = 0
         if (!reduce && animate) {
@@ -168,6 +187,7 @@ export default function PixelScatter({
             // Repaint the static frame after a resize whenever the rAF loop
             // isn't running (reduced-motion OR animate=false).
             if (reduce || !animate) render(0)
+            fireReady()
         })
         ro.observe(host)
 

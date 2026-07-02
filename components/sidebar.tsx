@@ -298,11 +298,20 @@ function Caret({ open }: { open: boolean }) {
 }
 
 // Sidebar — desktop wrapper. Hidden on small screens; the topbar's
-// MobileSidebar handles those.
-export function Sidebar({ projects, activeProjectId }: SidebarProps) {
+// MobileSidebar handles those. `collapsed` slides it away (width → 0) for the
+// immersive Mind view; the inner content keeps its 64-width and is clipped, so
+// the rail glides out rather than reflowing as it shrinks.
+export function Sidebar({ projects, activeProjectId, collapsed }: SidebarProps & { collapsed?: boolean }) {
     return (
-        <aside className="hidden h-full w-64 shrink-0 bg-[color:var(--c-shell)] md:block">
-            <SidebarContent projects={projects} activeProjectId={activeProjectId} />
+        <aside
+            className={cn(
+                "hidden h-full shrink-0 overflow-hidden bg-[color:var(--c-shell)] transition-[width,opacity] duration-500 md:block",
+                collapsed ? "w-0 opacity-0" : "w-64",
+            )}
+        >
+            <div className="h-full w-64">
+                <SidebarContent projects={projects} activeProjectId={activeProjectId} />
+            </div>
         </aside>
     )
 }

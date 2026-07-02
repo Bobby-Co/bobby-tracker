@@ -1,9 +1,7 @@
-import { MindSkeleton } from "@/components/mind-skeleton"
-
-// Route-level loading. Fires on hard navigations (initial visit,
-// reload). Soft client navigations between project tabs hit the
-// Suspense boundary inside page.tsx, which uses the same skeleton so
-// the experience is identical either way.
+// Route-level loading. Fires on hard navigations (initial visit, reload). The
+// Mind view is a static chat shell that renders immediately once mounted, so we
+// deliberately show nothing here rather than flashing a skeleton that doesn't
+// match the final UI (it also collides with the immersive morph).
 export default function MindLoading() {
-    return <MindSkeleton />
+    return null
 }

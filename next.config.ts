@@ -15,9 +15,17 @@ const supabaseConnect = supabaseHost ? ` https://${supabaseHost} wss://${supabas
 // defense-in-depth: it still blocks injected external script sources, framing,
 // base-uri hijacking, plugin content, and cross-origin form exfiltration.
 // (Markdown XSS is independently mitigated — react-markdown without rehype-raw.)
+// HSTS + `upgrade-insecure-requests` force the browser onto HTTPS. That's
+// correct in production (real TLS via Cloudflare) but breaks `next dev`, which
+// serves plain HTTP on localhost — the browser would refuse to connect and
+// try https://localhost:3000. So apply both only in production.
+const isProd = process.env.NODE_ENV === "production";
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // 'unsafe-eval' only in dev: Turbopack + React dev-mode need eval() for HMR
+  // and debug callstacks. Production React never uses eval, so it stays out.
+  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   `connect-src 'self'${supabaseConnect}`,
@@ -26,12 +34,14 @@ const csp = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
-  "upgrade-insecure-requests",
+  ...(isProd ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
-  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  ...(isProd
+    ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" }]
+    : []),
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

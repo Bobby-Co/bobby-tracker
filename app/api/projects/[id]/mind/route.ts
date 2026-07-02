@@ -61,7 +61,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-        const upstream = await chatStream(analyser.graph_id, question, history, maxBudgetUsd)
+        // Pass the project uuid so the analyser's thinker can scope its "issues"
+        // action to this project's embedded issues (analyser ADR-0048).
+        const upstream = await chatStream(analyser.graph_id, question, history, maxBudgetUsd, id)
         // Pipe the analyser's SSE stream straight to the browser.
         return new Response(upstream.body, {
             status: 200,

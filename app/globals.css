@@ -143,6 +143,7 @@ html, body {
     min-height: 0;
     overflow-y: auto;
     background-color: var(--c-surface);
+    transition: border-top-left-radius 450ms ease, box-shadow 450ms ease;
 }
 @media (min-width: 768px) {
     .app-panel {
@@ -150,6 +151,18 @@ html, body {
         box-shadow: var(--shadow-panel);
     }
 }
+/* Immersive Mind view: the panel drops its rounded corner + shadow and becomes
+   the scroll frame for a full-window chat (see components/immersive.ts). The
+   chat manages its own internal scroll, so lock the panel itself. */
+.app-panel.is-immersive {
+    border-top-left-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+/* Mind "thinking" indicator (components/mind-thinking.tsx): the orb is a
+   pre-rendered animated WebP; the status line shimmers via this keyframe. */
+@keyframes mind-shimmer { from { background-position-x: 120%; } to { background-position-x: -120%; } }
 
 /* ─── squircle corners ───────────────────────────────────────────────
    Every rounded RECTANGLE gets a superellipse (squircle) corner instead of

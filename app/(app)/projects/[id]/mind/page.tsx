@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { MindPanel } from "@/components/mind-panel"
-import { MindSkeleton } from "@/components/mind-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 type KnowledgeData = {
@@ -18,12 +17,12 @@ export default function MindPage() {
         id ? `/api/projects/${id}/knowledge` : null,
     )
 
-    if (loading) return <MindSkeleton />
-
     if (error) {
         return (
-            <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
-                {error}
+            <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+                <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">
+                    {error}
+                </div>
             </div>
         )
     }
@@ -33,9 +32,14 @@ export default function MindPage() {
     const ready =
         !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
 
-    if (!ready) {
+    // No skeleton during the morph — the chat shell is static and doesn't need
+    // the knowledge payload to render. Show it immediately and let repo/indexedSha
+    // (used only for citation links, which appear after an answer) fill in when
+    // the fetch lands. Only fall back to the gate once we've loaded AND confirmed
+    // the project isn't indexed yet.
+    if (!loading && !ready) {
         return (
-            <div className="flex flex-col gap-4">
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
                 <header>
                     <h2 className="h-section">Mind</h2>
                     <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">

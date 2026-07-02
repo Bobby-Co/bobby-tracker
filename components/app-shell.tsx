@@ -1,9 +1,11 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import { cn } from "@/components/cn"
 import { Sidebar } from "@/components/sidebar"
 import { MobileSidebar } from "@/components/mobile-sidebar"
 import { NotificationPopover } from "@/components/notification-popover"
+import { isImmersiveMind } from "@/components/immersive"
 import type { Project } from "@/lib/supabase/types"
 
 // Presentational app shell — the chrome shared by every signed-in route
@@ -21,11 +23,19 @@ export function AppShell({
     projects: Project[]
     children: React.ReactNode
 }) {
+    const pathname = usePathname()
+    const immersive = isImmersiveMind(pathname)
+
     return (
         <div className="flex h-screen w-full bg-[color:var(--c-shell)] text-[color:var(--c-text)]">
-            <Sidebar projects={projects} />
-            <div className="flex min-w-0 flex-1 flex-col pt-2">
-                <header className="relative z-30 flex h-14 shrink-0 items-center gap-2.5 px-3 sm:gap-3 sm:px-5">
+            <Sidebar projects={projects} collapsed={immersive} />
+            <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-500", immersive ? "pt-0" : "pt-2")}>
+                <header
+                    className={cn(
+                        "relative z-30 flex shrink-0 items-center gap-2.5 overflow-hidden px-3 transition-[height,opacity] duration-500 sm:gap-3 sm:px-5",
+                        immersive ? "pointer-events-none h-0 opacity-0" : "h-14 opacity-100",
+                    )}
+                >
                     <MobileSidebar projects={projects} />
                     <TopBreadcrumb projects={projects} />
                     <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
@@ -44,7 +54,7 @@ export function AppShell({
                     </div>
                 </header>
                 <main className="min-h-0 flex-1">
-                    <div className="app-panel">{children}</div>
+                    <div className={cn("app-panel", immersive && "is-immersive")}>{children}</div>
                 </main>
             </div>
         </div>
