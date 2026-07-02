@@ -34,16 +34,11 @@ export default function IssueDetailPage() {
         `/api/projects/${id}/issues/${issueId}`,
     )
 
-    if (loading) {
-        return (
-            <div className="flex flex-col gap-4 px-4">
-                <div className="skeleton h-4 w-16 rounded-[8px]" />
-                <div className="skeleton h-64 w-full rounded-[16px]" />
-                <div className="skeleton h-32 w-full rounded-[16px]" />
-                <div className="skeleton h-40 w-full rounded-[16px]" />
-            </div>
-        )
-    }
+    const issue = data?.issue ?? null
+    const project = data?.project ?? null
+    // Only 404 once the fetch resolved without the issue — never while
+    // it's still loading.
+    if (!loading && data && (!issue || !project)) notFound()
 
     if (error) {
         return (
@@ -54,10 +49,6 @@ export default function IssueDetailPage() {
             </div>
         )
     }
-
-    const issue = data?.issue ?? null
-    const project = data?.project ?? null
-    if (!issue || !project) notFound()
 
     const analyser = data?.analyser ?? null
     const peekOthers = data?.peekOthers ?? []
@@ -71,28 +62,45 @@ export default function IssueDetailPage() {
             <Link href={`/projects/${id}/issues`} className="text-xs text-zinc-500 hover:underline">
                 ← Issues
             </Link>
-            <IssueDetail
-                issue={issue}
-                projectId={id}
-                peekOthers={peekOthers}
-                labelIcons={labelIcons}
-                statusColors={statusColors}
-            />
+
+            {issue && project ? (
+                <IssueDetail
+                    issue={issue}
+                    projectId={id}
+                    peekOthers={peekOthers}
+                    labelIcons={labelIcons}
+                    statusColors={statusColors}
+                />
+            ) : (
+                <div className="skeleton h-64 w-full rounded-[16px]" />
+            )}
+
+            {/* Kick the similarity check off immediately from the URL id
+                so it's visibly running while the issue body is still
+                loading. Keyed + kept in a fixed position so it stays
+                mounted across the skeleton→content swap and its polling
+                isn't restarted. */}
             <SimilarIssuesCard
-                issueId={issue.id}
+                key="similar"
+                issueId={issueId}
                 variant="auth"
                 projectId={id}
-                duplicateOfIssueId={issue.duplicate_of_issue_id}
+                duplicateOfIssueId={issue?.duplicate_of_issue_id ?? null}
             />
-            <IssueSuggestions
-                issueId={issue.id}
-                projectId={id}
-                repo={project}
-                indexedSha={analyser?.last_indexed_sha ?? null}
-                initial={suggestion}
-                analyserReady={ready}
-                issueEffort={issue.analyse_effort ?? null}
-            />
+
+            {issue && project ? (
+                <IssueSuggestions
+                    issueId={issue.id}
+                    projectId={id}
+                    repo={project}
+                    indexedSha={analyser?.last_indexed_sha ?? null}
+                    initial={suggestion}
+                    analyserReady={ready}
+                    issueEffort={issue.analyse_effort ?? null}
+                />
+            ) : (
+                <div className="skeleton h-40 w-full rounded-[16px]" />
+            )}
         </div>
     )
 }

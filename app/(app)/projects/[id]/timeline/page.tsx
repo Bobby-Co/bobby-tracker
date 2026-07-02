@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { notFound, useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { TimelineWorkspace } from "@/components/timeline-workspace"
@@ -26,11 +27,25 @@ export default function TimelinePage() {
     const searchParams = useSearchParams()
     const focus = searchParams.get("focus") ?? undefined
 
-    const { data, error, loading } = useApi<TimelineData>(
+    const { data, error, loading, refetch } = useApi<TimelineData>(
         id ? `/api/projects/${id}/timeline` : null,
     )
 
-    if (loading) {
+    // Memoise so the issues array keeps a stable reference across
+    // re-renders that don't change the fetched data (e.g. opening the
+    // drawer, or a background refetch flipping `loading`). The timeline
+    // resets its local/optimistic state whenever this prop's reference
+    // changes, so a fresh array every render would clobber pending edits.
+    const list = useMemo(
+        () => (data?.issues ?? []).filter((i) => !i.duplicate_of_issue_id),
+        [data],
+    )
+    const usedLabels = useMemo(() => collectLabels(list), [list])
+
+    // Only block on the initial load. Once we have data, a refetch
+    // (e.g. after a schedule save) revalidates in the background without
+    // flashing the skeleton and unmounting the canvas.
+    if (loading && !data) {
         return (
             <div className="fixed inset-0 z-30 flex flex-col bg-[color:var(--c-page)]">
                 <div className="skeleton h-14 w-full" />
@@ -52,9 +67,6 @@ export default function TimelinePage() {
     const project = data?.project ?? null
     if (!project) notFound()
 
-    const list = (data?.issues ?? []).filter((i) => !i.duplicate_of_issue_id)
-    const usedLabels = collectLabels(list)
-
     return (
         <TimelineWorkspace
             project={project}
@@ -63,6 +75,7 @@ export default function TimelinePage() {
             statusColors={data?.statusColors ?? []}
             usedLabels={usedLabels}
             focusIssueId={focus ?? null}
+            onPersisted={refetch}
         />
     )
 }

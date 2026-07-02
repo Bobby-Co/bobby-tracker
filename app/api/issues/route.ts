@@ -1,3 +1,4 @@
+import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
 import { isAnalyseEffort } from "@/lib/analyser"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
@@ -73,12 +74,13 @@ export async function POST(request: Request) {
         .single<Issue>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 
-    // Best-effort embedding — fire-and-forget so issue creation isn't
-    // blocked on OpenAI. We use the service-role client because the
-    // user's cookie-bound client may be cleaned up before the await
-    // resolves; failures here are silent (the row stays unembedded
-    // until a future edit / sweep fills it in).
-    void embedIssueAsync(issue)
+    // Best-effort embedding — runs after the response so issue
+    // creation isn't blocked on the analyser round-trip. Use after()
+    // (NOT a bare `void`): on Cloudflare Workers a detached promise is
+    // abandoned the instant the response returns, so the embed fetch
+    // gets cancelled and the issue is never indexed. after() registers
+    // the work with the runtime's waitUntil so it runs to completion.
+    after(() => embedIssueAsync(issue))
 
     return Response.json({ issue })
 }

@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { flushSync } from "react-dom"
 import {
@@ -69,6 +68,7 @@ export function IssueTimeline({
     onTileClick,
     fullHeight = false,
     focusIssueId = null,
+    onPersisted,
 }: {
     projectId: string
     issues: Issue[]
@@ -80,8 +80,10 @@ export function IssueTimeline({
     /** When set, the canvas auto-scrolls to centre this issue
      *  instead of the "now" line on first paint. */
     focusIssueId?: string | null
+    /** Called once per flush cycle after schedule patches are
+     *  persisted, so the owner can revalidate its fetched data. */
+    onPersisted?: () => void
 }) {
-    const router = useRouter()
     // Continuous zoom — pixels per hour. Wheel events adjust this
     // smoothly; the preset buttons just snap to canonical values.
     const [pxPerHour, setPxPerHour] = useState<number>(ZOOM_PX_PER_HOUR[initialZoom])
@@ -286,10 +288,14 @@ export function IssueTimeline({
                         break
                     }
                 }
-                // Refresh the route once per flush cycle (not per
-                // entry) so server-derived data picks up the
-                // changes without thrashing.
-                if (synced > 0) router.refresh()
+                // Revalidate the owner's fetched data once per flush
+                // cycle (not per entry) so the canvas reconciles with
+                // the freshly-saved server state. We refetch the
+                // client data source rather than router.refresh()
+                // because this view is hydrated via useApi, not from
+                // server components — router.refresh() would re-render
+                // with stale data and revert the just-saved tiles.
+                if (synced > 0) onPersisted?.()
             } finally {
                 inFlight = false
             }
@@ -311,7 +317,7 @@ export function IssueTimeline({
             document.removeEventListener("visibilitychange", onHide)
             window.removeEventListener("pagehide", onHide)
         }
-    }, [outbox, router])
+    }, [outbox, onPersisted])
 
     function returnToTray(issue: Issue) {
         commitSchedule(issue.id, { starts_at: null, ends_at: null, lane_y: null })
@@ -429,7 +435,7 @@ export function IssueTimeline({
                 <StatusLegend
                     projectId={projectId}
                     overrides={colorOverrides}
-                    onSavedRefresh={() => router.refresh()}
+                    onSavedRefresh={() => onPersisted?.()}
                 />
             </div>
 

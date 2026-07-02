@@ -55,6 +55,8 @@ export function SimilarIssuesCard({
     const [status, setStatus] = useState<"loading" | "ready" | "error" | "missing">("loading")
     const [marking, setMarking] = useState<string | null>(null)
     const [markErr, setMarkErr] = useState<string | null>(null)
+    // Bumped by the Retry button to re-arm the polling effect.
+    const [reloadKey, setReloadKey] = useState(0)
 
     useEffect(() => {
         if (duplicateOfIssueId) {
@@ -121,7 +123,13 @@ export function SimilarIssuesCard({
         }
         const t = setTimeout(tick, delays[0])
         return () => { cancelled = true; clearTimeout(t) }
-    }, [issueId, variant, token, duplicateOfIssueId])
+    }, [issueId, variant, token, duplicateOfIssueId, reloadKey])
+
+    function retry() {
+        setSimilar(null)
+        setStatus("loading")
+        setReloadKey((k) => k + 1)
+    }
 
     function hrefFor(s: SimilarIssue) {
         return variant === "auth"
@@ -175,9 +183,13 @@ export function SimilarIssuesCard({
     }
 
     if (status === "loading") {
+        // Live, non-blocking indicator — the embedding for a
+        // just-created issue may still be generating, so this is the
+        // expected first state right after creation.
         return (
-            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
-                <Spinner /> Looking for similar issues…
+            <section className="flex items-center gap-2.5 rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                <Spinner />
+                <span>Checking for similar issues…</span>
             </section>
         )
     }
@@ -192,7 +204,33 @@ export function SimilarIssuesCard({
             </section>
         )
     }
-    if (status === "error" || !similar || similar.length === 0) return null
+    if (status === "error") {
+        // Transient failure (network / 5xx). Offer a manual retry so
+        // the user isn't stuck staring at nothing.
+        return (
+            <section className="flex items-center justify-between gap-3 rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                <span>Couldn&apos;t check for similar issues.</span>
+                <button
+                    type="button"
+                    onClick={retry}
+                    className="shrink-0 rounded-[8px] border border-[color:var(--c-border)] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-text)] hover:bg-[color:var(--c-overlay)]"
+                >
+                    Retry
+                </button>
+            </section>
+        )
+    }
+    if (!similar || similar.length === 0) {
+        // Check finished, nothing close enough cleared the threshold.
+        // Show an explicit "all clear" so the result is unambiguous
+        // instead of the card silently disappearing.
+        return (
+            <section className="flex items-center gap-2.5 rounded-[14px] border border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                <CheckIcon />
+                <span>No similar issues found.</span>
+            </section>
+        )
+    }
 
     return (
         <section className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
@@ -239,5 +277,24 @@ export function SimilarIssuesCard({
                 </p>
             )}
         </section>
+    )
+}
+
+function CheckIcon() {
+    return (
+        <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0 text-emerald-600"
+            aria-hidden
+        >
+            <path d="M20 6 9 17l-5-5" />
+        </svg>
     )
 }

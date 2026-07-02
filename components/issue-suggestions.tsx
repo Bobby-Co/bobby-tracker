@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/components/cn"
 import { EffortControl, EFFORT_LABEL } from "@/components/effort-control"
 import { createClient } from "@/lib/supabase/client"
@@ -24,8 +24,19 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     const [suggestion, setSuggestion] = useState<IssueSuggestion | null>(initial)
     const [error, setError] = useState<string | null>(null)
     const [errorCode, setErrorCode] = useState<string | null>(null)
-    const [pending, startTransition] = useTransition()
+    // Plain loading flag — deliberately NOT useTransition. The /suggest
+    // POST blocks for the full analyser run (~30s); wrapping it in a
+    // transition keeps React's root in a pending transition, and since
+    // App Router navigation is itself a transition, clicking a link /
+    // closing the issue would queue behind it and the page would feel
+    // frozen until the run finished. A regular boolean keeps the fetch
+    // off the transition lane so navigation stays instant.
+    const [pending, setPending] = useState(false)
     const autoFiredRef = useRef(false)
+    // Guard against state writes after the user navigates away mid-run
+    // (now the expected case — the fetch keeps going in the background).
+    const aliveRef = useRef(true)
+    useEffect(() => () => { aliveRef.current = false }, [])
 
     // Effort the popover shows + sends. `effort` is the user's explicit pick
     // this session (null until they touch the slider). The control displays
@@ -66,21 +77,32 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
         setError(null)
         setErrorCode(null)
         setEffortOpen(false)
-        startTransition(async () => {
-            const res = await fetch(`/api/issues/${issueId}/suggest`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(effort ? { effort } : {}),
-            })
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}))
-                setError(body?.error?.message || `Failed (${res.status})`)
-                setErrorCode(body?.error?.code || "unknown")
-                return
+        setPending(true)
+        void (async () => {
+            try {
+                const res = await fetch(`/api/issues/${issueId}/suggest`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(effort ? { effort } : {}),
+                })
+                if (!aliveRef.current) return
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}))
+                    setError(body?.error?.message || `Failed (${res.status})`)
+                    setErrorCode(body?.error?.code || "unknown")
+                    return
+                }
+                const { suggestion: next } = await res.json()
+                if (!aliveRef.current) return
+                setSuggestion(next)
+            } catch (e) {
+                if (!aliveRef.current) return
+                setError(e instanceof Error ? e.message : "Network error")
+                setErrorCode("network_error")
+            } finally {
+                if (aliveRef.current) setPending(false)
             }
-            const { suggestion: next } = await res.json()
-            setSuggestion(next)
-        })
+        })()
     }
 
     // Sync the server-rendered prop into local state on changes. Without
@@ -88,6 +110,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     // (from another tab, cron, etc.) would be ignored because useState
     // only honours the initial value.
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional prop→state sync: mirror a newly-surfaced server suggestion into local state
         setSuggestion(initial)
     }, [initial])
 

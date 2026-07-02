@@ -24,7 +24,7 @@ export async function embedIssueAsync(issue: MinimalIssue): Promise<void> {
     try {
         const result: EmbedResult = await embedText(issueEmbeddingText(issue))
         const svc = createServiceClient()
-        await svc
+        const { error } = await svc
             .from("issue_embeddings")
             .upsert(
                 {
@@ -34,9 +34,13 @@ export async function embedIssueAsync(issue: MinimalIssue): Promise<void> {
                 },
                 { onConflict: "issue_id" },
             )
-    } catch {
-        // Intentional: embedding failure shouldn't break issue
-        // creation. The row stays unembedded until a future edit /
-        // sweep fills it in.
+        if (error) throw error
+    } catch (err) {
+        // Embedding failure shouldn't break issue creation — the row
+        // stays unembedded until a future edit / sweep fills it in.
+        // But log it: a silently-swallowed failure here is exactly why
+        // similarity shows "unavailable" for brand-new issues. Surfaces
+        // in `wrangler tail` so analyser/config problems are visible.
+        console.error(`[embedIssueAsync] failed to embed issue ${issue.id}:`, err)
     }
 }

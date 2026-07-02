@@ -26,6 +26,7 @@ export function TimelineWorkspace({
     statusColors,
     usedLabels,
     focusIssueId,
+    onPersisted,
 }: {
     project: Pick<Project, "id" | "name" | "repo_url" | "repo_full_name">
     issues: Issue[]
@@ -33,6 +34,9 @@ export function TimelineWorkspace({
     statusColors: ProjectStatusColor[]
     usedLabels: string[]
     focusIssueId?: string | null
+    /** Called after schedule edits are flushed to the server so the
+     *  page can revalidate its fetched data. */
+    onPersisted?: () => void
 }) {
     const [openIssue, setOpenIssue] = useState<Issue | null>(null)
     const [iconsOpen, setIconsOpen] = useState(false)
@@ -87,6 +91,7 @@ export function TimelineWorkspace({
                     onTileClick={setOpenIssue}
                     fullHeight
                     focusIssueId={focusIssueId ?? null}
+                    onPersisted={onPersisted}
                 />
             </main>
 
