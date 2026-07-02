@@ -61,6 +61,57 @@ export async function ask(repoId: string, question: string, maxBudgetUsd?: numbe
     return (await res.json()) as QueryResult
 }
 
+// ─── /chat (streaming, SSE) ──────────────────────────────────────────────────
+
+export interface ChatCitation {
+    file: string
+    line?: number
+    valid: boolean
+}
+
+export interface ChatResult {
+    answer_markdown: string
+    citations: ChatCitation[]
+    confidence: string
+    cost_usd: number
+    duration_ms: number
+    agents_run: number
+    local?: boolean
+}
+
+export interface ChatHistoryMsg {
+    role: "user" | "assistant"
+    content: string
+}
+
+// chatStream opens the analyser's streaming /chat endpoint (Server-Sent Events)
+// and returns the raw fetch Response so the caller can pipe `response.body`
+// straight through to the browser. The body is text/event-stream with frames
+// `event: <type>\ndata: <json>\n\n` where type ∈ {stage, activity, answer, error}.
+export async function chatStream(
+    repoId: string,
+    question: string,
+    history?: ChatHistoryMsg[],
+    maxBudgetUsd?: number,
+): Promise<Response> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/chat`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+            ...authHeader(),
+        },
+        body: JSON.stringify({ repo_id: repoId, question, history, max_budget_usd: maxBudgetUsd }),
+    })
+    if (!res.ok || !res.body) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `chat failed: HTTP ${res.status}`, err.code || "chat_failed")
+    }
+    return res
+}
+
 // ─── /issues/analyse (structured) ──────────────────────────────────────────
 
 // How thorough the analyser is when investigating an issue. Higher levels

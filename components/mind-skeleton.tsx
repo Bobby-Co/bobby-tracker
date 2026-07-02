@@ -1,8 +1,8 @@
-// Shared skeleton for the project Ask page. Used by both the route's
+// Shared skeleton for the project Mind page. Used by both the route's
 // loading.tsx (hard navigations) and the in-page Suspense fallback
 // (so soft tab switches pop in instantly without waiting for the
 // project_analyser round-trip).
-export function AskSkeleton() {
+export function MindSkeleton() {
     return (
         <div aria-busy className="flex flex-col gap-4">
             <header>
