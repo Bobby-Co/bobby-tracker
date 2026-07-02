@@ -9,6 +9,8 @@ import { blobUrl, type RepoRef } from "@/lib/github"
 import { cn } from "@/components/cn"
 import PixelScatter from "@/components/pixel-scatter"
 import { ThinkingCard, type Progress } from "@/components/mind-thinking"
+import { IssueDrawer } from "@/components/issue-drawer"
+import type { Issue, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
 
 // ── Types mirroring the analyser /chat SSE events + final answer ──────────────
 
@@ -24,6 +26,7 @@ interface ChatIssue {
     number?: number
     title: string
     status?: string
+    snippet?: string
     similarity?: number
     cited: boolean
 }
@@ -68,6 +71,43 @@ export function MindPanel({
     const [busy, setBusy] = useState(false)
     const [messages, setMessages] = useState<Message[]>([])
     const endRef = useRef<HTMLDivElement>(null)
+    // Stable id for this conversation, keying the analyser's managed-context
+    // store (ADR-0049). One per mount — a page reload starts a fresh memory.
+    const [conversationId] = useState(() => crypto.randomUUID())
+
+    // Cited-issue drawer: clicking an issue chip opens the issue in a slide-over
+    // over the mind space (no navigation). We fetch the full issue + label/status
+    // metadata the shared IssueDrawer needs from the consolidated page endpoint.
+    const [openIssueId, setOpenIssueId] = useState<string | null>(null)
+    // Drawer data is keyed by issue id so a stale fetch never shows the wrong
+    // issue: it renders only when drawer.id === openIssueId. Keeping the last
+    // fetched payload around (instead of clearing it) avoids a synchronous
+    // setState in the effect.
+    const [drawer, setDrawer] = useState<{ id: string; issue: Issue; labelIcons: ProjectLabelIcon[]; statusColors: ProjectStatusColor[] } | null>(null)
+    const openIssue = useCallback((id: string) => setOpenIssueId(id), [])
+    const closeIssue = useCallback(() => setOpenIssueId(null), [])
+
+    useEffect(() => {
+        if (!openIssueId) return
+        let cancelled = false
+        fetch(`/api/projects/${projectId}/issues/${openIssueId}`)
+            .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+            .then((j: { issue: Issue | null; labelIcons?: ProjectLabelIcon[]; statusColors?: ProjectStatusColor[] }) => {
+                if (cancelled) return
+                if (!j.issue) {
+                    setOpenIssueId(null)
+                    return
+                }
+                setDrawer({ id: openIssueId, issue: j.issue, labelIcons: j.labelIcons ?? [], statusColors: j.statusColors ?? [] })
+            })
+            .catch(() => {
+                if (!cancelled) setOpenIssueId(null)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [openIssueId, projectId])
+    const activeIssue = drawer && drawer.id === openIssueId ? drawer.issue : null
 
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
@@ -108,6 +148,9 @@ export function MindPanel({
 
             const userId = `u-${Date.now()}`
             const botId = `a-${Date.now()}`
+            // Temporal context: the last 3 turns of raw chat. Durable structured
+            // memory lives in the analyser's managed-context store, keyed by
+            // conversationId (ADR-0049), so we don't accumulate a ledger here.
             const history = messages
                 .map((m) =>
                     m.role === "user"
@@ -115,6 +158,7 @@ export function MindPanel({
                         : { role: "assistant" as const, content: m.result?.answer_markdown ?? "" },
                 )
                 .filter((m) => m.content)
+                .slice(-6)
 
             setMessages((prev) => [
                 ...prev,
@@ -131,7 +175,7 @@ export function MindPanel({
                 const res = await fetch(`/api/projects/${projectId}/mind`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ question: q, history }),
+                    body: JSON.stringify({ question: q, history, conversation_id: conversationId }),
                 })
                 if (!res.ok || !res.body) {
                     const e = await res.json().catch(() => ({}))
@@ -164,7 +208,7 @@ export function MindPanel({
                 setBusy(false)
             }
         },
-        [busy, messages, projectId, patchAssistant],
+        [busy, messages, projectId, conversationId, patchAssistant],
     )
 
     // Backdrop blur ramps from a crisp 1px at rest to a deep 20px once the first
@@ -196,7 +240,7 @@ export function MindPanel({
                             transition: "opacity 1000ms cubic-bezier(0.16,1,0.3,1), transform 1000ms cubic-bezier(0.16,1,0.3,1)",
                         }}
                     >
-                        <PixelScatter cell={48} fill={0.4} corners={["tl", "br"]} className="scale-110 opacity-80" onReady={() => setScatterReady(true)} />
+                        <PixelScatter cell={32} fill={0.7} reach={0.3} falloff={2.4} corners={["tl", "tr", "bl", "br"]} className="scale-100" onReady={() => setScatterReady(true)} />
                     </div>
                 )}
             </div>
@@ -235,7 +279,7 @@ export function MindPanel({
                                 m.role === "user" ? (
                                     <UserBubble key={m.id} text={m.text} />
                                 ) : (
-                                    <AssistantBubble key={m.id} msg={m} projectId={projectId} repo={repo} indexedSha={indexedSha} delay={m.id === firstAssistantId ? 1 : 0.18} />
+                                    <AssistantBubble key={m.id} msg={m} projectId={projectId} repo={repo} indexedSha={indexedSha} onOpenIssue={openIssue} delay={m.id === firstAssistantId ? 1 : 0.18} />
                                 ),
                             )}
                         </AnimatePresence>
@@ -251,6 +295,16 @@ export function MindPanel({
                     </div>
                 </div>
             </div>
+
+            {/* Cited-issue slide-over. Opens over the mind space when a chip is
+                clicked; closed when `issue` is null (during fetch or after close). */}
+            <IssueDrawer
+                issue={activeIssue}
+                projectId={projectId}
+                labelIcons={drawer?.labelIcons ?? []}
+                statusColors={drawer?.statusColors ?? []}
+                onClose={closeIssue}
+            />
         </div>
     )
 }
@@ -518,12 +572,14 @@ function AssistantBubble({
     projectId,
     repo,
     indexedSha,
+    onOpenIssue,
     delay = 0.18,
 }: {
     msg: Extract<Message, { role: "assistant" }>
     projectId: string
     repo: RepoRef | null
     indexedSha: string | null
+    onOpenIssue: (id: string) => void
     delay?: number
 }) {
     return (
@@ -536,7 +592,7 @@ function AssistantBubble({
         >
             <div className="w-full">
                 {msg.result ? (
-                    <Answer result={msg.result} projectId={projectId} repo={repo} indexedSha={indexedSha} />
+                    <Answer result={msg.result} projectId={projectId} repo={repo} indexedSha={indexedSha} onOpenIssue={onOpenIssue} />
                 ) : msg.error ? (
                     <div className="rounded-[14px] bg-rose-50 px-3.5 py-2.5 text-[12.5px] text-rose-800">{msg.error}</div>
                 ) : (
@@ -549,7 +605,7 @@ function AssistantBubble({
 
 // ── Answer ──────────────────────────────────────────────────────────────────────
 
-function Answer({ result, projectId, repo, indexedSha }: { result: ChatResult; projectId: string; repo: RepoRef | null; indexedSha: string | null }) {
+function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: ChatResult; projectId: string; repo: RepoRef | null; indexedSha: string | null; onOpenIssue: (id: string) => void }) {
     const cited = result.citations ?? []
     const issues = useMemo(() => result.issues ?? [], [result.issues])
     // Cited issues first (finaliser referenced them inline), then related matches.
@@ -576,7 +632,7 @@ function Answer({ result, projectId, repo, indexedSha }: { result: ChatResult; p
             a({ href, children }) {
                 if (typeof href === "string" && href.startsWith(`/projects/${projectId}/issues/`)) {
                     const id = href.split("/").pop() ?? ""
-                    return <IssueChip issue={issues.find((x) => x.id === id)} projectId={projectId} inline />
+                    return <IssueChip issue={issues.find((x) => x.id === id)} projectId={projectId} onOpen={onOpenIssue} inline />
                 }
                 return (
                     <a href={href} target="_blank" rel="noreferrer">
@@ -595,7 +651,7 @@ function Answer({ result, projectId, repo, indexedSha }: { result: ChatResult; p
                 return <code className={className}>{children}</code>
             },
         }),
-        [issues, projectId, repo, indexedSha],
+        [issues, projectId, repo, indexedSha, onOpenIssue],
     )
 
     return (
@@ -611,7 +667,7 @@ function Answer({ result, projectId, repo, indexedSha }: { result: ChatResult; p
                     <SectionLabel>{orderedIssues.some((i) => i.cited) ? "Issues" : "Related issues"}</SectionLabel>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                         {orderedIssues.map((is) => (
-                            <IssueChip key={is.id} issue={is} projectId={projectId} showTitle />
+                            <IssueChip key={is.id} issue={is} projectId={projectId} onOpen={onOpenIssue} showTitle />
                         ))}
                     </div>
                 </div>
@@ -666,9 +722,11 @@ function statusDot(status?: string): string | null {
     }
 }
 
-// IssueChip renders a cited/related tracker issue as a clickable chip. Links to
-// the issue detail page when the uuid is known; otherwise a static `#number`.
-function IssueChip({ issue, projectId, inline = false, showTitle = false }: { issue?: ChatIssue; projectId: string; inline?: boolean; showTitle?: boolean }) {
+// IssueChip renders a cited/related tracker issue as a clickable chip. When the
+// uuid is known it opens the issue in the mind-space drawer via `onOpen` (no
+// navigation); without `onOpen` it falls back to a link to the detail page, and
+// without an id it's a static `#number`.
+function IssueChip({ issue, projectId, onOpen, inline = false, showTitle = false }: { issue?: ChatIssue; projectId: string; onOpen?: (id: string) => void; inline?: boolean; showTitle?: boolean }) {
     const num = issue?.number
     const label = num != null ? `#${num}` : "issue"
     const dot = statusDot(issue?.status)
@@ -687,6 +745,14 @@ function IssueChip({ issue, projectId, inline = false, showTitle = false }: { is
             {showTitle && issue?.title && <span className="max-w-[220px] truncate text-[color:var(--c-text-muted)]">{issue.title}</span>}
         </>
     )
+    if (issue?.id && onOpen) {
+        const id = issue.id
+        return (
+            <button type="button" onClick={() => onOpen(id)} className={cn(className, "cursor-pointer")} title={issue.title}>
+                {inner}
+            </button>
+        )
+    }
     if (issue?.id) {
         return (
             <Link href={`/projects/${projectId}/issues/${issue.id}`} className={className} title={issue.title}>

@@ -108,6 +108,7 @@ export async function chatStream(
     history?: ChatHistoryMsg[],
     maxBudgetUsd?: number,
     projectId?: string,
+    conversationId?: string,
 ): Promise<Response> {
     const { http } = assertConfigured()
     const res = await fetch(`${http}/chat`, {
@@ -118,10 +119,14 @@ export async function chatStream(
             ...authHeader(),
         },
         // project_id scopes the thinker's "issues" action to this project's
-        // embedded issues (analyser ADR-0048). Distinct from repo_id (graph id).
+        // embedded issues (analyser ADR-0048). conversation_id keys the durable
+        // managed-context store the background context agent maintains
+        // (ADR-0049); history is the short temporal buffer. Both distinct from
+        // repo_id (the graph id).
         body: JSON.stringify({
             repo_id: repoId,
             project_id: projectId,
+            conversation_id: conversationId,
             question,
             history,
             max_budget_usd: maxBudgetUsd,

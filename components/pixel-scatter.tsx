@@ -26,6 +26,8 @@ export default function PixelScatter({
     cell = 48,
     fill = 0.13,
     corners = ["tl", "br"],
+    reach = 0.72,
+    falloff = 1,
     animate = true,
     className = "",
     onReady,
@@ -34,6 +36,12 @@ export default function PixelScatter({
     fill?: number
     /** Which corner(s) the ember glows from (default: the landing's TL + BR). */
     corners?: Corner[]
+    /** How far the glow reaches along the diagonal from each lit corner
+        (0 = corner only, 1 = all the way across). Lower = tighter to corners. */
+    reach?: number
+    /** Exponent on the corner weight (1 = linear). Higher packs tiles into a
+        dense core that fades fast, cutting the stray outliers at the fringe. */
+    falloff?: number
     /** When false, paint one static frame (no rAF) — use in always-on chrome. */
     animate?: boolean
     className?: string
@@ -83,9 +91,6 @@ export default function PixelScatter({
 
             const cols = Math.ceil(w / cell) + 1
             const rows = Math.ceil(h / cell) + 1
-            // How far the glow reaches along the diagonal from each lit corner
-            // (0 = corner only, 1 = all the way across).
-            const reach = 0.72
 
             cells = []
             for (let r = 0; r < rows; r++) {
@@ -97,12 +102,15 @@ export default function PixelScatter({
                     // Corner weight: a pixelated gradient glowing from each
                     // selected corner (1 at the corner, 0 once `reach` of the
                     // diagonal away), fading out toward the rest of the canvas.
-                    let cw = 0
+                    let cwLin = 0
                     for (const k of corners) {
                         const cx = k[1] === "l" ? 0 : 1
                         const cy = k[0] === "t" ? 0 : 1
-                        cw = Math.max(cw, 1 - Math.min(1, Math.hypot(fx - cx, fy - cy) / reach))
+                        cwLin = Math.max(cwLin, 1 - Math.min(1, Math.hypot(fx - cx, fy - cy) / reach))
                     }
+                    // Curve the linear weight: falloff>1 packs the ember into a
+                    // dense corner core that thins out fast toward the middle.
+                    const cw = falloff === 1 ? cwLin : Math.pow(cwLin, falloff)
 
                     // Faint gray base only where the glow reaches; pure white
                     // (baseOp 0) through the centre.
@@ -195,7 +203,7 @@ export default function PixelScatter({
             ro.disconnect()
             if (raf) cancelAnimationFrame(raf)
         }
-    }, [cell, fill, animate, corners.join(",")])
+    }, [cell, fill, reach, falloff, animate, corners.join(",")])
 
     return (
         <canvas
