@@ -86,6 +86,7 @@ export interface ChatResult {
     citations: ChatCitation[]
     issues?: ChatIssue[] // related/cited tracker issues (ADR-0048)
     route?: string[] // actions the thinker chose: answer|codebase|issues
+    open_issue_id?: string // agent asks the UI to auto-open this issue in the tray
     confidence: string
     cost_usd: number
     duration_ms: number

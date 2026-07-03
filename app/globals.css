@@ -437,6 +437,41 @@ html, body {
         @apply my-2 border-l-2 border-[color:var(--c-border-strong)] pl-3 italic text-[color:var(--c-text-muted)];
     }
 
+    /* Syntax highlighting for fenced code blocks (rehype-highlight → hljs
+       classes), tuned to the app palette on the light surface-2 code bg. */
+    .prose-tracker .hljs-comment,
+    .prose-tracker .hljs-quote { color: #6b7280; font-style: italic; }
+    .prose-tracker .hljs-keyword,
+    .prose-tracker .hljs-selector-tag,
+    .prose-tracker .hljs-literal,
+    .prose-tracker .hljs-section,
+    .prose-tracker .hljs-doctag,
+    .prose-tracker .hljs-type,
+    .prose-tracker .hljs-built_in { color: #7c3aed; }
+    .prose-tracker .hljs-string,
+    .prose-tracker .hljs-regexp,
+    .prose-tracker .hljs-addition,
+    .prose-tracker .hljs-meta .hljs-string { color: #047857; }
+    .prose-tracker .hljs-number,
+    .prose-tracker .hljs-symbol,
+    .prose-tracker .hljs-bullet,
+    .prose-tracker .hljs-link,
+    .prose-tracker .hljs-template-variable,
+    .prose-tracker .hljs-selector-attr,
+    .prose-tracker .hljs-selector-pseudo { color: #b45309; }
+    .prose-tracker .hljs-title,
+    .prose-tracker .hljs-title.function_,
+    .prose-tracker .hljs-name { color: #1d4ed8; }
+    .prose-tracker .hljs-attr,
+    .prose-tracker .hljs-attribute,
+    .prose-tracker .hljs-variable,
+    .prose-tracker .hljs-selector-class,
+    .prose-tracker .hljs-selector-id { color: #0e7490; }
+    .prose-tracker .hljs-tag { color: var(--c-text-muted); }
+    .prose-tracker .hljs-deletion { color: #be123c; }
+    .prose-tracker .hljs-emphasis { font-style: italic; }
+    .prose-tracker .hljs-strong { font-weight: 500; }
+
     /* Animations */
     .anim-rise { animation: rise 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
     .anim-fade { animation: fade 220ms ease-out backwards; }

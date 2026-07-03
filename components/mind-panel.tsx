@@ -1,13 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
+import rehypeHighlight from "rehype-highlight"
 import { blobUrl, type RepoRef } from "@/lib/github"
 import { cn } from "@/components/cn"
-import PixelScatter from "@/components/pixel-scatter"
+import PixelCircuit from "@/components/pixel-circuit"
 import { ThinkingCard, type Progress } from "@/components/mind-thinking"
 import { IssueDrawer } from "@/components/issue-drawer"
 import type { Issue, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
@@ -35,6 +36,7 @@ interface ChatResult {
     citations: ChatCitation[]
     issues?: ChatIssue[]
     route?: string[]
+    open_issue_id?: string
     confidence: string
     cost_usd: number
     duration_ms: number
@@ -86,6 +88,35 @@ export function MindPanel({
     const [drawer, setDrawer] = useState<{ id: string; issue: Issue; labelIcons: ProjectLabelIcon[]; statusColors: ProjectStatusColor[] } | null>(null)
     const openIssue = useCallback((id: string) => setOpenIssueId(id), [])
     const closeIssue = useCallback(() => setOpenIssueId(null), [])
+
+    // Cowork split: the issue panel docks beside the chat and is drag-resizable.
+    // panelWidth is the panel's pixel width; the chat column takes the rest.
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [panelWidth, setPanelWidth] = useState(460)
+    const startResize = useCallback(
+        (e: ReactPointerEvent<HTMLDivElement>) => {
+            e.preventDefault()
+            const startX = e.clientX
+            const startW = panelWidth
+            const containerW = containerRef.current?.getBoundingClientRect().width ?? window.innerWidth
+            const maxW = Math.max(320, containerW - 380) // keep the chat ≥ 380px
+            const onMove = (ev: PointerEvent) => {
+                // Panel is on the right, so dragging left (smaller clientX) widens it.
+                setPanelWidth(Math.min(maxW, Math.max(320, startW + (startX - ev.clientX))))
+            }
+            const onUp = () => {
+                window.removeEventListener("pointermove", onMove)
+                window.removeEventListener("pointerup", onUp)
+                document.body.style.userSelect = ""
+                document.body.style.cursor = ""
+            }
+            document.body.style.userSelect = "none"
+            document.body.style.cursor = "col-resize"
+            window.addEventListener("pointermove", onMove)
+            window.addEventListener("pointerup", onUp)
+        },
+        [panelWidth],
+    )
 
     useEffect(() => {
         if (!openIssueId) return
@@ -193,6 +224,8 @@ export function MindPanel({
                     } else if (ev.type === "answer" && ev.answer) {
                         const answer = ev.answer
                         patchAssistant(botId, (m) => ({ ...m, streaming: false, result: answer }))
+                        // The agent can ask us to pop one issue into the side tray.
+                        if (answer.open_issue_id) openIssue(answer.open_issue_id)
                     } else if (ev.type === "error") {
                         patchAssistant(botId, (m) => ({ ...m, streaming: false, error: ev.error || "Something went wrong" }))
                     }
@@ -208,13 +241,13 @@ export function MindPanel({
                 setBusy(false)
             }
         },
-        [busy, messages, projectId, conversationId, patchAssistant],
+        [busy, messages, projectId, conversationId, patchAssistant, openIssue],
     )
 
     // Backdrop blur ramps from a crisp 1px at rest to a deep 20px once the first
     // question is sent (messages populate), then stays — a soft focus-pull as the
     // conversation begins.
-    const blurPx = messages.length > 0 ? 20 : 1
+    const blurPx = messages.length > 0 ? 20 : 0
 
     // "Blur first, then think": the first thinking bubble holds its entrance for a
     // beat so the backdrop starts pulling into focus before the orb appears. Later
@@ -222,7 +255,9 @@ export function MindPanel({
     const firstAssistantId = messages.find((m) => m.role === "assistant")?.id
 
     return (
-        <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[color:var(--c-surface)]">
+        <div ref={containerRef} className="relative flex h-full min-h-0 overflow-hidden bg-[color:var(--c-surface)]">
+            {/* Chat column — shrinks when the issue panel docks beside it. */}
+            <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
             {/* Waitlist ember backdrop, blurred — glows from the corners and stays
                 clean toward the centre so the conversation reads over it. */}
             <div
@@ -240,7 +275,7 @@ export function MindPanel({
                             transition: "opacity 1000ms cubic-bezier(0.16,1,0.3,1), transform 1000ms cubic-bezier(0.16,1,0.3,1)",
                         }}
                     >
-                        <PixelScatter cell={32} fill={0.7} reach={0.3} falloff={2.4} corners={["tl", "tr", "bl", "br"]} className="scale-100" onReady={() => setScatterReady(true)} />
+                        <PixelCircuit cell={26} density={0.55} corners={["tl", "tr", "bl", "br"]} className="" onReady={() => setScatterReady(true)} />
                     </div>
                 )}
             </div>
@@ -295,16 +330,52 @@ export function MindPanel({
                     </div>
                 </div>
             </div>
+            </div>{/* end chat column */}
 
-            {/* Cited-issue slide-over. Opens over the mind space when a chip is
-                clicked; closed when `issue` is null (during fetch or after close). */}
-            <IssueDrawer
-                issue={activeIssue}
-                projectId={projectId}
-                labelIcons={drawer?.labelIcons ?? []}
-                statusColors={drawer?.statusColors ?? []}
-                onClose={closeIssue}
-            />
+            {/* Cowork split: the cited-issue panel docks beside the chat and can be
+                dragged to resize. The chat column above shrinks to make room. */}
+            {openIssueId && (
+                <>
+                    <div
+                        role="separator"
+                        aria-orientation="vertical"
+                        onPointerDown={startResize}
+                        className="relative z-20 w-px shrink-0 cursor-col-resize bg-[color:var(--c-border)] transition-colors hover:bg-[color:var(--c-primary)]"
+                    >
+                        <span aria-hidden className="absolute inset-y-0 -left-2 -right-2" />
+                    </div>
+                    <div style={{ width: panelWidth }} className="relative z-20 h-full shrink-0 overflow-hidden border-l border-[color:var(--c-border)]">
+                        {activeIssue ? (
+                            <IssueDrawer
+                                docked
+                                issue={activeIssue}
+                                projectId={projectId}
+                                labelIcons={drawer?.labelIcons ?? []}
+                                statusColors={drawer?.statusColors ?? []}
+                                onClose={closeIssue}
+                            />
+                        ) : (
+                            <div className="flex h-full w-full flex-col bg-[#fafafa]">
+                                <div className="flex items-center justify-end px-4 py-3">
+                                    <button
+                                        type="button"
+                                        onClick={closeIssue}
+                                        aria-label="Close"
+                                        className="rounded-md p-1 text-[color:var(--c-text-muted)] transition-colors hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)]"
+                                    >
+                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+                                            <path d="M6 6l12 12M18 6L6 18" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div className="flex flex-1 items-center justify-center">
+                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[color:var(--c-border)] border-t-[color:var(--c-primary)]" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
         </div>
     )
 }
@@ -554,7 +625,6 @@ function Spinner() {
 function UserBubble({ text }: { text: string }) {
     return (
         <motion.div
-            layout
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
@@ -584,7 +654,6 @@ function AssistantBubble({
 }) {
     return (
         <motion.div
-            layout
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay }}
@@ -619,20 +688,30 @@ function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: 
         return m
     }, [issues])
 
-    // Rewrite the answer's [issue:N] tokens into internal issue links so the
-    // markdown renderer can turn them into chips inline (ADR-0048).
+    // Rewrite the finaliser's inline citation tokens ([issue:N], [file:path:line])
+    // into links the markdown renderer turns into chips (ADR-0048).
     const md = useMemo(
-        () => linkifyIssues(result.answer_markdown || "_(empty answer)_", issueByNumber, projectId),
+        () => linkifyCitations(result.answer_markdown || "_(empty answer)_", issueByNumber, projectId),
         [result.answer_markdown, issueByNumber, projectId],
     )
 
-    // Custom renderers: issue links → IssueChip; inline `path:line` code → FileChip.
+    // Custom renderers: issue links → IssueChip; #file: links + inline `path:line`
+    // code → FileChip. Fenced code blocks keep their rehype-highlight classes.
     const components = useMemo<Components>(
         () => ({
             a({ href, children }) {
-                if (typeof href === "string" && href.startsWith(`/projects/${projectId}/issues/`)) {
-                    const id = href.split("/").pop() ?? ""
-                    return <IssueChip issue={issues.find((x) => x.id === id)} projectId={projectId} onOpen={onOpenIssue} inline />
+                if (typeof href === "string") {
+                    if (href.startsWith(`/projects/${projectId}/issues/`)) {
+                        const id = href.split("/").pop() ?? ""
+                        return <IssueChip issue={issues.find((x) => x.id === id)} projectId={projectId} onOpen={onOpenIssue} inline />
+                    }
+                    if (href.startsWith("#file:")) {
+                        const spec = href.slice("#file:".length)
+                        const m = spec.match(/^(.*?):(\d+)$/)
+                        const file = m ? m[1] : spec
+                        const line = m ? Number(m[2]) : undefined
+                        return <FileChip file={file} line={line} repo={repo} sha={indexedSha} inline />
+                    }
                 }
                 return (
                     <a href={href} target="_blank" rel="noreferrer">
@@ -642,8 +721,9 @@ function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: 
             },
             code({ className, children }) {
                 const text = String(children ?? "")
-                // Only inline code (fenced blocks carry a language className) that
-                // looks like a file:line reference becomes a chip.
+                // Inline code (fenced blocks carry a language/hljs className) that
+                // looks like a file:line reference becomes a chip. Fenced blocks
+                // fall through with their highlight classes intact.
                 if (!className && CITE_RE.test(text)) {
                     const [file, line] = text.split(":")
                     return <FileChip file={file} line={Number(line)} repo={repo} sha={indexedSha} inline />
@@ -655,9 +735,13 @@ function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: 
     )
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25 }} className="flex flex-col gap-4">
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }} className="flex flex-col gap-4">
             <div className="prose-tracker">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+                    components={components}
+                >
                     {md}
                 </ReactMarkdown>
             </div>
@@ -692,14 +776,23 @@ function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: 
 // CITE_RE matches a bare `path/to/file.ext:line` reference (single token).
 const CITE_RE = /^[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:\d+$/
 
-// linkifyIssues rewrites `[issue:42]` / `[issue:#42]` tokens into internal issue
-// links (when the issue id is known) so the markdown renderer chips them; falls
-// back to a plain `#42` when the number wasn't among the retrieved matches.
-function linkifyIssues(md: string, byNumber: Map<number, ChatIssue>, projectId: string): string {
-    return md.replace(/\[issue:#?(\d+)\]/gi, (_m, n: string) => {
-        const is = byNumber.get(Number(n))
-        return is?.id ? `[#${n}](/projects/${projectId}/issues/${is.id})` : `#${n}`
-    })
+// linkifyCitations rewrites the finaliser's inline citation tokens into links the
+// markdown renderer turns into chips:
+//   [issue:42]            → internal issue link  → IssueChip (or plain #42 if unknown)
+//   [file:path/x.go:42]   → #file: fragment link → FileChip
+// Fragment (#…) and internal (/…) hrefs both survive react-markdown's urlTransform,
+// unlike a custom scheme.
+function linkifyCitations(md: string, byNumber: Map<number, ChatIssue>, projectId: string): string {
+    return md
+        .replace(/\[issue:#?(\d+)\]/gi, (_m, n: string) => {
+            const is = byNumber.get(Number(n))
+            return is?.id ? `[#${n}](/projects/${projectId}/issues/${is.id})` : `#${n}`
+        })
+        .replace(/\[file:([^\]\s]+?)(?::(\d+))?\]/gi, (_m, path: string, line?: string) => {
+            const label = line ? `${path}:${line}` : path
+            const frag = line ? `${path}:${line}` : path
+            return `[${label}](#file:${frag})`
+        })
 }
 
 // statusDot maps a tracker issue status to its palette dot (mirrors issue-meta).

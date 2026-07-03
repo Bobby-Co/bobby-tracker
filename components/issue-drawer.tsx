@@ -32,12 +32,17 @@ export function IssueDrawer({
     labelIcons,
     statusColors,
     onClose,
+    docked = false,
 }: {
     issue: Issue | null
     projectId: string
     labelIcons: ProjectLabelIcon[]
     statusColors: ProjectStatusColor[]
     onClose: () => void
+    // docked renders the panel inline (fills its parent) instead of as a
+    // fixed left-edge overlay — used by the mind "cowork" split where the panel
+    // takes real space beside the chat (analyser ADR-0048 UI).
+    docked?: boolean
 }) {
     const [suggestion, setSuggestion] = useState<IssueSuggestion | null>(null)
     const [loadingSuggestion, setLoadingSuggestion] = useState(false)
@@ -83,6 +88,25 @@ export function IssueDrawer({
     const colorOverride = issue
         ? (statusColors.find((c) => c.status === issue.status)?.color ?? null)
         : null
+
+    // Docked: fill the parent (the resizable mind panel) — no overlay, no backdrop.
+    if (docked) {
+        return (
+            <aside role="complementary" aria-label="Issue detail" className="flex h-full w-full flex-col overflow-hidden bg-[#fafafa]">
+                {issue && (
+                    <DrawerBody
+                        issue={issue}
+                        projectId={projectId}
+                        suggestion={suggestion}
+                        loadingSuggestion={loadingSuggestion}
+                        labelIcons={labelIcons}
+                        colorOverride={colorOverride}
+                        onClose={onClose}
+                    />
+                )}
+            </aside>
+        )
+    }
 
     return (
         <>
