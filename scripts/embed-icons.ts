@@ -7,12 +7,13 @@
 // yet so the script still produces a usable index without the
 // labeling step.
 //
-// Calls OpenAI text-embedding-3-small in batches and upserts into
-// tracker.icon_catalog with the service-role key. Idempotent — safe
-// to re-run after adding icons or re-labeling.
+// Calls qwen3-embedding-8b on Fireworks (MRL-truncated to 1536) in
+// batches and upserts into tracker.icon_catalog with the service-role
+// key. Idempotent — safe to re-run after adding icons, re-labeling, or
+// switching the embedding model.
 //
 // Required env (.env.local is auto-loaded by bun):
-//   OPENAI_API_KEY
+//   FIREWORK_API_KEY
 //   NEXT_PUBLIC_SUPABASE_URL
 //   SUPABASE_SERVICE_ROLE_KEY
 //
@@ -84,11 +85,15 @@ function normaliseTags(raw: unknown): IconlyTag[] {
     return out
 }
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? ""
+const EMBED_API_KEY = process.env.FIREWORK_API_KEY ?? ""
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
 
-const EMBED_MODEL = "text-embedding-3-small"
+// qwen3-embedding-8b on Fireworks, MRL-truncated to 1536 dims to match the rest
+// of the corpus + the vector(1536) columns/indexes.
+const EMBED_URL = "https://api.fireworks.ai/inference/v1/embeddings"
+const EMBED_MODEL = "accounts/fireworks/models/qwen3-embedding-8b"
+const EMBED_DIM = 1536
 // Stay well under the 2048-input batch cap; 100 keeps each request
 // snappy and the failure blast-radius small.
 const BATCH_SIZE = 100
@@ -140,17 +145,17 @@ function embeddingText(
 }
 
 async function embedBatch(inputs: string[]): Promise<number[][]> {
-    const res = await fetch("https://api.openai.com/v1/embeddings", {
+    const res = await fetch(EMBED_URL, {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            Authorization: `Bearer ${EMBED_API_KEY}`,
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({ model: EMBED_MODEL, input: inputs }),
+        body: JSON.stringify({ model: EMBED_MODEL, input: inputs, dimensions: EMBED_DIM }),
     })
     if (!res.ok) {
         const text = await res.text().catch(() => "")
-        throw new Error(`OpenAI embeddings ${res.status}: ${text || res.statusText}`)
+        throw new Error(`embeddings ${res.status}: ${text || res.statusText}`)
     }
     const json = (await res.json()) as OpenAIEmbedResponse
     // Sort by `index` so ordering matches `inputs` 1:1.
@@ -161,7 +166,7 @@ async function embedBatch(inputs: string[]): Promise<number[][]> {
 }
 
 async function main() {
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set")
+    if (!EMBED_API_KEY) throw new Error("FIREWORK_API_KEY is not set")
     if (!SUPABASE_URL) throw new Error("NEXT_PUBLIC_SUPABASE_URL is not set")
     if (!SERVICE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not set")
 
