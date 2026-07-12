@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { IssueDrawer } from "@/components/issue-drawer"
 import { IssueTimeline } from "@/components/issue-timeline"
+import { TimelineGrid } from "@/components/timeline-grid"
 import { LabelIconManager } from "@/components/label-icon-manager"
 import type {
     Issue,
@@ -40,6 +41,7 @@ export function TimelineWorkspace({
 }) {
     const [openIssue, setOpenIssue] = useState<Issue | null>(null)
     const [iconsOpen, setIconsOpen] = useState(false)
+    const [view, setView] = useState<"board" | "timeline">("board")
 
     const have = new Set(labelIcons.map((i) => i.label))
     const missing = usedLabels.filter((l) => !have.has(l))
@@ -66,6 +68,23 @@ export function TimelineWorkspace({
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Board / Timeline view switch */}
+                    <div className="flex items-center rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-0.5 text-[12px] font-semibold">
+                        <button
+                            type="button"
+                            onClick={() => setView("board")}
+                            className={`rounded-[8px] px-2.5 py-1 ${view === "board" ? "bg-white text-[color:var(--c-text)] shadow-sm" : "text-[color:var(--c-text-muted)]"}`}
+                        >
+                            Board
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setView("timeline")}
+                            className={`rounded-[8px] px-2.5 py-1 ${view === "timeline" ? "bg-white text-[color:var(--c-text)] shadow-sm" : "text-[color:var(--c-text-muted)]"}`}
+                        >
+                            Timeline
+                        </button>
+                    </div>
                     {missing.length > 0 && (
                         <span className="hidden items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-semibold text-amber-800 sm:inline-flex">
                             <DotIcon /> {missing.length} label{missing.length === 1 ? "" : "s"} need icons
@@ -81,18 +100,31 @@ export function TimelineWorkspace({
                 </div>
             </header>
 
-            {/* Canvas area */}
-            <main className="flex min-h-0 flex-1 flex-col px-5 py-4">
-                <IssueTimeline
-                    projectId={project.id}
-                    issues={issues}
-                    labelIcons={labelIcons}
-                    statusColors={statusColors}
-                    onTileClick={setOpenIssue}
-                    fullHeight
-                    focusIssueId={focusIssueId ?? null}
-                    onPersisted={onPersisted}
-                />
+            {/* Canvas area — full-bleed for the board so the grid is
+                the whole page; the classic timeline keeps its padding. */}
+            <main className={`flex min-h-0 flex-1 flex-col ${view === "board" ? "" : "px-5 py-4"}`}>
+                {view === "board" ? (
+                    <TimelineGrid
+                        projectId={project.id}
+                        issues={issues}
+                        labelIcons={labelIcons}
+                        statusColors={statusColors}
+                        onTileClick={setOpenIssue}
+                        focusIssueId={focusIssueId ?? null}
+                        onPersisted={onPersisted}
+                    />
+                ) : (
+                    <IssueTimeline
+                        projectId={project.id}
+                        issues={issues}
+                        labelIcons={labelIcons}
+                        statusColors={statusColors}
+                        onTileClick={setOpenIssue}
+                        fullHeight
+                        focusIssueId={focusIssueId ?? null}
+                        onPersisted={onPersisted}
+                    />
+                )}
             </main>
 
             <LabelIconManager
