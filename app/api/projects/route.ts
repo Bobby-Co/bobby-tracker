@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { validateRepoUrl } from "@/lib/repo-url"
+import { validateRepoUrl } from "@/lib/integrations/repo-url"
 import type { Project } from "@/lib/supabase/types"
 
 // GET — list the current user's projects, newest first. Backs the app

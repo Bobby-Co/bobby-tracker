@@ -1,6 +1,6 @@
 import { analyseIssue, AnalyserError, isAnalyseEffort } from "@/lib/analyser"
 import { jsonError, requireUser } from "@/lib/api"
-import { composeIssueFixPrompt } from "@/lib/issue-prompt"
+import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type {
     Issue,
     IssueAnalysisData,

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth/auth-context"
 import { isAllowed } from "@/lib/auth/access"
-import { AuthShell } from "@/components/auth-shell"
+import { AuthShell } from "@/components/layout/auth-shell"
 
 const ROLES = [
     "Engineer",

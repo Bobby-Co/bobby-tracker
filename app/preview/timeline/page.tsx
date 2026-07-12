@@ -5,7 +5,7 @@
 // linked from anywhere; safe to delete.
 
 import { useState } from "react"
-import { TimelineGrid } from "@/components/timeline-grid"
+import { TimelineGrid } from "@/components/timeline/timeline-grid"
 import type { Issue, IssueStatus, IssuePriority } from "@/lib/supabase/types"
 
 const DAY = 24 * 60 * 60 * 1000

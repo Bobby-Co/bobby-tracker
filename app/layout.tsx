@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { Nunito } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/lib/auth/auth-context"
-import {HyperellipseSetup} from "@/components/hyperellipse-setup";
+import {HyperellipseSetup} from "@/components/layout/hyperellipse-setup";
 
 const nunito = Nunito({
     variable: "--font-nunito",

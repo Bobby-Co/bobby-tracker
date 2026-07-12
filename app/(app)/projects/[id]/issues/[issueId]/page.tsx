@@ -3,9 +3,9 @@
 import { notFound, useParams } from "next/navigation"
 import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
-import { IssueDetail } from "@/components/issue-detail"
-import { IssueSuggestions } from "@/components/issue-suggestions"
-import { SimilarIssuesCard } from "@/components/similar-issues-card"
+import { IssueDetail } from "@/components/issues/issue-detail"
+import { IssueSuggestions } from "@/components/issues/issue-suggestions"
+import { SimilarIssuesCard } from "@/components/issues/similar-issues-card"
 import type {
     Issue,
     IssueSuggestion,

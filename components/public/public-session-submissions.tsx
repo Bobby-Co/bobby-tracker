@@ -1,0 +1,358 @@
+"use client"
+
+import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
+import type {
+    PublicListedIssue,
+    PublicParentRow,
+    PublicReporterGroup,
+} from "@/lib/public/public-reporter"
+import { reporterDisplay } from "@/lib/public/public-reporter"
+import { StatusChip } from "@/components/ui/status-chip"
+
+// Public-side counterpart to the auth issues list.
+//
+// Layout shape:
+//   1. Top-level grouping is by REPORTER. Each reporter section
+//      gets a header (avatar + name + "you" badge) and a stack of
+//      parent rows below.
+//   2. Inside a reporter section, each parent issue is its own
+//      card. Duplicates of that parent — even when filed by other
+//      reporters — render as smaller indented cards underneath in
+//      an amber-bordered column. The thread stays visually
+//      together under whoever started it.
+//
+// "you" highlighting is per-reporter (group header) AND per-row
+// (a small chip on any card the visitor authored, including
+// cross-reporter duplicates inside someone else's thread).
+//
+// restrictToOwn:
+//   - false (default) — show every reporter group.
+//   - true — only show rows the visitor owns. When the visitor is
+//     authenticated the server has already filtered the list. When
+//     they're anonymous (link-mode session + 'own' visibility),
+//     the server passes the full list and we filter client-side
+//     by localStorage reporter id.
+export function PublicSessionSubmissions({
+    token,
+    groups,
+    restrictToOwn = false,
+    visitorIsAuthenticated = false,
+}: {
+    token: string
+    groups: PublicReporterGroup[]
+    restrictToOwn?: boolean
+    visitorIsAuthenticated?: boolean
+}) {
+    const [myReporterId, setMyReporterId] = useState<string>("")
+    // Track whether the localStorage read has completed so anonymous
+    // own-mode visitors don't briefly see other people's submissions
+    // during hydration before we filter them out.
+    const [hydrated, setHydrated] = useState(false)
+
+    useEffect(() => {
+        // Read but don't generate — generating an id here would mark
+        // every fresh visitor as a "reporter" before they've actually
+        // submitted anything. Reading localStorage *requires* an
+        // effect (window isn't available during SSR), so the
+        // set-state-in-effect lint is genuine to the constraint.
+        try {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setMyReporterId(localStorage.getItem("bobby:public-profile:reporter-id") ?? "")
+        } catch {}
+        setHydrated(true)
+    }, [])
+
+    const visibleGroups = useMemo(() => {
+        if (!restrictToOwn) return groups
+        if (visitorIsAuthenticated) return groups // already server-filtered
+        if (!hydrated) return [] // avoid flashing other reporters
+        if (!myReporterId) return []
+        // Soft client-side filter for anonymous link-mode 'own' viewers.
+        // Within each group, keep parent rows where the parent OR any
+        // of its children matches the visitor; prune cross-reporter
+        // children when the parent isn't theirs. Empty groups drop out.
+        return groups
+            .map((g) => {
+                const rows = g.rows
+                    .map((r) => {
+                        const parentMine = r.parent.public_reporter_id === myReporterId
+                        const ownChildren = r.children.filter((c) => c.public_reporter_id === myReporterId)
+                        if (!parentMine && ownChildren.length === 0) return null
+                        return { parent: r.parent, children: parentMine ? r.children : ownChildren }
+                    })
+                    .filter((r): r is PublicParentRow => r !== null)
+                if (rows.length === 0) return null
+                return { ...g, rows }
+            })
+            .filter((g): g is PublicReporterGroup => g !== null)
+    }, [groups, restrictToOwn, visitorIsAuthenticated, hydrated, myReporterId])
+
+    const headingLabel = restrictToOwn ? "Your submissions" : "All submissions"
+    const totalCount = useMemo(
+        () => visibleGroups.reduce(
+            (n, g) => n + g.rows.reduce((m, r) => m + 1 + r.children.length, 0),
+            0,
+        ),
+        [visibleGroups],
+    )
+
+    if (visibleGroups.length === 0) {
+        if (!restrictToOwn) return null
+        return (
+            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-center text-[12.5px] text-[color:var(--c-text-muted)] sm:p-6">
+                <div className="text-[13px] font-bold text-[color:var(--c-text)]">{headingLabel}</div>
+                <p className="mt-1">
+                    {visitorIsAuthenticated || hydrated
+                        ? "You haven't filed anything in this session yet. Submissions you make will appear here, and only you can see them."
+                        : "Loading your submissions…"}
+                </p>
+            </section>
+        )
+    }
+
+    return (
+        <section className="flex flex-col gap-4">
+            <header className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+                <h2 className="text-[12px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
+                    {headingLabel}
+                </h2>
+                <span className="text-[11.5px] tabular-nums text-[color:var(--c-text-dim)]">
+                    {restrictToOwn
+                        ? `${totalCount} submission${totalCount === 1 ? "" : "s"}`
+                        : `${totalCount} from ${visibleGroups.length} reporter${visibleGroups.length === 1 ? "" : "s"}`}
+                </span>
+            </header>
+
+            <div className="flex flex-col gap-5">
+                {visibleGroups.map((g) => (
+                    <ReporterSection
+                        key={g.key}
+                        group={g}
+                        token={token}
+                        myReporterId={myReporterId}
+                        restrictToOwn={restrictToOwn}
+                    />
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function ReporterSection({
+    group, token, myReporterId, restrictToOwn,
+}: {
+    group: PublicReporterGroup
+    token: string
+    myReporterId: string
+    restrictToOwn: boolean
+}) {
+    const isMe = !!myReporterId && group.reporter_id === myReporterId
+    const issueCount = group.rows.reduce((n, r) => n + 1 + r.children.length, 0)
+    return (
+        <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 px-1">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-bold text-white">
+                    {(group.display_name || "?").trim().charAt(0).toUpperCase()}
+                </span>
+                <span className="truncate text-[13px] font-bold">
+                    {group.display_name}
+                </span>
+                {isMe && !restrictToOwn && (
+                    <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-800">
+                        You
+                    </span>
+                )}
+                <span className="grow" />
+                <span className="text-[11px] tabular-nums text-[color:var(--c-text-dim)]">
+                    {issueCount}
+                </span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+                {group.rows.map((row) => (
+                    <ParentBlock
+                        key={row.parent.id}
+                        parent={row.parent}
+                        duplicates={row.children}
+                        token={token}
+                        myReporterId={myReporterId}
+                    />
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function ParentBlock({
+    parent, duplicates, token, myReporterId,
+}: {
+    parent: PublicListedIssue
+    duplicates: PublicListedIssue[]
+    token: string
+    myReporterId: string
+}) {
+    // Default expanded so the visitor sees the related thread
+    // without an extra click. The chevron stays so noisy parents
+    // can still be collapsed.
+    const [open, setOpen] = useState(true)
+    const hasChildren = duplicates.length > 0
+
+    return (
+        <div className="flex flex-col gap-1.5">
+            <ParentRowCard
+                parent={parent}
+                duplicates={duplicates}
+                token={token}
+                open={open}
+                onToggle={() => setOpen((o) => !o)}
+            />
+            {hasChildren && open && (
+                <div className="flex flex-col gap-1.5 border-l-2 border-amber-200 pl-3 ml-3 sm:pl-4 sm:ml-5">
+                    {duplicates.map((c) => (
+                        <ChildRowCard key={c.id} child={c} token={token} myReporterId={myReporterId} />
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+function ParentRowCard({
+    parent, duplicates, token, open, onToggle,
+}: {
+    parent: PublicListedIssue
+    duplicates: PublicListedIssue[]
+    token: string
+    open: boolean
+    onToggle: () => void
+}) {
+    const hasChildren = duplicates.length > 0
+
+    return (
+        <div className="flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-white pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3">
+            {hasChildren && (
+                <button
+                    type="button"
+                    onClick={onToggle}
+                    aria-expanded={open}
+                    aria-label={open ? "Collapse duplicates" : "Expand duplicates"}
+                    className="grid h-5 w-5 shrink-0 -mr-2 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-white hover:text-[color:var(--c-text)]"
+                >
+                    <svg
+                        width="11"
+                        height="11"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        aria-hidden
+                        className={"transition-transform " + (open ? "rotate-90" : "")}
+                    >
+                        <path d="M9 6l6 6-6 6" />
+                    </svg>
+                </button>
+            )}
+
+            <Link
+                href={`/p/${token}/issues/${parent.id}`}
+                className="group flex min-w-0 flex-1 items-center gap-2 py-2.5 sm:gap-3"
+            >
+                <span className="hidden shrink-0 font-mono text-[11.5px] text-[color:var(--c-text-dim)] transition-colors group-hover:text-[color:var(--c-text-muted)] sm:inline">
+                    #{parent.issue_number}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13.5px] font-medium transition-transform group-hover:translate-x-px">
+                        <span className="mr-1.5 font-mono text-[11px] text-[color:var(--c-text-dim)] sm:hidden">
+                            #{parent.issue_number}
+                        </span>
+                        {parent.title}
+                    </div>
+                    <div className="mt-0.5 truncate text-[11px] text-[color:var(--c-text-dim)]">
+                        <span className="font-semibold">{parent.project_name}</span>
+                        {" · "}
+                        <time dateTime={parent.created_at}>{shortTime(parent.created_at)}</time>
+                    </div>
+                </div>
+
+                <div className="flex min-w-0 shrink items-center justify-end gap-1.5">
+                    {hasChildren && (
+                        <span
+                            className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-900 tabular-nums"
+                            title={`${duplicates.length} duplicate${duplicates.length === 1 ? "" : "s"}`}
+                        >
+                            +{duplicates.length}
+                        </span>
+                    )}
+                    <span className="shrink-0">
+                        <StatusChip status={parent.status} />
+                    </span>
+                </div>
+            </Link>
+        </div>
+    )
+}
+
+function ChildRowCard({
+    child, token, myReporterId,
+}: {
+    child: PublicListedIssue
+    token: string
+    myReporterId: string
+}) {
+    const childReporter = reporterDisplay(child.public_reporter_id, child.public_reporter_name)
+    const isMe = !!myReporterId && child.public_reporter_id === myReporterId
+
+    return (
+        <Link
+            href={`/p/${token}/issues/${child.id}`}
+            className="group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5"
+        >
+            <span className="hidden shrink-0 font-mono text-[11px] text-[color:var(--c-text-dim)] sm:inline">
+                #{child.issue_number}
+            </span>
+            <div className="min-w-0 flex-1">
+                <div className="truncate text-[color:var(--c-text-muted)] transition-transform group-hover:translate-x-px">
+                    <span className="mr-1.5 font-mono text-[10.5px] text-[color:var(--c-text-dim)] sm:hidden">
+                        #{child.issue_number}
+                    </span>
+                    {child.title}
+                </div>
+                <div className="mt-0.5 truncate text-[10.5px] text-[color:var(--c-text-dim)]">
+                    {/* Reporter name on the child card so cross-
+                        reporter duplicates (filed by someone other
+                        than the parent's reporter) are obvious. */}
+                    <span>{childReporter}</span>
+                    {" · "}
+                    <time dateTime={child.created_at}>{shortTime(child.created_at)}</time>
+                </div>
+            </div>
+            {isMe && (
+                <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-800">
+                    You
+                </span>
+            )}
+            <span className="shrink-0">
+                <StatusChip status={child.status} />
+            </span>
+        </Link>
+    )
+}
+
+// Compact "5m ago" / "yesterday" / locale fallback for the
+// metadata row. Keeps the card lighter than a full timestamp.
+function shortTime(iso: string): string {
+    const t = Date.parse(iso)
+    if (Number.isNaN(t)) return ""
+    const diff = Date.now() - t
+    const sec = Math.round(diff / 1000)
+    if (sec < 60) return "just now"
+    const min = Math.round(sec / 60)
+    if (min < 60) return `${min}m ago`
+    const hr = Math.round(min / 60)
+    if (hr < 24) return `${hr}h ago`
+    const day = Math.round(hr / 24)
+    if (day < 7) return `${day}d ago`
+    return new Date(t).toLocaleDateString()
+}

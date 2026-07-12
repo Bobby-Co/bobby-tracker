@@ -2,10 +2,10 @@
 
 import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
-import { AnalyserPanel } from "@/components/analyser-panel"
-import { AnalyserDefaultEffort } from "@/components/analyser-default-effort"
-import { VerifyPanel } from "@/components/verify-panel"
-import { KnowledgeSkeleton } from "@/components/knowledge-skeleton"
+import { AnalyserPanel } from "@/components/projects/analyser-panel"
+import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-effort"
+import { VerifyPanel } from "@/components/projects/verify-panel"
+import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 // Knowledge tab — single home for everything that drives the project's

@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { notFound, useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
-import { TimelineWorkspace } from "@/components/timeline-workspace"
+import { TimelineWorkspace } from "@/components/timeline/timeline-workspace"
 import type {
     Issue,
     Project,

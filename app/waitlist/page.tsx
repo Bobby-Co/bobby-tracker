@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth/auth-context"
 import { isAllowed } from "@/lib/auth/access"
-import { BrandLockup } from "@/components/BrandLockup"
-import PixelScatter from "@/components/pixel-scatter"
+import { BrandLockup } from "@/components/layout/brand-lockup"
+import PixelScatter from "@/components/ui/pixel-scatter"
 
 // Warm tones that read on the cream background (no white — it'd vanish).
 const PARTICLE_COLORS = ["#facc15", "#f59e0b", "#ea580c", "#dc2626", "#b45309"]

@@ -3,8 +3,8 @@
 import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { ProjectGroup } from "@/lib/supabase/types"
-import { GroupTabs } from "@/components/group-tabs"
-import { MiniIcon, toneFromString } from "@/components/field-card"
+import { GroupTabs } from "@/components/groups/group-tabs"
+import { MiniIcon, toneFromString } from "@/components/ui/field-card"
 
 // Group detail shell — mirror of the project layout. Header (name +
 // member count) loads via /api/groups/[id]; tabs paint immediately and

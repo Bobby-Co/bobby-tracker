@@ -1,6 +1,6 @@
 "use client"
 
-import { RelayWorkersClient } from "@/components/relay-workers-client"
+import { RelayWorkersClient } from "@/components/relay/relay-workers-client"
 
 // Auth is handled by the (app)/layout shell. The page is a thin wrapper —
 // all interactivity (polling, pairing, rename/unlink) lives in the client

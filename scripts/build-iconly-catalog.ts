@@ -18,8 +18,8 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 const ICONS_DIR = join(__dirname, "..", "icons")
-const TAGS_FILE = join(__dirname, "..", "lib", "iconly-tags.json")
-const OUT_FILE = join(__dirname, "..", "lib", "iconly-catalog.ts")
+const TAGS_FILE = join(__dirname, "..", "lib", "icons", "iconly-tags.json")
+const OUT_FILE = join(__dirname, "..", "lib", "icons", "iconly-catalog.ts")
 
 interface TagEntry {
     name: string

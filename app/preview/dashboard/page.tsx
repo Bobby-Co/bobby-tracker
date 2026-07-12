@@ -1,8 +1,8 @@
 "use client"
 // TEMPORARY harness — delete after verifying the project tile redesign.
 
-import { AppShell } from "@/components/app-shell"
-import { ProjectTile, type ProjectStatus } from "@/components/project-tile"
+import { AppShell } from "@/components/layout/app-shell"
+import { ProjectTile, type ProjectStatus } from "@/components/projects/project-tile"
 import type { Project } from "@/lib/supabase/types"
 
 const mk = (id: string, name: string, repo: string, description: string | null): Project => ({

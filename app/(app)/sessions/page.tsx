@@ -3,9 +3,9 @@
 import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
 import type { PublicSession } from "@/lib/supabase/types"
-import { NewSessionButton } from "@/components/new-session-button"
-import { SessionsSkeleton } from "@/components/sessions-skeleton"
-import { MiniCard } from "@/components/field-card"
+import { NewSessionButton } from "@/components/sessions/new-session-button"
+import { SessionsSkeleton } from "@/components/sessions/sessions-skeleton"
+import { MiniCard } from "@/components/ui/field-card"
 
 // Top-level "Public sessions" list. A session is a shareable submission
 // link that can cover one or more of the user's projects. From here

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth/auth-context"
 import { isAllowed } from "@/lib/auth/access"
 import { useApi } from "@/lib/hooks/use-api"
-import { AppShell, ShellSkeleton } from "@/components/app-shell"
+import { AppShell, ShellSkeleton } from "@/components/layout/app-shell"
 import type { Project } from "@/lib/supabase/types"
 
 // Auth-gated app shell — now a client guard instead of a server

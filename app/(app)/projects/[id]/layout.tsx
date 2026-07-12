@@ -3,10 +3,10 @@
 import { useParams, usePathname } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { Project } from "@/lib/supabase/types"
-import { ProjectTabs } from "@/components/project-tabs"
-import { MiniIcon, toneFromString } from "@/components/field-card"
-import { cn } from "@/components/cn"
-import { isImmersiveMind } from "@/components/immersive"
+import { ProjectTabs } from "@/components/projects/project-tabs"
+import { MiniIcon, toneFromString } from "@/components/ui/field-card"
+import { cn } from "@/components/ui/cn"
+import { isImmersiveMind } from "@/components/layout/immersive"
 
 // Project detail shell. The header (name + repo link) loads the
 // project via /api/projects/[id]; the tabs render immediately from the

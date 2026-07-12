@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { normalizeUserCode } from "@/lib/relay"
+import { normalizeUserCode } from "@/lib/integrations/relay"
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // AUTH. The signed-in user rejects a pending pairing by user_code. The

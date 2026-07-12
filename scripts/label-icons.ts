@@ -28,7 +28,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync } from "node:fs"
 import { join } from "node:path"
 
 const ICONS_DIR = join(__dirname, "..", "icons")
-const OUT_FILE = join(__dirname, "..", "lib", "iconly-tags.json")
+const OUT_FILE = join(__dirname, "..", "lib", "icons", "iconly-tags.json")
 const MODEL = "gpt-4.1-nano"
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? ""

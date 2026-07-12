@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
-import { MindPanel } from "@/components/mind-panel"
+import { MindPanel } from "@/components/mind/mind-panel"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 type KnowledgeData = {

@@ -3,7 +3,7 @@
 import {Suspense, useEffect, useState} from "react"
 import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { AuthShell } from "@/components/auth-shell"
+import { AuthShell } from "@/components/layout/auth-shell"
 import {registerHyperellipse} from "hyperellipse";
 
 type Provider = "github" | "google" | "apple"

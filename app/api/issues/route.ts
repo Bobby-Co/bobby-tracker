@@ -3,7 +3,7 @@ import { jsonError, requireUser } from "@/lib/api"
 import { isAnalyseEffort } from "@/lib/analyser"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
-import { embedIssueAsync } from "@/lib/issue-embedding"
+import { embedIssueAsync } from "@/lib/issues/issue-embedding"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()

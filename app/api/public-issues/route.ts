@@ -2,8 +2,8 @@ import { after } from "next/server"
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
-import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
-import { embedIssueAsync } from "@/lib/issue-embedding"
+import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/lib/public/public-session"
+import { embedIssueAsync } from "@/lib/issues/issue-embedding"
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // Anonymous issue submission. The caller proves authority with the

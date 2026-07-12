@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server"
-import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
+import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public/public-session"
 import type { Issue, IssueEmbedding } from "@/lib/supabase/types"
 
 interface SimilarRow {

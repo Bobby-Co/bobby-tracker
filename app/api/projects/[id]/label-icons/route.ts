@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { findIcon } from "@/lib/iconly"
-import { ICONLY_NAMES } from "@/lib/iconly-catalog"
+import { findIcon } from "@/lib/icons/iconly"
+import { ICONLY_NAMES } from "@/lib/icons/iconly-catalog"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"
 
 function isKnownIconName(name: string): boolean {

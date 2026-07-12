@@ -2,7 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/supabase/server"
 import { isAllowed } from "@/lib/auth/access"
-import PixelGradient, { EMBER_STOPS } from "@/components/pixel-gradient"
+import PixelGradient, { EMBER_STOPS } from "@/components/ui/pixel-gradient"
 
 const BobbyMark = () => (
   <svg viewBox="0 0 106 102" xmlns="http://www.w3.org/2000/svg" aria-hidden>

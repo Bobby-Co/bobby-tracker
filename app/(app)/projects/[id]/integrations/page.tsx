@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
-import { PublicIntegrationPanel } from "@/components/public-integration-panel"
+import { PublicIntegrationPanel } from "@/components/public/public-integration-panel"
 import IntegrationsLoading from "./loading"
 
 // Integrations tab — external-service syncs and the per-project

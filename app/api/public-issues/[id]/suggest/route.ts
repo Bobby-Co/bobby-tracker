@@ -3,7 +3,7 @@ import { jsonError } from "@/lib/api"
 import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
-import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
+import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public/public-session"
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // POST /api/public-issues/[id]/suggest

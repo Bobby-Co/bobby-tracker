@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { fetchAnalyserWorkers, type RelayModel, type RelayWorker } from "@/lib/relay"
+import { fetchAnalyserWorkers, type RelayModel, type RelayWorker } from "@/lib/integrations/relay"
 
 // AUTH. List the signed-in user's active (non-revoked) workers, enriched
 // with live connection state from the analyser. The analyser lookup is

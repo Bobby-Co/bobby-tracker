@@ -2,9 +2,9 @@
 
 import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
-import { NewProjectButton } from "@/components/new-project-button"
-import { NewGroupButton } from "@/components/new-group-button"
-import { ProjectTile } from "@/components/project-tile"
+import { NewProjectButton } from "@/components/projects/new-project-button"
+import { NewGroupButton } from "@/components/groups/new-group-button"
+import { ProjectTile } from "@/components/projects/project-tile"
 import type { Project, ProjectGroup } from "@/lib/supabase/types"
 
 type GroupWithCount = ProjectGroup & { member_count: number }

@@ -1,7 +1,7 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
-import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
+import { requireInviteAccess, resolvePublicSession } from "@/lib/public/public-session"
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
 // POST /api/public-issues/ai-compose

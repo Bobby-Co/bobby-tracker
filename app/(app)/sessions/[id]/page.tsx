@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { useAuth } from "@/lib/auth/auth-context"
 import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
-import { SessionManagePanel } from "@/components/session-manage-panel"
+import { SessionManagePanel } from "@/components/sessions/session-manage-panel"
 
 interface ProjectOption {
     id: string
