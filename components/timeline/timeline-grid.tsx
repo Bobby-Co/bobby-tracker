@@ -15,6 +15,7 @@ import {
     boardOrigin,
     cellToSchedule,
     issueToCell,
+    rowToLane,
 } from "@/lib/timeline/grid"
 import type {
     Issue,
@@ -46,6 +47,7 @@ export function TimelineGrid({
     onTileClick,
     focusIssueId = null,
     onPersisted,
+    initialTileRows,
 }: {
     projectId: string
     issues: Issue[]
@@ -56,6 +58,10 @@ export function TimelineGrid({
     /** Called after schedule edits flush to the server so the owner
      *  can revalidate its fetched data (useApi refetch). */
     onPersisted?: () => void
+    /** Seed tile heights (issue id → lane count, 1..MAX_TILE_ROWS).
+     *  Height is view-local (there's no schedule field for it yet), so
+     *  this lets a caller open the board with some tiles pre-expanded. */
+    initialTileRows?: Record<string, number>
 }) {
     const { local, commitSchedule } = useScheduleSync(projectId, issues, onPersisted)
 
@@ -234,7 +240,29 @@ export function TimelineGrid({
 
     // "Armed" tray brick — click-to-place flow (see onViewportPointerUp).
     const [armed, setArmed] = useState<string | null>(null)
-    const [resize, setResize] = useState<{ id: string; days: number } | null>(null)
+    // The drag / resize gesture in flight. Neighbours are pushed clear of
+    // it live (see `displace`) so tiles can never end up overlapping.
+    const [active, setActive] = useState<Active | null>(null)
+    // Per-tile lane height (1..MAX_TILE_ROWS), keyed by issue id. Kept in
+    // view state rather than the schedule because there's no persisted
+    // field for it — a taller tile just reveals more of its issue.
+    const [tileRows, setTileRows] = useState<Record<string, number>>(() => ({ ...initialTileRows }))
+    function setTileRowSpan(id: string, r: number) {
+        setTileRows((prev) => (prev[id] === r ? prev : { ...prev, [id]: r }))
+    }
+    const tileSpan = (id: string) => Math.max(1, Math.min(MAX_TILE_ROWS, tileRows[id] ?? 1))
+
+    // Footprint (column span × lane span) of every scheduled tile — the
+    // input to collision resolution, shared by placement, drag and resize.
+    const cells = new Map<string, Footprint>()
+    for (const i of scheduled) {
+        const c = issueToCell(i, originMs, rows)
+        if (c) cells.set(i.id, { col: c.col, row: c.row, days: c.days, span: tileSpan(i.id) })
+    }
+    // Live push: while a tile is dragged / resized, where its displaced
+    // neighbours should sit. Empty when nothing is in flight.
+    const displace = active ? pushNeighbours(cells, active) : EMPTY_DISPLACE
+
     const [grabbing, setGrabbing] = useState(false)
     // Snapped target cell shown while dragging a tray brick onto the board.
     const [dropPreview, setDropPreview] = useState<{ col: number; row: number } | null>(null)
@@ -278,9 +306,16 @@ export function TimelineGrid({
     }
 
     function placeAt(issueId: string, col: number, row: number, days = 1) {
+        const span = tileSpan(issueId)
         const c = Math.max(0, Math.min(col, cols - days))
         const r = Math.max(0, Math.min(row, rows - 1))
+        // Shove any tiles this placement lands on out of the way, so a tray
+        // drop / click-to-place can never overlap an existing brick.
+        const map = new Map(cells)
+        map.set(issueId, { col: c, row: r, days, span })
+        const pushed = pushNeighbours(map, { id: issueId, kind: "move", col: c, row: r, days, span })
         commitSchedule(issueId, cellToSchedule(c, r, days, originMs, rows))
+        for (const [bid, nextRow] of pushed) commitSchedule(bid, { lane_y: rowToLane(nextRow, rows) })
         return { c, r }
     }
 
@@ -417,6 +452,31 @@ export function TimelineGrid({
         return <div className="skeleton min-h-0 flex-1 rounded-[16px]" />
     }
 
+    // --- Interaction plumbing: a tile reports its live footprint as it is
+    // dragged or resized; we mirror it in `active` (driving the neighbour
+    // push) and, on release, commit the tile plus every shifted neighbour.
+    function beginInteract(id: string, kind: Active["kind"], fp: Footprint) {
+        setActive({ id, kind, ...fp })
+    }
+    function updateInteract(id: string, kind: Active["kind"], fp: Footprint) {
+        setActive({ id, kind, ...fp })
+    }
+    function endInteract(id: string, kind: Active["kind"], fp: Footprint) {
+        const finalDisplace = pushNeighbours(cells, { id, kind, ...fp })
+        // Move / duration changes touch the schedule; a pure height drag
+        // ("y") only changes view-local lane height.
+        if (kind !== "y") {
+            const col = Math.max(0, Math.min(fp.col, cols - fp.days))
+            const row = Math.max(0, Math.min(fp.row, rows - 1))
+            commitSchedule(id, cellToSchedule(col, row, fp.days, originMs, rows))
+        }
+        setTileRowSpan(id, fp.span)
+        for (const [bid, nextRow] of finalDisplace) {
+            commitSchedule(bid, { lane_y: rowToLane(nextRow, rows) })
+        }
+        setActive(null)
+    }
+
     return (
         <div
             ref={viewportRef}
@@ -462,31 +522,32 @@ export function TimelineGrid({
                     />
                 )}
 
-                {scheduled.map((issue) => (
-                    <Brick
-                        key={issue.id}
-                        issue={issue}
-                        originMs={originMs}
-                        cols={cols}
-                        rows={rows}
-                        cell={cell}
-                        colorOverrides={colorOverrides}
-                        labelIconMap={labelIconMap}
-                        resizeDays={resize?.id === issue.id ? resize.days : null}
-                        onMove={(col, row, days) => placeAt(issue.id, col, row, days)}
-                        onResizeStart={(days) => setResize({ id: issue.id, days })}
-                        onResizePreview={(days) => setResize({ id: issue.id, days })}
-                        onResizeEnd={(days) => {
-                            setResize(null)
-                            const c = issueToCell(issue, originMs, rows)
-                            if (c) placeAt(issue.id, c.col, c.row, days)
-                        }}
-                        onClick={() => onTileClick?.(issue)}
-                        onUnschedule={() =>
-                            commitSchedule(issue.id, { starts_at: null, ends_at: null, lane_y: null })
-                        }
-                    />
-                ))}
+                {scheduled.map((issue) => {
+                    const isActive = active?.id === issue.id
+                    return (
+                        <Brick
+                            key={issue.id}
+                            issue={issue}
+                            originMs={originMs}
+                            cols={cols}
+                            rows={rows}
+                            cell={cell}
+                            colorOverrides={colorOverrides}
+                            labelIconMap={labelIconMap}
+                            rowSpan={isActive ? active!.span : tileSpan(issue.id)}
+                            daysOverride={isActive && active!.kind !== "y" ? active!.days : null}
+                            rowOverride={displace.get(issue.id) ?? null}
+                            isActive={isActive}
+                            onInteractStart={(kind, fp) => beginInteract(issue.id, kind, fp)}
+                            onInteractMove={(kind, fp) => updateInteract(issue.id, kind, fp)}
+                            onInteractEnd={(kind, fp) => endInteract(issue.id, kind, fp)}
+                            onClick={() => onTileClick?.(issue)}
+                            onUnschedule={() =>
+                                commitSchedule(issue.id, { starts_at: null, ends_at: null, lane_y: null })
+                            }
+                        />
+                    )
+                })}
             </div>
 
             {/* Pinned date header — stays at the top; columns scale with
@@ -671,6 +732,21 @@ function ZoomBtn({ label, onClick }: { label: string; onClick: () => void }) {
 const DAY = 24 * 60 * 60 * 1000
 const ZOOM_MIN = 0.4
 const ZOOM_MAX = 2.5
+// A tile can be dragged from 1 lane tall up to this many, revealing
+// more of the issue as it grows: 1 = header only, 2 = + description,
+// 3 = + image thumbnails.
+const MAX_TILE_ROWS = 3
+
+// A brick is never narrower than this. Anything shorter reserves the
+// extra columns and overflows its label onto a detached piece. The
+// persisted schedule always uses the true duration. Exported so the
+// preview packer reserves the same footprint and nothing overlaps.
+export const MIN_TILE_COLS = 4
+
+// The columns a brick occupies on the board (collision + layout).
+export function tileCols(days: number): number {
+    return Math.max(days, MIN_TILE_COLS)
+}
 
 // Effective (continuous) cell size for a given zoom. Kept fractional so
 // zooming animates smoothly — the integer version snapped in whole-pixel
@@ -687,6 +763,61 @@ function cellFor(zoom: number): number {
 function fin(n: number): number {
     return Number.isFinite(n) ? n : 0
 }
+
+// A tile's occupied footprint on the board: a column range [col, col+days)
+// crossed with a lane range [row, row+span). Two tiles overlap iff both
+// ranges intersect.
+interface Footprint { col: number; row: number; days: number; span: number }
+// The live drag / resize gesture in flight, so neighbours can be pushed
+// clear of the tile the user is moving or growing.
+type InteractKind = "move" | "x" | "y" | "xy"
+interface Active extends Footprint { id: string; kind: InteractKind }
+
+function timeOverlap(a: Footprint, b: Footprint): boolean {
+    // Compare reserved widths, not raw durations, so two short tiles
+    // whose readable minimums would overlap are kept apart.
+    return a.col < b.col + tileCols(b.days) && b.col < a.col + tileCols(a.days)
+}
+function laneOverlap(a: Footprint, b: Footprint): boolean {
+    return a.row < b.row + b.span && b.row < a.row + a.span
+}
+
+// Resolve collisions for the tile the user is manipulating: keep it where
+// they put it, and shove every tile it now overlaps DOWN into the next
+// free lane, cascading (a pushed tile can push the next). Columns are time
+// and never move — only lanes shift. Returns the pushed rows keyed by id
+// (the active tile is the anchor and is never in the result). Pure, so it
+// drives both the live preview and the on-release commit.
+function pushNeighbours(cells: Map<string, Footprint>, active: Active): Map<string, number> {
+    const out = new Map<string, number>()
+    const work = new Map<string, Footprint>()
+    for (const [id, c] of cells) work.set(id, { ...c })
+    const anchor = work.get(active.id)
+    if (!anchor) return out
+    anchor.col = active.col
+    anchor.row = active.row
+    anchor.days = active.days
+    anchor.span = active.span
+    const queue = [active.id]
+    let guard = 0
+    while (queue.length && guard++ < 4000) {
+        const A = work.get(queue.shift()!)!
+        for (const [bid, B] of work) {
+            if (bid === active.id || B === A) continue
+            if (timeOverlap(A, B) && laneOverlap(A, B)) {
+                const nextRow = A.row + A.span
+                if (nextRow > B.row) {
+                    B.row = nextRow
+                    out.set(bid, nextRow)
+                    queue.push(bid)
+                }
+            }
+        }
+    }
+    return out
+}
+
+const EMPTY_DISPLACE: Map<string, number> = new Map()
 const MONTH_ROW_H = 28
 const WEEK_ROW_H = 24
 const DAY_ROW_H = 44
@@ -832,11 +963,13 @@ function Brick({
     cell,
     colorOverrides,
     labelIconMap,
-    resizeDays,
-    onMove,
-    onResizeStart,
-    onResizePreview,
-    onResizeEnd,
+    rowSpan,
+    daysOverride,
+    rowOverride,
+    isActive,
+    onInteractStart,
+    onInteractMove,
+    onInteractEnd,
     onClick,
     onUnschedule,
 }: {
@@ -847,16 +980,26 @@ function Brick({
     cell: number
     colorOverrides: Partial<Record<IssueStatus, string>>
     labelIconMap: Map<string, ProjectLabelIcon>
-    resizeDays: number | null
-    onMove: (col: number, row: number, days: number) => void
-    onResizeStart: (days: number) => void
-    onResizePreview: (days: number) => void
-    onResizeEnd: (days: number) => void
+    rowSpan: number
+    /** Live duration while resizing width; null = use the stored span. */
+    daysOverride: number | null
+    /** Lane this tile is pushed to while a neighbour is dragged; null =
+     *  sit at its own stored lane. */
+    rowOverride: number | null
+    /** This tile is the one being dragged / resized right now. */
+    isActive: boolean
+    onInteractStart: (kind: InteractKind, fp: Footprint) => void
+    onInteractMove: (kind: InteractKind, fp: Footprint) => void
+    onInteractEnd: (kind: InteractKind, fp: Footprint) => void
     onClick: () => void
     onUnschedule: () => void
 }) {
     const slot = issueToCell(issue, originMs, rows)
-    const days = resizeDays ?? slot?.days ?? 1
+    const days = daysOverride ?? slot?.days ?? 1
+    const images = useMemo(() => extractImages(issue.body), [issue.body])
+    // Snapped cell last reported during a move drag, so we only push
+    // parent state when the tile crosses into a new cell (not per pixel).
+    const lastCell = useRef({ col: 0, row: 0 })
 
     const x = useMotionValue(0)
     const y = useMotionValue(0)
@@ -882,36 +1025,103 @@ function Brick({
     const iconSize = clamp(cell * 0.3, 9, 16)
     const titleFont = clamp(cell * 0.3, 8, 15)
     const numFont = clamp(cell * 0.24, 7, 12)
+    const descFont = clamp(cell * 0.26, 8, 12)
+    const imgH = clamp(cell * 0.9, 18, 54)
+    const gw = Math.max(8, cell * 0.28)
+    // Height of the stud row. The label sits below it on a normal brick but
+    // the overlay spans the full tile, so the overlay is offset by this much
+    // to keep the title's vertical centre identical across the switch.
+    const studBand = studSize + 4
+    // Content tiers: 2+ lanes reveal the description, 3 lanes also show
+    // image thumbnails pulled from the body.
+    const isTall = rowSpan >= 2
+    const isXL = rowSpan >= 3
+    const descText = isTall ? stripImages(issue.body) : ""
+
+    // Width: the real duration, or the readable minimum for a narrow tile.
+    // The span past the true duration is a faint, dashed "reserved" piece
+    // — not scheduled time — and the label overflows onto it (dark text)
+    // so a one/two-day tile stays legible. Wider tiles get no piece.
+    const visualCols = tileCols(days)
+    const trueW = days * cell
+    const visW = visualCols * cell
+    const hasPad = visualCols > days
+    const labelOnPad = hasPad
+    // Kept translucent (not an opaque fill) so the grid shows through and
+    // the reserved piece reads as a detached ghost, not solid tile area.
+    const faintBg = `color-mix(in srgb, ${fill} 8%, transparent)`
+    const dashColor = `color-mix(in srgb, ${fill} 50%, transparent)`
+    // Two-tone title: the label is ONE text run overlaid across both
+    // pieces. A hard-stop gradient painted through `background-clip: text`
+    // is the "inverse mask" — the text is the brick's foreground colour up
+    // to the seam pixel, then flips to dark where it hangs over the faint
+    // detached piece. seamX is the seam measured from the title's own left
+    // (after the icon), so characters land in the right colour.
+    // The icon's slot. `padL` is the icon's own left margin; a wider tile
+    // then adds `iconGap` so the title sits a comfortable distance away,
+    // while a one-cell tile fills the whole cell (title shifts onto the
+    // tail). The icon is left-aligned in the slot so its margin is stable.
+    const padL = Math.max(5, cell * 0.13)
+    const iconGap = Math.max(8, cell * 0.2)
+    const iconSlotW = trueW > cell ? padL + iconBox + iconGap : cell
+    const titleLeft = iconSlotW
+    const titleSeamX = Math.max(0, trueW - titleLeft)
+    const titleGradient = `linear-gradient(90deg, ${fg} 0, ${fg} ${titleSeamX}px, var(--c-text) ${titleSeamX}px, var(--c-text) 100%)`
+    // On a one-cell tile the title sits inside the reserved box, so inset
+    // it (gap + the box's own right padding) to balance against the #num's
+    // right margin. Wider tiles ride the brick and need none. Transitioned.
+    const titlePad = trueW > cell ? 0 : Math.max(9, cell * 0.2)
+
+    // How many whole description lines actually fit in a tall tile, so it
+    // clamps at a line boundary (ellipsis on the brick, clean cut on the
+    // overlay) instead of slicing a line in half at the bottom edge.
+    const descLineH = descFont * 1.375 // leading-snug
+    const descAbove = studBand + iconBox + 6
+    const descBelow = (isXL && images.length > 0 ? imgH + 6 : 0) + Math.max(5, cell * 0.16)
+    const descLines = Math.max(1, Math.floor((rowSpan * cell - descAbove - descBelow) / descLineH))
 
     function handleDragEnd(_: unknown, info: PanInfo) {
         const dCol = Math.round(info.offset.x / cell)
         const dRow = Math.round(info.offset.y / cell)
-        if (dCol !== 0 || dRow !== 0) onMove(slot!.col + dCol, slot!.row + dRow, days)
+        onInteractEnd("move", { col: slot!.col + dCol, row: slot!.row + dRow, days: slot!.days, span: rowSpan })
         // commit ran flushSync, so left/top already reflect the new
         // cell — drop the transform without animating.
         x.set(0)
         y.set(0)
     }
 
-    // Resize grip — native pointer events, snaps to whole cells.
-    // Resize the tile by dragging the right grip. stopPropagation keeps
-    // the body's drag from starting (so the tile stays put and grows);
-    // the gesture is tracked on window so it never loses pointerup.
-    function onGripDown(e: React.PointerEvent) {
+    // Resize grips — native pointer events, snap to whole cells. The
+    // axis picks which dimensions move: "x" the duration (days, right
+    // edge), "y" the height (lanes, bottom edge), "xy" both (corner).
+    // stopPropagation keeps the body's move-drag from starting so the
+    // tile grows in place; the gesture is tracked on window so it never
+    // loses pointerup.
+    function startResize(e: React.PointerEvent, axis: "x" | "y" | "xy") {
         e.stopPropagation()
         e.preventDefault()
         const startX = e.clientX
+        const startY = e.clientY
         const baseDays = slot!.days
+        const baseRows = rowSpan
         const col = slot!.col
+        const row = slot!.row
         const nextDays = (clientX: number) =>
             Math.max(MIN_DURATION_DAYS, Math.min(baseDays + Math.round((clientX - startX) / cell), cols - col))
-        onResizeStart(baseDays)
-        function move(ev: PointerEvent) { onResizePreview(nextDays(ev.clientX)) }
+        const nextRows = (clientY: number) =>
+            Math.max(1, Math.min(MAX_TILE_ROWS, baseRows + Math.round((clientY - startY) / cell)))
+        const fpAt = (ev: PointerEvent): Footprint => ({
+            col,
+            row,
+            days: axis === "y" ? baseDays : nextDays(ev.clientX),
+            span: axis === "x" ? baseRows : nextRows(ev.clientY),
+        })
+        onInteractStart(axis, { col, row, days: baseDays, span: baseRows })
+        function move(ev: PointerEvent) { onInteractMove(axis, fpAt(ev)) }
         function end(ev: PointerEvent) {
             window.removeEventListener("pointermove", move)
             window.removeEventListener("pointerup", end)
             window.removeEventListener("pointercancel", end)
-            onResizeEnd(nextDays(ev.clientX))
+            onInteractEnd(axis, fpAt(ev))
         }
         window.addEventListener("pointermove", move)
         window.addEventListener("pointerup", end)
@@ -928,13 +1138,27 @@ function Brick({
             dragElastic={0}
             dragSnapToOrigin={false}
             whileDrag={{ scale: 1.04, zIndex: 40 }}
-            onDragStart={() => { dragged.current = true }}
+            onDragStart={() => {
+                dragged.current = true
+                lastCell.current = { col: slot.col, row: slot.row }
+                onInteractStart("move", { col: slot.col, row: slot.row, days: slot.days, span: rowSpan })
+            }}
             onDrag={(_, info) => {
                 // Snap to the grid live: quantize the drag offset to whole
                 // cells so the brick jumps cell-to-cell instead of tracking
                 // the cursor freely.
-                x.set(Math.round(info.offset.x / cell) * cell)
-                y.set(Math.round(info.offset.y / cell) * cell)
+                const dCol = Math.round(info.offset.x / cell)
+                const dRow = Math.round(info.offset.y / cell)
+                x.set(dCol * cell)
+                y.set(dRow * cell)
+                // Report the new footprint only when it crosses into a fresh
+                // cell, so neighbours are pushed without a per-pixel re-render.
+                const col = slot.col + dCol
+                const row = slot.row + dRow
+                if (col !== lastCell.current.col || row !== lastCell.current.row) {
+                    lastCell.current = { col, row }
+                    onInteractMove("move", { col, row, days: slot.days, span: rowSpan })
+                }
             }}
             onDragEnd={handleDragEnd}
             onDoubleClick={(e) => { e.stopPropagation(); onUnschedule() }}
@@ -942,10 +1166,15 @@ function Brick({
                 x, y,
                 position: "absolute",
                 left: fin(slot.col * cell),
-                top: fin(slot.row * cell),
-                width: fin(days * cell),
-                height: fin(cell),
+                top: fin((rowOverride ?? slot.row) * cell),
+                width: fin(visW),
+                height: fin(rowSpan * cell),
                 padding: inset,
+                // A pushed neighbour glides to its new lane. The active tile
+                // is positioned by the framer transform (drag) or grows in
+                // place (resize), so it must NOT also transition `top`.
+                transition: isActive ? undefined : "top 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                zIndex: isActive ? 40 : rowOverride != null ? 30 : undefined,
             }}
             className="touch-none"
             title={`${issue.title} • #${issue.issue_number}`}
@@ -958,42 +1187,194 @@ function Brick({
             <motion.div
                 onPointerDown={(e) => { dragged.current = false; dragControls.start(e) }}
                 onClick={() => { if (dragged.current) { dragged.current = false; return } onClick() }}
-                className="relative flex h-full w-full cursor-grab flex-col overflow-hidden active:cursor-grabbing"
-                style={{
-                    background: fill,
-                    color: fg,
-                    borderRadius: radius,
-                    boxShadow: `inset 0 1px 0 ${shade(fill, 0.22)}, inset 0 -3px 0 ${shade(fill, -0.16)}, 0 1px 2px rgba(15,23,42,0.25)`,
-                }}
+                className="relative flex h-full w-full cursor-grab items-stretch gap-[3px] active:cursor-grabbing"
             >
-                {/* Studs */}
-                <div className="flex items-center px-1.5 pt-1" style={{ gap: studSize * 0.6 }}>
-                    {Array.from({ length: Math.max(1, Math.min(days * 2, 6)) }, (_, i) => (
-                        <span
-                            key={i}
-                            className="rounded-full"
-                            style={{ width: studSize, height: studSize, background: shade(fill, 0.28), boxShadow: `inset 0 -1px 0 ${shade(fill, -0.2)}` }}
-                        />
-                    ))}
-                </div>
-                {/* Label */}
-                <div className="flex min-h-0 flex-1 items-center gap-1 px-1.5 pb-0.5">
-                    <span className="grid shrink-0 place-items-center rounded-[3px] bg-white/25" style={{ width: iconBox, height: iconBox }}>
-                        <IconlyIcon name={iconName} size={Math.round(iconSize)} />
-                    </span>
-                    <span className="min-w-0 flex-1 truncate font-bold leading-none" style={{ fontSize: titleFont }}>
-                        {issue.title}
-                    </span>
-                    <span className="shrink-0 font-mono opacity-80" style={{ fontSize: numFont }}>#{issue.issue_number}</span>
+                {/* Solid brick — the real task; its width IS the true
+                    duration. A bottom bevel reads as a physical LEGO piece. */}
+                <div
+                    className="relative flex shrink-0 flex-col overflow-hidden"
+                    style={{
+                        width: hasPad ? fin(trueW) : "100%",
+                        background: fill,
+                        color: fg,
+                        borderRadius: radius,
+                        boxShadow: `inset 0 1px 0 ${shade(fill, 0.22)}, inset 0 -3px 0 ${shade(fill, -0.16)}, 0 1px 2px rgba(15,23,42,0.25)`,
+                    }}
+                >
+                    {/* Studs */}
+                    <div className="flex items-center px-1.5 pt-1" style={{ gap: studSize * 0.6 }}>
+                        {Array.from({ length: Math.max(1, Math.min(days * 2, 6)) }, (_, i) => (
+                            <span key={i} className="rounded-full" style={{ width: studSize, height: studSize, background: shade(fill, 0.28), boxShadow: `inset 0 -1px 0 ${shade(fill, -0.2)}` }} />
+                        ))}
+                    </div>
+                    {labelOnPad ? (
+                        // Narrow tile: the icon, two-tone title AND description
+                        // are one overlay spanning both pieces (see below), so
+                        // the brick itself is just the coloured bar.
+                        <div className="min-h-0 flex-1" />
+                    ) : (
+                        <div className={cn("flex min-h-0 flex-1 flex-col pr-1.5", isTall ? "gap-1 pb-1 pt-0.5" : "justify-center pb-0.5")}>
+                            <div className="flex items-center">
+                                {/* First cell — reserved for the icon, matching
+                                    the narrow tiles so every tile lines up. */}
+                                <div className={cn("flex shrink-0 items-center", trueW > cell ? "justify-start" : "justify-center")} style={{ width: fin(iconSlotW), paddingLeft: trueW > cell ? padL : 0 }}>
+                                    <span className="grid place-items-center rounded-[3px] bg-white/25" style={{ width: iconBox, height: iconBox }}>
+                                        <IconlyIcon name={iconName} size={Math.round(iconSize)} color={fg} secondColor={fg} />
+                                    </span>
+                                </div>
+                                <span className="min-w-0 flex-1 truncate font-bold leading-none" style={{ fontSize: titleFont, paddingLeft: titlePad, transition: "padding-left 260ms cubic-bezier(0.22, 1, 0.36, 1)" }}>
+                                    {issue.title}
+                                </span>
+                                <span className="shrink-0 pl-1 font-mono opacity-80" style={{ fontSize: numFont }}>#{issue.issue_number}</span>
+                            </div>
+                            {isTall && (
+                                <p
+                                    className="min-w-0 overflow-hidden pl-1.5 font-medium leading-snug opacity-80"
+                                    style={{ fontSize: descFont, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: descLines }}
+                                >
+                                    {descText || "No description yet."}
+                                </p>
+                            )}
+                            {isXL && images.length > 0 && (
+                                <div className="mt-auto flex items-center gap-1 overflow-hidden pl-1.5 pt-0.5">
+                                    {images.slice(0, 4).map((src, i) => (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img key={i} src={src} alt="" draggable={false} className="shrink-0 rounded object-cover ring-1 ring-white/25" style={{ height: imgH, width: imgH * 1.4 }} />
+                                    ))}
+                                    {images.length > 4 && (
+                                        <span className="shrink-0 rounded bg-white/25 px-1 font-bold" style={{ fontSize: numFont }}>+{images.length - 4}</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                {/* Resize grip */}
+                {/* Reserved piece — a DETACHED, dashed, ghosted extension
+                    (note the gap + translucent fill): the tile does NOT
+                    really occupy this time, the room is only borrowed so a
+                    short tile's label stays readable. On narrow tiles the
+                    label renders here, in dark text. */}
+                {hasPad && (
+                    <div
+                        className="relative flex min-w-0 flex-1 overflow-hidden"
+                        style={{ borderRadius: radius, border: `1.5px dashed ${dashColor}`, background: faintBg }}
+                    />
+                )}
+
+                {/* Two-tone label overlay (narrow tiles) — the icon plus ONE
+                    real title text run spanning both pieces. A hard-stop
+                    gradient painted through background-clip:text is the
+                    inverse mask: foreground colour over the brick, dark where
+                    it overflows onto the faint detached piece. Pointer-events
+                    off so drags / clicks fall through to the body. */}
+                {labelOnPad && (
+                    <div
+                        className="pointer-events-none absolute inset-0 flex flex-col overflow-hidden pr-1.5"
+                        style={{
+                            justifyContent: isTall ? "flex-start" : "center",
+                            // Match the normal layout, where the label sits
+                            // below the stud row, so switching modes doesn't
+                            // shift the title vertically. A tall tile keeps a
+                            // bottom pad so the description/images never run to
+                            // the edge (overflow-hidden clips the rest).
+                            paddingTop: isTall ? studBand + 2 : studBand,
+                            paddingBottom: isTall ? Math.max(5, cell * 0.16) : 2,
+                        }}
+                    >
+                        <div className="flex items-center">
+                            {/* First cell — reserved for the icon only, so the
+                                title starts at cell two and shifts fully onto
+                                the reserved piece on a one-day tile. */}
+                            <div className={cn("flex shrink-0 items-center", trueW > cell ? "justify-start" : "justify-center")} style={{ width: fin(iconSlotW), paddingLeft: trueW > cell ? padL : 0 }}>
+                                <span className="grid place-items-center rounded-[3px] bg-white/25" style={{ width: iconBox, height: iconBox }}>
+                                    <IconlyIcon name={iconName} size={Math.round(iconSize)} color={fg} secondColor={fg} />
+                                </span>
+                            </div>
+                            <span
+                                className="min-w-0 flex-1 truncate font-bold leading-none"
+                                style={{
+                                    fontSize: titleFont,
+                                    paddingLeft: titlePad,
+                                    transition: "padding-left 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+                                    color: "transparent",
+                                    WebkitTextFillColor: "transparent",
+                                    backgroundImage: titleGradient,
+                                    WebkitBackgroundClip: "text",
+                                    backgroundClip: "text",
+                                }}
+                            >
+                                {issue.title}
+                            </span>
+                            <span className="shrink-0 pl-1 font-mono text-[color:var(--c-text-muted)]" style={{ fontSize: numFont }}>#{issue.issue_number}</span>
+                        </div>
+                        {/* Description overflows the same way the title does:
+                            one run across both pieces, foreground over the
+                            brick and dark over the tail (same gradient mask).
+                            overflow+maxHeight clamps it (line-clamp can't
+                            combine with background-clip:text). */}
+                        {isTall && (
+                            <p
+                                className="min-w-0 overflow-hidden font-medium leading-snug"
+                                style={{
+                                    fontSize: descFont,
+                                    marginTop: 2,
+                                    marginLeft: fin(titleLeft),
+                                    paddingLeft: titlePad,
+                                    maxHeight: descLines * descLineH,
+                                    color: "transparent",
+                                    WebkitTextFillColor: "transparent",
+                                    backgroundImage: titleGradient,
+                                    WebkitBackgroundClip: "text",
+                                    backgroundClip: "text",
+                                }}
+                            >
+                                {descText || "No description yet."}
+                            </p>
+                        )}
+                        {isXL && images.length > 0 && (
+                            <div className="mt-auto flex items-center gap-1 overflow-hidden pt-0.5" style={{ marginLeft: fin(titleLeft), paddingLeft: titlePad }}>
+                                {images.slice(0, 4).map((src, i) => (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img key={i} src={src} alt="" draggable={false} className="shrink-0 rounded object-cover ring-1 ring-white/25" style={{ height: imgH, width: imgH * 1.4 }} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Resize grips — right edge lengthens the duration, the
+                    bottom edge grows the height (up to MAX_TILE_ROWS
+                    lanes), the corner does both at once. */}
                 <div
-                    onPointerDown={onGripDown}
-                    className="absolute right-0 top-0 h-full cursor-ew-resize"
-                    style={{ width: Math.max(8, cell * 0.28), touchAction: "none" }}
+                    onPointerDown={(e) => startResize(e, "x")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-0 h-full cursor-ew-resize"
+                    style={{ left: fin(trueW - gw), width: gw, touchAction: "none" }}
                 >
-                    <div className="absolute right-[2px] top-1/2 w-[2px] -translate-y-1/2 rounded-full bg-white/45" style={{ height: cell * 0.35 }} />
+                    {/* Tick anchored to the top edge so it clears the title
+                        (which sits lower) — the full-height area below still
+                        grabs to resize. */}
+                    <div className="absolute right-[2px] top-[3px] w-[2px] rounded-full bg-white/45" style={{ height: Math.max(6, cell * 0.26) }} />
+                </div>
+                <div
+                    onPointerDown={(e) => startResize(e, "y")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute bottom-0 left-0 cursor-ns-resize"
+                    style={{ height: gw, right: gw, touchAction: "none" }}
+                >
+                    <div className="absolute bottom-[2px] left-1/2 h-[2px] -translate-x-1/2 rounded-full bg-white/45" style={{ width: cell * 0.35 }} />
+                </div>
+                <div
+                    onPointerDown={(e) => startResize(e, "xy")}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute bottom-0 right-0 cursor-nwse-resize"
+                    style={{ width: gw, height: gw, touchAction: "none" }}
+                >
+                    <div
+                        className="absolute bottom-[3px] right-[3px] rounded-[1px] border-b-2 border-r-2 border-white/55"
+                        style={{ width: Math.max(4, gw * 0.42), height: Math.max(4, gw * 0.42) }}
+                    />
                 </div>
             </motion.div>
         </motion.div>
@@ -1140,6 +1521,25 @@ function TrayBrick({
 }
 
 // ---------------------------------------------------------------------------
+
+// Pull image URLs out of a markdown issue body (`![alt](url)`), so a
+// tall tile can surface them as thumbnails. Capped so a body full of
+// images can't blow up the render.
+function extractImages(md: string): string[] {
+    if (!md) return []
+    const out: string[] = []
+    const re = /!\[[^\]]*\]\(\s*([^)\s]+)[^)]*\)/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(md)) !== null && out.length < 8) out.push(m[1])
+    return out
+}
+
+// The body with image markdown stripped + whitespace collapsed, for the
+// one-glance description snippet under the title.
+function stripImages(md: string): string {
+    if (!md) return ""
+    return md.replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\s+/g, " ").trim()
+}
 
 // Lighten (amt > 0) or darken (amt < 0) a #rrggbb colour for the
 // brick stud / bevel shades.
