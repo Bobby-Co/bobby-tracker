@@ -228,6 +228,55 @@ export async function analyseIssue(input: IssueAnalyseInput): Promise<IssueAnaly
     return (await res.json()) as IssueAnalysis
 }
 
+// runIssueAnalysis kicks off a DETACHED, cancellable analysis on the analyser
+// (POST /issues/analyse/run) and returns immediately (~50ms). The analyser runs
+// the analysis in its own goroutine — surviving the caller disconnecting — and
+// POSTs the terminal result to `callback.url` with `Authorization: Bearer
+// callback.token`. `taskId` correlates the callback and lets us cancel the run.
+export async function runIssueAnalysis(
+    input: IssueAnalyseInput,
+    taskId: string,
+    callback: { url: string; token?: string },
+): Promise<void> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/issues/analyse/run`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+            ...(input.userId ? { "X-Bobby-User": input.userId } : {}),
+        },
+        body: JSON.stringify({
+            repo_id: input.repoId,
+            title: input.title,
+            body: input.body,
+            labels: input.labels,
+            priority: input.priority,
+            effort: input.effort,
+            max_budget_usd: input.maxBudgetUsd,
+            task_id: taskId,
+            callback,
+        }),
+    })
+    if (!res.ok && res.status !== 202) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `analyse/run failed: HTTP ${res.status}`, err.code || "analyse_run_failed")
+    }
+}
+
+// cancelIssueAnalysis cancels an in-flight detached run by task id (POST
+// /issues/analyse/cancel) — e.g. the GitHub issue was closed. Best-effort: a
+// cancel for an already-finished/unknown task is a harmless no-op.
+export async function cancelIssueAnalysis(taskId: string): Promise<void> {
+    const { http } = assertConfigured()
+    await fetch(`${http}/issues/analyse/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ task_id: taskId }),
+    }).catch(() => {})
+}
+
 // ─── /issues/preferences (per-project analyse defaults) ─────────────────────
 
 export interface IssuePreferences {

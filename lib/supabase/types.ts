@@ -17,9 +17,31 @@ export interface Project {
     repo_url: string
     repo_full_name: string | null
     description: string | null
+    /** GitHub App installation whose token can act on this project's
+     *  repo. Set by the install callback. Null until connected. */
+    github_installation_id: number | null
+    /** GitHub numeric repo id (stable across renames/transfers) — the
+     *  join key for routing inbound `issues` webhooks to this project.
+     *  Enforced unique-per-repo by a partial index. Null until linked. */
+    github_repo_id: number | null
+    /** Master toggle for two-way GitHub issue sync. Orthogonal to
+     *  project_analyser.enabled — gates both inbound routing and
+     *  outbound pushes. */
+    github_sync_enabled: boolean
+    /** Direction issues flow when sync is enabled: 'inbound' = GitHub →
+     *  ucelot only, 'outbound' = ucelot → GitHub only, 'both' = full
+     *  two-way (default). */
+    github_sync_direction: "inbound" | "outbound" | "both"
+    /** When true (and the direction allows it), deleting an issue on one
+     *  side deletes/closes it on the other. Destructive → default false. */
+    github_sync_deletes: boolean
     created_at: string
     updated_at: string
 }
+
+/** Allowed values for github_sync_direction. */
+export const GITHUB_SYNC_DIRECTIONS = ["inbound", "outbound", "both"] as const
+export type GithubSyncDirection = (typeof GITHUB_SYNC_DIRECTIONS)[number]
 
 /** GitHub OAuth provider token captured at sign-in. One row per user;
  *  upserted by the auth callback. Used to list the user's repos in the
@@ -32,6 +54,29 @@ export interface GithubToken {
     scopes: string | null
     provider_user_id: string | null
     provider_login: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** A "Bobby" GitHub App installation. Created by the install callback
+ *  (which sets user_id) and kept current by the `installation` webhook.
+ *  Holds the installation-token cache (cached_token/token_expires_at)
+ *  used by lib/github-app.ts to avoid re-minting a token per request.
+ *  suspended_at / deleted_at are soft-delete lifecycle markers. */
+export interface GithubInstallation {
+    installation_id: number
+    /** Set only by the install callback (the one flow that knows the
+     *  tracker user); null for installations only seen via webhook. */
+    user_id: string | null
+    account_login: string | null
+    account_type: string | null
+    account_id: number | null
+    /** Cached installation access token (short-lived) + its expiry;
+     *  re-minted with a 5-min margin. Null until first mint. */
+    cached_token: string | null
+    token_expires_at: string | null
+    suspended_at: string | null
+    deleted_at: string | null
     created_at: string
     updated_at: string
 }
@@ -62,6 +107,25 @@ export interface Issue {
     labels: string[]
     github_issue_number: number | null
     github_node_id: string | null
+    /** Which side last wrote this row. Null for issues never synced to
+     *  GitHub. Drives provenance display and, with last_synced_hash,
+     *  echo suppression. */
+    sync_source: "tracker" | "github" | null
+    /** syncHash(normalized title|body|state) of the last value we
+     *  pushed to / ingested from GitHub. An inbound webhook whose hash
+     *  equals this is our own echo → dropped. Null until first sync. */
+    last_synced_hash: string | null
+    /** When this issue last round-tripped with GitHub. Null until first
+     *  sync. */
+    github_synced_at: string | null
+    /** GitHub comment id of the "analysing…" placeholder Bobby posts on the
+     *  linked issue; the analyser's result callback edits this comment in
+     *  place. Null until an analysis run starts. */
+    github_analysis_comment_id: number | null
+    /** Lifecycle of the durable, analyser-owned analysis run: 'analysing' →
+     *  'done' | 'failed' | 'cancelled'. Null for issues that never triggered
+     *  an analysis. */
+    analysis_status: "analysing" | "done" | "failed" | "cancelled" | null
     issue_number: number
     /** When this issue was filed via the AI composer flow rather than
      *  the bare new-issue form. Surfaces an "AI" badge in lists. */
