@@ -4,7 +4,7 @@ import { isAnalyseEffort } from "@/lib/analyser"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus, Project, ProjectAnalyser } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"
-import { pushIssueToGithub, startAnalysis } from "@/lib/github-sync"
+import { pushIssueToGithub, ensureAnalysis } from "@/lib/github-sync"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
             // Push first so the issue has its github_issue_number, then start
             // the placeholder-comment + detached analysis run.
             await pushIssueToGithub(issue, project)
-            await startAnalysis(issue.id, origin)
+            await ensureAnalysis(issue.id, origin)
         })
     }
 

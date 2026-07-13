@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { verifyWebhookSignature } from "@/lib/github-app"
-import { allowsInbound, cancelAnalysis, startAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
+import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Issue, Project } from "@/lib/supabase/types"
 
@@ -255,7 +255,7 @@ async function handleIssue(
         // "analysing…" placeholder + start the detached analyser run (no-ops
         // silently when the graph isn't indexed). Off the 202 ack path.
         if (action === "opened" && inserted) {
-            after(() => startAnalysis(inserted.id, origin))
+            after(() => ensureAnalysis(inserted.id, origin))
         }
     }
 

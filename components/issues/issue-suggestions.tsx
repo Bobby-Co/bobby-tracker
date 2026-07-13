@@ -105,6 +105,46 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
         })()
     }
 
+    // ensureInvestigation kicks off (or joins) the SINGLE analysis run for this
+    // issue via /analyse — the same run that feeds the GitHub comment — instead
+    // of starting a separate /suggest run. If a result is already cached it
+    // returns inline; otherwise it arrives via the realtime subscription below,
+    // so we keep `pending` until then.
+    function ensureInvestigation() {
+        setError(null)
+        setErrorCode(null)
+        setPending(true)
+        void (async () => {
+            try {
+                const res = await fetch(`/api/issues/${issueId}/analyse`, { method: "POST" })
+                if (!aliveRef.current) return
+                if (!res.ok) {
+                    const body = await res.json().catch(() => ({}))
+                    setError(body?.error?.message || `Failed (${res.status})`)
+                    setErrorCode(body?.error?.code || "unknown")
+                    setPending(false)
+                    return
+                }
+                const body = (await res.json().catch(() => ({}))) as {
+                    status?: string
+                    suggestion?: IssueSuggestion | null
+                }
+                if (!aliveRef.current) return
+                if (body.suggestion) {
+                    setSuggestion(body.suggestion)
+                    setPending(false)
+                }
+                // started / in_flight → the result lands via the realtime
+                // INSERT subscription below; stay pending until then.
+            } catch (e) {
+                if (!aliveRef.current) return
+                setError(e instanceof Error ? e.message : "Network error")
+                setErrorCode("network_error")
+                setPending(false)
+            }
+        })()
+    }
+
     // Sync the server-rendered prop into local state on changes. Without
     // this, a router.refresh that surfaces a freshly-inserted suggestion
     // (from another tab, cron, etc.) would be ignored because useState
@@ -149,18 +189,17 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     }, [effortOpen])
 
     // Auto-trigger when the issue lands on this page with no cached
-    // suggestion AND the analyser is ready. Fires once per mount so a
-    // user revisiting an unanswered issue gets investigation started
-    // without an extra click. The setState happens via startTransition
-    // inside regenerate(), not synchronously in the effect body — but
-    // the lint rule fires on the call site regardless, so suppress.
+    // suggestion AND the analyser is ready. Fires once per mount so a user
+    // revisiting an unanswered issue gets investigation started without an
+    // extra click. Uses ensureInvestigation() (the shared, idempotent run)
+    // rather than regenerate() so it never duplicates the GitHub-comment run.
     useEffect(() => {
         if (autoFiredRef.current) return
         if (!analyserReady) return
         if (suggestion) return
         autoFiredRef.current = true
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- regenerate() defers via startTransition; this is the right pattern for "kick off when conditions become true"
-        regenerate()
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- ensureInvestigation() sets state after an awaited fetch, not synchronously
+        ensureInvestigation()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [analyserReady, suggestion?.id])
 
@@ -180,7 +219,10 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                     table: "issue_suggestions",
                     filter: `issue_id=eq.${issueId}`,
                 },
-                (payload) => setSuggestion(payload.new as IssueSuggestion),
+                (payload) => {
+                    setSuggestion(payload.new as IssueSuggestion)
+                    setPending(false)
+                },
             )
             .subscribe()
         return () => {
@@ -205,6 +247,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                 const { suggestion: latest } = (await res.json()) as { suggestion: IssueSuggestion | null }
                 if (!latest || cancelled) return
                 setSuggestion(latest)
+                setPending(false)
             } catch {}
         }
         const id = setInterval(tick, 3000)
@@ -331,7 +374,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                         </div>
                     </div>
                     <button
-                        onClick={regenerate}
+                        onClick={suggestion ? regenerate : ensureInvestigation}
                         disabled={pending || !analyserReady}
                         className="btn-primary group relative overflow-hidden"
                         title={!analyserReady ? "Enable and index the project first" : undefined}

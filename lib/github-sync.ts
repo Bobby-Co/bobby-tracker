@@ -363,6 +363,7 @@ type AnalysisIssueRow = {
     labels: string[] | null
     github_issue_number: number | null
     github_analysis_comment_id: number | null
+    analysis_status: string | null
 }
 type AnalysisProjectRow = Pick<Project, "name" | "repo_url" | "repo_full_name" | "description"> & {
     github_installation_id: number | null
@@ -371,16 +372,26 @@ type AnalysisProjectRow = Pick<Project, "name" | "repo_url" | "repo_full_name" |
 }
 
 const ANALYSIS_ISSUE_COLS =
-    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id"
+    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status"
 const ANALYSIS_PROJECT_COLS =
     "name,repo_url,repo_full_name,description,github_installation_id,github_repo_id,github_sync_enabled"
 
-// startAnalysis posts the "analysing…" placeholder and launches the detached
-// analyser run. Gated on the project graph being indexed (skips silently
-// otherwise) and on sync being wired. `origin` is this app's public origin
-// (from the triggering request) — the analyser POSTs its result back to
-// `${origin}/api/internal/analysis-result`.
-export async function startAnalysis(issueId: string, origin: string): Promise<void> {
+// ensureAnalysis kicks off the SINGLE analysis run for an issue and is the one
+// entry point for both surfaces: the tracker's suggestion box (via the
+// issue_suggestions row its callback writes → realtime) and the GitHub comment
+// (posted here, edited by the callback). Idempotent + one-shot — it never
+// starts a second run:
+//   - a run already in flight (analysis_status='analysing') → "in_flight"
+//   - a result already cached (issue_suggestions row exists)  → "done"
+// Otherwise it marks the issue in-flight, posts the "analysing…" placeholder
+// comment WHEN the issue is GitHub-linked and sync is on (skipped for web-only
+// projects), and launches the detached analyser run. Whoever triggers first
+// (webhook, issue create, or the web box opening the issue) wins; the rest
+// no-op. `origin` is this app's public origin (the analyser calls it back).
+export async function ensureAnalysis(
+    issueId: string,
+    origin: string,
+): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue"> {
     const svc = createServiceClient()
 
     const { data: issue } = await svc
@@ -388,41 +399,57 @@ export async function startAnalysis(issueId: string, origin: string): Promise<vo
         .select(ANALYSIS_ISSUE_COLS)
         .eq("id", issueId)
         .maybeSingle<AnalysisIssueRow>()
-    if (!issue || issue.github_issue_number == null) return
+    if (!issue) return "no_issue"
 
-    const { data: project } = await svc
-        .from("projects")
-        .select(ANALYSIS_PROJECT_COLS)
-        .eq("id", issue.project_id)
-        .maybeSingle<AnalysisProjectRow>()
-    if (!project || !syncReady(project)) return
+    // Idempotent / one-shot: don't start a second run.
+    if (issue.analysis_status === "analysing") return "in_flight"
+    const { count } = await svc
+        .from("issue_suggestions")
+        .select("id", { count: "exact", head: true })
+        .eq("issue_id", issueId)
+    if ((count ?? 0) > 0) return "done"
 
     const { data: analyser } = await svc
         .from("project_analyser")
         .select("*")
         .eq("project_id", issue.project_id)
         .maybeSingle<ProjectAnalyser>()
-    // Gate: no placeholder + no run unless the graph is indexed.
-    if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) return
+    // No run unless the graph is indexed.
+    if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) return "not_ready"
 
-    const full = repoFullName(project)
-    if (!full) return
-    const [owner, repo] = full.split("/")
+    const update: Record<string, unknown> = { analysis_status: "analysing" }
 
-    // Placeholder comment → store its id so the callback can edit it in place.
-    const { id: commentId } = await createIssueComment(
-        project.github_installation_id!,
-        owner,
-        repo,
-        issue.github_issue_number,
-        loadingCommentBody({ origin, projectId: issue.project_id, issueId: issue.id }),
-    )
-    await svc
-        .from("issues")
-        .update({ github_analysis_comment_id: commentId, analysis_status: "analysing" })
-        .eq("id", issueId)
+    // Post the "analysing…" placeholder comment only when the issue is
+    // GitHub-linked and sync is on. For web-only projects the analysis still
+    // runs and caches — there's just no GitHub comment.
+    const { data: project } = await svc
+        .from("projects")
+        .select(ANALYSIS_PROJECT_COLS)
+        .eq("id", issue.project_id)
+        .maybeSingle<AnalysisProjectRow>()
+    if (project && syncReady(project) && issue.github_issue_number != null) {
+        const full = repoFullName(project)
+        if (full) {
+            const [owner, repo] = full.split("/")
+            try {
+                const { id: commentId } = await createIssueComment(
+                    project.github_installation_id!,
+                    owner,
+                    repo,
+                    issue.github_issue_number,
+                    loadingCommentBody({ origin, projectId: issue.project_id, issueId: issue.id }),
+                )
+                update.github_analysis_comment_id = commentId
+            } catch {
+                // Comment is best-effort; the analysis still runs + caches.
+            }
+        }
+    }
 
-    // Kick the detached, cancellable analyser run; it calls us back when done.
+    await svc.from("issues").update(update).eq("id", issueId)
+
+    // Kick the single detached run; its callback caches to issue_suggestions
+    // (the web box picks it up via realtime) and edits the GitHub comment.
     await runIssueAnalysis(
         {
             repoId: analyser.graph_id,
@@ -434,6 +461,7 @@ export async function startAnalysis(issueId: string, origin: string): Promise<vo
         issueId,
         { url: `${origin}/api/internal/analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
     )
+    return "started"
 }
 
 // applyAnalysisResult is invoked by /api/internal/analysis-result when the
