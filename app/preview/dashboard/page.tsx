@@ -8,6 +8,8 @@ import type { Project } from "@/lib/supabase/types"
 const mk = (id: string, name: string, repo: string, description: string | null): Project => ({
     id, user_id: "u", name, repo_url: `https://github.com/${repo}`, repo_full_name: repo,
     description, created_at: "2026-06-01T00:00:00.000Z", updated_at: "2026-06-20T00:00:00.000Z",
+    github_installation_id: null, github_repo_id: null, github_sync_enabled: false,
+    github_sync_direction: "both", github_sync_deletes: false,
 })
 
 // Same org (repo owner) → same colour. Varied orgs → varied palette colours.
