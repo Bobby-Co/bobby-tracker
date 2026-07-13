@@ -277,6 +277,78 @@ export async function cancelIssueAnalysis(taskId: string): Promise<void> {
     }).catch(() => {})
 }
 
+// ─── /pr/analyse (agentic PR review) ────────────────────────────────────────
+
+export interface PRAnalyseFile {
+    path: string
+    previous_path?: string
+    status?: string
+    patch?: string
+    additions?: number
+    deletions?: number
+}
+
+export interface PRAnalyseInput {
+    repoId:  string
+    number:  number
+    title:   string
+    body?:   string
+    baseSha?: string
+    headSha?: string
+    files:   PRAnalyseFile[]
+    maxBudgetUsd?: number
+    /** Relay routing (X-Bobby-User); ignored when no worker is connected. */
+    userId?: string
+}
+
+// runPRAnalysis kicks off a DETACHED, cancellable PR review on the analyser
+// (POST /pr/analyse/run) and returns immediately. The analyser runs it in its
+// own goroutine and POSTs the terminal result to `callback.url`. `taskId`
+// correlates the callback and lets us cancel the run.
+export async function runPRAnalysis(
+    input: PRAnalyseInput,
+    taskId: string,
+    callback: { url: string; token?: string },
+): Promise<void> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/pr/analyse/run`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            ...authHeader(),
+            ...(input.userId ? { "X-Bobby-User": input.userId } : {}),
+        },
+        body: JSON.stringify({
+            repo_id: input.repoId,
+            number:  input.number,
+            title:   input.title,
+            body:    input.body,
+            base_sha: input.baseSha,
+            head_sha: input.headSha,
+            files:   input.files,
+            max_budget_usd: input.maxBudgetUsd,
+            task_id: taskId,
+            callback,
+        }),
+    })
+    if (!res.ok && res.status !== 202) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `pr/analyse/run failed: HTTP ${res.status}`, err.code || "pr_run_failed")
+    }
+}
+
+// cancelPRAnalysis cancels an in-flight detached PR run (POST /pr/analyse/cancel)
+// — e.g. the PR was closed. Best-effort.
+export async function cancelPRAnalysis(taskId: string): Promise<void> {
+    const { http } = assertConfigured()
+    await fetch(`${http}/pr/analyse/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ task_id: taskId }),
+    }).catch(() => {})
+}
+
 // ─── /issues/preferences (per-project analyse defaults) ─────────────────────
 
 export interface IssuePreferences {

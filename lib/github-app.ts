@@ -445,3 +445,40 @@ export async function listRepoIssues(
     }
     return out
 }
+
+// GithubPRFile is the subset of a PR's changed-file entry we send to the
+// analyser (GET /repos/{o}/{r}/pulls/{n}/files).
+export interface GithubPRFile {
+    filename: string
+    previous_filename?: string
+    status: string // added | modified | removed | renamed | changed
+    patch?: string // unified diff; absent for binary/oversized files
+    additions: number
+    deletions: number
+}
+
+// listPullRequestFiles fetches a PR's changed files (with per-file unified
+// patches), paginated. Bounded by maxPages × 100 so a huge PR can't run
+// unbounded.
+export async function listPullRequestFiles(
+    installationId: number,
+    owner: string,
+    repo: string,
+    number: number,
+    opts: { maxPages?: number } = {},
+): Promise<GithubPRFile[]> {
+    const maxPages = opts.maxPages ?? 5 // up to 500 files
+    const out: GithubPRFile[] = []
+    for (let page = 1; page <= maxPages; page++) {
+        const res = await githubAppFetch(
+            installationId,
+            `/repos/${owner}/${repo}/pulls/${number}/files?per_page=100&page=${page}`,
+        )
+        if (!res.ok) return readError(res, "list PR files")
+        const items = (await res.json().catch(() => [])) as GithubPRFile[]
+        if (!Array.isArray(items) || items.length === 0) break
+        out.push(...items)
+        if (items.length < 100) break
+    }
+    return out
+}

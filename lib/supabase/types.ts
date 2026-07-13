@@ -81,6 +81,42 @@ export interface GithubInstallation {
     updated_at: string
 }
 
+/** Tracks Bobby's analysis of a GitHub PR so its live comment can be edited in
+ *  place and the run cancelled (migration 0042). `id` doubles as the analyser
+ *  task_id. One row per (project, pr_number). */
+export interface PullRequestAnalysis {
+    id: string
+    project_id: string
+    pr_number: number
+    github_comment_id: number | null
+    head_sha: string | null
+    status: "analysing" | "done" | "failed" | "cancelled" | null
+    created_at: string
+    updated_at: string
+}
+
+/** Bobby's structured PR review — the analyser /pr/analyse result. */
+export interface PRFixVerdict {
+    claim: string
+    verdict: "likely" | "partial" | "unlikely" | "unclear" | string
+    reason: string
+}
+export interface PRImpactRef {
+    file: string
+    reason: string
+}
+export interface PRAnalysis {
+    summary: string
+    impact: string
+    impact_files?: PRImpactRef[]
+    fix_claims?: PRFixVerdict[]
+    concerns?: string[]
+    confidence?: string
+    markdown?: string
+    cost_usd?: number
+    duration_ms?: number
+}
+
 /** Shape returned by GET /api/github/repos — a flattened subset of the
  *  GitHub `/user/repos` payload. `private` decides whether the picker
  *  shows a lock icon and whether the analyser kickoff needs to attach

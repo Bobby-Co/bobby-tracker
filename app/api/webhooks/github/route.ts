@@ -1,6 +1,7 @@
 import { after } from "next/server"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
+import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Issue, Project } from "@/lib/supabase/types"
 
@@ -74,6 +75,18 @@ export async function POST(request: Request) {
             action === "deleted"
         ) {
             return handleIssue(svc, payload, action, new URL(request.url).origin)
+        }
+    }
+
+    if (event === "pull_request") {
+        const action = String((payload as { action?: unknown }).action ?? "")
+        if (
+            action === "opened" ||
+            action === "reopened" ||
+            action === "synchronize" ||
+            action === "closed"
+        ) {
+            return handlePullRequest(svc, payload, action, new URL(request.url).origin)
         }
     }
 
@@ -260,5 +273,74 @@ async function handleIssue(
     }
 
     // (9) Ack.
+    return ack()
+}
+
+// ─── pull-request path ──────────────────────────────────────────────────────
+
+// handlePullRequest reviews a PR: on opened/reopened/synchronize it kicks the
+// detached analyser review (off the ack path); on closed it cancels any
+// in-flight run. Gated on the project being App-linked + sync-enabled; the
+// graph-indexed + diff-fetch gates live in startPRAnalysis.
+async function handlePullRequest(
+    svc: Svc,
+    payload: Record<string, unknown>,
+    action: string,
+    origin: string,
+): Promise<Response> {
+    const repository = payload.repository as { id?: number } | undefined
+    const pr = payload.pull_request as
+        | {
+              number?: number
+              title?: string
+              body?: string | null
+              draft?: boolean
+              base?: { sha?: string }
+              head?: { sha?: string }
+          }
+        | undefined
+    const repoId = repository?.id
+    const number = pr?.number
+    if (!repoId || !number) return ack()
+
+    const { data: project } = await svc
+        .from("projects")
+        .select("id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled")
+        .eq("github_repo_id", repoId)
+        .eq("github_sync_enabled", true)
+        .maybeSingle<
+            Pick<
+                Project,
+                | "id"
+                | "repo_url"
+                | "repo_full_name"
+                | "github_installation_id"
+                | "github_repo_id"
+                | "github_sync_enabled"
+            >
+        >()
+    if (!project) return ack()
+
+    // Closing a PR cancels any in-flight review.
+    if (action === "closed") {
+        after(() => cancelPRAnalysisForPR(project.id, number))
+        return ack()
+    }
+
+    // opened | reopened | synchronize → review. Skip drafts.
+    if (pr?.draft) return ack()
+    after(() =>
+        startPRAnalysis(
+            project,
+            {
+                number,
+                title: pr?.title ?? "",
+                body: pr?.body ?? null,
+                baseSha: pr?.base?.sha ?? null,
+                headSha: pr?.head?.sha ?? null,
+            },
+            origin,
+        ),
+    )
     return ack()
 }
