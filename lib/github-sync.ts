@@ -229,42 +229,126 @@ export async function deleteGithubIssueFromTracker(issue: SyncIssue, project: Sy
 // result → applyAnalysisResult edits the placeholder comment in place. Closing
 // the issue cancels the run. See the analyser's issue_async.go + ADR-0051.
 
-const BOT_HEADER = "## 🤖 Bobby"
+// Hidden marker so a later pass can find/dedupe Bobby's own comment.
+const BOBBY_MARKER = "<!-- bobby:analysis -->"
 
-function loadingCommentBody(): string {
-    return `${BOT_HEADER} — analysing…\n\n⏳ Locating where this issue lives in the codebase. This comment updates with the result.`
+// Context for the footer link back into ucelot.
+type CommentCtx = { origin: string; projectId: string; issueId: string }
+
+// shield renders a flat-square shields.io badge (label-value-color). Real
+// projects use badges, so it reads as tooling — not an AI wall of text.
+function shield(label: string, value: string, color: string): string {
+    const enc = (s: string) => encodeURIComponent(s.replace(/-/g, "--").replace(/_/g, "__"))
+    return `![${label}](https://img.shields.io/badge/${enc(label)}-${enc(value)}-${color}?style=flat-square)`
 }
 
-function cancelledCommentBody(): string {
-    return `${BOT_HEADER} — analysis cancelled\n\nThe issue was closed before analysis finished, so Bobby stopped.`
+function issueLink(ctx: CommentCtx): string {
+    return `<a href="${ctx.origin}/projects/${ctx.projectId}/issues/${ctx.issueId}">Open in ucelot ↗</a>`
 }
 
-function failedCommentBody(): string {
-    return `${BOT_HEADER} — analysis unavailable\n\nBobby couldn't complete the analysis this time.`
+function footer(ctx: CommentCtx, extra?: string): string {
+    return `<sub>${issueLink(ctx)}${extra ? ` · ${extra}` : ""}</sub>`
 }
 
-// resultCommentBody shapes the analyser result into GitHub-flavoured markdown —
-// a summary, a collapsible "Likely locations" list with blob deep-links, and a
-// confidence badge. Falls back to the analyser's own markdown when present.
-function resultCommentBody(result: IssueAnalysis, project: Pick<Project, "repo_url" | "repo_full_name">): string {
-    const conf = result.confidence ? ` · confidence **${result.confidence}**` : ""
-    const lines: string[] = [`${BOT_HEADER} — analysis${conf}`, ""]
-    if (result.summary?.trim()) lines.push(result.summary.trim(), "")
+// Small self-hosted brand loader (public/brand_loader.webp), inline.
+function brandMark(origin: string): string {
+    return `<img src="${origin}/brand_loader.webp" width="18" alt="Bobby" />`
+}
+
+function loadingCommentBody(ctx: CommentCtx): string {
+    return [
+        BOBBY_MARKER,
+        `${brandMark(ctx.origin)} **Bobby** is analyzing this issue…`,
+        "",
+        shield("status", "analyzing", "2563eb"),
+        "",
+        "Scanning the codebase to locate the relevant files — this comment updates automatically when it's ready.",
+        "",
+        footer(ctx),
+    ].join("\n")
+}
+
+function cancelledCommentBody(ctx: CommentCtx): string {
+    return [
+        BOBBY_MARKER,
+        "**Bobby** — analysis cancelled",
+        "",
+        shield("status", "cancelled", "64748b"),
+        "",
+        "The issue was closed before analysis finished.",
+        "",
+        footer(ctx),
+    ].join("\n")
+}
+
+function failedCommentBody(ctx: CommentCtx): string {
+    return [
+        BOBBY_MARKER,
+        "**Bobby** — analysis unavailable",
+        "",
+        shield("status", "failed", "dc2626"),
+        "",
+        "Bobby couldn't complete the analysis this time.",
+        "",
+        footer(ctx),
+    ].join("\n")
+}
+
+// escapeCell keeps a findings-table cell single-line and pipe-safe.
+function escapeCell(s: string): string {
+    return s.replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim()
+}
+
+function confidenceColor(c?: string): string {
+    switch ((c ?? "").toLowerCase()) {
+        case "high":
+            return "16a34a"
+        case "medium":
+            return "d97706"
+        default:
+            return "64748b"
+    }
+}
+
+// resultCommentBody renders the result as a compact report: a badge row
+// (confidence + candidate count), a one-line summary blockquote, and a ranked
+// findings table with blob deep-links. Falls back to the analyser's own
+// markdown when it returned no structured suggestions.
+function resultCommentBody(
+    result: IssueAnalysis,
+    project: Pick<Project, "repo_url" | "repo_full_name">,
+    ctx: CommentCtx,
+): string {
+    const out: string[] = [BOBBY_MARKER, "### Bobby · code analysis", ""]
+
+    const badges: string[] = []
+    if (result.confidence) {
+        badges.push(shield("confidence", result.confidence, confidenceColor(result.confidence)))
+    }
     if (result.suggestions?.length) {
-        lines.push("<details open>", "<summary><b>Likely locations</b></summary>", "")
-        for (const s of result.suggestions) {
+        badges.push(shield("candidates", String(result.suggestions.length), "64748b"))
+    }
+    if (badges.length) out.push(badges.join(" "), "")
+
+    if (result.summary?.trim()) out.push(`> ${result.summary.trim().replace(/\n/g, "\n> ")}`, "")
+
+    if (result.suggestions?.length) {
+        out.push("**Most likely locations**", "", "| # | Location | Why |", "|--:|:--|:--|")
+        result.suggestions.forEach((s, i) => {
             const link = blobUrl(project, s.file, s.line, null)
             const label = s.line ? `${s.file}:${s.line}` : s.file
             const loc = link ? `[\`${label}\`](${link})` : `\`${label}\``
-            const sym = s.symbol ? ` (\`${s.symbol}\`)` : ""
-            lines.push(`- ${loc}${sym} — ${s.reason}`)
-        }
-        lines.push("", "</details>")
+            const sym = s.symbol ? ` \`${s.symbol}\`` : ""
+            out.push(`| ${i + 1} | ${loc}${sym} | ${escapeCell(s.reason)} |`)
+        })
+        out.push("")
     } else if (result.markdown?.trim()) {
-        lines.push(result.markdown.trim())
+        out.push(result.markdown.trim(), "")
     }
-    lines.push("", "<sub>🔍 Analysed by Bobby — updates when the issue changes.</sub>")
-    return lines.join("\n")
+
+    const dur = result.duration_ms ? `analysed in ${(result.duration_ms / 1000).toFixed(1)}s` : undefined
+    out.push(footer(ctx, dur))
+    return out.join("\n")
 }
 
 // Structural subset the analysis flow reads from tracker.issues / .projects.
@@ -331,7 +415,7 @@ export async function startAnalysis(issueId: string, origin: string): Promise<vo
         owner,
         repo,
         issue.github_issue_number,
-        loadingCommentBody(),
+        loadingCommentBody({ origin, projectId: issue.project_id, issueId: issue.id }),
     )
     await svc
         .from("issues")
@@ -360,6 +444,7 @@ export async function applyAnalysisResult(
     taskId: string,
     status: "done" | "failed" | "cancelled",
     result: IssueAnalysis | null,
+    origin: string,
 ): Promise<void> {
     const svc = createServiceClient()
 
@@ -381,12 +466,13 @@ export async function applyAnalysisResult(
         const full = repoFullName(project)
         if (full) {
             const [owner, repo] = full.split("/")
+            const ctx: CommentCtx = { origin, projectId: issue.project_id, issueId: issue.id }
             const body =
                 status === "done" && result
-                    ? resultCommentBody(result, project)
+                    ? resultCommentBody(result, project, ctx)
                     : status === "cancelled"
-                      ? cancelledCommentBody()
-                      : failedCommentBody()
+                      ? cancelledCommentBody(ctx)
+                      : failedCommentBody(ctx)
             try {
                 await updateIssueComment(project.github_installation_id!, owner, repo, issue.github_analysis_comment_id, body)
             } catch {
