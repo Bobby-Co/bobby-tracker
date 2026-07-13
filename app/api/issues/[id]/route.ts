@@ -1,6 +1,8 @@
+import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
+import { deleteGithubIssueFromTracker, updateGithubIssueFromTracker } from "@/lib/github-sync"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue, Project } from "@/lib/supabase/types"
 
 // GET /api/issues/[id]?project_id=... — single issue. The optional
 // project_id query param scopes the lookup to a project (matching the
@@ -42,6 +44,42 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         .select("*")
         .single<Issue>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
+
+    // Mirror title/body/status edits to GitHub when this issue is linked and
+    // the project has two-way sync on. Only these three fields sync — never
+    // priority/labels. Fire-and-forget via after() so the response isn't
+    // blocked (bare `void` gets cancelled on Workers). No-op otherwise.
+    const changed = {
+        title: "title" in patch,
+        body: "body" in patch,
+        status: "status" in patch,
+    }
+    if (data?.github_issue_number && (changed.title || changed.body || changed.status)) {
+        const { data: project } = await supabase
+            .from("projects")
+            .select(
+                "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
+            )
+            .eq("id", data.project_id)
+            .maybeSingle<
+                Pick<
+                    Project,
+                    | "id"
+                    | "user_id"
+                    | "repo_url"
+                    | "repo_full_name"
+                    | "github_installation_id"
+                    | "github_repo_id"
+                    | "github_sync_enabled"
+                    | "github_sync_direction"
+                    | "github_sync_deletes"
+                >
+            >()
+        if (project?.github_sync_enabled && project.github_installation_id && project.github_repo_id) {
+            after(() => updateGithubIssueFromTracker(data, project, changed))
+        }
+    }
+
     return Response.json({ issue: data })
 }
 
@@ -49,7 +87,40 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { id } = await params
     const { supabase, error } = await requireUser()
     if (error) return error
+
+    // Capture the row (esp. its GitHub linkage) BEFORE deleting so we can
+    // propagate the deletion afterwards.
+    const { data: issue } = await supabase.from("issues").select("*").eq("id", id).maybeSingle<Issue>()
+
     const { error: dbErr } = await supabase.from("issues").delete().eq("id", id)
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
+
+    // Propagate the delete to GitHub when the issue was linked and the project
+    // opted into delete-sync (outbound). deleteGithubIssueFromTracker itself
+    // re-checks direction + the deletes flag. Fire-and-forget via after().
+    if (issue && (issue.github_issue_number != null || issue.github_node_id)) {
+        const { data: project } = await supabase
+            .from("projects")
+            .select(
+                "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
+            )
+            .eq("id", issue.project_id)
+            .maybeSingle<
+                Pick<
+                    Project,
+                    | "id"
+                    | "user_id"
+                    | "repo_url"
+                    | "repo_full_name"
+                    | "github_installation_id"
+                    | "github_repo_id"
+                    | "github_sync_enabled"
+                    | "github_sync_direction"
+                    | "github_sync_deletes"
+                >
+            >()
+        if (project) after(() => deleteGithubIssueFromTracker(issue, project))
+    }
+
     return new Response(null, { status: 204 })
 }

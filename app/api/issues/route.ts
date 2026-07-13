@@ -2,8 +2,9 @@ import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
 import { isAnalyseEffort } from "@/lib/analyser"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
+import type { Issue, IssuePriority, IssueStatus, Project, ProjectAnalyser } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"
+import { pushIssueToGithub, startAnalysis } from "@/lib/github-sync"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
@@ -81,6 +82,41 @@ export async function POST(request: Request) {
     // gets cancelled and the issue is never indexed. after() registers
     // the work with the runtime's waitUntil so it runs to completion.
     after(() => embedIssueAsync(issue))
+
+    // If the project is linked to GitHub with two-way sync on, mirror the new
+    // issue to GitHub and post the auto-analysis comment. Fire-and-forget via
+    // after() (same reason as the embed above — a bare `void` gets cancelled
+    // when the response returns on Workers). Independent of the needs_indexing
+    // gate above; a no-op when the project isn't sync-wired.
+    const { data: project } = await supabase
+        .from("projects")
+        .select(
+            "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
+        )
+        .eq("id", project_id)
+        .maybeSingle<
+            Pick<
+                Project,
+                | "id"
+                | "user_id"
+                | "repo_url"
+                | "repo_full_name"
+                | "github_installation_id"
+                | "github_repo_id"
+                | "github_sync_enabled"
+                | "github_sync_direction"
+                | "github_sync_deletes"
+            >
+        >()
+    if (project?.github_sync_enabled && project.github_installation_id && project.github_repo_id) {
+        const origin = new URL(request.url).origin
+        after(async () => {
+            // Push first so the issue has its github_issue_number, then start
+            // the placeholder-comment + detached analysis run.
+            await pushIssueToGithub(issue, project)
+            await startAnalysis(issue.id, origin)
+        })
+    }
 
     return Response.json({ issue })
 }
