@@ -221,10 +221,10 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     // their one-shot glow-bloom-in / glow-ring-in entrance.
     return (
         <div className={cn("rounded-xl", !pending && suggestion && "rainbow-glow")}>
-        <section className="rounded-xl border border-transparent bg-white p-4 transition-colors dark:bg-zinc-950">
+        <section className="rounded-xl border border-transparent bg-white p-4 transition-colors">
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <h2 className="flex items-center gap-2 text-sm dark:text-red-50 font-medium">
+                    <h2 className="flex items-center gap-2 text-sm font-medium">
                         <SparklesIcon spinning={pending} />
                         Investigate with analyser
                         {/* Shown only when the analyser reports the swarm ran on a
@@ -233,7 +233,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                             treats missing as not-local. Never inferred from cost. */}
                         {suggestion?.data?.local === true && <LocalChip />}
                     </h2>
-                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-white transition-opacity">
+                    <p className="mt-0.5 text-xs text-zinc-500 transition-opacity">
                         {pending
                             ? "Reading the graph and source — typically 10–30s."
                             : suggestion
@@ -260,7 +260,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                             <ChevronIcon />
                         </span>
                         <div
-                            className="absolute right-0 top-0 z-20 overflow-hidden bg-white ring-1 ring-inset ring-zinc-200 dark:bg-red-50/90 backdrop-blur-xl dark:ring-zinc-800"
+                            className="absolute right-0 top-0 z-20 overflow-hidden bg-white ring-1 ring-inset ring-zinc-200 backdrop-blur-xl"
                             style={{
                                 width: effortOpen ? panelSize.w : chipSize.w,
                                 height: effortOpen ? panelSize.h : chipSize.h,
@@ -280,7 +280,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                                 aria-haspopup="dialog"
                                 aria-expanded={effortOpen}
                                 title="Choose how thorough the analyser is for this issue"
-                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-red-50/90"
+                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
                                 style={{
                                     opacity: effortOpen ? 0 : 1,
                                     pointerEvents: effortOpen ? "none" : "auto",
@@ -315,7 +315,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                                         type="button"
                                         onClick={() => setEffortOpen(false)}
                                         tabIndex={effortOpen ? 0 : -1}
-                                        className="-mr-1 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                                        className="-mr-1 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600"
                                         aria-label="Close effort picker"
                                     >
                                         <CloseIcon />
@@ -352,7 +352,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
             {!analyserReady && !suggestion && !pending && <NeedsIndexing />}
 
             {error && (
-                <div className="mt-3 anim-fade rounded-lg bg-red-50 p-3 text-xs text-red-800 dark:bg-red-950/40 dark:text-red-300">
+                <div className="mt-3 anim-fade rounded-lg bg-red-50 p-3 text-xs text-red-800">
                     {errorCode === "needs_indexing" ? <NeedsIndexing /> : <p>{error}</p>}
                 </div>
             )}
@@ -381,7 +381,7 @@ function SuggestionBody({
     const data: IssueAnalysisData | null = suggestion.data
     if (!data) {
         return (
-            <div className="mt-4 anim-rise text-[13px] leading-6 text-zinc-700 dark:text-zinc-300">
+            <div className="mt-4 anim-rise text-[13px] leading-6 text-zinc-700">
                 {suggestion.markdown || "(no result)"}
             </div>
         )
@@ -395,7 +395,7 @@ function SuggestionBody({
             {data.summary && (
                 <div className="anim-rise" style={{ ["--i" as string]: 0 } as React.CSSProperties}>
                     <SectionLabel>Summary</SectionLabel>
-                    <p className="mt-1 text-sm leading-6 text-zinc-700 dark:text-zinc-300">{data.summary}</p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-700">{data.summary}</p>
                 </div>
             )}
 
@@ -452,16 +452,16 @@ function FindingCard({
 
     return (
         <li
-            className="anim-rise overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-all duration-200 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+            className="anim-rise overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-all duration-200 hover:border-zinc-300"
             style={{ ["--i" as string]: index } as React.CSSProperties}
         >
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 aria-expanded={open}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/60 dark:hover:bg-zinc-900/60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/60"
             >
-                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-zinc-900 dark:text-zinc-100">
+                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-zinc-900">
                     {headline}
                 </span>
                 {finding.symbol && !open && (
@@ -488,14 +488,14 @@ function FindingCard({
             </button>
 
             {open && (
-                <div className="anim-fade border-t border-zinc-200/60 bg-white px-3 py-2.5 dark:border-zinc-800/60 dark:bg-zinc-950">
+                <div className="anim-fade border-t border-zinc-200/60 bg-white px-3 py-2.5">
                     {finding.symbol && (
-                        <div className="font-mono text-[11.5px] text-zinc-500 dark:text-zinc-400">
+                        <div className="font-mono text-[11.5px] text-zinc-500">
                             {finding.symbol}
                         </div>
                     )}
                     {finding.reason && (
-                        <p className="mt-1 text-[13px] leading-5 text-zinc-700 dark:text-zinc-300">
+                        <p className="mt-1 text-[13px] leading-5 text-zinc-700">
                             {finding.reason}
                         </p>
                     )}
@@ -504,7 +504,7 @@ function FindingCard({
                             href={url}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-2.5 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[11.5px] text-zinc-500 hover:text-blue-600 hover:underline dark:hover:text-blue-400"
+                            className="mt-2.5 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[11.5px] text-zinc-500 hover:text-blue-600 hover:underline"
                         >
                             <span className="truncate">{finding.file}</span>
                             <ExternalLinkIcon />
@@ -527,7 +527,7 @@ function LocalChip() {
     return (
         <span
             title="Produced by a locally-served model"
-            className="shrink-0 rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-700 transition-colors dark:bg-indigo-950 dark:text-indigo-300"
+            className="shrink-0 rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-indigo-700 transition-colors"
         >
             Local
         </span>
@@ -537,10 +537,10 @@ function LocalChip() {
 function ConfidenceBadge({ value }: { value: string }) {
     const v = value.toLowerCase()
     const cls =
-        v === "high"   ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300" :
-        v === "medium" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" :
-        v === "low"    ? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400" :
-                         "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+        v === "high"   ? "bg-green-100 text-green-800" :
+        v === "medium" ? "bg-amber-100 text-amber-800" :
+        v === "low"    ? "bg-zinc-100 text-zinc-600" :
+                         "bg-zinc-100 text-zinc-600"
     return (
         <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition-colors ${cls}`}>
             {v}
@@ -598,7 +598,7 @@ function Analysing() {
     return (
         <div className="mt-4 anim-fade flex flex-col items-center gap-4 py-6">
             <GraphScan />
-            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-600 dark:text-zinc-300">
+            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-600">
                 <SmallSpinner />
                 {/* keyed so anim-fade replays on every phase change → soft crossfade */}
                 <span key={phase} className="anim-fade">{ANALYSING_PHASES[phase]}…</span>
@@ -675,7 +675,7 @@ function GraphScan() {
                                 key={`base-${i}`}
                                 x1={GRAPH_NODES[a].x} y1={GRAPH_NODES[a].y}
                                 x2={GRAPH_NODES[b].x} y2={GRAPH_NODES[b].y}
-                                className="stroke-zinc-200 dark:stroke-zinc-800"
+                                className="stroke-zinc-200"
                                 strokeWidth={1.5}
                             />
                         ))}
@@ -710,7 +710,7 @@ function GraphScan() {
 
 function NeedsIndexing() {
     return (
-        <p className="mt-3 anim-fade rounded-lg bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+        <p className="mt-3 anim-fade rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
             Enable the <strong>bobby-analyser</strong> integration on this project and run <em>Index now</em> first. Suggestions need an indexed knowledge graph to cite files and lines.
         </p>
     )
@@ -723,7 +723,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function Pill({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
     return (
         <span
-            className={`rounded-md bg-zinc-100 px-1.5 py-0.5 transition-colors dark:bg-zinc-800 ${mono ? "font-mono" : ""}`}
+            className={`rounded-md bg-zinc-100 px-1.5 py-0.5 transition-colors ${mono ? "font-mono" : ""}`}
         >
             {children}
         </span>

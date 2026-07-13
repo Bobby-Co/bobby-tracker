@@ -25,7 +25,7 @@ const EFFORT_HINT: Record<AnalyseEffort, string> = {
 // warning there and as neutral guidance higher up.
 function hintToneClass(level: AnalyseEffort): string {
     return level === "fast"
-        ? "text-amber-700 dark:text-amber-400"
+        ? "text-amber-700"
         : "text-[color:var(--c-text-muted)]"
 }
 
@@ -62,10 +62,10 @@ export function EffortControl({
                 full 0–100% — the same range the ticks and labels are placed in. */}
             <div className="relative mx-2 h-4">
                 {/* track */}
-                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-200" />
                 {/* filled portion up to the current stop */}
                 <div
-                    className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-900 dark:bg-zinc-100"
+                    className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-900"
                     style={{ width: pct(index) }}
                 />
                 {/* per-stop tick lines */}
@@ -75,7 +75,7 @@ export function EffortControl({
                         aria-hidden
                         className={cn(
                             "absolute top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 rounded-full",
-                            i <= index ? "bg-zinc-400 dark:bg-zinc-500" : "bg-zinc-300 dark:bg-zinc-600",
+                            i <= index ? "bg-zinc-400" : "bg-zinc-300",
                         )}
                         style={{ left: pct(i) }}
                     />
@@ -98,7 +98,7 @@ export function EffortControl({
                 {/* thumb (visual only; the input above drives it) */}
                 <span
                     aria-hidden
-                    className="pointer-events-none absolute top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-zinc-900 shadow ring-zinc-400 transition-shadow peer-focus-visible:ring-2 dark:border-zinc-950 dark:bg-zinc-100"
+                    className="pointer-events-none absolute top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-zinc-900 shadow ring-zinc-400 transition-shadow peer-focus-visible:ring-2"
                     style={{ left: pct(index) }}
                 />
             </div>
