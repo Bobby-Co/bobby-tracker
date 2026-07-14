@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { notFound, useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
+import { useAuth } from "@/lib/auth/auth-context"
 import { PrDetail } from "@/components/pulls/pr-detail"
 import { PrReview } from "@/components/pulls/pr-review"
 import { PrComments } from "@/components/pulls/pr-comments"
@@ -17,7 +18,8 @@ interface PullView {
 
 export default function PullDetailPage() {
     const { id, number } = useParams<{ id: string; number: string }>()
-    const { data, loading, error } = useApi<PullView>(`/api/projects/${id}/pulls/${number}`)
+    const { user } = useAuth()
+    const { data, loading, error, refetch } = useApi<PullView>(`/api/projects/${id}/pulls/${number}`)
 
     const pull = data?.pull ?? null
     if (!loading && data && !pull) notFound()
@@ -40,7 +42,13 @@ export default function PullDetailPage() {
                 <>
                     <PrDetail pr={pull} reviewStatus={data?.analysis?.status ?? null} />
                     <PrReview analysis={data?.analysis ?? null} />
-                    <PrComments comments={data?.comments ?? []} />
+                    <PrComments
+                        comments={data?.comments ?? []}
+                        projectId={id}
+                        prNumber={pull.pr_number}
+                        currentUserId={user?.id ?? null}
+                        onChanged={refetch}
+                    />
                 </>
             ) : (
                 <>

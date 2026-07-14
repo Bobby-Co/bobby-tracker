@@ -3,11 +3,14 @@
 import { notFound, useParams } from "next/navigation"
 import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
+import { useAuth } from "@/lib/auth/auth-context"
 import { IssueDetail } from "@/components/issues/issue-detail"
 import { IssueSuggestions } from "@/components/issues/issue-suggestions"
+import { IssueComments } from "@/components/issues/issue-comments"
 import { SimilarIssuesCard } from "@/components/issues/similar-issues-card"
 import type {
     Issue,
+    IssueComment,
     IssueSuggestion,
     Project,
     ProjectAnalyser,
@@ -23,14 +26,16 @@ interface IssueView {
     peekOthers: Issue[]
     labelIcons: ProjectLabelIcon[]
     statusColors: ProjectStatusColor[]
+    comments: IssueComment[]
 }
 
 export default function IssueDetailPage() {
     const { id, issueId } = useParams<{ id: string; issueId: string }>()
+    const { user } = useAuth()
 
     // One consolidated fetch instead of 7 parallel ones — the route
     // handler does the Promise.all server-side (1 Worker invocation).
-    const { data, loading, error } = useApi<IssueView>(
+    const { data, loading, error, refetch } = useApi<IssueView>(
         `/api/projects/${id}/issues/${issueId}`,
     )
 
@@ -101,6 +106,17 @@ export default function IssueDetailPage() {
             ) : (
                 <div className="skeleton h-40 w-full rounded-[16px]" />
             )}
+
+            {/* GitHub comment thread — only for issues that exist on GitHub. */}
+            {issue?.github_issue_number ? (
+                <IssueComments
+                    comments={data?.comments ?? []}
+                    projectId={id}
+                    issueId={issueId}
+                    currentUserId={user?.id ?? null}
+                    onChanged={refetch}
+                />
+            ) : null}
         </div>
     )
 }

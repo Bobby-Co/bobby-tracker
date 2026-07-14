@@ -1,6 +1,9 @@
+import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
+import { backfillIssueComments } from "@/lib/pr-backfill"
 import type {
     Issue,
+    IssueComment,
     IssueSuggestion,
     Project,
     ProjectAnalyser,
@@ -60,6 +63,23 @@ export async function GET(
         suggestionR.error || peekR.error || iconsR.error || colorsR.error
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 
+    // The GitHub comment thread is keyed by the issue's GitHub number, which we
+    // only know once the issue row resolves — so it's a second read (only for
+    // issues that exist on GitHub). Lazy-backfill an empty thread, like PR detail.
+    let comments: IssueComment[] = []
+    const ghNumber = issueR.data?.github_issue_number ?? null
+    if (ghNumber) {
+        const commentsR = await supabase
+            .from("issue_comments")
+            .select("*")
+            .eq("project_id", id)
+            .eq("issue_number", ghNumber)
+            .order("gh_created_at", { ascending: true, nullsFirst: true })
+            .returns<IssueComment[]>()
+        comments = commentsR.data ?? []
+        if (comments.length === 0) after(() => backfillIssueComments(id, ghNumber))
+    }
+
     return Response.json({
         issue: issueR.data,
         project: projectR.data,
@@ -68,5 +88,6 @@ export async function GET(
         peekOthers: peekR.data ?? [],
         labelIcons: iconsR.data ?? [],
         statusColors: colorsR.data ?? [],
+        comments,
     })
 }

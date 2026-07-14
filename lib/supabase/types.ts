@@ -130,15 +130,38 @@ export interface PullRequest {
     updated_at: string
 }
 
-/** A synced GitHub comment on a PR (migration 0043). `source` disambiguates the
- *  GitHub id spaces: 'issue_comment' (conversation thread), 'review' (a review's
- *  summary body), 'review_comment' (inline diff — reserved for later). */
+/** A comment on a PR. `source` disambiguates the GitHub id spaces: 'issue_comment'
+ *  (conversation thread), 'review' (a review's summary body), 'review_comment'
+ *  (inline diff — reserved). `provenance` (migration 0044) marks whether it's a
+ *  read-only GitHub mirror or a tracker-authored comment we own and push to
+ *  GitHub as `author_user_id`. */
 export interface PRComment {
     id: string
     project_id: string
     pr_number: number
     source: "issue_comment" | "review" | "review_comment"
     github_comment_id: number
+    provenance: "github" | "tracker"
+    author_user_id: string | null
+    author_login: string | null
+    author_avatar_url: string | null
+    body: string | null
+    html_url: string | null
+    gh_created_at: string | null
+    gh_updated_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** A comment on an issue thread (migration 0044) — the issue-side mirror of
+ *  PRComment (conversation comments only; no review types). */
+export interface IssueComment {
+    id: string
+    project_id: string
+    issue_number: number
+    github_comment_id: number
+    provenance: "github" | "tracker"
+    author_user_id: string | null
     author_login: string | null
     author_avatar_url: string | null
     body: string | null

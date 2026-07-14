@@ -48,6 +48,8 @@ export type PRCommentUpsert = {
     pr_number: number
     source: PRCommentSource
     github_comment_id: number
+    provenance?: "github" | "tracker"
+    author_user_id?: string | null
     author_login?: string | null
     author_avatar_url?: string | null
     body?: string | null

@@ -2,6 +2,7 @@ import { after } from "next/server"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
+import { deleteIssueComment, upsertIssueComment } from "@/lib/issue-store"
 import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/lib/pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Issue, Project } from "@/lib/supabase/types"
@@ -397,9 +398,11 @@ async function handlePullRequest(
 
 // handlePrComment mirrors a PR's conversation comments (issue_comment, incl.
 // Bobby's own bot comment) and review summaries (pull_request_review, when the
-// review carries a note) into tracker.pr_comments. issue_comment fires for
-// plain issues too — handled only when the issue carries a pull_request ref.
-// No echo suppression: v1 never posts comments from the tracker.
+// review carries a note) into tracker.pr_comments; plain-issue comments are
+// forwarded to handleIssueComment. Echo suppression is implicit: webhook upserts
+// omit `provenance`, so a conflicting write (a tracker comment bouncing back)
+// keeps the existing 'tracker' provenance + author while the DB default makes
+// fresh mirrors 'github'.
 async function handlePrComment(
     svc: Svc,
     event: string,
@@ -421,8 +424,9 @@ async function handlePrComment(
 
     if (event === "issue_comment") {
         const issue = payload.issue as { number?: number; pull_request?: unknown } | undefined
-        // Only PR comments carry a pull_request ref; plain-issue comments are out.
-        if (!issue?.pull_request || !issue.number) return ack()
+        if (!issue?.number) return ack()
+        // A comment without a pull_request ref is a plain-issue comment.
+        if (!issue.pull_request) return handleIssueComment(svc, project.id, action, payload)
         const comment = payload.comment as
             | {
                   id?: number
@@ -477,6 +481,45 @@ async function handlePrComment(
         html_url: review.html_url ?? null,
         gh_created_at: review.submitted_at ?? null,
         gh_updated_at: review.submitted_at ?? null,
+    })
+    return ack()
+}
+
+// handleIssueComment mirrors a plain-issue conversation comment into
+// tracker.issue_comments. Same implicit echo suppression as handlePrComment
+// (omitting `provenance` preserves a tracker row's ownership on the bounce-back).
+async function handleIssueComment(
+    svc: Svc,
+    projectId: string,
+    action: string,
+    payload: Record<string, unknown>,
+): Promise<Response> {
+    const issue = payload.issue as { number?: number } | undefined
+    const comment = payload.comment as
+        | {
+              id?: number
+              body?: string | null
+              html_url?: string
+              user?: { login?: string; avatar_url?: string }
+              created_at?: string
+              updated_at?: string
+          }
+        | undefined
+    if (!issue?.number || !comment?.id) return ack()
+
+    if (action === "deleted") {
+        await deleteIssueComment(svc, projectId, comment.id)
+        return ack()
+    }
+    await upsertIssueComment(svc, projectId, {
+        issue_number: issue.number,
+        github_comment_id: comment.id,
+        author_login: comment.user?.login ?? null,
+        author_avatar_url: comment.user?.avatar_url ?? null,
+        body: comment.body ?? null,
+        html_url: comment.html_url ?? null,
+        gh_created_at: comment.created_at ?? null,
+        gh_updated_at: comment.updated_at ?? null,
     })
     return ack()
 }

@@ -14,6 +14,7 @@ import {
     type GithubPullRequest,
 } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
+import { upsertIssueComment } from "@/lib/issue-store"
 import { upsertPRComment, upsertPullRequest, type PRUpsert } from "@/lib/pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Project } from "@/lib/supabase/types"
@@ -150,4 +151,28 @@ export async function backfillPullRequestComments(projectId: string, prNumber: n
     const creds = await resolveCreds(svc, projectId)
     if (!creds) return
     await syncComments(svc, projectId, creds, prNumber)
+}
+
+// backfillIssueComments fills one issue's conversation thread on demand (kicked
+// from the issue-detail endpoint when the thread is empty). Upserts omit
+// provenance, so a tracker-authored comment already present keeps its ownership.
+export async function backfillIssueComments(projectId: string, issueNumber: number): Promise<void> {
+    const svc = createServiceClient()
+    const creds = await resolveCreds(svc, projectId)
+    if (!creds) return
+    const comments = await listIssueComments(creds.installationId, creds.owner, creds.repo, issueNumber).catch(
+        () => [],
+    )
+    for (const c of comments) {
+        await upsertIssueComment(svc, projectId, {
+            issue_number: issueNumber,
+            github_comment_id: c.id,
+            author_login: c.user?.login ?? null,
+            author_avatar_url: c.user?.avatar_url ?? null,
+            body: c.body ?? null,
+            html_url: c.html_url ?? null,
+            gh_created_at: c.created_at ?? null,
+            gh_updated_at: c.updated_at ?? null,
+        })
+    }
 }
