@@ -6,6 +6,7 @@
 // update, and the auto-analysis comment path. See plan Phases 4–6.
 
 import { cancelIssueAnalysis, runIssueAnalysis, type IssueAnalysis } from "@/lib/analyser"
+import { badge, confidenceTone } from "@/lib/badge"
 import {
     createGithubIssue,
     createIssueComment,
@@ -235,13 +236,6 @@ const BOBBY_MARKER = "<!-- bobby:analysis -->"
 // Context for the footer link back into ucelot.
 type CommentCtx = { origin: string; projectId: string; issueId: string }
 
-// shield renders a flat-square shields.io badge (label-value-color). Real
-// projects use badges, so it reads as tooling — not an AI wall of text.
-function shield(label: string, value: string, color: string): string {
-    const enc = (s: string) => encodeURIComponent(s.replace(/-/g, "--").replace(/_/g, "__"))
-    return `![${label}](https://img.shields.io/badge/${enc(label)}-${enc(value)}-${color}?style=flat-square)`
-}
-
 function issueLink(ctx: CommentCtx): string {
     return `<a href="${ctx.origin}/projects/${ctx.projectId}/issues/${ctx.issueId}">Open in ucelot ↗</a>`
 }
@@ -260,7 +254,7 @@ function loadingCommentBody(ctx: CommentCtx): string {
         BOBBY_MARKER,
         `${brandMark(ctx.origin)} **Bobby** is analyzing this issue…`,
         "",
-        shield("status", "analyzing", "2563eb"),
+        badge(ctx.origin, "analyzing", "blue"),
         "",
         "Scanning the codebase to locate the relevant files — this comment updates automatically when it's ready.",
         "",
@@ -273,7 +267,7 @@ function cancelledCommentBody(ctx: CommentCtx): string {
         BOBBY_MARKER,
         "**Bobby** — analysis cancelled",
         "",
-        shield("status", "cancelled", "64748b"),
+        badge(ctx.origin, "cancelled", "zinc"),
         "",
         "The issue was closed before analysis finished.",
         "",
@@ -286,7 +280,7 @@ function failedCommentBody(ctx: CommentCtx): string {
         BOBBY_MARKER,
         "**Bobby** — analysis unavailable",
         "",
-        shield("status", "failed", "dc2626"),
+        badge(ctx.origin, "failed", "rose"),
         "",
         "Bobby couldn't complete the analysis this time.",
         "",
@@ -297,17 +291,6 @@ function failedCommentBody(ctx: CommentCtx): string {
 // escapeCell keeps a findings-table cell single-line and pipe-safe.
 function escapeCell(s: string): string {
     return s.replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim()
-}
-
-function confidenceColor(c?: string): string {
-    switch ((c ?? "").toLowerCase()) {
-        case "high":
-            return "16a34a"
-        case "medium":
-            return "d97706"
-        default:
-            return "64748b"
-    }
 }
 
 // resultCommentBody renders the result as a compact report: a badge row
@@ -323,10 +306,10 @@ function resultCommentBody(
 
     const badges: string[] = []
     if (result.confidence) {
-        badges.push(shield("confidence", result.confidence, confidenceColor(result.confidence)))
+        badges.push(badge(ctx.origin, `confidence: ${result.confidence}`, confidenceTone(result.confidence)))
     }
     if (result.suggestions?.length) {
-        badges.push(shield("candidates", String(result.suggestions.length), "64748b"))
+        badges.push(badge(ctx.origin, `${result.suggestions.length} candidates`, "zinc"))
     }
     if (badges.length) out.push(badges.join(" "), "")
 

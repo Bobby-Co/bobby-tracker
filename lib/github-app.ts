@@ -482,3 +482,133 @@ export async function listPullRequestFiles(
     }
     return out
 }
+
+// ─── PR + comment mirror (Pull-requests tab) ────────────────────────────────
+
+// A GitHub user reference as it appears on PRs/comments/reviews.
+export interface GithubActor {
+    login: string
+    avatar_url: string
+}
+
+// GithubPullRequest is the subset of a REST PR (list or single) we mirror.
+// Note: the list endpoint (/pulls) omits additions/deletions/changed_files —
+// those only come on the single-PR GET and the webhook payload, so they're
+// optional here.
+export interface GithubPullRequest {
+    number: number
+    node_id: string
+    title: string
+    body: string | null
+    state: string // "open" | "closed"
+    draft?: boolean
+    merged_at: string | null
+    html_url: string
+    user: GithubActor | null
+    head: { ref: string; sha: string }
+    base: { ref: string; sha: string }
+    additions?: number
+    deletions?: number
+    changed_files?: number
+    comments?: number
+    created_at: string
+    updated_at: string
+    closed_at: string | null
+}
+
+// listPullRequests paginates a repo's PRs (state=all by default), newest first.
+// Bounded by maxPages (×100) so a huge repo can't run unbounded.
+export async function listPullRequests(
+    installationId: number,
+    owner: string,
+    repo: string,
+    opts: { state?: "open" | "closed" | "all"; maxPages?: number } = {},
+): Promise<GithubPullRequest[]> {
+    const state = opts.state ?? "all"
+    const maxPages = opts.maxPages ?? 5 // up to 500 PRs
+    const out: GithubPullRequest[] = []
+    for (let page = 1; page <= maxPages; page++) {
+        const res = await githubAppFetch(
+            installationId,
+            `/repos/${owner}/${repo}/pulls?state=${state}&sort=updated&direction=desc&per_page=100&page=${page}`,
+        )
+        if (!res.ok) return readError(res, "list PRs")
+        const items = (await res.json().catch(() => [])) as GithubPullRequest[]
+        if (!Array.isArray(items) || items.length === 0) break
+        out.push(...items)
+        if (items.length < 100) break
+    }
+    return out
+}
+
+// GithubComment is the subset of a PR conversation comment we mirror.
+export interface GithubComment {
+    id: number
+    body: string | null
+    html_url: string
+    user: GithubActor | null
+    created_at: string
+    updated_at: string
+}
+
+// listIssueComments paginates a PR's conversation-thread comments (a PR is an
+// issue for the comments endpoint), oldest first.
+export async function listIssueComments(
+    installationId: number,
+    owner: string,
+    repo: string,
+    number: number,
+    opts: { maxPages?: number } = {},
+): Promise<GithubComment[]> {
+    const maxPages = opts.maxPages ?? 5 // up to 500 comments
+    const out: GithubComment[] = []
+    for (let page = 1; page <= maxPages; page++) {
+        const res = await githubAppFetch(
+            installationId,
+            `/repos/${owner}/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+        )
+        if (!res.ok) return readError(res, "list PR comments")
+        const items = (await res.json().catch(() => [])) as GithubComment[]
+        if (!Array.isArray(items) || items.length === 0) break
+        out.push(...items)
+        if (items.length < 100) break
+    }
+    return out
+}
+
+// GithubReview is the subset of a PR review we mirror. Only reviews carrying a
+// non-empty body are worth showing as a comment (approve/request-changes with
+// no note are just status).
+export interface GithubReview {
+    id: number
+    body: string | null
+    html_url: string
+    user: GithubActor | null
+    state: string // APPROVED | CHANGES_REQUESTED | COMMENTED | DISMISSED
+    submitted_at: string | null
+}
+
+// listPullRequestReviews paginates a PR's reviews (summary bodies), oldest
+// first. The caller filters to reviews with a body.
+export async function listPullRequestReviews(
+    installationId: number,
+    owner: string,
+    repo: string,
+    number: number,
+    opts: { maxPages?: number } = {},
+): Promise<GithubReview[]> {
+    const maxPages = opts.maxPages ?? 3 // up to 300 reviews
+    const out: GithubReview[] = []
+    for (let page = 1; page <= maxPages; page++) {
+        const res = await githubAppFetch(
+            installationId,
+            `/repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100&page=${page}`,
+        )
+        if (!res.ok) return readError(res, "list PR reviews")
+        const items = (await res.json().catch(() => [])) as GithubReview[]
+        if (!Array.isArray(items) || items.length === 0) break
+        out.push(...items)
+        if (items.length < 100) break
+    }
+    return out
+}

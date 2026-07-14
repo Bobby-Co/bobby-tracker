@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     if (!taskId || !status) return jsonError("bad_request", "task_id and a valid status are required", 400)
 
     try {
-        await applyPRResult(taskId, status, result)
+        await applyPRResult(taskId, status, result, new URL(request.url).origin)
     } catch (err) {
         const e = err as { message?: string }
         return jsonError("apply_failed", e?.message ?? "apply failed", 500)

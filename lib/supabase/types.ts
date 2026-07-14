@@ -83,7 +83,8 @@ export interface GithubInstallation {
 
 /** Tracks Bobby's analysis of a GitHub PR so its live comment can be edited in
  *  place and the run cancelled (migration 0042). `id` doubles as the analyser
- *  task_id. One row per (project, pr_number). */
+ *  task_id. One row per (project, pr_number). `result` (migration 0043) is the
+ *  persisted structured review so the detail page can render it natively. */
 export interface PullRequestAnalysis {
     id: string
     project_id: string
@@ -91,6 +92,59 @@ export interface PullRequestAnalysis {
     github_comment_id: number | null
     head_sha: string | null
     status: "analysing" | "done" | "failed" | "cancelled" | null
+    result: PRAnalysis | null
+    created_at: string
+    updated_at: string
+}
+
+/** A queryable mirror of a GitHub pull request (migration 0043). One row per
+ *  (project, pr_number), upserted from webhook `pull_request` payloads + the
+ *  backfill. `state` is open|closed; `merged` distinguishes a merged-closed PR
+ *  from a plain-closed one. */
+export interface PullRequest {
+    id: string
+    project_id: string
+    pr_number: number
+    github_node_id: string | null
+    title: string
+    body: string | null
+    state: "open" | "closed"
+    merged: boolean
+    draft: boolean
+    author_login: string | null
+    author_avatar_url: string | null
+    html_url: string | null
+    head_ref: string | null
+    base_ref: string | null
+    head_sha: string | null
+    base_sha: string | null
+    additions: number | null
+    deletions: number | null
+    changed_files: number | null
+    comments_count: number | null
+    gh_created_at: string | null
+    gh_updated_at: string | null
+    closed_at: string | null
+    merged_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** A synced GitHub comment on a PR (migration 0043). `source` disambiguates the
+ *  GitHub id spaces: 'issue_comment' (conversation thread), 'review' (a review's
+ *  summary body), 'review_comment' (inline diff — reserved for later). */
+export interface PRComment {
+    id: string
+    project_id: string
+    pr_number: number
+    source: "issue_comment" | "review" | "review_comment"
+    github_comment_id: number
+    author_login: string | null
+    author_avatar_url: string | null
+    body: string | null
+    html_url: string | null
+    gh_created_at: string | null
+    gh_updated_at: string | null
     created_at: string
     updated_at: string
 }

@@ -8,6 +8,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
     const pathname = usePathname()
     const tabs = [
         { href: `/projects/${projectId}/issues`, label: "Issues" },
+        { href: `/projects/${projectId}/pulls`, label: "Pull requests" },
         { href: `/projects/${projectId}/mind`, label: "Mind" },
         { href: `/projects/${projectId}/knowledge`, label: "Knowledge" },
         { href: `/projects/${projectId}/integrations`, label: "Integrations" },

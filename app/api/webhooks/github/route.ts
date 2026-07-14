@@ -2,6 +2,7 @@ import { after } from "next/server"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
+import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/lib/pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Issue, Project } from "@/lib/supabase/types"
 
@@ -88,6 +89,11 @@ export async function POST(request: Request) {
         ) {
             return handlePullRequest(svc, payload, action, new URL(request.url).origin)
         }
+    }
+
+    // PR conversation comments + review summaries → tracker.pr_comments.
+    if (event === "issue_comment" || event === "pull_request_review") {
+        return handlePrComment(svc, event, payload)
     }
 
     // Unhandled event/action — acknowledge and move on.
@@ -278,10 +284,12 @@ async function handleIssue(
 
 // ─── pull-request path ──────────────────────────────────────────────────────
 
-// handlePullRequest reviews a PR: on opened/reopened/synchronize it kicks the
-// detached analyser review (off the ack path); on closed it cancels any
-// in-flight run. Gated on the project being App-linked + sync-enabled; the
-// graph-indexed + diff-fetch gates live in startPRAnalysis.
+// handlePullRequest mirrors a PR into tracker.pull_requests (all actions, incl.
+// drafts + closed/merged, so the Pull-requests tab stays current) and then, for
+// opened/reopened/synchronize, kicks the detached analyser review (off the ack
+// path); on closed it cancels any in-flight run. Gated on the project being
+// App-linked + sync-enabled; the graph-indexed + diff-fetch gates live in
+// startPRAnalysis.
 async function handlePullRequest(
     svc: Svc,
     payload: Record<string, unknown>,
@@ -292,11 +300,24 @@ async function handlePullRequest(
     const pr = payload.pull_request as
         | {
               number?: number
+              node_id?: string
               title?: string
               body?: string | null
+              state?: string
               draft?: boolean
-              base?: { sha?: string }
-              head?: { sha?: string }
+              merged?: boolean
+              merged_at?: string | null
+              html_url?: string
+              additions?: number
+              deletions?: number
+              changed_files?: number
+              comments?: number
+              created_at?: string
+              updated_at?: string
+              closed_at?: string | null
+              user?: { login?: string; avatar_url?: string }
+              base?: { ref?: string; sha?: string }
+              head?: { ref?: string; sha?: string }
           }
         | undefined
     const repoId = repository?.id
@@ -321,13 +342,40 @@ async function handlePullRequest(
         >()
     if (!project) return ack()
 
-    // Closing a PR cancels any in-flight review.
+    // Mirror the PR first (awaited inline — one bounded write — so the row is
+    // durable before we ack, exactly like the issues path).
+    await upsertPullRequest(svc, project.id, {
+        pr_number: number,
+        github_node_id: pr?.node_id ?? null,
+        title: pr?.title ?? "",
+        body: pr?.body ?? null,
+        state: pr?.state === "closed" ? "closed" : "open",
+        merged: pr?.merged ?? !!pr?.merged_at,
+        draft: !!pr?.draft,
+        author_login: pr?.user?.login ?? null,
+        author_avatar_url: pr?.user?.avatar_url ?? null,
+        html_url: pr?.html_url ?? null,
+        head_ref: pr?.head?.ref ?? null,
+        base_ref: pr?.base?.ref ?? null,
+        head_sha: pr?.head?.sha ?? null,
+        base_sha: pr?.base?.sha ?? null,
+        additions: pr?.additions ?? null,
+        deletions: pr?.deletions ?? null,
+        changed_files: pr?.changed_files ?? null,
+        comments_count: pr?.comments ?? null,
+        gh_created_at: pr?.created_at ?? null,
+        gh_updated_at: pr?.updated_at ?? null,
+        closed_at: pr?.closed_at ?? null,
+        merged_at: pr?.merged_at ?? null,
+    })
+
+    // Closing a PR cancels any in-flight review (state already mirrored above).
     if (action === "closed") {
         after(() => cancelPRAnalysisForPR(project.id, number))
         return ack()
     }
 
-    // opened | reopened | synchronize → review. Skip drafts.
+    // opened | reopened | synchronize → review. Skip drafts (still mirrored).
     if (pr?.draft) return ack()
     after(() =>
         startPRAnalysis(
@@ -342,5 +390,93 @@ async function handlePullRequest(
             origin,
         ),
     )
+    return ack()
+}
+
+// ─── PR comment sync ────────────────────────────────────────────────────────
+
+// handlePrComment mirrors a PR's conversation comments (issue_comment, incl.
+// Bobby's own bot comment) and review summaries (pull_request_review, when the
+// review carries a note) into tracker.pr_comments. issue_comment fires for
+// plain issues too — handled only when the issue carries a pull_request ref.
+// No echo suppression: v1 never posts comments from the tracker.
+async function handlePrComment(
+    svc: Svc,
+    event: string,
+    payload: Record<string, unknown>,
+): Promise<Response> {
+    const repository = payload.repository as { id?: number } | undefined
+    const repoId = repository?.id
+    if (!repoId) return ack()
+
+    const { data: project } = await svc
+        .from("projects")
+        .select("id")
+        .eq("github_repo_id", repoId)
+        .eq("github_sync_enabled", true)
+        .maybeSingle<{ id: string }>()
+    if (!project) return ack()
+
+    const action = String((payload as { action?: unknown }).action ?? "")
+
+    if (event === "issue_comment") {
+        const issue = payload.issue as { number?: number; pull_request?: unknown } | undefined
+        // Only PR comments carry a pull_request ref; plain-issue comments are out.
+        if (!issue?.pull_request || !issue.number) return ack()
+        const comment = payload.comment as
+            | {
+                  id?: number
+                  body?: string | null
+                  html_url?: string
+                  user?: { login?: string; avatar_url?: string }
+                  created_at?: string
+                  updated_at?: string
+              }
+            | undefined
+        if (!comment?.id) return ack()
+
+        if (action === "deleted") {
+            await deletePRComment(svc, project.id, "issue_comment", comment.id)
+            return ack()
+        }
+        await upsertPRComment(svc, project.id, {
+            pr_number: issue.number,
+            source: "issue_comment",
+            github_comment_id: comment.id,
+            author_login: comment.user?.login ?? null,
+            author_avatar_url: comment.user?.avatar_url ?? null,
+            body: comment.body ?? null,
+            html_url: comment.html_url ?? null,
+            gh_created_at: comment.created_at ?? null,
+            gh_updated_at: comment.updated_at ?? null,
+        })
+        return ack()
+    }
+
+    // pull_request_review — store a review's summary body (skip bodiless
+    // approvals and dismissals, which are status, not a comment).
+    const prr = payload.pull_request as { number?: number } | undefined
+    const review = payload.review as
+        | {
+              id?: number
+              body?: string | null
+              html_url?: string
+              user?: { login?: string; avatar_url?: string }
+              submitted_at?: string | null
+          }
+        | undefined
+    if (!prr?.number || !review?.id || action === "dismissed") return ack()
+    if (!review.body?.trim()) return ack()
+    await upsertPRComment(svc, project.id, {
+        pr_number: prr.number,
+        source: "review",
+        github_comment_id: review.id,
+        author_login: review.user?.login ?? null,
+        author_avatar_url: review.user?.avatar_url ?? null,
+        body: review.body,
+        html_url: review.html_url ?? null,
+        gh_created_at: review.submitted_at ?? null,
+        gh_updated_at: review.submitted_at ?? null,
+    })
     return ack()
 }

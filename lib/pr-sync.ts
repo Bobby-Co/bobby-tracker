@@ -5,6 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
+import { badge, confidenceTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -85,14 +86,14 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
     let commentId = existing?.github_comment_id ?? null
     if (commentId != null) {
         try {
-            await updateIssueComment(installationId, owner, repo, commentId, loadingComment())
+            await updateIssueComment(installationId, owner, repo, commentId, loadingComment(origin))
         } catch {
             commentId = null
         }
     }
     if (commentId == null) {
         try {
-            const created = await createIssueComment(installationId, owner, repo, pr.number, loadingComment())
+            const created = await createIssueComment(installationId, owner, repo, pr.number, loadingComment(origin))
             commentId = created.id
         } catch {
             return
@@ -137,6 +138,7 @@ export async function applyPRResult(
     taskId: string,
     status: "done" | "failed" | "cancelled",
     result: PRAnalysis | null,
+    origin: string,
 ): Promise<void> {
     const svc = createServiceClient()
 
@@ -159,10 +161,10 @@ export async function applyPRResult(
                 const [owner, repo] = full.split("/")
                 const body =
                     status === "done" && result
-                        ? resultComment(result)
+                        ? resultComment(result, origin)
                         : status === "cancelled"
-                          ? cancelledComment()
-                          : failedComment()
+                          ? cancelledComment(origin)
+                          : failedComment(origin)
                 try {
                     await updateIssueComment(project.github_installation_id!, owner, repo, row.github_comment_id, body)
                 } catch {
@@ -172,7 +174,9 @@ export async function applyPRResult(
         }
     }
 
-    await svc.from("pull_request_analyses").update({ status }).eq("id", taskId)
+    // Persist the structured review alongside the status so the Pull-requests
+    // tab can render it natively (not just via the GitHub comment).
+    await svc.from("pull_request_analyses").update({ status, result: result ?? null }).eq("id", taskId)
 }
 
 // cancelPRAnalysisForPR cancels an in-flight run when a PR is closed. The
@@ -193,50 +197,32 @@ export async function cancelPRAnalysisForPR(projectId: string, prNumber: number)
 
 const PR_MARKER = "<!-- bobby:pr-analysis -->"
 
-function shield(label: string, value: string, color: string): string {
-    const enc = (s: string) => encodeURIComponent(s.replace(/-/g, "--").replace(/_/g, "__"))
-    return `![${label}](https://img.shields.io/badge/${enc(label)}-${enc(value)}-${color}?style=flat-square)`
-}
-
-function verdictColor(v: string): string {
-    switch (v) {
-        case "likely":
-            return "16a34a"
-        case "partial":
-            return "d97706"
-        case "unlikely":
-            return "dc2626"
-        default:
-            return "64748b"
-    }
-}
-
 function esc(s: string): string {
     return s.replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim()
 }
 
-function loadingComment(): string {
+function loadingComment(origin: string): string {
     return [
         PR_MARKER,
         "**Bobby** is reviewing this pull request…",
         "",
-        shield("status", "reviewing", "2563eb"),
+        badge(origin, "reviewing", "blue"),
         "",
         "Reading the diff and tracing its impact through the codebase. This comment updates automatically.",
     ].join("\n")
 }
 
-function cancelledComment(): string {
-    return [PR_MARKER, "**Bobby** — review cancelled", "", shield("status", "cancelled", "64748b"), "", "The PR was closed before the review finished."].join("\n")
+function cancelledComment(origin: string): string {
+    return [PR_MARKER, "**Bobby** — review cancelled", "", badge(origin, "cancelled", "zinc"), "", "The PR was closed before the review finished."].join("\n")
 }
 
-function failedComment(): string {
-    return [PR_MARKER, "**Bobby** — review unavailable", "", shield("status", "failed", "dc2626"), "", "Bobby couldn't complete the review this time."].join("\n")
+function failedComment(origin: string): string {
+    return [PR_MARKER, "**Bobby** — review unavailable", "", badge(origin, "failed", "rose"), "", "Bobby couldn't complete the review this time."].join("\n")
 }
 
-function resultComment(r: PRAnalysis): string {
+function resultComment(r: PRAnalysis, origin: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
-    if (r.confidence) out.push(shield("confidence", r.confidence, verdictColor(r.confidence === "high" ? "likely" : r.confidence === "medium" ? "partial" : "")), "")
+    if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
 
     if (r.summary?.trim()) out.push(`> ${r.summary.trim().replace(/\n/g, "\n> ")}`, "")
 
@@ -250,7 +236,7 @@ function resultComment(r: PRAnalysis): string {
     if (r.fix_claims?.length) {
         out.push("**Fix claims**", "", "| Claim | Verdict | Why |", "|:--|:--|:--|")
         for (const c of r.fix_claims) {
-            out.push(`| ${esc(c.claim)} | ${shield("", c.verdict || "unclear", verdictColor(c.verdict))} | ${esc(c.reason)} |`)
+            out.push(`| ${esc(c.claim)} | ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} | ${esc(c.reason)} |`)
         }
         out.push("")
     }
