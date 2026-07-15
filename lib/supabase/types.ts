@@ -182,16 +182,32 @@ export interface PRImpactRef {
     file: string
     reason: string
 }
+
+/** A grounded, cited review item on the changed code (analyser ADR-0054). */
+export interface PRFinding {
+    file: string
+    line?: number
+    severity: "bug" | "risk" | "style" | "nit" | string
+    /** Short scannable label (≤ ~8 words); detail is the one-sentence explanation. */
+    title?: string
+    detail: string
+}
 export interface PRAnalysis {
     summary: string
     impact: string
     impact_files?: PRImpactRef[]
+    /** Grounded code-review findings — the core of the review (ADR-0054). */
+    findings?: PRFinding[]
+    /** Only present when the PR description makes an explicit claim (ADR-0054). */
     fix_claims?: PRFixVerdict[]
+    /** Retired analyser-side (folded into findings); kept for old rows. */
     concerns?: string[]
     confidence?: string
     markdown?: string
     cost_usd?: number
     duration_ms?: number
+    /** Session-insight id → powers the deep-dive chat (analyser ADR-0055). */
+    insight_id?: string
 }
 
 /** Shape returned by GET /api/github/repos — a flattened subset of the

@@ -36,6 +36,16 @@ export function confidenceTone(c: string): BadgeTone {
 export function verdictTone(v: string): BadgeTone {
     return v === "likely" ? "emerald" : v === "partial" ? "amber" : v === "unlikely" ? "rose" : "zinc"
 }
+// Finding severity → tone (analyser ADR-0054): bug=rose, risk=amber, style=blue,
+// nit/other=zinc.
+export function severityTone(s: string): BadgeTone {
+    return s === "bug" ? "rose" : s === "risk" ? "amber" : s === "style" ? "blue" : "zinc"
+}
+// Human-facing label for a finding severity — softer than the raw machine value
+// ("risk" reads as advisory "review", "style" as "convention").
+export function severityLabel(s: string): string {
+    return s === "risk" ? "review" : s === "style" ? "convention" : s || "note"
+}
 
 // ── text metrics ────────────────────────────────────────────────────────────
 // Helvetica-Bold advance widths (per 1000 em) so the pill hugs its text without

@@ -1,7 +1,8 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { MindPanel } from "@/components/mind/mind-panel"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
@@ -11,8 +12,21 @@ type KnowledgeData = {
     analyser: ProjectAnalyser | null
 }
 
+// Suspense boundary: MindPageInner reads useSearchParams (the PR deep-dive
+// passes ?c=<conversation_id>, ADR-0055), which Next requires be wrapped.
 export default function MindPage() {
+    return (
+        <Suspense fallback={null}>
+            <MindPageInner />
+        </Suspense>
+    )
+}
+
+function MindPageInner() {
     const { id } = useParams<{ id: string }>()
+    // A PR deep-dive opens this page with ?c=<conversation_id> — reuse it so the
+    // analyser's pre-seeded managed context loads on the first turn (ADR-0055).
+    const seededConversation = useSearchParams().get("c") || undefined
     const { data, error, loading } = useApi<KnowledgeData>(
         id ? `/api/projects/${id}/knowledge` : null,
     )
@@ -68,6 +82,7 @@ export default function MindPage() {
             projectId={id}
             repo={project ? { repo_url: project.repo_url, repo_full_name: project.repo_full_name } : null}
             indexedSha={analyser?.last_indexed_sha ?? null}
+            initialConversationId={seededConversation}
         />
     )
 }

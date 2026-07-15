@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, confidenceTone, verdictTone } from "@/lib/badge"
+import { badge, confidenceTone, severityLabel, severityTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -126,6 +126,7 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
             baseSha: pr.baseSha || undefined,
             headSha: pr.headSha || undefined,
             files,
+            projectId: project.id,
         },
         row.id,
         { url: `${origin}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
@@ -224,13 +225,26 @@ function resultComment(r: PRAnalysis, origin: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
     if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
 
-    if (r.summary?.trim()) out.push(`> ${r.summary.trim().replace(/\n/g, "\n> ")}`, "")
+    // Summary is short markdown bullets (analyser ADR-0054) — render them plainly
+    // so they read as a scannable list, not a wrapped blockquote.
+    if (r.summary?.trim()) out.push(r.summary.trim(), "")
 
     if (r.impact?.trim()) out.push("**Impact**", "", r.impact.trim(), "")
     if (r.impact_files?.length) {
         out.push("<details><summary>Affected files</summary>", "")
         for (const f of r.impact_files) out.push(`- \`${f.file}\` — ${esc(f.reason)}`)
         out.push("", "</details>", "")
+    }
+
+    if (r.findings?.length) {
+        out.push("**Review**", "")
+        for (const f of r.findings) {
+            const loc = f.line ? `\`${f.file}:${f.line}\`` : `\`${f.file}\``
+            const title = esc(f.title || f.detail)
+            out.push(`- ${badge(origin, severityLabel(f.severity || ""), severityTone(f.severity || ""))} **${title}** — ${loc}`)
+            if (f.title && f.detail && f.detail.trim() !== f.title.trim()) out.push(`  ${esc(f.detail)}`)
+        }
+        out.push("")
     }
 
     if (r.fix_claims?.length) {

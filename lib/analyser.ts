@@ -297,6 +297,9 @@ export interface PRAnalyseInput {
     headSha?: string
     files:   PRAnalyseFile[]
     maxBudgetUsd?: number
+    /** Tracker project uuid — persisted with the insight + scopes the deep-dive
+     *  chat (analyser ADR-0055). */
+    projectId?: string
     /** Relay routing (X-Bobby-User); ignored when no worker is connected. */
     userId?: string
 }
@@ -320,6 +323,7 @@ export async function runPRAnalysis(
         },
         body: JSON.stringify({
             repo_id: input.repoId,
+            project_id: input.projectId,
             number:  input.number,
             title:   input.title,
             body:    input.body,
@@ -347,6 +351,26 @@ export async function cancelPRAnalysis(taskId: string): Promise<void> {
         headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ task_id: taskId }),
     }).catch(() => {})
+}
+
+// deepDivePRInsight materialises a stored PR session-insight into a chat
+// conversation (analyser POST /pr/insight/{id}/deep-dive, ADR-0055) and returns
+// the fresh conversation_id — open the Mind chat with it and the seeded PR
+// context loads on the first turn.
+export async function deepDivePRInsight(
+    insightId: string,
+): Promise<{ conversation_id: string; repo_id?: string; project_id?: string }> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/pr/insight/${encodeURIComponent(insightId)}/deep-dive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `deep-dive failed: HTTP ${res.status}`, err.code || "deep_dive_failed")
+    }
+    return res.json() as Promise<{ conversation_id: string; repo_id?: string; project_id?: string }>
 }
 
 // ─── /issues/preferences (per-project analyse defaults) ─────────────────────

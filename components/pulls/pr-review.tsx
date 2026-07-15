@@ -1,9 +1,12 @@
 "use client"
 
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
-import type { PRAnalysis, PullRequestAnalysis } from "@/lib/supabase/types"
+import { severityLabel } from "@/lib/badge"
+import type { PRAnalysis, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Renders Bobby's persisted PR review (pull_request_analyses.result) natively —
 // the same structured shape the analyser posts to the GitHub comment, minus the
@@ -31,6 +34,19 @@ function confidenceClasses(c: string): string {
             return "bg-amber-50 text-amber-700"
         default:
             return "bg-rose-50 text-rose-700"
+    }
+}
+
+function severityClasses(s: string): string {
+    switch (s) {
+        case "bug":
+            return "bg-rose-50 text-rose-700"
+        case "risk":
+            return "bg-amber-50 text-amber-700"
+        case "style":
+            return "bg-blue-50 text-blue-700"
+        default:
+            return "bg-zinc-100 text-zinc-600"
     }
 }
 
@@ -96,12 +112,12 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
 
     return (
         <Shell>
-            <Review r={result} />
+            <Review r={result} projectId={analysis?.project_id ?? null} />
         </Shell>
     )
 }
 
-function Review({ r }: { r: PRAnalysis }) {
+function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
     return (
         <div className="flex flex-col gap-4">
             {r.confidence && (
@@ -143,6 +159,17 @@ function Review({ r }: { r: PRAnalysis }) {
                 </div>
             )}
 
+            {r.findings && r.findings.length > 0 && (
+                <div>
+                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Review</h3>
+                    <div className="flex flex-col gap-2">
+                        {r.findings.map((f, i) => (
+                            <Finding key={i} f={f} />
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {r.fix_claims && r.fix_claims.length > 0 && (
                 <div>
                     <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Fix claims</h3>
@@ -173,9 +200,84 @@ function Review({ r }: { r: PRAnalysis }) {
                 </div>
             )}
 
-            {r.duration_ms != null && (
-                <p className="text-[11px] text-[color:var(--c-text-dim)]">Reviewed in {(r.duration_ms / 1000).toFixed(1)}s</p>
+            {(r.duration_ms != null || (r.insight_id && projectId)) && (
+                <div className="flex items-center justify-between gap-3 pt-1">
+                    {r.insight_id && projectId ? <DeepDiveButton insightId={r.insight_id} projectId={projectId} /> : <span />}
+                    {r.duration_ms != null && (
+                        <p className="text-[11px] text-[color:var(--c-text-dim)]">Reviewed in {(r.duration_ms / 1000).toFixed(1)}s</p>
+                    )}
+                </div>
             )}
+        </div>
+    )
+}
+
+// One scannable line: severity chip · short title · file. The longer detail sits
+// muted underneath, and only when it adds something over the title.
+function Finding({ f }: { f: PRFinding }) {
+    const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
+    const title = (f.title && f.title.trim()) || f.detail
+    const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())
+    return (
+        <div className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2.5 py-2">
+            <div className="flex items-baseline gap-2">
+                <span className={cn("shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide", severityClasses(f.severity))}>
+                    {severityLabel(f.severity)}
+                </span>
+                <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-[color:var(--c-text)]">{title}</span>
+                <code className="max-w-[42%] shrink-0 truncate font-mono text-[10.5px] text-[color:var(--c-text-muted)]" title={loc}>
+                    {loc}
+                </code>
+            </div>
+            {hasDetail && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{f.detail}</p>}
+        </div>
+    )
+}
+
+// DeepDiveButton opens the Mind chat seeded with this PR's session insight
+// (analyser ADR-0055): it mints a conversation via the tracker route, then
+// navigates to the Mind page with that conversation_id so the first turn is
+// already grounded in the PR.
+function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId: string }) {
+    const router = useRouter()
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState(false)
+
+    async function open() {
+        if (busy) return
+        setBusy(true)
+        setErr(false)
+        try {
+            const res = await fetch(`/api/projects/${projectId}/pr-insight/deep-dive`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ insight_id: insightId }),
+            })
+            if (!res.ok) throw new Error(String(res.status))
+            const j = (await res.json()) as { conversation_id?: string }
+            if (!j.conversation_id) throw new Error("no conversation")
+            router.push(`/projects/${projectId}/mind?c=${encodeURIComponent(j.conversation_id)}`)
+        } catch {
+            setErr(true)
+            setBusy(false)
+        }
+    }
+
+    return (
+        <div className="flex items-center gap-2">
+            <button
+                type="button"
+                onClick={open}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-3 py-1 text-[12px] font-medium text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
+            >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M12 3a9 9 0 1 0 9 9" />
+                    <path d="M12 7v5l3 2" />
+                </svg>
+                {busy ? "Opening…" : "Deep dive with Bobby"}
+            </button>
+            {err && <span className="text-[11px] text-rose-600">Couldn&apos;t open</span>}
         </div>
     )
 }

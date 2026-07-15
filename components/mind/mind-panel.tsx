@@ -64,18 +64,23 @@ export function MindPanel({
     projectId,
     repo,
     indexedSha,
+    initialConversationId,
 }: {
     projectId: string
     repo: RepoRef | null
     indexedSha: string | null
+    /** When set (PR deep-dive, ADR-0055), reuse this conversation so the
+     *  analyser's pre-seeded managed context loads on the first turn. */
+    initialConversationId?: string
 }) {
     const [question, setQuestion] = useState("")
     const [busy, setBusy] = useState(false)
     const [messages, setMessages] = useState<Message[]>([])
     const endRef = useRef<HTMLDivElement>(null)
     // Stable id for this conversation, keying the analyser's managed-context
-    // store (ADR-0049). One per mount — a page reload starts a fresh memory.
-    const [conversationId] = useState(() => crypto.randomUUID())
+    // store (ADR-0049). A PR deep-dive supplies a pre-seeded id (ADR-0055);
+    // otherwise one per mount — a page reload starts a fresh memory.
+    const [conversationId] = useState(() => initialConversationId || crypto.randomUUID())
 
     // Cited-issue drawer: clicking an issue chip opens the issue in a slide-over
     // over the mind space (no navigation). We fetch the full issue + label/status
