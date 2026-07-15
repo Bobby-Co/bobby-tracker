@@ -203,6 +203,11 @@ export interface PRAnalysis {
     /** Retired analyser-side (folded into findings); kept for old rows. */
     concerns?: string[]
     confidence?: string
+    /** Merge recommendation + one-line reason (analyser ADR-0056). */
+    verdict?: "approve" | "request_changes" | "comment" | string
+    verdict_reason?: string
+    /** Verify-before-merge items (analyser ADR-0056). */
+    checklist?: string[]
     markdown?: string
     cost_usd?: number
     duration_ms?: number

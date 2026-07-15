@@ -46,6 +46,13 @@ export function severityTone(s: string): BadgeTone {
 export function severityLabel(s: string): string {
     return s === "risk" ? "review" : s === "style" ? "convention" : s || "note"
 }
+// Merge verdict (ADR-0056) → tone + human label.
+export function mergeVerdictTone(v: string): BadgeTone {
+    return v === "approve" ? "emerald" : v === "request_changes" ? "rose" : "amber"
+}
+export function mergeVerdictLabel(v: string): string {
+    return v === "approve" ? "approve" : v === "request_changes" ? "changes requested" : "comment"
+}
 
 // ── text metrics ────────────────────────────────────────────────────────────
 // Helvetica-Bold advance widths (per 1000 em) so the pill hugs its text without

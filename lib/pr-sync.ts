@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, confidenceTone, severityLabel, severityTone, verdictTone } from "@/lib/badge"
+import { badge, confidenceTone, mergeVerdictLabel, mergeVerdictTone, severityLabel, severityTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -223,6 +223,10 @@ function failedComment(origin: string): string {
 
 function resultComment(r: PRAnalysis, origin: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
+    if (r.verdict) {
+        out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict)), "")
+        if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
+    }
     if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
 
     // Summary is short markdown bullets (analyser ADR-0054) — render them plainly
@@ -258,6 +262,12 @@ function resultComment(r: PRAnalysis, origin: string): string {
     if (r.concerns?.length) {
         out.push("**Concerns**", "")
         for (const c of r.concerns) out.push(`- ${c}`)
+        out.push("")
+    }
+
+    if (r.checklist?.length) {
+        out.push("**Before merge**", "")
+        for (const c of r.checklist) out.push(`- [ ] ${esc(c)}`)
         out.push("")
     }
 
