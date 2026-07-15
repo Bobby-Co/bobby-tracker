@@ -14,8 +14,9 @@ export function GET(request: Request) {
     const toneParam = searchParams.get("tone") ?? "zinc"
     const tone = isBadgeTone(toneParam) ? toneParam : "zinc"
     const dot = searchParams.get("dot") !== "0"
+    const icon = searchParams.get("icon") || undefined
 
-    const svg = renderBadge(text, tone, { dot })
+    const svg = renderBadge(text, tone, { dot, icon })
 
     return new Response(svg, {
         headers: {

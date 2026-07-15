@@ -249,6 +249,32 @@ export function MindPanel({
         [busy, messages, projectId, conversationId, patchAssistant, openIssue],
     )
 
+    // Deep-dive (ADR-0055): arriving from a PR review with a pre-seeded
+    // conversation, auto-ask an opener so the chat lands "already chatting" — a
+    // user context bubble + a streaming, PR-grounded answer. Fires once, and only
+    // for a FRESH deep-dive (the stash is written on the click and cleared here),
+    // so reloading the same URL is just a normal seeded conversation.
+    const deepDiveFired = useRef(false)
+    useEffect(() => {
+        if (!initialConversationId || deepDiveFired.current) return
+        let raw: string | null = null
+        try {
+            raw = sessionStorage.getItem(`bobby:deepdive:${initialConversationId}`)
+        } catch {}
+        if (!raw) return
+        deepDiveFired.current = true
+        try {
+            sessionStorage.removeItem(`bobby:deepdive:${initialConversationId}`)
+        } catch {}
+        let pr: { number?: number; title?: string } = {}
+        try {
+            pr = JSON.parse(raw)
+        } catch {}
+        const ref = pr.number ? `PR #${pr.number}${pr.title ? ` — ${pr.title}` : ""}` : "this pull request"
+        void submit(`Give me an overview of ${ref} and the top things worth checking before I merge.`)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialConversationId])
+
     // Backdrop blur ramps from a crisp 1px at rest to a deep 20px once the first
     // question is sent (messages populate), then stays — a soft focus-pull as the
     // conversation begins.

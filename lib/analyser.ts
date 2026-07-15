@@ -359,7 +359,7 @@ export async function cancelPRAnalysis(taskId: string): Promise<void> {
 // context loads on the first turn.
 export async function deepDivePRInsight(
     insightId: string,
-): Promise<{ conversation_id: string; repo_id?: string; project_id?: string }> {
+): Promise<{ conversation_id: string; repo_id?: string; project_id?: string; pr_number?: number; pr_title?: string }> {
     const { http } = assertConfigured()
     const res = await fetch(`${http}/pr/insight/${encodeURIComponent(insightId)}/deep-dive`, {
         method: "POST",
@@ -370,7 +370,7 @@ export async function deepDivePRInsight(
         const err = body?.error || {}
         throw new AnalyserError(err.message || `deep-dive failed: HTTP ${res.status}`, err.code || "deep_dive_failed")
     }
-    return res.json() as Promise<{ conversation_id: string; repo_id?: string; project_id?: string }>
+    return res.json() as Promise<{ conversation_id: string; repo_id?: string; project_id?: string; pr_number?: number; pr_title?: string }>
 }
 
 // ─── /issues/preferences (per-project analyse defaults) ─────────────────────

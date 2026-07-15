@@ -45,6 +45,8 @@ function severityClasses(s: string): string {
             return "bg-amber-50 text-amber-700"
         case "style":
             return "bg-blue-50 text-blue-700"
+        case "good":
+            return "bg-emerald-50 text-emerald-700"
         default:
             return "bg-zinc-100 text-zinc-600"
     }
@@ -250,11 +252,11 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
 
             {r.checklist && r.checklist.length > 0 && (
                 <div>
-                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Before merge</h3>
+                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Nice to check</h3>
                     <ul className="flex flex-col gap-1.5">
                         {r.checklist.map((c, i) => (
-                            <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text)]">
-                                <span className="mt-[2px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border border-[color:var(--c-border-strong)]" aria-hidden />
+                            <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
+                                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[color:var(--c-text-dim)]" aria-hidden />
                                 <span>{c}</span>
                             </li>
                         ))}
@@ -316,8 +318,16 @@ function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId
                 body: JSON.stringify({ insight_id: insightId }),
             })
             if (!res.ok) throw new Error(String(res.status))
-            const j = (await res.json()) as { conversation_id?: string }
+            const j = (await res.json()) as { conversation_id?: string; pr_number?: number; pr_title?: string }
             if (!j.conversation_id) throw new Error("no conversation")
+            // Stash the PR reference so the Mind chat can open with a context bubble
+            // + an auto-asked opener (read + cleared on arrival). Session-scoped.
+            try {
+                sessionStorage.setItem(
+                    `bobby:deepdive:${j.conversation_id}`,
+                    JSON.stringify({ number: j.pr_number, title: j.pr_title }),
+                )
+            } catch {}
             router.push(`/projects/${projectId}/mind?c=${encodeURIComponent(j.conversation_id)}`)
         } catch {
             setErr(true)

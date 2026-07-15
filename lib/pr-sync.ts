@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, confidenceTone, mergeVerdictLabel, mergeVerdictTone, severityLabel, severityTone, verdictTone } from "@/lib/badge"
+import { badge, confidenceTone, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -224,7 +224,7 @@ function failedComment(origin: string): string {
 function resultComment(r: PRAnalysis, origin: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
     if (r.verdict) {
-        out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict)), "")
+        out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict) }), "")
         if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
     }
     if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
@@ -233,7 +233,7 @@ function resultComment(r: PRAnalysis, origin: string): string {
     // so they read as a scannable list, not a wrapped blockquote.
     if (r.summary?.trim()) out.push(r.summary.trim(), "")
 
-    if (r.impact?.trim()) out.push("**Impact**", "", r.impact.trim(), "")
+    if (r.impact?.trim()) out.push(`${icon(origin, "nodes")} **Impact**`, "", r.impact.trim(), "")
     if (r.impact_files?.length) {
         out.push("<details><summary>Affected files</summary>", "")
         for (const f of r.impact_files) out.push(`- \`${f.file}\` — ${esc(f.reason)}`)
@@ -241,18 +241,19 @@ function resultComment(r: PRAnalysis, origin: string): string {
     }
 
     if (r.findings?.length) {
-        out.push("**Review**", "")
+        out.push(`${icon(origin, "search")} **Review**`, "")
         for (const f of r.findings) {
             const loc = f.line ? `\`${f.file}:${f.line}\`` : `\`${f.file}\``
             const title = esc(f.title || f.detail)
-            out.push(`- ${badge(origin, severityLabel(f.severity || ""), severityTone(f.severity || ""))} **${title}** — ${loc}`)
+            const chip = badge(origin, severityLabel(f.severity || ""), severityTone(f.severity || ""), { icon: severityIcon(f.severity || "") })
+            out.push(`- ${chip} **${title}** — ${loc}`)
             if (f.title && f.detail && f.detail.trim() !== f.title.trim()) out.push(`  ${esc(f.detail)}`)
         }
         out.push("")
     }
 
     if (r.fix_claims?.length) {
-        out.push("**Fix claims**", "", "| Claim | Verdict | Why |", "|:--|:--|:--|")
+        out.push(`${icon(origin, "target")} **Fix claims**`, "", "| Claim | Verdict | Why |", "|:--|:--|:--|")
         for (const c of r.fix_claims) {
             out.push(`| ${esc(c.claim)} | ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} | ${esc(c.reason)} |`)
         }
@@ -266,8 +267,8 @@ function resultComment(r: PRAnalysis, origin: string): string {
     }
 
     if (r.checklist?.length) {
-        out.push("**Before merge**", "")
-        for (const c of r.checklist) out.push(`- [ ] ${esc(c)}`)
+        out.push(`${icon(origin, "list")} **Nice to check**`, "")
+        for (const c of r.checklist) out.push(`- ${esc(c)}`)
         out.push("")
     }
 

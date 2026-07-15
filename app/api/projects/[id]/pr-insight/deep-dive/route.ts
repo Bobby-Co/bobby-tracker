@@ -31,9 +31,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
 
     try {
-        const { conversation_id } = await deepDivePRInsight(insightId)
+        const { conversation_id, pr_number, pr_title } = await deepDivePRInsight(insightId)
         if (!conversation_id) return jsonError("deep_dive_failed", "no conversation returned", 502)
-        return Response.json({ conversation_id })
+        return Response.json({ conversation_id, pr_number, pr_title })
     } catch (e) {
         const message = e instanceof Error ? e.message : String(e)
         const code = e instanceof AnalyserError ? e.code : "deep_dive_failed"

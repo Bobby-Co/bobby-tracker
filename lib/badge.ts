@@ -36,22 +36,29 @@ export function confidenceTone(c: string): BadgeTone {
 export function verdictTone(v: string): BadgeTone {
     return v === "likely" ? "emerald" : v === "partial" ? "amber" : v === "unlikely" ? "rose" : "zinc"
 }
-// Finding severity → tone (analyser ADR-0054): bug=rose, risk=amber, style=blue,
-// nit/other=zinc.
+// Finding severity → tone (analyser ADR-0054/0056): bug=rose, risk=amber,
+// style=blue, good=emerald, nit/other=zinc.
 export function severityTone(s: string): BadgeTone {
-    return s === "bug" ? "rose" : s === "risk" ? "amber" : s === "style" ? "blue" : "zinc"
+    return s === "bug" ? "rose" : s === "risk" ? "amber" : s === "style" ? "blue" : s === "good" ? "emerald" : "zinc"
 }
-// Human-facing label for a finding severity — softer than the raw machine value
-// ("risk" reads as advisory "review", "style" as "convention").
+// Human-facing label — the disposition chip the reviewer shows: bug reads
+// "critical", risk "review", style "convention", good "good".
 export function severityLabel(s: string): string {
-    return s === "risk" ? "review" : s === "style" ? "convention" : s || "note"
+    return s === "bug" ? "critical" : s === "risk" ? "review" : s === "style" ? "convention" : s === "good" ? "good" : s || "note"
 }
-// Merge verdict (ADR-0056) → tone + human label.
+// Icon glyph name (see ICON_PATHS) for a finding's disposition chip.
+export function severityIcon(s: string): string {
+    return s === "bug" ? "alert" : s === "risk" ? "search" : s === "style" ? "code" : s === "good" ? "check" : ""
+}
+// Merge verdict (ADR-0056) → tone + human label + icon.
 export function mergeVerdictTone(v: string): BadgeTone {
     return v === "approve" ? "emerald" : v === "request_changes" ? "rose" : "amber"
 }
 export function mergeVerdictLabel(v: string): string {
     return v === "approve" ? "approve" : v === "request_changes" ? "changes requested" : "comment"
+}
+export function mergeVerdictIcon(v: string): string {
+    return v === "approve" ? "check" : v === "request_changes" ? "x" : "chat"
 }
 
 // ── text metrics ────────────────────────────────────────────────────────────
@@ -84,9 +91,22 @@ const MAX_CHARS = 42
 
 // renderBadge builds a rounded-pill SVG: tinted fill + hairline, an optional
 // leading dot, and centered semibold text — the app's chip, as an image.
-export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean } = {}): string {
+// Tabler-style line-icon glyphs (24×24, stroke) — the same visual language as the
+// in-app SVG icons, so the GitHub-comment chips match the UI.
+const ICON_PATHS: Record<string, string> = {
+    check: `<path d="M20 6L9 17l-5-5"/>`,
+    x: `<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>`,
+    chat: `<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>`,
+    search: `<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>`,
+    alert: `<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/>`,
+    code: `<path d="M8 6l-5 6 5 6M16 6l5 6-5 6"/>`,
+    list: `<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 5.5l1 1 1.6-1.9M4.5 11.5l1 1 1.6-1.9M4.5 17.5l1 1 1.6-1.9"/>`,
+    target: `<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>`,
+    nodes: `<circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.1 10.9l7.8-3.7M8.1 13.1l7.8 3.7"/>`,
+}
+
+export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
     const label = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS - 1) + "…" : text
-    const dot = opts.dot ?? true
     const c = TONE_HEX[tone]
 
     const H = 20
@@ -95,34 +115,62 @@ export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean
     const rightPad = 9
     const dotR = 3
     const gap = 5
+    const iconSize = 12
 
-    const textX = dot ? leftPad + dotR * 2 + gap : leftPad
+    const hasIcon = !!opts.icon && !!ICON_PATHS[opts.icon]
+    const dot = !hasIcon && (opts.dot ?? true)
+
+    const leadW = hasIcon ? iconSize : dot ? dotR * 2 : 0
+    const textX = leadW ? leftPad + leadW + gap : leftPad
     const tw = textWidth(label, fontSize)
     const width = Math.ceil(textX + tw + rightPad)
 
-    const dotSvg = dot
-        ? `<circle cx="${leftPad + dotR}" cy="${H / 2}" r="${dotR}" fill="${c.dot}"/>`
-        : ""
+    let lead = ""
+    if (hasIcon) {
+        const scale = iconSize / 24
+        const y = (H - iconSize) / 2
+        lead = `<g transform="translate(${leftPad},${y}) scale(${scale.toFixed(4)})" fill="none" stroke="${c.fg}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[opts.icon!]}</g>`
+    } else if (dot) {
+        lead = `<circle cx="${leftPad + dotR}" cy="${H / 2}" r="${dotR}" fill="${c.dot}"/>`
+    }
 
     return [
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${H}" viewBox="0 0 ${width} ${H}" role="img" aria-label="${escapeXml(label)}">`,
         `<rect x="0.5" y="0.5" width="${width - 1}" height="${H - 1}" rx="${(H - 1) / 2}" fill="${c.bg}" stroke="${c.dot}" stroke-opacity="0.4"/>`,
-        dotSvg,
+        lead,
         `<text x="${textX}" y="14" font-family="${FONT_FAMILY}" font-size="${fontSize}" font-weight="600" fill="${c.fg}">${escapeXml(label)}</text>`,
         `</svg>`,
     ].join("")
 }
 
+// renderIcon builds a small standalone line-icon (no pill) — used to prefix the
+// comment's section headers so they carry the same glyphs as the app.
+export function renderIcon(name: string, tone: BadgeTone = "zinc"): string {
+    const path = ICON_PATHS[name] ?? ICON_PATHS.search
+    const c = TONE_HEX[tone]
+    const S = 16
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 24 24" fill="none" stroke="${c.fg}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" role="img">${path}</svg>`
+}
+
 // badgeUrl builds the absolute /api/badge URL (origin is this app's public
 // origin — the same one comment renderers already use for images).
-export function badgeUrl(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean } = {}): string {
+export function badgeUrl(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
     const q = new URLSearchParams({ text, tone })
     if (opts.dot === false) q.set("dot", "0")
+    if (opts.icon) q.set("icon", opts.icon)
     return `${origin}/api/badge?${q.toString()}`
 }
 
 // badge returns the markdown image embed for a comment.
-export function badge(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean } = {}): string {
+export function badge(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
     const alt = text.replace(/[[\]]/g, "")
     return `![${alt}](${badgeUrl(origin, text, tone, opts)})`
+}
+
+// icon returns the markdown embed for a standalone section-header glyph.
+export function iconUrl(origin: string, name: string, tone: BadgeTone = "zinc"): string {
+    return `${origin}/api/icon?${new URLSearchParams({ name, tone }).toString()}`
+}
+export function icon(origin: string, name: string, tone: BadgeTone = "zinc"): string {
+    return `![](${iconUrl(origin, name, tone)})`
 }
