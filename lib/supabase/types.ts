@@ -187,8 +187,10 @@ export interface PRImpactRef {
 export interface PRFinding {
     file: string
     line?: number
-    severity: "bug" | "risk" | "style" | "nit" | string
-    /** Short scannable label (≤ ~8 words); detail is the one-sentence explanation. */
+    /** STATE chosen by impact (ADR-0056): "critical" | "review" | "good". Older
+     *  rows may carry the legacy bug|risk|style|nit — normalised by findingState. */
+    severity: "critical" | "review" | "good" | string
+    /** Short topic (≤ ~8 words), may lead with a category tag ("Convention:"). */
     title?: string
     detail: string
 }

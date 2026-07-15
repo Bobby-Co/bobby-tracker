@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
-import { severityLabel } from "@/lib/badge"
+import { findingState, severityLabel } from "@/lib/badge"
 import type { PRAnalysis, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Renders Bobby's persisted PR review (pull_request_analyses.result) natively —
@@ -37,19 +37,10 @@ function confidenceClasses(c: string): string {
     }
 }
 
+// Traffic-light chip by state: critical=rose, review=amber, good=emerald.
 function severityClasses(s: string): string {
-    switch (s) {
-        case "bug":
-            return "bg-rose-50 text-rose-700"
-        case "risk":
-            return "bg-amber-50 text-amber-700"
-        case "style":
-            return "bg-blue-50 text-blue-700"
-        case "good":
-            return "bg-emerald-50 text-emerald-700"
-        default:
-            return "bg-zinc-100 text-zinc-600"
-    }
+    const st = findingState(s)
+    return st === "critical" ? "bg-rose-50 text-rose-700" : st === "good" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
 }
 
 function verdictBannerClasses(v: string): string {

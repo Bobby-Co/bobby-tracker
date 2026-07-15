@@ -36,19 +36,26 @@ export function confidenceTone(c: string): BadgeTone {
 export function verdictTone(v: string): BadgeTone {
     return v === "likely" ? "emerald" : v === "partial" ? "amber" : v === "unlikely" ? "rose" : "zinc"
 }
-// Finding severity → tone (analyser ADR-0054/0056): bug=rose, risk=amber,
-// style=blue, good=emerald, nit/other=zinc.
-export function severityTone(s: string): BadgeTone {
-    return s === "bug" ? "rose" : s === "risk" ? "amber" : s === "style" ? "blue" : s === "good" ? "emerald" : "zinc"
+// A finding's STATE — the traffic-light disposition the chip shows (analyser
+// ADR-0056): "critical" (block), "review" (worth a manual look), "good". Chosen
+// by impact, not by the topic (which lives in the title). Normalises the legacy
+// bug/risk/style/nit vocabulary so old stored rows still render.
+export function findingState(s: string): "critical" | "review" | "good" {
+    if (s === "critical" || s === "bug") return "critical"
+    if (s === "good") return "good"
+    return "review" // review, risk, style, nit, or anything else
 }
-// Human-facing label — the disposition chip the reviewer shows: bug reads
-// "critical", risk "review", style "convention", good "good".
+// The chip label IS the state word.
 export function severityLabel(s: string): string {
-    return s === "bug" ? "critical" : s === "risk" ? "review" : s === "style" ? "convention" : s === "good" ? "good" : s || "note"
+    return findingState(s)
 }
-// Icon glyph name (see ICON_PATHS) for a finding's disposition chip.
+export function severityTone(s: string): BadgeTone {
+    const st = findingState(s)
+    return st === "critical" ? "rose" : st === "good" ? "emerald" : "amber"
+}
 export function severityIcon(s: string): string {
-    return s === "bug" ? "alert" : s === "risk" ? "search" : s === "style" ? "code" : s === "good" ? "check" : ""
+    const st = findingState(s)
+    return st === "critical" ? "alert" : st === "good" ? "check" : "search"
 }
 // Merge verdict (ADR-0056) → tone + human label + icon.
 export function mergeVerdictTone(v: string): BadgeTone {
