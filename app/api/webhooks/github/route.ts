@@ -1,11 +1,12 @@
 import { after } from "next/server"
+import { kickoffJob } from "@/lib/analyser"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
 import { deleteIssueComment, upsertIssueComment } from "@/lib/issue-store"
 import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/lib/pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { Issue, Project } from "@/lib/supabase/types"
+import type { Issue, Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 // INBOUND WEBHOOK — public (NO requireUser). GitHub signs each delivery with
 // the app webhook secret; we prove authenticity by HMAC over the RAW body
@@ -95,6 +96,11 @@ export async function POST(request: Request) {
     // PR conversation comments + review summaries → tracker.pr_comments.
     if (event === "issue_comment" || event === "pull_request_review") {
         return handlePrComment(svc, event, payload)
+    }
+
+    // A push to the default branch triggers an incremental graph update.
+    if (event === "push") {
+        return handlePush(svc, payload)
     }
 
     // Unhandled event/action — acknowledge and move on.
@@ -391,6 +397,76 @@ async function handlePullRequest(
             origin,
         ),
     )
+    return ack()
+}
+
+// ─── push → incremental graph update ────────────────────────────────────────
+
+// handlePush turns a default-branch push into an incremental graph update.
+// The heavy lifting (clone, diff, smart-update) runs on the analyser; here we
+// only map repo→project, confirm the project has an indexed graph, and enqueue.
+// The analyser's coalescing queue collapses a burst of pushes to the same repo
+// into a single re-index at the latest commit, so we forward every qualifying
+// push (even mid-update) rather than debouncing here.
+async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<Response> {
+    const repository = payload.repository as { id?: number; default_branch?: string } | undefined
+    const ref = String((payload as { ref?: unknown }).ref ?? "")
+    const headSha = String((payload as { after?: unknown }).after ?? "")
+    const deleted = (payload as { deleted?: unknown }).deleted === true
+    const repoId = repository?.id
+    if (!repoId || !ref) return ack()
+
+    // Only the default branch drives the graph. Feature-branch and tag pushes
+    // are ignored so the graph tracks the canonical branch (no thrashing).
+    const defaultBranch = repository?.default_branch
+    if (!defaultBranch || ref !== `refs/heads/${defaultBranch}`) return ack()
+
+    // Branch deletion (or an all-zero head) has nothing to index.
+    if (deleted || /^0+$/.test(headSha)) return ack()
+
+    const { data: project } = await svc
+        .from("projects")
+        .select("id,user_id,repo_url,github_repo_id,github_sync_enabled")
+        .eq("github_repo_id", repoId)
+        .eq("github_sync_enabled", true)
+        .maybeSingle<Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "github_sync_enabled">>()
+    if (!project) return ack()
+
+    // Incremental needs a prior successful bootstrap: a graph_id must exist.
+    // We deliberately do NOT gate on status==='ready' — a push that lands
+    // mid-update must still reach the analyser so its queue can coalesce it.
+    const { data: analyser } = await svc
+        .from("project_analyser")
+        .select("enabled,graph_id,last_indexed_sha")
+        .eq("project_id", project.id)
+        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "graph_id" | "last_indexed_sha">>()
+    if (!analyser?.enabled || !analyser.graph_id) return ack()
+
+    // Already indexed at this exact commit → nothing to do (the analyser would
+    // no-op too, but skipping saves a clone + a queue round-trip).
+    if (analyser.last_indexed_sha && analyser.last_indexed_sha === headSha) return ack()
+
+    const graphId = analyser.graph_id
+    after(async () => {
+        try {
+            await kickoffJob({
+                job_type: "incremental",
+                repo_url: project.repo_url,
+                repo_id: graphId,
+                // Check out the pushed commit specifically; coalesced re-pushes
+                // update this to the newest SHA on the analyser side.
+                repo_ref: headSha,
+                // The analyser worker fetches this owner's GitHub token from
+                // tracker.github_tokens to clone — no credential crosses the wire.
+                user_id: project.user_id,
+                supabase_progress: { key_value: project.id },
+            })
+        } catch (e) {
+            // Best-effort: a transient kickoff failure is retried by the next
+            // push. Don't flip the project to 'failed' over a delivery hiccup.
+            console.error("[webhook] push → incremental kickoff failed", project.id, e)
+        }
+    })
     return ack()
 }
 
