@@ -119,7 +119,10 @@ const ICON_PATHS: Record<string, string> = {
     nodes: `<circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.1 10.9l7.8-3.7M8.1 13.1l7.8 3.7"/>`,
 }
 
-export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
+// size "sm" (default) is the inline chip (20px); "header" is the taller, larger
+// section-header banner (30px) used for the verdict + collapsible group titles,
+// so a header doesn't render at the same weight as an inline chip.
+export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string; size?: "sm" | "header" } = {}): string {
     const label = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS - 1) + "…" : text
     const c = TONE_HEX[tone]
     // Solid pill: the tone's saturated colour fills the chip; text + glyph are
@@ -128,13 +131,15 @@ export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean
     const FILL = c.fg
     const INK = "#ffffff"
 
-    const H = 20
-    const fontSize = 11
-    const leftPad = 8
-    const rightPad = 9
-    const dotR = 3
-    const gap = 5
-    const iconSize = 12
+    const header = opts.size === "header"
+    const H = header ? 30 : 20
+    const fontSize = header ? 14 : 11
+    const leftPad = header ? 13 : 8
+    const rightPad = header ? 14 : 9
+    const dotR = header ? 4 : 3
+    const gap = header ? 7 : 5
+    const iconSize = header ? 17 : 12
+    const textY = H / 2 + fontSize * 0.34 // baseline for vertical centering
 
     const hasIcon = !!opts.icon && !!ICON_PATHS[opts.icon]
     const dot = !hasIcon && (opts.dot ?? true)
@@ -157,7 +162,7 @@ export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${H}" viewBox="0 0 ${width} ${H}" role="img" aria-label="${escapeXml(label)}">`,
         `<rect x="0" y="0" width="${width}" height="${H}" rx="${H / 2}" fill="${FILL}"/>`,
         lead,
-        `<text x="${textX}" y="14" font-family="${FONT_FAMILY}" font-size="${fontSize}" font-weight="600" fill="${INK}">${escapeXml(label)}</text>`,
+        `<text x="${textX}" y="${textY.toFixed(1)}" font-family="${FONT_FAMILY}" font-size="${fontSize}" font-weight="600" fill="${INK}">${escapeXml(label)}</text>`,
         `</svg>`,
     ].join("")
 }
@@ -173,15 +178,16 @@ export function renderIcon(name: string, tone: BadgeTone = "zinc"): string {
 
 // badgeUrl builds the absolute /api/badge URL (origin is this app's public
 // origin — the same one comment renderers already use for images).
-export function badgeUrl(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
+export function badgeUrl(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string; size?: "sm" | "header" } = {}): string {
     const q = new URLSearchParams({ text, tone })
     if (opts.dot === false) q.set("dot", "0")
     if (opts.icon) q.set("icon", opts.icon)
+    if (opts.size === "header") q.set("size", "header")
     return `${origin}/api/badge?${q.toString()}`
 }
 
 // badge returns the markdown image embed for a comment.
-export function badge(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
+export function badge(origin: string, text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string; size?: "sm" | "header" } = {}): string {
     const alt = text.replace(/[[\]]/g, "")
     return `![${alt}](${badgeUrl(origin, text, tone, opts)})`
 }

@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, type BadgeTone, confidenceLevelTone, findingState, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, verdictTone } from "@/lib/badge"
+import { badge, type BadgeTone, confidenceLevelTone, findingState, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -238,7 +238,7 @@ const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone
 function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
     if (r.verdict) {
-        out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict) }), "")
+        out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict), size: "header" }), "")
         if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
     }
 
@@ -261,7 +261,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     for (const g of FINDING_GROUPS) {
         const items = findings.filter((f) => findingState(f.severity) === g.key)
         if (!items.length) continue
-        out.push(`<details${g.open ? " open" : ""}>`, `<summary>${badge(origin, `${g.title} · ${items.length}`, g.tone, { icon: g.ic })}</summary>`, "")
+        out.push(`<details${g.open ? " open" : ""}>`, `<summary>${badge(origin, `${g.title} · ${items.length}`, g.tone, { icon: g.ic, size: "header" })}</summary>`, "")
         for (const f of items.slice(0, 8)) {
             const loc = f.line ? ` — \`${f.file}:${f.line}\`` : f.file ? ` — \`${f.file}\`` : ""
             out.push(`- ${esc(findingTitle(f))}${loc}`)
@@ -274,7 +274,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     // expanded. Only issue findings that carry a snippet (i.e. sit on changed lines).
     const withSnip = findings.filter((f) => findingState(f.severity) !== "good" && f.snippet?.trim()).slice(0, 4)
     if (withSnip.length) {
-        out.push("<details>", `<summary>${badge(origin, `Changed code · ${withSnip.length}`, "zinc", { icon: "code" })}</summary>`, "")
+        out.push("<details>", `<summary>${badge(origin, `Changed code · ${withSnip.length}`, "zinc", { icon: "code", size: "header" })}</summary>`, "")
         for (const f of withSnip) {
             const loc = f.line ? `${f.file}:${f.line}` : f.file || ""
             out.push(`**${esc(f.title || "")}**${loc ? ` — \`${loc}\`` : ""}`, "", "```" + (f.lang || "diff"), f.snippet!.trim(), "```", "")
@@ -282,9 +282,9 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
         out.push("</details>", "")
     }
 
-    // Fix claims — one line each (verdict + claim).
+    // Fix claims — a header banner + one line each (verdict + claim).
     if (r.fix_claims?.length) {
-        out.push(`${icon(origin, "target")} **Fix claims**`, "")
+        out.push(badge(origin, "Fix claims", "indigo", { icon: "target", size: "header" }), "")
         for (const c of r.fix_claims) out.push(`- ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} ${esc(c.claim)}`)
         out.push("")
     }
