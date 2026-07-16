@@ -163,7 +163,7 @@ export async function applyPRResult(
                 const uiUrl = `${origin}/projects/${row.project_id}/pulls/${row.pr_number}`
                 const body =
                     status === "done" && result
-                        ? resultComment(result, origin, uiUrl)
+                        ? resultComment(result, origin, uiUrl, row.pr_number)
                         : status === "cancelled"
                           ? cancelledComment(origin)
                           : failedComment(origin)
@@ -235,30 +235,30 @@ const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone
 // confidence, diff snippets, the deep-dive chat). Deliberately low-detail —
 // verdict, summary, the issue findings as one-liners, fix-claim verdicts, and the
 // link. Everything richer lives in the app.
-function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
-    const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
+function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?: number): string {
+    const name = (r.title ?? "").replace(/[\r\n]+/g, " ").trim() || (prNumber != null ? `#${prNumber}` : "")
+    const out: string[] = [PR_MARKER, `## PR Review${name ? ` (${name})` : ""}`, ""]
     if (r.verdict) out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict), size: "header" }), "")
-
-    // Merge-readiness headline: a titled, decisive score + segmented bar (banded by ratio).
-    if (r.score_max && r.score_max > 0) out.push("**Merge readiness**", "", scoreImage(origin, r.score ?? 0, r.score_max), "")
     if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
 
-    // Confidence as three 3-stage meters, coloured by level.
+    // ── Quick Summary — readiness score, the confidence rubrics, what the PR does.
+    // The trailing "\\" hard-breaks the bold label onto its own line above the image.
+    out.push("### Quick Summary")
+    if (r.score_max && r.score_max > 0) out.push("**Merge Readiness**\\", scoreImage(origin, r.score ?? 0, r.score_max), "")
     if (r.confidences) {
         const c = r.confidences
-        out.push(confidenceImage(origin, [c.correctness?.level, c.load_perf?.level, c.security?.level].map((l) => l || "low")), "")
+        out.push("**Analysis rubrics**\\", confidenceImage(origin, [c.correctness?.level, c.load_perf?.level, c.security?.level].map((l) => l || "low")), "")
     }
+    if (r.summary?.trim()) out.push("**About this PR**", r.summary.trim(), "")
 
-    // Summary — already short markdown bullets.
-    if (r.summary?.trim()) out.push(r.summary.trim(), "")
-
-    // Findings grouped into collapsible <details> sections — the same traffic-light
-    // grouping as the app. Blockers + review stay open (they're the point); good
-    // notes collapse. A coloured badge is the section header. GitHub renders the
-    // markdown list inside once there are blank lines around it.
+    // ── Ucelot Notes — grouped findings, the changed code, and fix-claim verdicts.
+    // The header replaces the old inter-section spacer; groups render open (issues)
+    // or collapsed (good), each with a coloured badge title.
     const findings = r.findings ?? []
-    // Breathing room between the summary and the first collapsible section.
-    if (FINDING_GROUPS.some((g) => findings.some((f) => findingState(f.severity) === g.key))) out.push("<br>", "")
+    const hasGroups = FINDING_GROUPS.some((g) => findings.some((f) => findingState(f.severity) === g.key))
+    const withSnip = findings.filter((f) => findingState(f.severity) !== "good" && f.snippet?.trim()).slice(0, 4)
+    if (hasGroups || withSnip.length > 0 || (r.fix_claims?.length ?? 0) > 0) out.push("### Ucelot Notes", "")
+
     for (const g of FINDING_GROUPS) {
         const items = findings.filter((f) => findingState(f.severity) === g.key)
         if (!items.length) continue
@@ -272,8 +272,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     }
 
     // The changed code, in one collapsible — GitHub highlights the diff when
-    // expanded. Only issue findings that carry a snippet (i.e. sit on changed lines).
-    const withSnip = findings.filter((f) => findingState(f.severity) !== "good" && f.snippet?.trim()).slice(0, 4)
+    // expanded (withSnip computed above).
     if (withSnip.length) {
         out.push("<details>", `<summary>${badge(origin, `Changed code · ${withSnip.length}`, "zinc", { icon: "code", size: "header" })}</summary>`, "")
         for (const f of withSnip) {

@@ -250,6 +250,9 @@ export interface PRChecks {
     removed_symbols?: number
 }
 export interface PRAnalysis {
+    /** The PR title, echoed by the analyser (ADR-0057) → the comment header
+     *  "PR Review (title)". Absent on older results; the comment falls back to #N. */
+    title?: string
     summary: string
     impact: string
     impact_files?: PRImpactRef[]
