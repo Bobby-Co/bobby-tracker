@@ -102,10 +102,11 @@ function escapeXml(s: string): string {
 const FONT_FAMILY = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 const MAX_CHARS = 42
 
-// renderBadge builds a rounded-pill SVG: tinted fill + hairline, an optional
-// leading dot, and centered semibold text — the app's chip, as an image.
+// renderBadge builds a rounded-pill SVG: SOLID saturated fill + white text/icon
+// — a self-contained chip that reads clearly on any host (GitHub light OR dark),
+// unlike a pastel tint that only works on our own light surfaces.
 // Tabler-style line-icon glyphs (24×24, stroke) — the same visual language as the
-// in-app SVG icons, so the GitHub-comment chips match the UI.
+// in-app SVG icons.
 const ICON_PATHS: Record<string, string> = {
     check: `<path d="M20 6L9 17l-5-5"/>`,
     x: `<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>`,
@@ -121,6 +122,11 @@ const ICON_PATHS: Record<string, string> = {
 export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean; icon?: string } = {}): string {
     const label = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS - 1) + "…" : text
     const c = TONE_HEX[tone]
+    // Solid pill: the tone's saturated colour fills the chip; text + glyph are
+    // white. c.fg (the tone-700 hue) is dark enough to carry white text (AA) for
+    // every tone in the map.
+    const FILL = c.fg
+    const INK = "#ffffff"
 
     const H = 20
     const fontSize = 11
@@ -142,16 +148,16 @@ export function renderBadge(text: string, tone: BadgeTone, opts: { dot?: boolean
     if (hasIcon) {
         const scale = iconSize / 24
         const y = (H - iconSize) / 2
-        lead = `<g transform="translate(${leftPad},${y}) scale(${scale.toFixed(4)})" fill="none" stroke="${c.fg}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[opts.icon!]}</g>`
+        lead = `<g transform="translate(${leftPad},${y}) scale(${scale.toFixed(4)})" fill="none" stroke="${INK}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[opts.icon!]}</g>`
     } else if (dot) {
-        lead = `<circle cx="${leftPad + dotR}" cy="${H / 2}" r="${dotR}" fill="${c.dot}"/>`
+        lead = `<circle cx="${leftPad + dotR}" cy="${H / 2}" r="${dotR}" fill="${INK}" fill-opacity="0.9"/>`
     }
 
     return [
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${H}" viewBox="0 0 ${width} ${H}" role="img" aria-label="${escapeXml(label)}">`,
-        `<rect x="0.5" y="0.5" width="${width - 1}" height="${H - 1}" rx="${(H - 1) / 2}" fill="${c.bg}" stroke="${c.dot}" stroke-opacity="0.4"/>`,
+        `<rect x="0" y="0" width="${width}" height="${H}" rx="${H / 2}" fill="${FILL}"/>`,
         lead,
-        `<text x="${textX}" y="14" font-family="${FONT_FAMILY}" font-size="${fontSize}" font-weight="600" fill="${c.fg}">${escapeXml(label)}</text>`,
+        `<text x="${textX}" y="14" font-family="${FONT_FAMILY}" font-size="${fontSize}" font-weight="600" fill="${INK}">${escapeXml(label)}</text>`,
         `</svg>`,
     ].join("")
 }

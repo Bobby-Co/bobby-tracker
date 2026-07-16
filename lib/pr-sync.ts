@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, confidenceLevelTone, findingState, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
+import { badge, type BadgeTone, confidenceLevelTone, findingState, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -222,6 +222,14 @@ function failedComment(origin: string): string {
     return [PR_MARKER, "**Bobby** — review unavailable", "", badge(origin, "failed", "rose"), "", "Bobby couldn't complete the review this time."].join("\n")
 }
 
+// Finding groups → collapsible comment sections, traffic-light order (issues
+// first). Issue groups render open; positives collapse.
+const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone: BadgeTone; ic: string; open: boolean }[] = [
+    { key: "critical", title: "Blockers", tone: "rose", ic: "alert", open: true },
+    { key: "review", title: "Worth a review", tone: "amber", ic: "search", open: true },
+    { key: "good", title: "Looks good", tone: "emerald", ic: "check", open: false },
+]
+
 // resultComment is the GitHub-comment TEASER: a terse, bullet-point digest that
 // links through to the full, navigable review in ucelot (evidence, per-dimension
 // confidence, diff snippets, the deep-dive chat). Deliberately low-detail —
@@ -245,32 +253,33 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     // Summary — already short markdown bullets.
     if (r.summary?.trim()) out.push(r.summary.trim(), "")
 
-    // Findings as terse one-line bullets, issues first, capped. Detail + evidence
-    // live in the app — this is just the headline.
+    // Findings grouped into collapsible <details> sections — the same traffic-light
+    // grouping as the app. Blockers + review stay open (they're the point); good
+    // notes collapse. A coloured badge is the section header. GitHub renders the
+    // markdown list inside once there are blank lines around it.
     const findings = r.findings ?? []
-    const issues = findings.filter((f) => findingState(f.severity) !== "good")
-    const goods = findings.filter((f) => findingState(f.severity) === "good")
-    if (issues.length) {
-        out.push(`${icon(origin, "search")} **Findings**`, "")
-        for (const f of issues.slice(0, 6)) {
+    for (const g of FINDING_GROUPS) {
+        const items = findings.filter((f) => findingState(f.severity) === g.key)
+        if (!items.length) continue
+        out.push(`<details${g.open ? " open" : ""}>`, `<summary>${badge(origin, `${g.title} · ${items.length}`, g.tone, { icon: g.ic })}</summary>`, "")
+        for (const f of items.slice(0, 8)) {
             const loc = f.line ? ` — \`${f.file}:${f.line}\`` : f.file ? ` — \`${f.file}\`` : ""
-            const chip = badge(origin, severityLabel(f.severity || ""), severityTone(f.severity || ""), { icon: severityIcon(f.severity || "") })
-            out.push(`- ${chip} ${esc(findingTitle(f))}${loc}`)
+            out.push(`- ${esc(findingTitle(f))}${loc}`)
         }
-        if (issues.length > 6) out.push(`- …and ${issues.length - 6} more`)
-        out.push("")
+        if (items.length > 8) out.push(`- …and ${items.length - 8} more`)
+        out.push("", "</details>", "")
+    }
 
-        // The changed code, collapsed — terse by default, GitHub highlights the diff
-        // when expanded. Only the issue findings that carry a snippet.
-        const withSnip = issues.filter((f) => f.snippet?.trim()).slice(0, 4)
-        if (withSnip.length) {
-            out.push("<details>", `<summary>${icon(origin, "search")} Changed code (${withSnip.length})</summary>`, "")
-            for (const f of withSnip) {
-                const loc = f.line ? `${f.file}:${f.line}` : f.file || ""
-                out.push(`**${esc(f.title || "")}**${loc ? ` — \`${loc}\`` : ""}`, "", "```" + (f.lang || "diff"), f.snippet!.trim(), "```", "")
-            }
-            out.push("</details>", "")
+    // The changed code, in one collapsible — GitHub highlights the diff when
+    // expanded. Only issue findings that carry a snippet (i.e. sit on changed lines).
+    const withSnip = findings.filter((f) => findingState(f.severity) !== "good" && f.snippet?.trim()).slice(0, 4)
+    if (withSnip.length) {
+        out.push("<details>", `<summary>${badge(origin, `Changed code · ${withSnip.length}`, "zinc", { icon: "code" })}</summary>`, "")
+        for (const f of withSnip) {
+            const loc = f.line ? `${f.file}:${f.line}` : f.file || ""
+            out.push(`**${esc(f.title || "")}**${loc ? ` — \`${loc}\`` : ""}`, "", "```" + (f.lang || "diff"), f.snippet!.trim(), "```", "")
         }
+        out.push("</details>", "")
     }
 
     // Fix claims — one line each (verdict + claim).
@@ -279,9 +288,6 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
         for (const c of r.fix_claims) out.push(`- ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} ${esc(c.claim)}`)
         out.push("")
     }
-
-    // Positives — a single compact line, never a section.
-    if (goods.length) out.push(`👍 ${goods.slice(0, 3).map((g) => esc(g.title || g.detail)).join(" · ")}`, "")
 
     // The call to action: the full, navigable review.
     out.push("---", "")
