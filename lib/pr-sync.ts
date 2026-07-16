@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, type BadgeTone, confidenceImage, findingState, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/badge"
+import { badge, type BadgeTone, badgeUrl, confidenceImage, findingState, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -241,6 +241,40 @@ const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone
     { key: "good", title: "Looks good", tone: "emerald", ic: "check", open: false },
 ]
 
+// badgeImg is the RAW <img> form of a badge — required inside <summary>, where
+// GitHub renders the content as HTML and does NOT parse markdown, so ![alt](url)
+// would show literally. `&` is escaped so the src is valid HTML.
+function badgeImg(origin: string, text: string, tone: BadgeTone, opts: { icon?: string; size?: "sm" | "header" } = {}): string {
+    const url = badgeUrl(origin, text, tone, opts).replace(/&/g, "&amp;")
+    return `<img src="${url}" alt="${text.replace(/"/g, "")}" />`
+}
+
+// scoreFor returns the merge-readiness score: the analyser's value when present,
+// else recomputed from the result (mirrors the analyser's deriveScore) so the
+// headline renders even against an older analyser build that doesn't send it.
+function scoreFor(r: PRAnalysis): { value: number; max: number } {
+    if (typeof r.score === "number" && typeof r.score_max === "number" && r.score_max > 0) {
+        return { value: r.score, max: r.score_max }
+    }
+    const max = 10
+    let score = 10
+    let reviewPenalty = 0
+    for (const f of r.findings ?? []) {
+        const st = findingState(f.severity)
+        if (st === "critical") score -= 5
+        else if (st === "review") reviewPenalty += 1
+    }
+    score -= Math.min(reviewPenalty, 3)
+    for (const c of r.fix_claims ?? []) {
+        if (c.verdict === "unlikely") score -= 4
+        else if (c.verdict === "partial") score -= 1
+    }
+    if (r.confidences?.correctness?.level === "low") score -= 1
+    if (r.verdict === "request_changes") score = Math.min(score, 4)
+    else if (r.verdict === "comment") score = Math.min(score, 7)
+    return { value: Math.max(0, Math.min(score, max)), max }
+}
+
 // resultComment is the GitHub-comment TEASER: a terse, bullet-point digest that
 // links through to the full, navigable review in ucelot (evidence, per-dimension
 // confidence, diff snippets, the deep-dive chat). Deliberately low-detail —
@@ -255,7 +289,8 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?:
     // ── Quick Summary — readiness score, the confidence rubrics, what the PR does.
     // The trailing "\\" hard-breaks the bold label onto its own line above the image.
     out.push("### Quick Summary")
-    if (r.score_max && r.score_max > 0) out.push("**Merge Readiness**\\", scoreImage(origin, r.score ?? 0, r.score_max), "")
+    const sc = scoreFor(r)
+    out.push("**Merge Readiness**\\", scoreImage(origin, sc.value, sc.max), "")
     if (r.confidences) {
         const c = r.confidences
         out.push("**Analysis rubrics**\\", confidenceImage(origin, [c.correctness?.level, c.load_perf?.level, c.security?.level].map((l) => l || "low")), "")
@@ -273,7 +308,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?:
     for (const g of FINDING_GROUPS) {
         const items = findings.filter((f) => findingState(f.severity) === g.key)
         if (!items.length) continue
-        out.push(`<details${g.open ? " open" : ""}>`, `<summary>${badge(origin, `${g.title} · ${items.length}`, g.tone, { icon: g.ic, size: "header" })}</summary>`, "")
+        out.push(`<details${g.open ? " open" : ""}>`, `<summary>${badgeImg(origin, `${g.title} · ${items.length}`, g.tone, { icon: g.ic, size: "header" })}</summary>`, "")
         for (const f of items.slice(0, 8)) {
             const loc = f.line ? ` — \`${f.file}:${f.line}\`` : f.file ? ` — \`${f.file}\`` : ""
             out.push(`- ${esc(findingTitle(f))}${loc}`)
@@ -285,7 +320,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?:
     // The changed code, in one collapsible — GitHub highlights the diff when
     // expanded (withSnip computed above).
     if (withSnip.length) {
-        out.push("<details>", `<summary>${badge(origin, `Changed code · ${withSnip.length}`, "zinc", { icon: "code", size: "header" })}</summary>`, "")
+        out.push("<details>", `<summary>${badgeImg(origin, `Changed code · ${withSnip.length}`, "zinc", { icon: "code", size: "header" })}</summary>`, "")
         for (const f of withSnip) {
             const loc = f.line ? `${f.file}:${f.line}` : f.file || ""
             out.push(`**${esc(f.title || "")}**${loc ? ` — \`${loc}\`` : ""}`, "", "```" + (f.lang || "diff"), f.snippet!.trim(), "```", "")
