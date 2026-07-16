@@ -33,11 +33,10 @@ export function isBadgeTone(t: string): t is BadgeTone {
 export function confidenceTone(c: string): BadgeTone {
     return c === "high" ? "emerald" : c === "medium" ? "amber" : "rose"
 }
-// Per-dimension confidence level (analyser ADR-0057): high=green, medium=amber,
-// low=zinc. Distinct from confidenceTone — low reads as "unknown/neutral" here
-// (not an alarm), since a low correctness confidence isn't itself a defect.
+// Per-dimension confidence level (analyser ADR-0057): a clear traffic-light so
+// the meters read by STATE at a glance — high=green, medium=amber, low=red.
 export function confidenceLevelTone(level: string): BadgeTone {
-    return level === "high" ? "emerald" : level === "medium" ? "amber" : "zinc"
+    return level === "high" ? "emerald" : level === "medium" ? "amber" : "rose"
 }
 export function verdictTone(v: string): BadgeTone {
     return v === "likely" ? "emerald" : v === "partial" ? "amber" : v === "unlikely" ? "rose" : "zinc"

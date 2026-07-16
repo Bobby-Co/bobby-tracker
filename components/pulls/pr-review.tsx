@@ -359,24 +359,28 @@ function Section({
 // ScoreBar is the merge-readiness headline: a big value, "/ max", and a
 // max-segment bar filled to value, banded by ratio (strong=green / mid=amber /
 // weak=rose) — the same visual the GitHub comment renders as an SVG.
-function scoreBand(value: number, max: number): { text: string; bar: string } {
+function scoreBand(value: number, max: number): { text: string; bar: string; bg: string; empty: string } {
     const r = max > 0 ? value / max : 0
-    return r >= 0.8 ? { text: "text-emerald-600", bar: "bg-emerald-500" } : r >= 0.5 ? { text: "text-amber-600", bar: "bg-amber-500" } : { text: "text-rose-600", bar: "bg-rose-500" }
+    return r >= 0.8
+        ? { text: "text-emerald-700", bar: "bg-emerald-500", bg: "border-emerald-200 bg-emerald-50", empty: "bg-emerald-200/70" }
+        : r >= 0.5
+          ? { text: "text-amber-700", bar: "bg-amber-500", bg: "border-amber-200 bg-amber-50", empty: "bg-amber-200/70" }
+          : { text: "text-rose-700", bar: "bg-rose-500", bg: "border-rose-200 bg-rose-50", empty: "bg-rose-200/70" }
 }
 function ScoreBar({ value, max }: { value: number; max: number }) {
     const b = scoreBand(value, max)
     return (
-        <div className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-2.5">
+        <div className={cn("flex items-center gap-3 rounded-[12px] border px-3.5 py-2.5", b.bg)}>
             <div className="flex items-baseline gap-1">
                 <span className={cn("text-[26px] font-bold leading-none tabular-nums", b.text)}>{value}</span>
-                <span className="text-[13px] font-semibold text-[color:var(--c-text-dim)]">/ {max}</span>
+                <span className={cn("text-[13px] font-semibold opacity-70", b.text)}>/ {max}</span>
             </div>
             <div className="flex flex-1 items-center gap-[3px]">
                 {Array.from({ length: max }).map((_, i) => (
-                    <span key={i} className={cn("h-4 flex-1 rounded-[3px]", i < value ? b.bar : "bg-[color:var(--c-surface-3,#e7e5e0)]")} />
+                    <span key={i} className={cn("h-4 flex-1 rounded-[3px]", i < value ? b.bar : b.empty)} />
                 ))}
             </div>
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-muted)]">readiness</span>
+            <span className={cn("shrink-0 text-[10px] font-bold uppercase tracking-[0.06em] opacity-80", b.text)}>readiness</span>
         </div>
     )
 }
@@ -388,7 +392,7 @@ function meterTone(level: string): { fill: string; text: string } {
         ? { fill: "bg-emerald-500", text: "text-emerald-600" }
         : level === "medium"
           ? { fill: "bg-amber-500", text: "text-amber-600" }
-          : { fill: "bg-zinc-400", text: "text-zinc-500" }
+          : { fill: "bg-rose-500", text: "text-rose-600" }
 }
 function Meter({ label, dim }: { label: string; dim: PRConfidenceDimension }) {
     const idx = dim.level === "high" ? 3 : dim.level === "medium" ? 2 : 1
