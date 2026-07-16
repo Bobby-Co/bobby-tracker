@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
 import { findingState, severityLabel } from "@/lib/badge"
-import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
 // `.prose-tracker .hljs-*` theme in globals.css). Used for summary/impact/detail
@@ -48,19 +48,6 @@ function confidenceClasses(c: string): string {
             return "bg-amber-50 text-amber-700"
         default:
             return "bg-rose-50 text-rose-700"
-    }
-}
-
-// Per-dimension confidence tone (ADR-0057): low here means "little/no evidence
-// for this dimension", not "bad" — so zinc, not rose.
-function confLevelClasses(level: string): string {
-    switch (level) {
-        case "high":
-            return "bg-emerald-50 text-emerald-700"
-        case "medium":
-            return "bg-amber-50 text-amber-700"
-        default:
-            return "bg-zinc-100 text-zinc-600"
     }
 }
 
@@ -215,25 +202,28 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                 </div>
             )}
 
-            {/* At-a-glance: confidence + finding tally, so the reader orients before scrolling. */}
-            <div className="flex flex-wrap items-center gap-1.5">
-                {r.confidences ? (
-                    <>
-                        <ConfChip label="correctness" dim={r.confidences.correctness} />
-                        <ConfChip label="load/perf" dim={r.confidences.load_perf} />
-                        <ConfChip label="security" dim={r.confidences.security} />
-                    </>
-                ) : (
-                    r.confidence && (
-                        <span className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
-                            confidence: {r.confidence}
-                        </span>
-                    )
-                )}
-                {counts.critical > 0 && <Tally n={counts.critical} label="blocker" tone="bg-rose-100 text-rose-700" />}
-                {counts.review > 0 && <Tally n={counts.review} label="to review" tone="bg-amber-100 text-amber-700" />}
-                {counts.good > 0 && <Tally n={counts.good} label="good" tone="bg-emerald-100 text-emerald-700" />}
-            </div>
+            {/* Merge-readiness headline: a decisive score + segmented bar. */}
+            {typeof r.score === "number" && r.score_max ? <ScoreBar value={r.score} max={r.score_max} /> : null}
+
+            {/* Finding tally, so the reader orients before scrolling. */}
+            {(counts.critical > 0 || counts.review > 0 || counts.good > 0) && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {counts.critical > 0 && <Tally n={counts.critical} label="blocker" tone="bg-rose-100 text-rose-700" />}
+                    {counts.review > 0 && <Tally n={counts.review} label="to review" tone="bg-amber-100 text-amber-700" />}
+                    {counts.good > 0 && <Tally n={counts.good} label="good" tone="bg-emerald-100 text-emerald-700" />}
+                </div>
+            )}
+
+            {/* Per-dimension confidence as 3-stage meters, coloured by level. */}
+            {r.confidences ? (
+                <ConfidenceMeters c={r.confidences} />
+            ) : (
+                r.confidence && (
+                    <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
+                        confidence: {r.confidence}
+                    </span>
+                )
+            )}
 
             {r.summary?.trim() && (
                 <blockquote className="border-l-2 border-amber-300 pl-3 text-[13.5px] leading-6 text-[color:var(--c-text)]">
@@ -366,15 +356,62 @@ function Section({
     )
 }
 
-// One per-dimension confidence chip; the calibration basis is the hover title.
-function ConfChip({ label, dim }: { label: string; dim: PRConfidenceDimension }) {
+// ScoreBar is the merge-readiness headline: a big value, "/ max", and a
+// max-segment bar filled to value, banded by ratio (strong=green / mid=amber /
+// weak=rose) — the same visual the GitHub comment renders as an SVG.
+function scoreBand(value: number, max: number): { text: string; bar: string } {
+    const r = max > 0 ? value / max : 0
+    return r >= 0.8 ? { text: "text-emerald-600", bar: "bg-emerald-500" } : r >= 0.5 ? { text: "text-amber-600", bar: "bg-amber-500" } : { text: "text-rose-600", bar: "bg-rose-500" }
+}
+function ScoreBar({ value, max }: { value: number; max: number }) {
+    const b = scoreBand(value, max)
     return (
-        <span
-            className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confLevelClasses(dim.level))}
-            title={dim.basis || undefined}
-        >
-            {label}: {dim.level}
-        </span>
+        <div className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-2.5">
+            <div className="flex items-baseline gap-1">
+                <span className={cn("text-[26px] font-bold leading-none tabular-nums", b.text)}>{value}</span>
+                <span className="text-[13px] font-semibold text-[color:var(--c-text-dim)]">/ {max}</span>
+            </div>
+            <div className="flex flex-1 items-center gap-[3px]">
+                {Array.from({ length: max }).map((_, i) => (
+                    <span key={i} className={cn("h-4 flex-1 rounded-[3px]", i < value ? b.bar : "bg-[color:var(--c-surface-3,#e7e5e0)]")} />
+                ))}
+            </div>
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-muted)]">readiness</span>
+        </div>
+    )
+}
+
+// Confidence meters: each dimension as a 3-stage bar (low→high), filled +
+// labelled in its level's tone. Basis is the hover title.
+function meterTone(level: string): { fill: string; text: string } {
+    return level === "high"
+        ? { fill: "bg-emerald-500", text: "text-emerald-600" }
+        : level === "medium"
+          ? { fill: "bg-amber-500", text: "text-amber-600" }
+          : { fill: "bg-zinc-400", text: "text-zinc-500" }
+}
+function Meter({ label, dim }: { label: string; dim: PRConfidenceDimension }) {
+    const idx = dim.level === "high" ? 3 : dim.level === "medium" ? 2 : 1
+    const t = meterTone(dim.level)
+    return (
+        <div className="flex items-center gap-2" title={dim.basis || undefined}>
+            <span className="w-[76px] shrink-0 text-[11.5px] text-[color:var(--c-text-muted)]">{label}</span>
+            <div className="flex items-center gap-[3px]">
+                {[0, 1, 2].map((i) => (
+                    <span key={i} className={cn("h-2 w-3.5 rounded-[2px]", i < idx ? t.fill : "bg-[color:var(--c-surface-3,#e7e5e0)]")} />
+                ))}
+            </div>
+            <span className={cn("text-[11.5px] font-semibold", t.text)}>{dim.level}</span>
+        </div>
+    )
+}
+function ConfidenceMeters({ c }: { c: PRConfidences }) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <Meter label="correctness" dim={c.correctness} />
+            <Meter label="load / perf" dim={c.load_perf} />
+            <Meter label="security" dim={c.security} />
+        </div>
     )
 }
 

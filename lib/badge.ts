@@ -199,3 +199,117 @@ export function iconUrl(origin: string, name: string, tone: BadgeTone = "zinc"):
 export function icon(origin: string, name: string, tone: BadgeTone = "zinc"): string {
     return `![](${iconUrl(origin, name, tone)})`
 }
+
+// ── gauges: readiness score + confidence meters ───────────────────────────────
+// Segmented-bar SVGs for comments, mirrored in CSS in the app. Both are
+// self-contained (the score is a solid band pill with white ink; confidence is a
+// light card) so they read on GitHub light AND dark — the image sits on whatever
+// background the host provides.
+
+// scoreTone bands the readiness score: strong=green, mid=amber, weak=rose.
+export function scoreTone(value: number, max: number): BadgeTone {
+    const r = max > 0 ? value / max : 0
+    return r >= 0.8 ? "emerald" : r >= 0.5 ? "amber" : "rose"
+}
+
+// renderScore draws the merge-readiness headline as a SOLID band-coloured pill:
+// a large value, "/ max", and a max-segment bar (white = filled, translucent =
+// empty) — theme-safe, in the same solid language as the badges.
+export function renderScore(value: number, max: number): string {
+    const v = Math.max(0, Math.min(Math.round(value), max))
+    const band = TONE_HEX[scoreTone(v, max)].fg
+    const INK = "#ffffff"
+    const H = 34
+    const numFS = 19
+    const slashFS = 12
+    const numText = String(v)
+    const numW = textWidth(numText, numFS)
+    const slashText = `/ ${max}`
+    const slashW = textWidth(slashText, slashFS)
+    const segW = 6
+    const segGap = 3
+    const segH = 13
+    const barW = max * segW + (max - 1) * segGap
+    const padX = 13
+    const numX = padX
+    const slashX = numX + numW + 5
+    const barX = slashX + slashW + 11
+    const width = Math.ceil(barX + barW + padX)
+    const mid = H / 2
+    const baseY = (mid + numFS * 0.35).toFixed(1)
+    let segs = ""
+    for (let i = 0; i < max; i++) {
+        const x = barX + i * (segW + segGap)
+        segs += `<rect x="${x}" y="${mid - segH / 2}" width="${segW}" height="${segH}" rx="2.5" fill="${INK}" fill-opacity="${i < v ? 1 : 0.28}"/>`
+    }
+    return [
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${H}" viewBox="0 0 ${width} ${H}" role="img" aria-label="readiness ${v} of ${max}">`,
+        `<rect x="0" y="0" width="${width}" height="${H}" rx="${H / 2}" fill="${band}"/>`,
+        `<text x="${numX}" y="${baseY}" font-family="${FONT_FAMILY}" font-size="${numFS}" font-weight="700" fill="${INK}">${numText}</text>`,
+        `<text x="${slashX}" y="${baseY}" font-family="${FONT_FAMILY}" font-size="${slashFS}" font-weight="600" fill="${INK}" fill-opacity="0.8">${escapeXml(slashText)}</text>`,
+        segs,
+        `</svg>`,
+    ].join("")
+}
+
+// renderConfidence draws the calibrated dimensions as labelled 3-stage meters
+// (low→high) on a light card, each filled + labelled in its level's tone.
+export function renderConfidence(dims: { label: string; level: string }[]): string {
+    const rowH = 19
+    const padX = 12
+    const padY = 8
+    const fontSize = 11.5
+    const H = padY * 2 + dims.length * rowH
+    const labelW = 70
+    const segW = 12
+    const segGap = 3
+    const segH = 8
+    const nseg = 3
+    const barX = padX + labelW
+    const barW = nseg * segW + (nseg - 1) * segGap
+    const levelX = barX + barW + 9
+    let maxLevelW = 0
+    for (const d of dims) maxLevelW = Math.max(maxLevelW, textWidth(d.level, fontSize))
+    const width = Math.ceil(levelX + maxLevelW + padX)
+    let rows = ""
+    dims.forEach((d, r) => {
+        const idx = d.level === "high" ? 3 : d.level === "medium" ? 2 : 1
+        const fill = TONE_HEX[confidenceLevelTone(d.level)].fg
+        const cy = padY + r * rowH + rowH / 2
+        const ty = (cy + fontSize * 0.34).toFixed(1)
+        rows += `<text x="${padX}" y="${ty}" font-family="${FONT_FAMILY}" font-size="${fontSize}" fill="#57606a">${escapeXml(d.label)}</text>`
+        for (let i = 0; i < nseg; i++) {
+            const x = barX + i * (segW + segGap)
+            rows += `<rect x="${x}" y="${(cy - segH / 2).toFixed(1)}" width="${segW}" height="${segH}" rx="2" fill="${i < idx ? fill : "#d0d7de"}"/>`
+        }
+        rows += `<text x="${levelX}" y="${ty}" font-family="${FONT_FAMILY}" font-size="${fontSize}" font-weight="600" fill="${fill}">${escapeXml(d.level)}</text>`
+    })
+    return [
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${H}" viewBox="0 0 ${width} ${H}" role="img" aria-label="confidence">`,
+        `<rect x="0.5" y="0.5" width="${width - 1}" height="${H - 1}" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>`,
+        rows,
+        `</svg>`,
+    ].join("")
+}
+
+const CONF_LABELS = ["correctness", "load/perf", "security"]
+
+// scoreImage / confidenceImage — markdown image embeds for a comment.
+export function scoreImage(origin: string, value: number, max: number): string {
+    return `![readiness ${value}/${max}](${origin}/api/gauge?${new URLSearchParams({ kind: "score", value: String(value), max: String(max) })})`
+}
+export function confidenceImage(origin: string, levels: string[]): string {
+    return `![confidence](${origin}/api/gauge?${new URLSearchParams({ kind: "confidence", levels: levels.join(",") })})`
+}
+
+// gaugeSvg is the /api/gauge route's renderer: kind "score" (value,max) or
+// "confidence" (levels → the three fixed dimensions).
+export function gaugeSvg(params: URLSearchParams): string {
+    if (params.get("kind") === "score") {
+        const value = Number.parseInt(params.get("value") ?? "0", 10) || 0
+        const max = Number.parseInt(params.get("max") ?? "10", 10) || 10
+        return renderScore(value, max)
+    }
+    const levels = (params.get("levels") ?? "").split(",").map((s) => s.trim())
+    return renderConfidence(CONF_LABELS.map((label, i) => ({ label, level: levels[i] || "low" })))
+}

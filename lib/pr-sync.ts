@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, type BadgeTone, confidenceLevelTone, findingState, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, verdictTone } from "@/lib/badge"
+import { badge, type BadgeTone, confidenceImage, findingState, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -237,17 +237,16 @@ const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone
 // link. Everything richer lives in the app.
 function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
-    if (r.verdict) {
-        out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict), size: "header" }), "")
-        if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
-    }
+    if (r.verdict) out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict), size: "header" }), "")
 
-    // Per-dimension confidence as three compact badges (colour = at-a-glance signal).
+    // Merge-readiness headline: a decisive score + segmented bar (banded by ratio).
+    if (r.score_max && r.score_max > 0) out.push(scoreImage(origin, r.score ?? 0, r.score_max), "")
+    if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
+
+    // Confidence as three 3-stage meters, coloured by level.
     if (r.confidences) {
         const c = r.confidences
-        const chip = (label: string, d?: { level?: string }) => (d?.level ? badge(origin, `${label}: ${d.level}`, confidenceLevelTone(d.level)) : "")
-        const chips = [chip("correctness", c.correctness), chip("load/perf", c.load_perf), chip("security", c.security)].filter(Boolean)
-        if (chips.length) out.push(chips.join(" "), "")
+        out.push(confidenceImage(origin, [c.correctness?.level, c.load_perf?.level, c.security?.level].map((l) => l || "low")), "")
     }
 
     // Summary — already short markdown bullets.

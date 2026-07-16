@@ -272,6 +272,10 @@ export interface PRAnalysis {
     /** Merge recommendation + one-line reason (analyser ADR-0056). */
     verdict?: "approve" | "request_changes" | "comment" | string
     verdict_reason?: string
+    /** Deterministic merge-readiness headline 0..score_max (analyser ADR-0057),
+     *  rendered as "X/N" + a segmented bar. Absent on legacy rows. */
+    score?: number
+    score_max?: number
     /** Verify-before-merge items (analyser ADR-0056). */
     checklist?: string[]
     markdown?: string
