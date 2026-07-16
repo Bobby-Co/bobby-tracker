@@ -230,7 +230,7 @@ export async function deleteGithubIssueFromTracker(issue: SyncIssue, project: Sy
 // result → applyAnalysisResult edits the placeholder comment in place. Closing
 // the issue cancels the run. See the analyser's issue_async.go + ADR-0051.
 
-// Hidden marker so a later pass can find/dedupe Bobby's own comment.
+// Hidden marker so a later pass can find/dedupe Ucelot's own comment.
 const BOBBY_MARKER = "<!-- bobby:analysis -->"
 
 // Context for the footer link back into ucelot.
@@ -246,13 +246,13 @@ function footer(ctx: CommentCtx, extra?: string): string {
 
 // Small self-hosted brand loader (public/brand_loader.webp), inline.
 function brandMark(origin: string): string {
-    return `<img src="${origin}/brand_loader.webp" width="18" alt="Bobby" />`
+    return `<img src="${origin}/brand_loader.webp" width="18" alt="Ucelot" />`
 }
 
 function loadingCommentBody(ctx: CommentCtx): string {
     return [
         BOBBY_MARKER,
-        `${brandMark(ctx.origin)} **Bobby** is analyzing this issue…`,
+        `${brandMark(ctx.origin)} **Ucelot** is analyzing this issue…`,
         "",
         badge(ctx.origin, "analyzing", "blue"),
         "",
@@ -265,7 +265,7 @@ function loadingCommentBody(ctx: CommentCtx): string {
 function cancelledCommentBody(ctx: CommentCtx): string {
     return [
         BOBBY_MARKER,
-        "**Bobby** — analysis cancelled",
+        "**Ucelot** — analysis cancelled",
         "",
         badge(ctx.origin, "cancelled", "zinc"),
         "",
@@ -278,11 +278,11 @@ function cancelledCommentBody(ctx: CommentCtx): string {
 function failedCommentBody(ctx: CommentCtx): string {
     return [
         BOBBY_MARKER,
-        "**Bobby** — analysis unavailable",
+        "**Ucelot** — analysis unavailable",
         "",
         badge(ctx.origin, "failed", "rose"),
         "",
-        "Bobby couldn't complete the analysis this time.",
+        "Ucelot couldn't complete the analysis this time.",
         "",
         footer(ctx),
     ].join("\n")
@@ -302,7 +302,7 @@ function resultCommentBody(
     project: Pick<Project, "repo_url" | "repo_full_name">,
     ctx: CommentCtx,
 ): string {
-    const out: string[] = [BOBBY_MARKER, "### Bobby · code analysis", ""]
+    const out: string[] = [BOBBY_MARKER, "### Ucelot · code analysis", ""]
 
     const badges: string[] = []
     if (result.confidence) {

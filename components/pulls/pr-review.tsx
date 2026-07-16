@@ -22,7 +22,7 @@ function Md({ children, className }: { children: string; className?: string }) {
     )
 }
 
-// Renders Bobby's persisted PR review (pull_request_analyses.result) natively —
+// Renders Ucelot's persisted PR review (pull_request_analyses.result) natively —
 // the same structured shape the analyser posts to the GitHub comment, minus the
 // markdown scraping. Falls back to a status-appropriate placeholder when there's
 // no result to show.
@@ -120,7 +120,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                         <path d="M21 21l-4.3-4.3" />
                     </svg>
                 </span>
-                <h2 className="text-[14px] font-bold tracking-[-0.005em]">Bobby · PR review</h2>
+                <h2 className="text-[14px] font-bold tracking-[-0.005em]">Ucelot · PR review</h2>
             </div>
             {children}
         </section>
@@ -144,14 +144,14 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
     if (status === "analysing") {
         return (
             <Shell>
-                <Placeholder tone="amber" text="Bobby is reviewing this pull request… this panel fills in automatically." />
+                <Placeholder tone="amber" text="Ucelot is reviewing this pull request… this panel fills in automatically." />
             </Shell>
         )
     }
     if (status === "failed") {
         return (
             <Shell>
-                <Placeholder tone="rose" text="Bobby couldn't complete the review this time." />
+                <Placeholder tone="rose" text="Ucelot couldn't complete the review this time." />
             </Shell>
         )
     }
@@ -303,7 +303,7 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
 
             {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note. */}
             <p className="pt-1 text-[10.5px] leading-4 text-[color:var(--c-text-dim)]">
-                Bobby is AI-assisted and can make mistakes — verify findings before acting.
+                Ucelot is AI-assisted and can make mistakes — verify findings before acting.
             </p>
         </div>
     )
@@ -559,7 +559,7 @@ function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId
                     <path d="M12 3a9 9 0 1 0 9 9" />
                     <path d="M12 7v5l3 2" />
                 </svg>
-                {busy ? "Opening…" : "Deep dive with Bobby"}
+                {busy ? "Opening…" : "Deep dive with Ucelot"}
             </button>
             {err && <span className="text-[11px] text-rose-600">Couldn&apos;t open</span>}
         </div>

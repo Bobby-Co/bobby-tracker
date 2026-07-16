@@ -206,7 +206,7 @@ function esc(s: string): string {
 function loadingComment(origin: string): string {
     return [
         PR_MARKER,
-        "**Bobby** is reviewing this pull request…",
+        "**Ucelot** is reviewing this pull request…",
         "",
         badge(origin, "reviewing", "blue"),
         "",
@@ -215,11 +215,11 @@ function loadingComment(origin: string): string {
 }
 
 function cancelledComment(origin: string): string {
-    return [PR_MARKER, "**Bobby** — review cancelled", "", badge(origin, "cancelled", "zinc"), "", "The PR was closed before the review finished."].join("\n")
+    return [PR_MARKER, "**Ucelot** — review cancelled", "", badge(origin, "cancelled", "zinc"), "", "The PR was closed before the review finished."].join("\n")
 }
 
 function failedComment(origin: string): string {
-    return [PR_MARKER, "**Bobby** — review unavailable", "", badge(origin, "failed", "rose"), "", "Bobby couldn't complete the review this time."].join("\n")
+    return [PR_MARKER, "**Ucelot** — review unavailable", "", badge(origin, "failed", "rose"), "", "Ucelot couldn't complete the review this time."].join("\n")
 }
 
 // Finding groups → collapsible comment sections, traffic-light order (issues
@@ -295,7 +295,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?:
     if (uiUrl) out.push(`**[View the full review in ucelot →](${uiUrl})**`, "")
 
     const dur = r.duration_ms ? ` · reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : ""
-    out.push(`<sub>🔎 Reviewed by Bobby${dur}</sub>`, "", `<sub>Bobby is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
+    out.push(`<sub>🔎 Reviewed by Ucelot${dur}</sub>`, "", `<sub>Ucelot is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
     return out.join("\n")
 }
 
