@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
 import { findingState, severityLabel } from "@/lib/badge"
-import type { PRAnalysis, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Renders Bobby's persisted PR review (pull_request_analyses.result) natively —
 // the same structured shape the analyser posts to the GitHub comment, minus the
@@ -34,6 +34,34 @@ function confidenceClasses(c: string): string {
             return "bg-amber-50 text-amber-700"
         default:
             return "bg-rose-50 text-rose-700"
+    }
+}
+
+// Per-dimension confidence tone (ADR-0057): low here means "little/no evidence
+// for this dimension", not "bad" — so zinc, not rose.
+function confLevelClasses(level: string): string {
+    switch (level) {
+        case "high":
+            return "bg-emerald-50 text-emerald-700"
+        case "medium":
+            return "bg-amber-50 text-amber-700"
+        default:
+            return "bg-zinc-100 text-zinc-600"
+    }
+}
+
+// A short human label for a finding category (ADR-0057).
+function categoryLabel(c: string): string {
+    switch (c) {
+        case "blast_radius":
+            return "blast radius"
+        case "test_gap":
+            return "test gap"
+        case "bug":
+        case "good":
+            return "" // redundant with the severity chip
+        default:
+            return c.replace(/_/g, " ")
     }
 }
 
@@ -161,12 +189,20 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                 </div>
             )}
 
-            {r.confidence && (
-                <div>
-                    <span className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
-                        confidence: {r.confidence}
-                    </span>
+            {r.confidences ? (
+                <div className="flex flex-wrap gap-1.5">
+                    <ConfChip label="correctness" dim={r.confidences.correctness} />
+                    <ConfChip label="load/perf" dim={r.confidences.load_perf} />
+                    <ConfChip label="security" dim={r.confidences.security} />
                 </div>
+            ) : (
+                r.confidence && (
+                    <div>
+                        <span className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
+                            confidence: {r.confidence}
+                        </span>
+                    </div>
+                )
             )}
 
             {r.summary?.trim() && (
@@ -255,6 +291,8 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                 </div>
             )}
 
+            {r.checks && <ChecksFooter checks={r.checks} />}
+
             {(r.duration_ms != null || (r.insight_id && projectId)) && (
                 <div className="flex items-center justify-between gap-3 pt-1">
                     {r.insight_id && projectId ? <DeepDiveButton insightId={r.insight_id} projectId={projectId} /> : <span />}
@@ -267,24 +305,75 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
     )
 }
 
+// One per-dimension confidence chip; the calibration basis is the hover title.
+function ConfChip({ label, dim }: { label: string; dim: PRConfidenceDimension }) {
+    return (
+        <span
+            className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confLevelClasses(dim.level))}
+            title={dim.basis || undefined}
+        >
+            {label}: {dim.level}
+        </span>
+    )
+}
+
+// The KB-verification tally (ADR-0057) — the diligence behind the review,
+// rendered as a terse "Checked N callers · M precedents · …" line. Zero counts
+// are omitted; nothing to show → nothing rendered.
+function ChecksFooter({ checks }: { checks: PRChecks }) {
+    const parts: string[] = []
+    if (checks.callers) parts.push(`${checks.callers} caller${checks.callers === 1 ? "" : "s"}`)
+    if (checks.precedents) parts.push(`${checks.precedents} precedent${checks.precedents === 1 ? "" : "s"}`)
+    if (checks.tests) parts.push(`${checks.tests} test${checks.tests === 1 ? "" : "s"}`)
+    if (checks.failure_probes) parts.push(`${checks.failure_probes} failure probe${checks.failure_probes === 1 ? "" : "s"}`)
+    if (checks.git_reads) parts.push(`${checks.git_reads} history read${checks.git_reads === 1 ? "" : "s"}`)
+    if (parts.length === 0 && !checks.dropped) return null
+    return (
+        <p className="border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-dim)]">
+            {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
+            {checks.dropped ? <span className="text-[color:var(--c-text-muted)]">{parts.length > 0 ? " · " : ""}{checks.dropped} ungrounded dropped</span> : null}
+        </p>
+    )
+}
+
 // One scannable line: severity chip · short title · file. The longer detail sits
 // muted underneath, and only when it adds something over the title.
 function Finding({ f }: { f: PRFinding }) {
     const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
     const title = (f.title && f.title.trim()) || f.detail
     const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())
+    const catLabel = f.category ? categoryLabel(f.category) : ""
+    const evidence = (f.evidence ?? []).filter((a) => a.file).slice(0, 2)
     return (
         <div className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2.5 py-2">
             <div className="flex items-baseline gap-2">
                 <span className={cn("shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide", severityClasses(f.severity))}>
                     {severityLabel(f.severity)}
                 </span>
+                {catLabel && (
+                    <span className="shrink-0 rounded-full bg-[color:var(--c-surface-3,#f1f1f1)] px-1.5 py-[1px] text-[9.5px] font-medium uppercase tracking-wide text-[color:var(--c-text-muted)]">
+                        {catLabel}
+                    </span>
+                )}
                 <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-[color:var(--c-text)]">{title}</span>
                 <code className="max-w-[42%] shrink-0 truncate font-mono text-[10.5px] text-[color:var(--c-text-muted)]" title={loc}>
                     {loc}
                 </code>
             </div>
             {hasDetail && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{f.detail}</p>}
+            {evidence.length > 0 && (
+                <ul className="mt-1.5 flex flex-col gap-0.5">
+                    {evidence.map((a, i) => (
+                        <li key={i} className="flex items-baseline gap-1 text-[11px] leading-5 text-[color:var(--c-text-dim)]">
+                            <span aria-hidden>↳</span>
+                            <code className="font-mono text-[10.5px] text-[color:var(--c-text-muted)]">
+                                {a.line && a.line > 0 ? `${a.file}:${a.line}` : a.file}
+                            </code>
+                            {a.note && <span className="min-w-0 truncate">— {a.note}</span>}
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     )
 }
