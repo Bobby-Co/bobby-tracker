@@ -5,12 +5,12 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, confidenceLevelTone, confidenceTone, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
+import { badge, findingState, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { PRAnalysis, PRChecks, PRConfidences, PRFinding, Project } from "@/lib/supabase/types"
+import type { PRAnalysis, PRFinding, Project } from "@/lib/supabase/types"
 
 // The subset of a tracker.projects row PR analysis reads.
 type PRProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
@@ -160,9 +160,10 @@ export async function applyPRResult(
             const full = repoFullName(project)
             if (full) {
                 const [owner, repo] = full.split("/")
+                const uiUrl = `${origin}/projects/${row.project_id}/pulls/${row.pr_number}`
                 const body =
                     status === "done" && result
-                        ? resultComment(result, origin)
+                        ? resultComment(result, origin, uiUrl)
                         : status === "cancelled"
                           ? cancelledComment(origin)
                           : failedComment(origin)
@@ -221,91 +222,53 @@ function failedComment(origin: string): string {
     return [PR_MARKER, "**Bobby** — review unavailable", "", badge(origin, "failed", "rose"), "", "Bobby couldn't complete the review this time."].join("\n")
 }
 
-function resultComment(r: PRAnalysis, origin: string): string {
+// resultComment is the GitHub-comment TEASER: a terse, bullet-point digest that
+// links through to the full, navigable review in ucelot (evidence, per-dimension
+// confidence, diff snippets, the deep-dive chat). Deliberately low-detail —
+// verdict, summary, the issue findings as one-liners, fix-claim verdicts, and the
+// link. Everything richer lives in the app.
+function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
     if (r.verdict) {
         out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict) }), "")
         if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
     }
-    // Per-dimension calibrated confidence (analyser ADR-0057): three small chips
-    // toned by level. Falls back to the flat rollup badge for legacy results that
-    // only carry `confidence`.
-    const confLine = confidenceChips(r.confidences, origin)
-    if (confLine) out.push(confLine, "")
-    else if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
 
-    // Summary is short markdown bullets (analyser ADR-0054) — render them plainly
-    // so they read as a scannable list, not a wrapped blockquote.
+    // Summary — already short markdown bullets.
     if (r.summary?.trim()) out.push(r.summary.trim(), "")
 
-    if (r.impact?.trim()) out.push(`${icon(origin, "nodes")} **Impact**`, "", r.impact.trim(), "")
-    if (r.impact_files?.length) {
-        out.push("<details><summary>Affected files</summary>", "")
-        for (const f of r.impact_files) out.push(`- \`${f.file}\` — ${esc(f.reason)}`)
-        out.push("", "</details>", "")
-    }
-
-    if (r.findings?.length) {
-        out.push(`${icon(origin, "search")} **Review**`, "")
-        for (const f of r.findings) {
-            const loc = f.line ? `\`${f.file}:${f.line}\`` : `\`${f.file}\``
-            const title = findingTitle(f)
+    // Findings as terse one-line bullets, issues first, capped. Detail + evidence
+    // + the diff live in the app — this is just the headline.
+    const findings = r.findings ?? []
+    const issues = findings.filter((f) => findingState(f.severity) !== "good")
+    const goods = findings.filter((f) => findingState(f.severity) === "good")
+    if (issues.length) {
+        out.push(`${icon(origin, "search")} **Findings**`, "")
+        for (const f of issues.slice(0, 6)) {
+            const loc = f.line ? ` — \`${f.file}:${f.line}\`` : f.file ? ` — \`${f.file}\`` : ""
             const chip = badge(origin, severityLabel(f.severity || ""), severityTone(f.severity || ""), { icon: severityIcon(f.severity || "") })
-            out.push(`- ${chip} **${title}** — ${loc}`)
-            if (f.title && f.detail && f.detail.trim() !== f.title.trim()) out.push(`  ${esc(f.detail)}`)
-            // Cited KB anchors backing the finding (analyser ADR-0057) — the top
-            // 1-2 as a dim sub-line so the review reads as grounded, not asserted.
-            const ev = findingEvidenceLine(f)
-            if (ev) out.push(ev)
+            out.push(`- ${chip} ${esc(findingTitle(f))}${loc}`)
         }
+        if (issues.length > 6) out.push(`- …and ${issues.length - 6} more`)
         out.push("")
     }
 
+    // Fix claims — one line each (verdict + claim).
     if (r.fix_claims?.length) {
-        out.push(`${icon(origin, "target")} **Fix claims**`, "", "| Claim | Verdict | Why |", "|:--|:--|:--|")
-        for (const c of r.fix_claims) {
-            out.push(`| ${esc(c.claim)} | ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} | ${esc(c.reason)} |`)
-        }
+        out.push(`${icon(origin, "target")} **Fix claims**`, "")
+        for (const c of r.fix_claims) out.push(`- ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} ${esc(c.claim)}`)
         out.push("")
     }
 
-    if (r.concerns?.length) {
-        out.push("**Concerns**", "")
-        for (const c of r.concerns) out.push(`- ${c}`)
-        out.push("")
-    }
+    // Positives — a single compact line, never a section.
+    if (goods.length) out.push(`👍 ${goods.slice(0, 3).map((g) => esc(g.title || g.detail)).join(" · ")}`, "")
 
-    if (r.checklist?.length) {
-        out.push(`${icon(origin, "list")} **Nice to check**`, "")
-        for (const c of r.checklist) out.push(`- ${esc(c)}`)
-        out.push("")
-    }
+    // The call to action: the full, navigable review.
+    if (uiUrl) out.push(`**[View the full review in ucelot →](${uiUrl})**`, "")
 
-    // KB-diligence footer (analyser ADR-0057): a terse tally of what the reviewer
-    // verified against the knowledge graph. Omitted entirely for legacy results.
-    const checks = checksFooter(r.checks)
-    if (checks) out.push(checks, "")
-
-    const dur = r.duration_ms ? `reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : undefined
-    out.push(`<sub>🔎 Reviewed by Bobby${dur ? ` · ${dur}` : ""}</sub>`)
+    const dur = r.duration_ms ? ` · reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : ""
+    out.push(`<sub>🔎 Reviewed by Bobby${dur}</sub>`)
     return out.join("\n")
-}
-
-// confidenceChips renders the three per-dimension confidence chips as one line,
-// each toned by level (high=green, medium=amber, low=zinc). Returns "" when the
-// analyser didn't calibrate per-dimension (legacy results) so the caller can
-// fall back to the flat rollup badge.
-function confidenceChips(confidences: PRConfidences | null | undefined, origin: string): string {
-    if (!confidences) return ""
-    const dims: [string, { level?: string } | undefined][] = [
-        ["correctness", confidences.correctness],
-        ["load/perf", confidences.load_perf],
-        ["security", confidences.security],
-    ]
-    const chips = dims
-        .filter(([, d]) => d && typeof d.level === "string" && d.level)
-        .map(([label, d]) => badge(origin, `${label}: ${d!.level}`, confidenceLevelTone(d!.level!)))
-    return chips.join(" ")
 }
 
 // findingTitle leads the finding title with its category as a tag (Bug:,
@@ -334,37 +297,4 @@ function categoryLabel(cat: string): string {
         case "history": return "History"
         default: return cat.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
     }
-}
-
-// findingEvidenceLine renders the top 1-2 cited anchors under a finding as a dim
-// sub-line, e.g. `  ↳ evidence: \`x.go:12\` — wraps errors with %w`. Returns ""
-// when the finding carries no evidence (legacy findings).
-function findingEvidenceLine(f: PRFinding): string {
-    const ev = (f.evidence || []).filter((e) => e && e.file)
-    if (ev.length === 0) return ""
-    const parts = ev.slice(0, 2).map((e) => {
-        const loc = e.line ? `\`${e.file}:${e.line}\`` : `\`${e.file}\``
-        const note = (e.note || "").trim()
-        return note ? `${loc} — ${esc(note)}` : loc
-    })
-    return `  <sub>↳ evidence: ${parts.join(" · ")}</sub>`
-}
-
-// checksFooter summarises the KB-verification tally as one terse line, omitting
-// zero counts. When findings were dropped for being ungrounded, it appends that
-// too. Returns "" when there's nothing non-zero to report.
-function checksFooter(checks: PRChecks | null | undefined): string {
-    if (!checks) return ""
-    const bits: string[] = []
-    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-    if (checks.callers > 0) bits.push(plural(checks.callers, "caller", "callers"))
-    if (checks.precedents > 0) bits.push(plural(checks.precedents, "precedent", "precedents"))
-    if (checks.tests > 0) bits.push(plural(checks.tests, "test", "tests"))
-    if (checks.git_reads > 0) bits.push(plural(checks.git_reads, "git read", "git reads"))
-    if (checks.failure_probes > 0) bits.push(plural(checks.failure_probes, "failure probe", "failure probes"))
-    if (checks.removed_symbols && checks.removed_symbols > 0) bits.push(plural(checks.removed_symbols, "removed symbol", "removed symbols"))
-    if (bits.length === 0 && !(checks.dropped && checks.dropped > 0)) return ""
-    let line = bits.length ? `Checked ${bits.join(" · ")}` : "Checked the knowledge graph"
-    if (checks.dropped && checks.dropped > 0) line += ` · ${checks.dropped} ungrounded dropped`
-    return `<sub>${line}</sub>`
 }

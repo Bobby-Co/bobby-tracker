@@ -4,9 +4,23 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
 import { findingState, severityLabel } from "@/lib/badge"
 import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
+
+// Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
+// `.prose-tracker .hljs-*` theme in globals.css). Used for summary/impact/detail
+// and the per-finding diff snippets.
+function Md({ children, className }: { children: string; className?: string }) {
+    return (
+        <div className={cn("prose-tracker", className)}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeHighlight, { ignoreMissing: true, detect: true }]]}>
+                {children}
+            </ReactMarkdown>
+        </div>
+    )
+}
 
 // Renders Bobby's persisted PR review (pull_request_analyses.result) natively —
 // the same structured shape the analyser posts to the GitHub comment, minus the
@@ -176,9 +190,21 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
     )
 }
 
+// Finding groups by traffic-light state, issues first. Each becomes a
+// collapsible section so a long review stays scannable.
+const GROUPS: { key: "critical" | "review" | "good"; title: string; tone: string; open: boolean }[] = [
+    { key: "critical", title: "Blockers", tone: "bg-rose-100 text-rose-700", open: true },
+    { key: "review", title: "Worth a review", tone: "bg-amber-100 text-amber-700", open: true },
+    { key: "good", title: "Looks good", tone: "bg-emerald-100 text-emerald-700", open: false },
+]
+
 function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
+    const findings = r.findings ?? []
+    const grouped = GROUPS.map((g) => ({ ...g, items: findings.filter((f) => findingState(f.severity) === g.key) }))
+    const counts = Object.fromEntries(grouped.map((g) => [g.key, g.items.length]))
+
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
             {r.verdict && (
                 <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(r.verdict))}>
                     <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
@@ -189,67 +215,62 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                 </div>
             )}
 
-            {r.confidences ? (
-                <div className="flex flex-wrap gap-1.5">
-                    <ConfChip label="correctness" dim={r.confidences.correctness} />
-                    <ConfChip label="load/perf" dim={r.confidences.load_perf} />
-                    <ConfChip label="security" dim={r.confidences.security} />
-                </div>
-            ) : (
-                r.confidence && (
-                    <div>
+            {/* At-a-glance: confidence + finding tally, so the reader orients before scrolling. */}
+            <div className="flex flex-wrap items-center gap-1.5">
+                {r.confidences ? (
+                    <>
+                        <ConfChip label="correctness" dim={r.confidences.correctness} />
+                        <ConfChip label="load/perf" dim={r.confidences.load_perf} />
+                        <ConfChip label="security" dim={r.confidences.security} />
+                    </>
+                ) : (
+                    r.confidence && (
                         <span className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
                             confidence: {r.confidence}
                         </span>
-                    </div>
-                )
-            )}
+                    )
+                )}
+                {counts.critical > 0 && <Tally n={counts.critical} label="blocker" tone="bg-rose-100 text-rose-700" />}
+                {counts.review > 0 && <Tally n={counts.review} label="to review" tone="bg-amber-100 text-amber-700" />}
+                {counts.good > 0 && <Tally n={counts.good} label="good" tone="bg-emerald-100 text-emerald-700" />}
+            </div>
 
             {r.summary?.trim() && (
                 <blockquote className="border-l-2 border-amber-300 pl-3 text-[13.5px] leading-6 text-[color:var(--c-text)]">
-                    <div className="prose-tracker">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.summary}</ReactMarkdown>
-                    </div>
+                    <Md>{r.summary}</Md>
                 </blockquote>
             )}
 
-            {r.impact?.trim() && (
-                <div>
-                    <h3 className="mb-1 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Impact</h3>
-                    <div className="prose-tracker text-[13px] leading-6">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.impact}</ReactMarkdown>
-                    </div>
-                </div>
+            {(r.impact?.trim() || (r.impact_files && r.impact_files.length > 0)) && (
+                <Section title="Impact">
+                    {r.impact?.trim() && <Md className="text-[13px] leading-6">{r.impact}</Md>}
+                    {r.impact_files && r.impact_files.length > 0 && (
+                        <ul className="mt-1.5 flex flex-col gap-1.5">
+                            {r.impact_files.map((f, i) => (
+                                <li key={i} className="text-[12.5px] leading-5">
+                                    <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
+                                    <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Section>
             )}
 
-            {r.impact_files && r.impact_files.length > 0 && (
-                <div>
-                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Affected files</h3>
-                    <ul className="flex flex-col gap-1.5">
-                        {r.impact_files.map((f, i) => (
-                            <li key={i} className="text-[12.5px] leading-5">
-                                <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
-                                <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-
-            {r.findings && r.findings.length > 0 && (
-                <div>
-                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Review</h3>
-                    <div className="flex flex-col gap-2">
-                        {r.findings.map((f, i) => (
-                            <Finding key={i} f={f} />
-                        ))}
-                    </div>
-                </div>
+            {grouped.map((g) =>
+                g.items.length === 0 ? null : (
+                    <Section key={g.key} title={g.title} count={g.items.length} countTone={g.tone} defaultOpen={g.open}>
+                        <div className="flex flex-col gap-2">
+                            {g.items.map((f, i) => (
+                                <Finding key={i} f={f} />
+                            ))}
+                        </div>
+                    </Section>
+                ),
             )}
 
             {r.fix_claims && r.fix_claims.length > 0 && (
-                <div>
-                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Fix claims</h3>
+                <Section title="Fix claims" count={r.fix_claims.length}>
                     <div className="flex flex-col gap-2">
                         {r.fix_claims.map((c, i) => (
                             <div key={i} className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-2.5">
@@ -263,23 +284,11 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                             </div>
                         ))}
                     </div>
-                </div>
-            )}
-
-            {r.concerns && r.concerns.length > 0 && (
-                <div>
-                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Concerns</h3>
-                    <ul className="flex list-disc flex-col gap-1 pl-4 text-[12.5px] leading-5 text-[color:var(--c-text)]">
-                        {r.concerns.map((c, i) => (
-                            <li key={i}>{c}</li>
-                        ))}
-                    </ul>
-                </div>
+                </Section>
             )}
 
             {r.checklist && r.checklist.length > 0 && (
-                <div>
-                    <h3 className="mb-1.5 text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">Nice to check</h3>
+                <Section title="Nice to check" count={r.checklist.length} defaultOpen={false}>
                     <ul className="flex flex-col gap-1.5">
                         {r.checklist.map((c, i) => (
                             <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
@@ -288,7 +297,7 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                             </li>
                         ))}
                     </ul>
-                </div>
+                </Section>
             )}
 
             {r.checks && <ChecksFooter checks={r.checks} />}
@@ -302,6 +311,58 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                 </div>
             )}
         </div>
+    )
+}
+
+// Tally is one at-a-glance count pill ("2 blockers").
+function Tally({ n, label, tone }: { n: number; label: string; tone: string }) {
+    return (
+        <span className={cn("inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", tone)}>
+            {n} {label}
+            {n === 1 || label.endsWith("review") || label === "good" ? "" : "s"}
+        </span>
+    )
+}
+
+// Section is a native collapsible <details> block with a header + optional count,
+// so a long review collapses into a scannable outline.
+function Section({
+    title,
+    count,
+    countTone,
+    defaultOpen = true,
+    children,
+}: {
+    title: string
+    count?: number
+    countTone?: string
+    defaultOpen?: boolean
+    children: React.ReactNode
+}) {
+    return (
+        <details open={defaultOpen} className="group rounded-[12px] border border-[color:var(--c-border)] bg-white">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+                <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="shrink-0 text-[color:var(--c-text-dim)] transition-transform group-open:rotate-90"
+                    aria-hidden
+                >
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+                <span className="text-[12px] font-bold uppercase tracking-[0.03em] text-[color:var(--c-text-muted)]">{title}</span>
+                {count != null && (
+                    <span className={cn("ml-auto rounded-full px-1.5 py-[1px] text-[10.5px] font-semibold", countTone ?? "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]")}>{count}</span>
+                )}
+            </summary>
+            <div className="border-t border-[color:var(--c-border)] px-3 py-2.5">{children}</div>
+        </details>
     )
 }
 
@@ -336,14 +397,16 @@ function ChecksFooter({ checks }: { checks: PRChecks }) {
     )
 }
 
-// One scannable line: severity chip · short title · file. The longer detail sits
-// muted underneath, and only when it adds something over the title.
+// A rich finding card: severity + category + title + location on top, then the
+// detail, a collapsible syntax-highlighted diff of the changed code, the cited
+// evidence, and what the reviewer verified.
 function Finding({ f }: { f: PRFinding }) {
     const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
     const title = (f.title && f.title.trim()) || f.detail
     const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())
     const catLabel = f.category ? categoryLabel(f.category) : ""
-    const evidence = (f.evidence ?? []).filter((a) => a.file).slice(0, 2)
+    const evidence = (f.evidence ?? []).filter((a) => a.file).slice(0, 3)
+    const snippet = f.snippet?.trim() ? "```" + (f.lang || "diff") + "\n" + f.snippet.trim() + "\n```" : ""
     return (
         <div className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2.5 py-2">
             <div className="flex items-baseline gap-2">
@@ -360,7 +423,23 @@ function Finding({ f }: { f: PRFinding }) {
                     {loc}
                 </code>
             </div>
+
             {hasDetail && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{f.detail}</p>}
+
+            {snippet && (
+                <details className="group/snip mt-2">
+                    <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-[color:var(--c-text-dim)] [&::-webkit-details-marker]:hidden">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open/snip:rotate-90" aria-hidden>
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                        View change
+                    </summary>
+                    <div className="mt-1 overflow-x-auto rounded-[8px] border border-[color:var(--c-border)]">
+                        <Md className="text-[11px] [&_pre]:my-0 [&_pre]:rounded-none [&_pre]:border-0">{snippet}</Md>
+                    </div>
+                </details>
+            )}
+
             {evidence.length > 0 && (
                 <ul className="mt-1.5 flex flex-col gap-0.5">
                     {evidence.map((a, i) => (
@@ -373,6 +452,13 @@ function Finding({ f }: { f: PRFinding }) {
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {f.checked && f.checked.length > 0 && (
+                <p className="mt-1.5 flex items-baseline gap-1 text-[10.5px] leading-5 text-[color:var(--c-text-dim)]">
+                    <span className="text-emerald-600" aria-hidden>✓</span>
+                    <span className="min-w-0">Verified: {f.checked.slice(0, 3).join("; ")}</span>
+                </p>
             )}
         </div>
     )

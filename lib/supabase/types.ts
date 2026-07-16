@@ -215,6 +215,10 @@ export interface PRFinding {
     /** What the reviewer verified for this finding (analyser ADR-0057) —
      *  e.g. "callers of Foo still compile". Absent on legacy rows. */
     checked?: string[]
+    /** The finding's diff hunk (the actual changed code) for a syntax-highlighted
+     *  snippet in the UI; `lang` is the fenced-block language (usually "diff"). */
+    snippet?: string
+    lang?: string
 }
 
 /** Per-dimension calibrated confidence (analyser ADR-0057). `level` is the
