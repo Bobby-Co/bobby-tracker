@@ -249,32 +249,6 @@ function badgeImg(origin: string, text: string, tone: BadgeTone, opts: { icon?: 
     return `<img src="${url}" alt="${text.replace(/"/g, "")}" />`
 }
 
-// scoreFor returns the merge-readiness score: the analyser's value when present,
-// else recomputed from the result (mirrors the analyser's deriveScore) so the
-// headline renders even against an older analyser build that doesn't send it.
-function scoreFor(r: PRAnalysis): { value: number; max: number } {
-    if (typeof r.score === "number" && typeof r.score_max === "number" && r.score_max > 0) {
-        return { value: r.score, max: r.score_max }
-    }
-    const max = 10
-    let score = 10
-    let reviewPenalty = 0
-    for (const f of r.findings ?? []) {
-        const st = findingState(f.severity)
-        if (st === "critical") score -= 5
-        else if (st === "review") reviewPenalty += 1
-    }
-    score -= Math.min(reviewPenalty, 3)
-    for (const c of r.fix_claims ?? []) {
-        if (c.verdict === "unlikely") score -= 4
-        else if (c.verdict === "partial") score -= 1
-    }
-    if (r.confidences?.correctness?.level === "low") score -= 1
-    if (r.verdict === "request_changes") score = Math.min(score, 4)
-    else if (r.verdict === "comment") score = Math.min(score, 7)
-    return { value: Math.max(0, Math.min(score, max)), max }
-}
-
 // resultComment is the GitHub-comment TEASER: a terse, bullet-point digest that
 // links through to the full, navigable review in ucelot (evidence, per-dimension
 // confidence, diff snippets, the deep-dive chat). Deliberately low-detail —
@@ -289,8 +263,10 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?:
     // ── Quick Summary — readiness score, the confidence rubrics, what the PR does.
     // The trailing "\\" hard-breaks the bold label onto its own line above the image.
     out.push("### Quick Summary")
-    const sc = scoreFor(r)
-    out.push("**Merge Readiness**\\", scoreImage(origin, sc.value, sc.max), "")
+    // Score comes from the analyser only — never faked here. If it's absent
+    // (older analyser build), show a plain "not ready" placeholder instead.
+    if (r.score_max && r.score_max > 0) out.push("**Merge Readiness**\\", scoreImage(origin, r.score ?? 0, r.score_max), "")
+    else out.push("**Merge Readiness**\\", "`…` _not ready_", "")
     if (r.confidences) {
         const c = r.confidences
         out.push("**Analysis rubrics**\\", confidenceImage(origin, [c.correctness?.level, c.load_perf?.level, c.security?.level].map((l) => l || "low")), "")

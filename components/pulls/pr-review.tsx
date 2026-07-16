@@ -202,8 +202,16 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                 </div>
             )}
 
-            {/* Merge-readiness headline: a decisive score + segmented bar. */}
-            {typeof r.score === "number" && r.score_max ? <ScoreBar value={r.score} max={r.score_max} /> : null}
+            {/* Merge-readiness headline: the analyser's score + bar, or a plain
+                "not ready" placeholder when it didn't send one (never faked). */}
+            {typeof r.score === "number" && r.score_max ? (
+                <ScoreBar value={r.score} max={r.score_max} />
+            ) : (
+                <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-white px-3.5 py-2.5">
+                    <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">Merge readiness</span>
+                    <span className="text-[12px] text-[color:var(--c-text-muted)]">· not ready</span>
+                </div>
+            )}
 
             {/* Finding tally, so the reader orients before scrolling. */}
             {(counts.critical > 0 || counts.review > 0 || counts.good > 0) && (
