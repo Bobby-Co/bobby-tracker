@@ -5,12 +5,12 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, confidenceTone, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
+import { badge, confidenceLevelTone, confidenceTone, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { PRAnalysis, Project } from "@/lib/supabase/types"
+import type { PRAnalysis, PRChecks, PRConfidences, PRFinding, Project } from "@/lib/supabase/types"
 
 // The subset of a tracker.projects row PR analysis reads.
 type PRProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
@@ -227,7 +227,12 @@ function resultComment(r: PRAnalysis, origin: string): string {
         out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict) }), "")
         if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
     }
-    if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
+    // Per-dimension calibrated confidence (analyser ADR-0057): three small chips
+    // toned by level. Falls back to the flat rollup badge for legacy results that
+    // only carry `confidence`.
+    const confLine = confidenceChips(r.confidences, origin)
+    if (confLine) out.push(confLine, "")
+    else if (r.confidence) out.push(badge(origin, `confidence: ${r.confidence}`, confidenceTone(r.confidence)), "")
 
     // Summary is short markdown bullets (analyser ADR-0054) — render them plainly
     // so they read as a scannable list, not a wrapped blockquote.
@@ -244,10 +249,14 @@ function resultComment(r: PRAnalysis, origin: string): string {
         out.push(`${icon(origin, "search")} **Review**`, "")
         for (const f of r.findings) {
             const loc = f.line ? `\`${f.file}:${f.line}\`` : `\`${f.file}\``
-            const title = esc(f.title || f.detail)
+            const title = findingTitle(f)
             const chip = badge(origin, severityLabel(f.severity || ""), severityTone(f.severity || ""), { icon: severityIcon(f.severity || "") })
             out.push(`- ${chip} **${title}** — ${loc}`)
             if (f.title && f.detail && f.detail.trim() !== f.title.trim()) out.push(`  ${esc(f.detail)}`)
+            // Cited KB anchors backing the finding (analyser ADR-0057) — the top
+            // 1-2 as a dim sub-line so the review reads as grounded, not asserted.
+            const ev = findingEvidenceLine(f)
+            if (ev) out.push(ev)
         }
         out.push("")
     }
@@ -272,7 +281,90 @@ function resultComment(r: PRAnalysis, origin: string): string {
         out.push("")
     }
 
+    // KB-diligence footer (analyser ADR-0057): a terse tally of what the reviewer
+    // verified against the knowledge graph. Omitted entirely for legacy results.
+    const checks = checksFooter(r.checks)
+    if (checks) out.push(checks, "")
+
     const dur = r.duration_ms ? `reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : undefined
     out.push(`<sub>🔎 Reviewed by Bobby${dur ? ` · ${dur}` : ""}</sub>`)
     return out.join("\n")
+}
+
+// confidenceChips renders the three per-dimension confidence chips as one line,
+// each toned by level (high=green, medium=amber, low=zinc). Returns "" when the
+// analyser didn't calibrate per-dimension (legacy results) so the caller can
+// fall back to the flat rollup badge.
+function confidenceChips(confidences: PRConfidences | null | undefined, origin: string): string {
+    if (!confidences) return ""
+    const dims: [string, { level?: string } | undefined][] = [
+        ["correctness", confidences.correctness],
+        ["load/perf", confidences.load_perf],
+        ["security", confidences.security],
+    ]
+    const chips = dims
+        .filter(([, d]) => d && typeof d.level === "string" && d.level)
+        .map(([label, d]) => badge(origin, `${label}: ${d!.level}`, confidenceLevelTone(d!.level!)))
+    return chips.join(" ")
+}
+
+// findingTitle leads the finding title with its category as a tag (Bug:,
+// Convention:, …) when the title doesn't already carry one. "good" needs no tag
+// (the emerald chip already says so); an empty category is skipped.
+function findingTitle(f: PRFinding): string {
+    const base = esc(f.title || f.detail)
+    const cat = (f.category || "").trim()
+    if (!cat || cat === "good") return base
+    // Don't double-tag: the analyser sometimes already prefixes the title
+    // ("Convention: …"). Compare case-insensitively against the tag word(s).
+    const tag = categoryLabel(cat)
+    if (base.toLowerCase().startsWith(`${tag.toLowerCase()}:`)) return base
+    return `${tag}: ${base}`
+}
+
+// categoryLabel humanises a finding category slug into a short tag word.
+function categoryLabel(cat: string): string {
+    switch (cat) {
+        case "bug": return "Bug"
+        case "convention": return "Convention"
+        case "blast_radius": return "Blast radius"
+        case "test_gap": return "Test gap"
+        case "drift": return "Drift"
+        case "failure": return "Failure"
+        case "history": return "History"
+        default: return cat.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+    }
+}
+
+// findingEvidenceLine renders the top 1-2 cited anchors under a finding as a dim
+// sub-line, e.g. `  ↳ evidence: \`x.go:12\` — wraps errors with %w`. Returns ""
+// when the finding carries no evidence (legacy findings).
+function findingEvidenceLine(f: PRFinding): string {
+    const ev = (f.evidence || []).filter((e) => e && e.file)
+    if (ev.length === 0) return ""
+    const parts = ev.slice(0, 2).map((e) => {
+        const loc = e.line ? `\`${e.file}:${e.line}\`` : `\`${e.file}\``
+        const note = (e.note || "").trim()
+        return note ? `${loc} — ${esc(note)}` : loc
+    })
+    return `  <sub>↳ evidence: ${parts.join(" · ")}</sub>`
+}
+
+// checksFooter summarises the KB-verification tally as one terse line, omitting
+// zero counts. When findings were dropped for being ungrounded, it appends that
+// too. Returns "" when there's nothing non-zero to report.
+function checksFooter(checks: PRChecks | null | undefined): string {
+    if (!checks) return ""
+    const bits: string[] = []
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+    if (checks.callers > 0) bits.push(plural(checks.callers, "caller", "callers"))
+    if (checks.precedents > 0) bits.push(plural(checks.precedents, "precedent", "precedents"))
+    if (checks.tests > 0) bits.push(plural(checks.tests, "test", "tests"))
+    if (checks.git_reads > 0) bits.push(plural(checks.git_reads, "git read", "git reads"))
+    if (checks.failure_probes > 0) bits.push(plural(checks.failure_probes, "failure probe", "failure probes"))
+    if (checks.removed_symbols && checks.removed_symbols > 0) bits.push(plural(checks.removed_symbols, "removed symbol", "removed symbols"))
+    if (bits.length === 0 && !(checks.dropped && checks.dropped > 0)) return ""
+    let line = bits.length ? `Checked ${bits.join(" · ")}` : "Checked the knowledge graph"
+    if (checks.dropped && checks.dropped > 0) line += ` · ${checks.dropped} ungrounded dropped`
+    return `<sub>${line}</sub>`
 }

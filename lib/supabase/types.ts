@@ -183,6 +183,17 @@ export interface PRImpactRef {
     reason: string
 }
 
+/** A cited evidence anchor backing a finding (analyser ADR-0057). Points at a
+ *  concrete file (optionally a line), with `kind` describing what was inspected
+ *  ("precedent" | "caller" | "test" | "git" | "failure" | …) and `note` a short
+ *  human gloss. All fields but `file` are optional — older/looser anchors omit them. */
+export interface PREvidence {
+    file: string
+    line?: number
+    kind?: string
+    note?: string
+}
+
 /** A grounded, cited review item on the changed code (analyser ADR-0054). */
 export interface PRFinding {
     file: string
@@ -190,9 +201,49 @@ export interface PRFinding {
     /** STATE chosen by impact (ADR-0056): "critical" | "review" | "good". Older
      *  rows may carry the legacy bug|risk|style|nit — normalised by findingState. */
     severity: "critical" | "review" | "good" | string
+    /** Topic of the finding (analyser ADR-0057): "bug" | "convention" |
+     *  "blast_radius" | "test_gap" | "drift" | "failure" | "history" | "good".
+     *  Distinct from `severity` (the traffic-light state). Optional — legacy rows
+     *  produced before ADR-0057 don't carry it. */
+    category?: string
     /** Short topic (≤ ~8 words), may lead with a category tag ("Convention:"). */
     title?: string
     detail: string
+    /** Cited KB anchors the reviewer inspected to ground this finding
+     *  (analyser ADR-0057). Empty/absent on legacy rows. */
+    evidence?: PREvidence[]
+    /** What the reviewer verified for this finding (analyser ADR-0057) —
+     *  e.g. "callers of Foo still compile". Absent on legacy rows. */
+    checked?: string[]
+}
+
+/** Per-dimension calibrated confidence (analyser ADR-0057). `level` is the
+ *  coarse bucket; `basis` is the one-line justification for that level. */
+export interface PRConfidenceDimension {
+    level: "high" | "medium" | "low" | string
+    basis: string
+}
+
+/** The three review dimensions the analyser calibrates confidence over
+ *  (analyser ADR-0057). Supersedes the flat `confidence` rollup when present. */
+export interface PRConfidences {
+    correctness: PRConfidenceDimension
+    load_perf: PRConfidenceDimension
+    security: PRConfidenceDimension
+}
+
+/** The KB-verification tally the reviewer accrued (analyser ADR-0057) — the
+ *  concrete diligence counts surfaced as a "checked N callers · …" footer.
+ *  `dropped` is findings that couldn't be grounded and were cut;
+ *  `removed_symbols` is symbols the diff deleted that the reviewer traced. */
+export interface PRChecks {
+    precedents: number
+    callers: number
+    tests: number
+    git_reads: number
+    failure_probes: number
+    dropped?: number
+    removed_symbols?: number
 }
 export interface PRAnalysis {
     summary: string
@@ -204,7 +255,16 @@ export interface PRAnalysis {
     fix_claims?: PRFixVerdict[]
     /** Retired analyser-side (folded into findings); kept for old rows. */
     concerns?: string[]
+    /** Flat rollup confidence (analyser ADR-0054). Superseded by `confidences`
+     *  when the KB reviewer calibrates per-dimension (ADR-0057); kept as the
+     *  back-compat fallback for rows without the finer breakdown. */
     confidence?: string
+    /** Per-dimension calibrated confidence (analyser ADR-0057). Nullable — legacy
+     *  results carry only the flat `confidence`. */
+    confidences?: PRConfidences | null
+    /** KB-verification tally (analyser ADR-0057) — powers the diligence footer.
+     *  Nullable — absent on legacy results. */
+    checks?: PRChecks | null
     /** Merge recommendation + one-line reason (analyser ADR-0056). */
     verdict?: "approve" | "request_changes" | "comment" | string
     verdict_reason?: string
