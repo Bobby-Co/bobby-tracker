@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { badge, findingState, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
+import { badge, confidenceLevelTone, findingState, icon, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, severityIcon, severityLabel, severityTone, verdictTone } from "@/lib/badge"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
 import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
@@ -234,11 +234,19 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
         if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
     }
 
+    // Per-dimension confidence as three compact badges (colour = at-a-glance signal).
+    if (r.confidences) {
+        const c = r.confidences
+        const chip = (label: string, d?: { level?: string }) => (d?.level ? badge(origin, `${label}: ${d.level}`, confidenceLevelTone(d.level)) : "")
+        const chips = [chip("correctness", c.correctness), chip("load/perf", c.load_perf), chip("security", c.security)].filter(Boolean)
+        if (chips.length) out.push(chips.join(" "), "")
+    }
+
     // Summary — already short markdown bullets.
     if (r.summary?.trim()) out.push(r.summary.trim(), "")
 
     // Findings as terse one-line bullets, issues first, capped. Detail + evidence
-    // + the diff live in the app — this is just the headline.
+    // live in the app — this is just the headline.
     const findings = r.findings ?? []
     const issues = findings.filter((f) => findingState(f.severity) !== "good")
     const goods = findings.filter((f) => findingState(f.severity) === "good")
@@ -251,6 +259,18 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
         }
         if (issues.length > 6) out.push(`- …and ${issues.length - 6} more`)
         out.push("")
+
+        // The changed code, collapsed — terse by default, GitHub highlights the diff
+        // when expanded. Only the issue findings that carry a snippet.
+        const withSnip = issues.filter((f) => f.snippet?.trim()).slice(0, 4)
+        if (withSnip.length) {
+            out.push("<details>", `<summary>${icon(origin, "search")} Changed code (${withSnip.length})</summary>`, "")
+            for (const f of withSnip) {
+                const loc = f.line ? `${f.file}:${f.line}` : f.file || ""
+                out.push(`**${esc(f.title || "")}**${loc ? ` — \`${loc}\`` : ""}`, "", "```" + (f.lang || "diff"), f.snippet!.trim(), "```", "")
+            }
+            out.push("</details>", "")
+        }
     }
 
     // Fix claims — one line each (verdict + claim).
@@ -264,6 +284,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     if (goods.length) out.push(`👍 ${goods.slice(0, 3).map((g) => esc(g.title || g.detail)).join(" · ")}`, "")
 
     // The call to action: the full, navigable review.
+    out.push("---", "")
     if (uiUrl) out.push(`**[View the full review in ucelot →](${uiUrl})**`, "")
 
     const dur = r.duration_ms ? ` · reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : ""
