@@ -41,7 +41,9 @@ export default function PullDetailPage() {
             {pull ? (
                 <>
                     <PrDetail pr={pull} reviewStatus={data?.analysis?.status ?? null} />
-                    <PrReview analysis={data?.analysis ?? null} />
+                    <div id="pr-review" className="scroll-mt-20">
+                        <PrReview analysis={data?.analysis ?? null} />
+                    </div>
                     <PrComments
                         comments={data?.comments ?? []}
                         projectId={id}

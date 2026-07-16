@@ -306,7 +306,7 @@ export function MindPanel({
                             transition: "opacity 1000ms cubic-bezier(0.16,1,0.3,1), transform 1000ms cubic-bezier(0.16,1,0.3,1)",
                         }}
                     >
-                        <PixelScatter cell={26} fill={0.55} corners={["tl", "tr", "bl", "br"]} className="" onReady={() => setScatterReady(true)} />
+                        <PixelScatter cell={26} fill={0.5} corners={["bl", "br"]} reach={0.3} falloff={1} className="" onReady={() => setScatterReady(true)} />
                     </div>
                 )}
             </div>

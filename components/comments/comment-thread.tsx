@@ -114,6 +114,71 @@ function ProvenanceChip({ c }: { c: ThreadComment }) {
     return <span className="rounded-full bg-zinc-100 px-1.5 py-[1px] text-[10px] font-semibold text-zinc-600">GitHub</span>
 }
 
+// Every bot PR comment (loading / result / cancelled / failed) is prefixed with
+// this HTML marker — kept in sync with PR_MARKER in lib/pr-sync.ts. It's the
+// reliable way to spot the bot's review comment regardless of how it round-trips
+// back through the GitHub webhook (which stores it as a plain issue_comment).
+const PR_REVIEW_MARKER = "<!-- bobby:pr-analysis -->"
+
+function isBotReviewComment(body: string | null): boolean {
+    return !!body && body.includes(PR_REVIEW_MARKER)
+}
+
+// Collapsed stand-in for the bot review comment. The full review is rendered by
+// <PrReview> at the top of the page (anchor id="pr-review"); this just points to
+// it, with copy that tracks the comment's state (still reviewing vs. finished).
+function ReviewPointer({ body, createdAt }: { body: string | null; createdAt: string | null }) {
+    const b = body ?? ""
+    const reviewing = /is reviewing this pull request/i.test(b)
+    const cancelled = /closed before the review finished/i.test(b)
+    const failed = /couldn't complete the review/i.test(b)
+    const title = reviewing ? "PR Review in progress" : cancelled ? "PR Review cancelled" : failed ? "PR Review unavailable" : "PR Review Result"
+    const sub = reviewing
+        ? "Ucelot is reviewing this pull request…"
+        : cancelled || failed
+          ? "See the review section above"
+          : `${createdAt ? `Posted ${timeAgo(createdAt)} · ` : ""}shown in full above`
+
+    function scrollToReview() {
+        const el = typeof document !== "undefined" ? document.getElementById("pr-review") : null
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+    return (
+        <li className="flex gap-2.5">
+            <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-700">
+                {reviewing ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-300 border-t-violet-600" />
+                ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                    </svg>
+                )}
+            </span>
+            <button
+                type="button"
+                onClick={scrollToReview}
+                className="group flex min-w-0 flex-1 items-center gap-2 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2.5 text-left transition-colors hover:border-violet-300 hover:bg-violet-50/50"
+            >
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-semibold text-[color:var(--c-text)]">{title}</span>
+                        <span className="rounded-full bg-violet-50 px-1.5 py-[1px] text-[10px] font-semibold text-violet-700">Ucelot</span>
+                    </div>
+                    <p className="mt-0.5 text-[11.5px] text-[color:var(--c-text-muted)]">{sub}</p>
+                </div>
+                <span className="flex items-center gap-1 whitespace-nowrap text-[12px] font-semibold text-violet-700 group-hover:underline">
+                    View review
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 19V5" />
+                        <path d="M5 12l7-7 7 7" />
+                    </svg>
+                </span>
+            </button>
+        </li>
+    )
+}
+
 function CommentRow({
     c,
     owned,
@@ -129,6 +194,12 @@ function CommentRow({
     const [draft, setDraft] = useState(c.body ?? "")
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState<string | null>(null)
+
+    // The bot's PR review comment mirrors the full "PR Review" section already
+    // shown at the top of the page. It's posted as a plain issue comment (so its
+    // `kind` is "issue_comment", not "review"), but every bot PR comment carries a
+    // stable HTML marker — detect that and collapse it to a chip that scrolls up.
+    if (isBotReviewComment(c.body)) return <ReviewPointer body={c.body} createdAt={c.gh_created_at} />
 
     async function save() {
         const body = draft.trim()

@@ -215,7 +215,7 @@ function loadingComment(origin: string, prName?: string, uiUrl?: string): string
         PR_MARKER,
         `## PR Review${name ? ` (${name})` : ""}`,
         "",
-        `<img src="${origin}/brand_loader.webp" width="26" align="middle" alt="" /> **Ucelot is reviewing this pull request…**`,
+        `<img align="absmiddle" src="${origin}/brand_loader.webp" width="26" alt="" /> **Ucelot is reviewing this pull request…**`,
         "",
         "Reading the diff and tracing its impact through the codebase — this comment fills in automatically when the review is ready.",
     ]
@@ -246,7 +246,7 @@ const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone
 // would show literally. `&` is escaped so the src is valid HTML.
 function badgeImg(origin: string, text: string, tone: BadgeTone, opts: { icon?: string; size?: "sm" | "header" } = {}): string {
     const url = badgeUrl(origin, text, tone, opts).replace(/&/g, "&amp;")
-    return `<img src="${url}" alt="${text.replace(/"/g, "")}" />`
+    return `<picture><img align="absmiddle" src="${url}" alt="${text.replace(/"/g, "")}" /></picture>`
 }
 
 // resultComment is the GitHub-comment TEASER: a terse, bullet-point digest that
