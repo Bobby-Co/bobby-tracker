@@ -295,7 +295,7 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?:
     if (uiUrl) out.push(`**[View the full review in ucelot →](${uiUrl})**`, "")
 
     const dur = r.duration_ms ? ` · reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : ""
-    out.push(`<sub>🔎 Reviewed by Bobby${dur}</sub>`)
+    out.push(`<sub>🔎 Reviewed by Bobby${dur}</sub>`, "", `<sub>Bobby is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
     return out.join("\n")
 }
 

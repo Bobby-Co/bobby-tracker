@@ -300,6 +300,11 @@ function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
                     )}
                 </div>
             )}
+
+            {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note. */}
+            <p className="pt-1 text-[10.5px] leading-4 text-[color:var(--c-text-dim)]">
+                Bobby is AI-assisted and can make mistakes — verify findings before acting.
+            </p>
         </div>
     )
 }
