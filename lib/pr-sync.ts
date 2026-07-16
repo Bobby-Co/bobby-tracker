@@ -83,17 +83,18 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
     if (files.length === 0) return
 
     // Loading comment: edit the prior one on a re-run, else post fresh.
+    const loadingUrl = `${origin}/projects/${project.id}/pulls/${pr.number}`
     let commentId = existing?.github_comment_id ?? null
     if (commentId != null) {
         try {
-            await updateIssueComment(installationId, owner, repo, commentId, loadingComment(origin))
+            await updateIssueComment(installationId, owner, repo, commentId, loadingComment(origin, pr.title, loadingUrl))
         } catch {
             commentId = null
         }
     }
     if (commentId == null) {
         try {
-            const created = await createIssueComment(installationId, owner, repo, pr.number, loadingComment(origin))
+            const created = await createIssueComment(installationId, owner, repo, pr.number, loadingComment(origin, pr.title, loadingUrl))
             commentId = created.id
         } catch {
             return
@@ -165,8 +166,8 @@ export async function applyPRResult(
                     status === "done" && result
                         ? resultComment(result, origin, uiUrl, row.pr_number)
                         : status === "cancelled"
-                          ? cancelledComment(origin)
-                          : failedComment(origin)
+                          ? cancelledComment(origin, row.pr_number)
+                          : failedComment(origin, row.pr_number)
                 try {
                     await updateIssueComment(project.github_installation_id!, owner, repo, row.github_comment_id, body)
                 } catch {
@@ -203,23 +204,33 @@ function esc(s: string): string {
     return s.replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim()
 }
 
-function loadingComment(origin: string): string {
-    return [
+const prTitle = (name?: string) => (name ?? "").replace(/[\r\n]+/g, " ").trim()
+
+// loadingComment is the "reviewing" state — the same header + CTA as the result,
+// with the self-hosted animated brand loader (public/brand_loader.webp, the one
+// the Mind panel uses). It edits in place to the finished review.
+function loadingComment(origin: string, prName?: string, uiUrl?: string): string {
+    const name = prTitle(prName)
+    const out = [
         PR_MARKER,
-        "**Ucelot** is reviewing this pull request…",
+        `## PR Review${name ? ` (${name})` : ""}`,
         "",
-        badge(origin, "reviewing", "blue"),
+        `<img src="${origin}/brand_loader.webp" width="26" alt="" /> **Ucelot is reviewing this pull request…**`,
         "",
-        "Reading the diff and tracing its impact through the codebase. This comment updates automatically.",
-    ].join("\n")
+        "Reading the diff and tracing its impact through the codebase — this comment fills in automatically when the review is ready.",
+    ]
+    if (uiUrl) out.push("", "---", "", `**[View the full review in ucelot →](${uiUrl})**`)
+    return out.join("\n")
 }
 
-function cancelledComment(origin: string): string {
-    return [PR_MARKER, "**Ucelot** — review cancelled", "", badge(origin, "cancelled", "zinc"), "", "The PR was closed before the review finished."].join("\n")
+function cancelledComment(origin: string, prNumber?: number): string {
+    const name = prNumber != null ? `#${prNumber}` : ""
+    return [PR_MARKER, `## PR Review${name ? ` (${name})` : ""}`, "", badge(origin, "cancelled", "zinc", { size: "header" }), "", "The PR was closed before the review finished."].join("\n")
 }
 
-function failedComment(origin: string): string {
-    return [PR_MARKER, "**Ucelot** — review unavailable", "", badge(origin, "failed", "rose"), "", "Ucelot couldn't complete the review this time."].join("\n")
+function failedComment(origin: string, prNumber?: number): string {
+    const name = prNumber != null ? `#${prNumber}` : ""
+    return [PR_MARKER, `## PR Review${name ? ` (${name})` : ""}`, "", badge(origin, "review unavailable", "rose", { size: "header" }), "", "Ucelot couldn't complete the review this time."].join("\n")
 }
 
 // Finding groups → collapsible comment sections, traffic-light order (issues
