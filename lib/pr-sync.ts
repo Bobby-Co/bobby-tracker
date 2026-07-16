@@ -215,7 +215,7 @@ function loadingComment(origin: string, prName?: string, uiUrl?: string): string
         PR_MARKER,
         `## PR Review${name ? ` (${name})` : ""}`,
         "",
-        `<img src="${origin}/brand_loader.webp" width="26" alt="" /> **Ucelot is reviewing this pull request…**`,
+        `<img src="${origin}/brand_loader.webp" width="26" align="middle" alt="" /> **Ucelot is reviewing this pull request…**`,
         "",
         "Reading the diff and tracing its impact through the codebase — this comment fills in automatically when the review is ready.",
     ]

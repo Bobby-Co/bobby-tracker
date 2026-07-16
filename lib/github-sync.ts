@@ -246,7 +246,7 @@ function footer(ctx: CommentCtx, extra?: string): string {
 
 // Small self-hosted brand loader (public/brand_loader.webp), inline.
 function brandMark(origin: string): string {
-    return `<img src="${origin}/brand_loader.webp" width="18" alt="Ucelot" />`
+    return `<img src="${origin}/brand_loader.webp" width="18" align="middle" alt="Ucelot" />`
 }
 
 function loadingCommentBody(ctx: CommentCtx): string {
