@@ -239,8 +239,8 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     const out: string[] = [PR_MARKER, "### Bobby · PR review", ""]
     if (r.verdict) out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict), size: "header" }), "")
 
-    // Merge-readiness headline: a decisive score + segmented bar (banded by ratio).
-    if (r.score_max && r.score_max > 0) out.push(scoreImage(origin, r.score ?? 0, r.score_max), "")
+    // Merge-readiness headline: a titled, decisive score + segmented bar (banded by ratio).
+    if (r.score_max && r.score_max > 0) out.push("**Merge readiness**", "", scoreImage(origin, r.score ?? 0, r.score_max), "")
     if (r.verdict_reason?.trim()) out.push(`_${esc(r.verdict_reason)}_`, "")
 
     // Confidence as three 3-stage meters, coloured by level.
@@ -257,6 +257,8 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
     // notes collapse. A coloured badge is the section header. GitHub renders the
     // markdown list inside once there are blank lines around it.
     const findings = r.findings ?? []
+    // Breathing room between the summary and the first collapsible section.
+    if (FINDING_GROUPS.some((g) => findings.some((f) => findingState(f.severity) === g.key))) out.push("<br>", "")
     for (const g of FINDING_GROUPS) {
         const items = findings.filter((f) => findingState(f.severity) === g.key)
         if (!items.length) continue
@@ -281,9 +283,10 @@ function resultComment(r: PRAnalysis, origin: string, uiUrl?: string): string {
         out.push("</details>", "")
     }
 
-    // Fix claims — a header banner + one line each (verdict + claim).
+    // Fix claims — a header banner + one line each (verdict + claim), with a gap
+    // above it so it reads as its own section.
     if (r.fix_claims?.length) {
-        out.push(badge(origin, "Fix claims", "indigo", { icon: "target", size: "header" }), "")
+        out.push("<br>", "", badge(origin, "Fix claims", "indigo", { icon: "target", size: "header" }), "")
         for (const c of r.fix_claims) out.push(`- ${badge(origin, c.verdict || "unclear", verdictTone(c.verdict))} ${esc(c.claim)}`)
         out.push("")
     }
