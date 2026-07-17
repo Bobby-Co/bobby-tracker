@@ -9,7 +9,7 @@ const mk = (id: string, name: string, repo: string, description: string | null):
     id, user_id: "u", name, repo_url: `https://github.com/${repo}`, repo_full_name: repo,
     description, created_at: "2026-06-01T00:00:00.000Z", updated_at: "2026-06-20T00:00:00.000Z",
     github_installation_id: null, github_repo_id: null, github_sync_enabled: false,
-    github_sync_direction: "both", github_sync_deletes: false,
+    github_sync_direction: "both", github_sync_deletes: false, auto_index_on_push: true,
 })
 
 // Same org (repo owner) → same colour. Varied orgs → varied palette colours.

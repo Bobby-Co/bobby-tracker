@@ -735,6 +735,24 @@ export async function kickoffJob(input: KickoffJobInput): Promise<KickoffResult>
     return (await res.json()) as KickoffResult
 }
 
+// deleteGraph tears down a repo's knowledge graph on the analyser (FalkorDB +
+// on-disk files) by its graph id. Used by the delete-project flow — the graph
+// is external to the tracker DB, so nothing cascades to it. Idempotent on the
+// analyser side (deleting a never-indexed / already-gone graph is a 200).
+export async function deleteGraph(graphId: string): Promise<void> {
+    const { http } = assertConfigured()
+    const res = await fetch(`${http}/graphs/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ repo_id: graphId }),
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        const err = body?.error || {}
+        throw new AnalyserError(err.message || `delete graph failed: HTTP ${res.status}`, err.code || "delete_failed")
+    }
+}
+
 // ─── /jobs (WebSocket, kept for CLI use) ────────────────────────────────────
 
 export interface JobSpec {

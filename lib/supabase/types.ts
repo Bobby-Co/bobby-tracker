@@ -35,6 +35,10 @@ export interface Project {
     /** When true (and the direction allows it), deleting an issue on one
      *  side deletes/closes it on the other. Destructive → default false. */
     github_sync_deletes: boolean
+    /** When true (default), a push to the repo's default branch auto-triggers
+     *  an incremental graph update (ADR-0058). Independent of github_sync_enabled;
+     *  the webhook no-ops unless the App is installed and a graph exists. */
+    auto_index_on_push: boolean
     created_at: string
     updated_at: string
 }

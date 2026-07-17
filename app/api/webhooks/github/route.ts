@@ -424,13 +424,15 @@ async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<R
     // Branch deletion (or an all-zero head) has nothing to index.
     if (deleted || /^0+$/.test(headSha)) return ack()
 
+    // Auto-index is its own toggle (setup page), independent of issue/PR sync.
+    // The webhook only reaches us when the App is installed, and github_repo_id
+    // was set at install — so no extra install check is needed here.
     const { data: project } = await svc
         .from("projects")
-        .select("id,user_id,repo_url,github_repo_id,github_sync_enabled")
+        .select("id,user_id,repo_url,github_repo_id,auto_index_on_push")
         .eq("github_repo_id", repoId)
-        .eq("github_sync_enabled", true)
-        .maybeSingle<Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "github_sync_enabled">>()
-    if (!project) return ack()
+        .maybeSingle<Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "auto_index_on_push">>()
+    if (!project || !project.auto_index_on_push) return ack()
 
     // Incremental needs a prior successful bootstrap: a graph_id must exist.
     // We deliberately do NOT gate on status==='ready' — a push that lands

@@ -113,7 +113,9 @@ export function ProjectForm() {
                 return
             }
             const { project } = await res.json()
-            router.push(`/projects/${project.id}/issues`)
+            // Land on the setup page first — connect GitHub, confirm auto-index
+            // on push, pick analyser effort — then the user moves into the project.
+            router.push(`/projects/${project.id}/setup`)
             router.refresh()
         })
     }
