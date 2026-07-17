@@ -455,9 +455,13 @@ async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<R
                 job_type: "incremental",
                 repo_url: project.repo_url,
                 repo_id: graphId,
-                // Check out the pushed commit specifically; coalesced re-pushes
-                // update this to the newest SHA on the analyser side.
-                repo_ref: headSha,
+                // NB: deliberately NO repo_ref. The analyser shallow-clones
+                // (`--depth`, so `--single-branch`) and already lands on the
+                // default-branch tip — a second `git checkout <ref>` on top of
+                // that fails (an arbitrary SHA isn't fetched; even the branch name
+                // errors in a single-branch shallow clone). The manual re-index
+                // works the same way (no ref). Incremental reads HEAD, and
+                // coalescing means "index to latest", so the tip is what we want.
                 // The analyser worker fetches this owner's GitHub token from
                 // tracker.github_tokens to clone — no credential crosses the wire.
                 user_id: project.user_id,

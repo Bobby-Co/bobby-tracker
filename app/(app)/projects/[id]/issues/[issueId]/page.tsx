@@ -102,6 +102,9 @@ export default function IssueDetailPage() {
                     initial={suggestion}
                     analyserReady={ready}
                     issueEffort={issue.analyse_effort ?? null}
+                    // Imported GitHub issues don't auto-investigate on open —
+                    // the user opts in per issue via the "Investigate" button.
+                    autoInvestigate={issue.sync_source !== "github"}
                 />
             ) : (
                 <div className="skeleton h-40 w-full rounded-[16px]" />

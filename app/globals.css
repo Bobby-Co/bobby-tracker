@@ -522,6 +522,14 @@ html, body {
 @keyframes graph-sonar      { 0% { opacity: 0.55; transform: scale(0.6); } 70%, 100% { opacity: 0; transform: scale(2.6); } }
 @keyframes graph-edge-flow  { to { stroke-dashoffset: -64; } }
 
+/* Setup-wizard sync flow: a parcel tossed along its offset-path. CSS (not JS) so
+   it plays on first paint — framer-motion's AnimatePresence initial=false would
+   otherwise suppress it on the first scene. -a/-b interleave the two-way toss
+   (forward in the first half, back in the second); -solo is the one-way loop. */
+@keyframes wizard-fly-a    { 0% { offset-distance: 0%; opacity: 0; } 4% { opacity: 1; } 44% { offset-distance: 100%; opacity: 1; } 50%, 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes wizard-fly-b    { 0%, 50% { offset-distance: 0%; opacity: 0; } 54% { opacity: 1; } 94% { offset-distance: 100%; opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes wizard-fly-solo { 0% { offset-distance: 0%; opacity: 0; } 7% { opacity: 1; } 82% { offset-distance: 100%; opacity: 1; } 92%, 100% { offset-distance: 100%; opacity: 0; } }
+
 /* Camera rig. The pan layer centres a focal point and zooms in; translate is
    derived per keyframe as t = scale × (viewBox-centre − focal) so the target
    lands dead centre. 0% and 100% are identical (whole graph) for a seamless

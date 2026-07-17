@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { validateRepoUrl } from "@/lib/integrations/repo-url"
+import { canonicalRepoUrl, validateRepoUrl } from "@/lib/integrations/repo-url"
 import type { Project } from "@/lib/supabase/types"
 
 // GET — list the current user's projects, newest first. Backs the app
@@ -42,13 +42,32 @@ export async function POST(request: Request) {
     // GitHub Enterprise hosts); otherwise fall back to URL inference.
     const repo_full_name = repo_full_name_from_client ?? inferGithubFullName(repo_url)
 
+    // Canonicalise the URL so trivial variants (…/bar, …/bar.git, …/bar/,
+    // www., host case) can't create "different" projects for the same repo.
+    const canonical_url = canonicalRepoUrl(repo_url)
+
+    // Reject a repo the user already has. The DB's unique(user_id, repo_url)
+    // constraint only catches an EXACT string match, so we also compare by
+    // canonical URL and by repo_full_name case-insensitively (a repo's real
+    // identity). RLS scopes this select to the caller's own projects.
+    const { data: mine } = await supabase.from("projects").select("repo_url,repo_full_name")
+    const already = (mine ?? []).some((p) => {
+        if (canonicalRepoUrl(p.repo_url).toLowerCase() === canonical_url.toLowerCase()) return true
+        if (repo_full_name && p.repo_full_name && p.repo_full_name.toLowerCase() === repo_full_name.toLowerCase()) return true
+        return false
+    })
+    if (already) {
+        return jsonError("conflict", "You already have a project for this repository.", 409)
+    }
+
     const { data: project, error: dbErr } = await supabase
         .from("projects")
-        .insert({ user_id: user.id, name, repo_url, repo_full_name, description })
+        .insert({ user_id: user.id, name, repo_url: canonical_url, repo_full_name, description })
         .select("*")
         .single<Project>()
     if (dbErr) {
-        if (dbErr.code === "23505") return jsonError("conflict", "you already have a project with this repo URL", 409)
+        // Backstop for the pre-check race — the unique(user_id, repo_url) index.
+        if (dbErr.code === "23505") return jsonError("conflict", "You already have a project for this repository.", 409)
         return jsonError("db_error", dbErr.message, 500)
     }
     return Response.json({ project })

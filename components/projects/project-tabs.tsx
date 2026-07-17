@@ -12,7 +12,7 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
         { href: `/projects/${projectId}/mind`, label: "Mind" },
         { href: `/projects/${projectId}/knowledge`, label: "Knowledge" },
         { href: `/projects/${projectId}/integrations`, label: "Integrations" },
-        { href: `/projects/${projectId}/setup`, label: "Setup" },
+        { href: `/projects/${projectId}/settings`, label: "Settings" },
     ]
     return (
         <div className="mt-4 flex gap-1">

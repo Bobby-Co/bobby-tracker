@@ -1,4 +1,6 @@
+import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
+import { importExistingIssues } from "@/lib/github-sync"
 import { GITHUB_SYNC_DIRECTIONS } from "@/lib/supabase/types"
 import type { Project } from "@/lib/supabase/types"
 
@@ -54,5 +56,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             >
         >()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
+
+    // When the user turns sync on (or points the direction inbound), pull the
+    // repo's existing issues in automatically — the backfill they'd otherwise
+    // have to trigger by hand from the Integrations tab. Only when this request
+    // actually touched enabled/direction, so a bare `deletes` toggle doesn't
+    // re-run it. importExistingIssues is idempotent (skips already-linked),
+    // self-guards on sync readiness, and deliberately does NOT auto-analyse the
+    // imported issues. after() so it runs post-response (a bare promise would be
+    // frozen on Workers). See [[workers-detached-promises]].
+    const touchedSync = "github_sync_enabled" in patch || "github_sync_direction" in patch
+    const inboundNow = data.github_sync_direction === "inbound" || data.github_sync_direction === "both"
+    if (touchedSync && data.github_sync_enabled && inboundNow) {
+        after(() => importExistingIssues(id).catch(() => {}))
+    }
+
     return Response.json({ project: data })
 }

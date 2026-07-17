@@ -36,6 +36,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try { body = await request.json() } catch {}
     const jobType: "bootstrap" | "incremental" =
         body?.job_type === "incremental" ? "incremental" : "bootstrap"
+    // Indexing depth for a bootstrap. The setup wizard passes the user's choice
+    // (medium recommended); the manual re-index button omits it → "low" default
+    // to keep spend predictable. Ignored by the analyser on incremental jobs.
+    const effort: "low" | "medium" | "high" =
+        body?.effort === "medium" || body?.effort === "high" ? body.effort : "low"
 
     const { data: project, error: pErr } = await supabase
         .from("projects")
@@ -67,12 +72,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const result = await kickoffJob({
             job_type: jobType,
             repo_url: project.repo_url,
-            // Default to "low" effort to keep token spend predictable.
-            // Effort scales grouper aggressiveness + per-cluster turn budget
-            // on the analyser side; the smart-update agent fills in detail
-            // on subsequent commits, so a sparser first-pass graph is fine.
-            // Ignored by the analyser when job_type === "incremental".
-            effort: "low",
+            // Effort scales grouper aggressiveness + per-cluster turn budget on
+            // the analyser side. From the wizard this is the user's pick; the
+            // manual re-index button leaves it "low". Ignored on incremental.
+            effort,
             // The analyser worker fetches this user's GitHub token from
             // tracker.github_tokens (keyed by user_id) to clone private
             // repos — no credential crosses the wire from here.

@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { AnalyserPanel } from "@/components/projects/analyser-panel"
+import { AutoUpdatePanel } from "@/components/projects/auto-update-panel"
 import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-effort"
 import { VerifyPanel } from "@/components/projects/verify-panel"
 import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
@@ -49,6 +50,9 @@ export default function KnowledgePage() {
                 </p>
             </header>
             <AnalyserPanel projectId={id} state={state ?? null} />
+            {/* Auto-update on push keeps the graph current on every commit. An
+                indexing setting, so it lives here with the analyser controls. */}
+            <AutoUpdatePanel projectId={id} />
             {/* Default effort lives with the analyser settings. Only meaningful
                 once the project has an indexed graph the preference keys to. */}
             {state?.graph_id && <AnalyserDefaultEffort projectId={id} />}

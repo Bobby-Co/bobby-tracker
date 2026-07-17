@@ -52,6 +52,27 @@ function isBlockedHost(host: string): boolean {
     return false
 }
 
+// canonicalRepoUrl returns a stable form of a repo URL for storage + dedup:
+// lowercased host without a leading `www.`, no trailing slash(es), no trailing
+// `.git`, and no query/hash. So https://github.com/Foo/bar.git,
+// https://github.com/Foo/bar/ and https://www.github.com/Foo/bar all collapse
+// to https://github.com/Foo/bar. Path case is preserved (display/clone); the
+// caller does the case-insensitive identity check via repo_full_name. Returns
+// the trimmed input unchanged when it can't be parsed (callers validate first).
+export function canonicalRepoUrl(raw: string): string {
+    const s = String(raw ?? "").trim()
+    let u: URL
+    try {
+        u = new URL(s)
+    } catch {
+        return s
+    }
+    let host = u.hostname.toLowerCase()
+    if (host.startsWith("www.")) host = host.slice(4)
+    const path = u.pathname.replace(/\/+$/, "").replace(/\.git$/i, "")
+    return `${u.protocol}//${host}${path}`
+}
+
 export function validateRepoUrl(raw: string): RepoUrlCheck {
     const s = String(raw ?? "").trim()
     if (!s) return { ok: false, message: "repo_url is required" }

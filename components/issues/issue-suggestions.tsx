@@ -18,9 +18,14 @@ interface Props {
     /** The issue's stored per-issue effort (create-time advanced setting).
      *  Seeds the popover unless the user overrides it this session. */
     issueEffort: AnalyseEffort | null
+    /** Whether to kick the analysis off automatically on open when nothing's
+     *  cached. Off for imported GitHub issues — a backfilled repo can hold
+     *  hundreds, and auto-running each on view is spend the user may not want.
+     *  They get the manual "Investigate" button instead. Defaults to true. */
+    autoInvestigate?: boolean
 }
 
-export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial, analyserReady, issueEffort }: Props) {
+export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial, analyserReady, issueEffort, autoInvestigate = true }: Props) {
     const [suggestion, setSuggestion] = useState<IssueSuggestion | null>(initial)
     const [error, setError] = useState<string | null>(null)
     const [errorCode, setErrorCode] = useState<string | null>(null)
@@ -195,6 +200,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     // rather than regenerate() so it never duplicates the GitHub-comment run.
     useEffect(() => {
         if (autoFiredRef.current) return
+        if (!autoInvestigate) return
         if (!analyserReady) return
         if (suggestion) return
         autoFiredRef.current = true

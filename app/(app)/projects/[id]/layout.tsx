@@ -1,12 +1,13 @@
 "use client"
 
-import { useParams, usePathname } from "next/navigation"
+import { useEffect } from "react"
+import { useParams, usePathname, useRouter } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
-import type { Project } from "@/lib/supabase/types"
+import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 import { ProjectTabs } from "@/components/projects/project-tabs"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
 import { cn } from "@/components/ui/cn"
-import { isImmersiveMind } from "@/components/layout/immersive"
+import { isImmersiveMind, isProjectWizard } from "@/components/layout/immersive"
 
 // Project detail shell. The header (name + repo link) loads the
 // project via /api/projects/[id]; the tabs render immediately from the
@@ -14,18 +15,32 @@ import { isImmersiveMind } from "@/components/layout/immersive"
 //
 // On the Mind tab the shell goes "immersive": the header + tabs collapse away
 // and the content fills the full height/width so the chat can take over the
-// window (see components/immersive.ts). Layouts persist across tab changes, so
-// toggling this animates via the CSS transitions below.
+// window (see components/immersive.ts). The first-run setup wizard is
+// "chromeless" the same way. Layouts persist across tab changes, so toggling
+// this animates via the CSS transitions below.
 export default function ProjectLayout({ children }: { children: React.ReactNode }) {
     const { id } = useParams<{ id: string }>()
     const pathname = usePathname()
-    const immersive = isImmersiveMind(pathname)
+    const immersiveMind = isImmersiveMind(pathname)
+    const onWizard = isProjectWizard(pathname)
+    // Settings (delete) stays reachable even for an un-indexed project — else a
+    // user who never wants to index couldn't delete it (they'd be trapped in the
+    // wizard). Exempt it (and the wizard itself) from the setup gate.
+    const onSettings = /^\/projects\/[^/]+\/settings\/?$/.test(pathname ?? "")
+    // Header + tabs collapse for both the Mind chat and the setup wizard; only
+    // Mind claims the full viewport (the wizard keeps the normal content column).
+    const chromeless = immersiveMind || onWizard
+
+    // Setup gate: a project isn't usable until its graph starts building. Until
+    // a first index has kicked off, the working tabs bounce to the wizard.
+    useSetupGate(id, onWizard || onSettings)
+
     return (
-        <div className={cn("flex flex-col", immersive ? "h-full min-h-0" : "min-h-full")}>
+        <div className={cn("flex flex-col", immersiveMind ? "h-full min-h-0" : "min-h-full")}>
             <div
                 className={cn(
                     "overflow-hidden border-[color:var(--c-border)] bg-white transition-all duration-500",
-                    immersive ? "max-h-0 border-b-0 opacity-0" : "max-h-[400px] border-b opacity-100",
+                    chromeless ? "max-h-0 border-b-0 opacity-0" : "max-h-[400px] border-b opacity-100",
                 )}
             >
                 <div className="flex w-full max-w-5xl items-start justify-between gap-4 px-4 pt-5 sm:px-6 sm:pt-6">
@@ -37,9 +52,29 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
                     <ProjectTabs projectId={id} />
                 </div>
             </div>
-            <div className={cn("flex-1", immersive ? "min-h-0 w-full" : "w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-6")}>{children}</div>
+            <div className={cn("flex-1", immersiveMind ? "min-h-0 w-full" : "w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-6")}>{children}</div>
         </div>
     )
+}
+
+// useSetupGate redirects unconfigured projects to the first-run wizard. A
+// project is "configured enough" once a first index has started — status is
+// indexing/ready/failed (a bootstrap was kicked off at least once). Before that
+// (no analyser row, or disabled/pending) the project's pages aren't useful, so
+// we replace() to the wizard. `exempt` covers the wizard + settings routes.
+// Never fires during load or when we can't tell (fail open — better than
+// trapping the user).
+function useSetupGate(id: string, exempt: boolean) {
+    const router = useRouter()
+    const { data, loading } = useApi<{ analyser: Pick<ProjectAnalyser, "status" | "graph_id"> | null }>(
+        id && !exempt ? `/api/projects/${id}/knowledge` : null,
+    )
+    useEffect(() => {
+        if (exempt || loading || !data) return
+        const status = data.analyser?.status
+        const started = status === "indexing" || status === "ready" || status === "failed"
+        if (!started) router.replace(`/projects/${id}/setup`)
+    }, [exempt, loading, data, id, router])
 }
 
 function ProjectHeader({ id }: { id: string }) {
