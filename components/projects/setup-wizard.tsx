@@ -666,8 +666,11 @@ function EffortPile({ value, reduce }: { value: WizardEffort; reduce: boolean })
     const colorRef = useRef("#e9730f")
     const prevCountRef = useRef(EFFORT_COUNT[value])
 
-    // Init once: size the canvas, build the Path2D + colour, seed the pile at
-    // rest for the current tier, and paint a single static frame.
+    // Init once: size the canvas, build the Path2D + colour, and seed the pile
+    // EMPTY. The tier-change effect below also fires on mount and — seeing
+    // prevCount 0 → current — drops the marks in as the scene's ENTRY animation,
+    // so the jar fills the instant the page appears (reduced motion snap-fills
+    // there instead).
     useEffect(() => {
         const canvas = canvasRef.current
         if (!canvas) return
@@ -680,7 +683,6 @@ function EffortPile({ value, reduce }: { value: WizardEffort; reduce: boolean })
         pathRef.current = new Path2D(BOBBY_MARK_PATH)
         colorRef.current = getComputedStyle(canvas).getPropertyValue("--c-primary").trim() || "#e9730f"
 
-        const count = EFFORT_COUNT[value]
         const marks: Mark[] = []
         for (let i = 0; i < MARK_SLOTS; i++) {
             const mound = i < MOUND
@@ -689,17 +691,23 @@ function EffortPile({ value, reduce }: { value: WizardEffort; reduce: boolean })
             const restX = bx + (mound ? (Math.random() - 0.5) * 8 : 0)
             const restY = by + (mound ? (Math.random() - 0.5) * 3 : 0)
             marks.push({
-                active: i < count, state: "rest",
+                // Start inactive so the tier-change effect drops them in on mount.
+                active: false, state: "rest",
                 x: restX, y: restY, vx: 0, vy: 0, rot: (Math.random() - 0.5) * 0.4, vr: (Math.random() - 0.5) * 0.3,
                 restX, restY, spawnAt: 0,
             })
         }
         marksRef.current = marks
-        prevCountRef.current = count
+        prevCountRef.current = 0 // → the tier effect animates 0 → current on mount
         paintPile(ctx, marks, pathRef.current, colorRef.current)
 
         return () => {
             if (rafRef.current) cancelAnimationFrame(rafRef.current)
+            // Reset so a remount can start a fresh loop. Without this, Strict
+            // Mode's mount→unmount→remount leaves a stale (cancelled) id here,
+            // and the entry drop's `if (!rafRef.current)` guard never re-fires —
+            // the jar would stay empty on the second mount.
+            rafRef.current = 0
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
