@@ -43,6 +43,39 @@ export interface Project {
     updated_at: string
 }
 
+/** Per-project read model backing the projects-grid tile footer (0047).
+ *  Maintained entirely by triggers on issues/pull_requests — never written
+ *  from the app — so reading the grid is one indexed row per project. */
+export interface ProjectInsight {
+    project_id: string
+    user_id: string
+    /** status in (open, in_progress, blocked) — the app's !isClosed() set. */
+    open_total: number
+    /** status = 'done' only. 'archived' and 'duplicated' are closed but not
+     *  done, so they sit in neither counter and never inflate done/total. */
+    done_total: number
+    urgent_open: number
+    /** Last time urgent_open rose — issue created urgent, or escalated to it. */
+    last_urgent_at: string | null
+    /** Creation time of the newest issue (0048). Distinct from last_activity_at,
+     *  which tracks the newest *update* — an edit to an old issue must not read
+     *  as "2 / 7, 3m ago". Recomputed on delete, so it never points at a
+     *  removed issue. */
+    last_issue_created_at: string | null
+    /** Open timestamps of the 10 most recent non-draft PRs, newest first.
+     *  Stored raw, not as a window count: nothing fires when a PR stops being
+     *  recent, so the window is applied client-side at render (pickStatus). */
+    recent_pr_opens: string[]
+    /** Newest issue/PR activity — what the tile footer should show.
+     *  projects.updated_at is the project row's touch time and does not move
+     *  when an issue does. */
+    last_activity_at: string | null
+    updated_at: string
+}
+
+/** A project row with its insight embedded — the shape of GET /api/projects?stats=1. */
+export type ProjectWithInsight = Project & { insight: ProjectInsight | null }
+
 /** Allowed values for github_sync_direction. */
 export const GITHUB_SYNC_DIRECTIONS = ["inbound", "outbound", "both"] as const
 export type GithubSyncDirection = (typeof GITHUB_SYNC_DIRECTIONS)[number]
@@ -615,4 +648,33 @@ export interface ProjectGroup {
  *  project_group_members). */
 export interface ProjectGroupWithMembers extends ProjectGroup {
     members: { id: string; name: string; has_summary: boolean }[]
+}
+
+/** What a notification is about. The popover maps this to an icon +
+ *  tone — the DB stores the fact, not the styling. */
+export type NotificationKind =
+    | "kb_ready"          // first successful index of a project
+    | "kb_updated"        // every index after that
+    | "pr_analysis_ready" // Bobby's PR review finished
+    | "pr_opened"         // a new PR landed on a synced repo
+
+/** A row in the topbar bell's feed (migration 0049). Written only by
+ *  DB triggers — the KB event has no server-side code path at all, since
+ *  the analyser PATCHes project_analyser directly. Clients may mark read
+ *  and delete; the UPDATE grant is column-scoped to read_at. */
+export interface Notification {
+    id: string
+    user_id: string
+    project_id: string | null
+    kind: NotificationKind
+    /** Rendered verbatim. A point-in-time snapshot, so a project renamed
+     *  later keeps the name it had when the event happened. */
+    title: string
+    /** Secondary line — typically "Project · PR #12". */
+    meta: string | null
+    /** In-app path to open on click. */
+    href: string | null
+    /** Null = unread. */
+    read_at: string | null
+    created_at: string
 }

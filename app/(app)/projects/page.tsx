@@ -4,13 +4,15 @@ import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
 import { NewProjectButton } from "@/components/projects/new-project-button"
 import { NewGroupButton } from "@/components/groups/new-group-button"
-import { ProjectTile } from "@/components/projects/project-tile"
-import type { Project, ProjectGroup } from "@/lib/supabase/types"
+import { ProjectOrgGrid } from "@/components/projects/project-org-grid"
+import type { ProjectGroup, ProjectWithInsight } from "@/lib/supabase/types"
 
 type GroupWithCount = ProjectGroup & { member_count: number }
 
 export default function ProjectsPage() {
-    const projectsQ = useApi<{ projects: Project[] }>("/api/projects")
+    // ?stats=1 embeds each project's insight row so the tile footers render
+    // from this same round-trip — no second request, no footer shimmer.
+    const projectsQ = useApi<{ projects: ProjectWithInsight[] }>("/api/projects?stats=1")
     const groupsQ = useApi<{ groups: GroupWithCount[] }>("/api/groups")
 
     const list = projectsQ.data?.projects ?? []
@@ -110,23 +112,7 @@ export default function ProjectsPage() {
                     </div>
                 </div>
             ) : (
-                <ul
-                    className="grid gap-4 stagger"
-                    style={{
-                        gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                        ["--stagger-step" as string]: "60ms",
-                    } as React.CSSProperties}
-                >
-                    {list.map((p, i) => (
-                        <li
-                            key={p.id}
-                            className="anim-rise"
-                            style={{ ["--i" as string]: i } as React.CSSProperties}
-                        >
-                            <ProjectTile project={p} />
-                        </li>
-                    ))}
-                </ul>
+                <ProjectOrgGrid projects={list} />
             )}
         </div>
     )

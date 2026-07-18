@@ -1,19 +1,40 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { canonicalRepoUrl, validateRepoUrl } from "@/lib/integrations/repo-url"
-import type { Project } from "@/lib/supabase/types"
+import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/supabase/types"
 
 // GET — list the current user's projects, newest first. Backs the app
 // sidebar and the /projects grid. RLS scopes rows to the signed-in user.
-export async function GET() {
+//
+// ?stats=1 embeds each project's insight row (0047) so the grid can render its
+// tile footers from the same round-trip. The sidebar calls the plain form and
+// pays nothing for stats it never shows.
+export async function GET(request: Request) {
     const { supabase, error } = await requireUser()
     if (error) return error
+
+    const withStats = new URL(request.url).searchParams.get("stats") === "1"
+
     const { data, error: dbErr } = await supabase
         .from("projects")
-        .select("*")
+        .select(withStats ? "*, project_insight(*)" : "*")
         .order("updated_at", { ascending: false })
-        .returns<Project[]>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ projects: data ?? [] })
+
+    if (!withStats) {
+        return Response.json({ projects: (data ?? []) as unknown as Project[] })
+    }
+
+    // PostgREST returns a one-to-one embed as an object (project_insight.project_id
+    // is both PK and FK), but falls back to an array when it can't prove
+    // uniqueness — normalise both, same defensive unwrap as app/api/groups/route.ts.
+    const projects: ProjectWithInsight[] = (data ?? []).map((row) => {
+        const { project_insight, ...project } = row as unknown as Project & {
+            project_insight: ProjectInsight | ProjectInsight[] | null
+        }
+        const insight = Array.isArray(project_insight) ? project_insight[0] ?? null : project_insight ?? null
+        return { ...project, insight }
+    })
+    return Response.json({ projects })
 }
 
 export async function POST(request: Request) {

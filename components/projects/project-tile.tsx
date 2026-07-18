@@ -2,7 +2,8 @@ import Link from "next/link"
 import { cn } from "@/components/ui/cn"
 import { FieldTable, FieldRow, SegBar } from "@/components/ui/field-card"
 import { shortDate, timeAgo } from "@/components/issues/issue-meta"
-import type { Project } from "@/lib/supabase/types"
+import { pickStatus, type ProjectStatus } from "@/lib/projects/pick-status"
+import type { Project, ProjectInsight } from "@/lib/supabase/types"
 import { IconlyCode } from "@/icons/Iconly-code-icon"
 import { IconlyFoldercode } from "@/icons/Iconly-folder-code-icon"
 import { IconlyRocket } from "@/icons/Iconly-rocket-icon"
@@ -22,17 +23,14 @@ import { motion } from "framer-motion"
 // table, and a variant footer (progress / clear / critical / pr).
 //
 // The org colour is pulled from the org chip palette and hashed off the org
-// key, so every project under the same org shares one chip. The glyph
-// icon + the footer status + the people count are STUBBED here (derived
-// deterministically from the id) — the real issue/PR/people data gets wired
-// to the same props later.
+// key, so every project under the same org shares one chip. The footer status
+// is real (from the project's insight row, via pickStatus). The glyph icon +
+// the people count are still STUBBED — there is no per-project icon or members
+// table to read them from yet.
 
-// Status footer variants — stubbed for now, data-driven later.
-export type ProjectStatus =
-    | { kind: "progress"; done: number; total: number }
-    | { kind: "clear" }
-    | { kind: "critical"; count: number }
-    | { kind: "pr"; count: number }
+// The `status` override prop's type — re-exported so callers don't have to
+// reach into lib/projects to type it. Derivation lives in pickStatus.
+export type { ProjectStatus }
 
 // FNV-1a 32-bit — stable per-string hash (matches lib/timeline/labels).
 function hash(s: string): number {
@@ -115,40 +113,62 @@ const CHIP_PALETTE = [
     { bg: "var(--app-graphite-bg)", fg: "var(--app-graphite)" },
 ]
 
-// Everything not yet in the data model is derived from a stable hash so the
-// tile looks real and consistent across renders. Swap these for real fields
-// (status, members) when they land.
-function stubMeta(p: Project) {
-    const orgKey = (p.repo_full_name?.split("/")[0] || p.name).trim()
-    const h = hash(p.id || p.name)
-    const chip = CHIP_PALETTE[hash(orgKey) % CHIP_PALETTE.length]
-    const Icon = ICONS[h % ICONS.length]
-    const people = 3 + (hash(orgKey + ":people") % 26)
-
-    let status: ProjectStatus
-    switch (h % 4) {
-        case 0: {
-            const total = 4 + (h % 8)
-            status = { kind: "progress", done: Math.max(1, total - 1 - (h % 3)), total }
-            break
-        }
-        case 1:
-            status = { kind: "clear" }
-            break
-        case 2:
-            status = { kind: "critical", count: 1 + (h % 2) }
-            break
-        default:
-            status = { kind: "pr", count: 1 + (h % 2) }
-    }
-
-    return { orgKey, orgName: orgKey, chip, Icon, people, status }
+/** A project's organisation: the repo owner, falling back to the project name
+ *  when there's no repo slug to read one from.
+ *
+ *  Exported because the projects grid groups by exactly this, and the group
+ *  header shows the same colour chip as the tiles beneath it. Deriving it twice
+ *  would let the grouping and the tint drift apart — a project could sit under a
+ *  header of a different colour than its own tile, which reads as a bug even
+ *  though both are "right". One function, one answer. */
+export function projectOrg(p: Project): { key: string; name: string; chip: { bg: string; fg: string } } {
+    const key = (p.repo_full_name?.split("/")[0] || p.name).trim()
+    return { key, name: key, chip: CHIP_PALETTE[hash(key) % CHIP_PALETTE.length] }
 }
 
-export function ProjectTile({ project, status: statusOverride }: { project: Project; status?: ProjectStatus }) {
-    const stub = stubMeta(project)
-    const { orgName, chip, Icon, people } = stub
-    const status = statusOverride ?? stub.status
+// The glyph icon and people count have no data source yet (no per-project icon,
+// no members table), so they stay hash-derived — stable per project, and at
+// least consistent across renders. The status footer no longer belongs here.
+function stubMeta(p: Project) {
+    const org = projectOrg(p)
+    const h = hash(p.id || p.name)
+    const Icon = ICONS[h % ICONS.length]
+    const people = 3 + (hash(org.key + ":people") % 26)
+
+    return { orgKey: org.key, orgName: org.name, chip: org.chip, Icon, people }
+}
+
+export function ProjectTile({
+    project,
+    insight,
+    status: statusOverride,
+    minimal = false,
+}: {
+    project: Project
+    insight?: ProjectInsight | null
+    /** Escape hatch for the /preview/dashboard harness, which has no insight rows. */
+    status?: ProjectStatus
+    /** Drop the Repo / Updated field table, leaving identity (org bar, glyph,
+     *  name, description) and the live status footer.
+     *
+     *  Both rows are reference material rather than news: the repo slug is
+     *  already implied by the org bar + project name, and "Updated" is a second,
+     *  duller reading of the same clock the footer shows — the footer's time is
+     *  strictly better, since it reports the subject of the status beside it
+     *  rather than generic activity. Dropping them costs no unique information.
+     *  Kept as a prop rather than a separate component so the two variants can't
+     *  drift: there is one tile, one status derivation, one set of colours. */
+    minimal?: boolean
+}) {
+    const { orgName, chip, Icon, people } = stubMeta(project)
+    const status = statusOverride ?? pickStatus(insight)
+    // Real activity, not the project row's touch time — updated_at only moves
+    // when the project itself is edited, never when an issue or PR changes.
+    const activityAt = insight?.last_activity_at ?? project.updated_at
+    // The footer's time text reports the subject of the status beside it: the
+    // latest PR open, the latest urgent issue, or the latest issue created.
+    // Falls back only when a project has no issues or PRs at all.
+    const statusAt = status.at ?? activityAt
     const desc = project.description
     const peopleLabel = people >= 20 ? "20+ People" : `${people} People`
 
@@ -199,18 +219,20 @@ export function ProjectTile({ project, status: statusOverride }: { project: Proj
                         </div>
                     </div>
 
-                    <FieldTable>
-                        <FieldRow icon={<RepoMini />} label="Repo">
-                            <span className="font-mono text-[11.5px]">{project.repo_full_name ?? project.repo_url}</span>
-                        </FieldRow>
-                        <FieldRow icon={<ClockIcon />} label="Updated">{shortDate(project.updated_at)}</FieldRow>
-                    </FieldTable>
+                    {!minimal && (
+                        <FieldTable>
+                            <FieldRow icon={<RepoMini />} label="Repo">
+                                <span className="font-mono text-[11.5px]">{project.repo_full_name ?? project.repo_url}</span>
+                            </FieldRow>
+                            <FieldRow icon={<ClockIcon />} label="Updated">{shortDate(activityAt)}</FieldRow>
+                        </FieldTable>
+                    )}
 
                     <div className="flex items-center justify-between gap-3">
                         <StatusFooter status={status} />
                         <span className="inline-flex shrink-0 items-center gap-1 text-[11.5px] tabular-nums text-[color:var(--c-text-dim)]">
                         <ClockIcon />
-                            {timeAgo(project.updated_at)}
+                            {timeAgo(statusAt)}
                     </span>
                     </div>
                 </div>

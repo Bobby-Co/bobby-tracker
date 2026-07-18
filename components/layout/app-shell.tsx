@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/components/ui/cn"
 import { Sidebar } from "@/components/layout/sidebar"
@@ -32,8 +33,16 @@ export function AppShell({
             <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-500", immersive ? "pt-0" : "pt-2")}>
                 <header
                     className={cn(
-                        "relative z-30 flex shrink-0 items-center gap-2.5 overflow-hidden px-3 transition-[height,opacity] duration-500 sm:gap-3 sm:px-5",
-                        immersive ? "pointer-events-none h-0 opacity-0" : "h-14 opacity-100",
+                        "relative z-30 flex shrink-0 items-center gap-2.5 px-3 transition-[height,opacity] duration-500 sm:gap-3 sm:px-5",
+                        // overflow-hidden ONLY while immersive. It exists to contain the
+                        // contents as the bar collapses to h-0 for the Mind view — at the
+                        // normal h-14 nothing overflows, so clipping buys nothing and costs
+                        // a lot: the notification popover is absolutely positioned inside
+                        // this header and grows ~420px BELOW it, so a permanent clip cut it
+                        // off at the header's edge. That reads as "the popover is under the
+                        // page", but no z-index can fix it — a clipped box can't escape its
+                        // clipping ancestor by winning the stacking order.
+                        immersive ? "pointer-events-none h-0 overflow-hidden opacity-0" : "h-14 opacity-100",
                     )}
                 >
                     <MobileSidebar projects={projects} />
@@ -81,18 +90,26 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 // Top-bar breadcrumb (reference: "</> Engineering › Workstreams"). Built
 // from the path; resolves the project name when on a project route.
+//
+// Each crumb carries the href it stands for, so the trail is walkable rather
+// than decorative. Every href here is a real route: the section indexes match
+// the sidebar's own nav targets, and /projects|groups|sessions/[id] plus the
+// project tabs all have pages.
+type Crumb = { label: string; href: string }
+
 function TopBreadcrumb({ projects }: { projects: Project[] }) {
     const pathname = usePathname()
     const segs = pathname.split("/").filter(Boolean)
-    const crumbs: string[] = []
-    if (segs[0]) crumbs.push(SECTION_LABEL[segs[0]] ?? cap(segs[0]))
+    const crumbs: Crumb[] = []
+    if (segs[0]) crumbs.push({ label: SECTION_LABEL[segs[0]] ?? cap(segs[0]), href: `/${segs[0]}` })
     if (segs[1]) {
-        if (segs[0] === "projects") crumbs.push(projects.find((p) => p.id === segs[1])?.name ?? "Project")
-        else if (segs[0] === "groups") crumbs.push("Group")
-        else if (segs[0] === "sessions") crumbs.push("Session")
+        const href = `/${segs[0]}/${segs[1]}`
+        if (segs[0] === "projects") crumbs.push({ label: projects.find((p) => p.id === segs[1])?.name ?? "Project", href })
+        else if (segs[0] === "groups") crumbs.push({ label: "Group", href })
+        else if (segs[0] === "sessions") crumbs.push({ label: "Session", href })
     }
-    if (segs[2]) crumbs.push(cap(segs[2]))
-    if (crumbs.length === 0) crumbs.push("Home")
+    if (segs[2]) crumbs.push({ label: cap(segs[2]), href: `/${segs[0]}/${segs[1]}/${segs[2]}` })
+    if (crumbs.length === 0) crumbs.push({ label: "Home", href: "/" })
 
     return (
         <nav aria-label="Breadcrumb" className="hidden min-w-0 shrink items-center gap-1.5 sm:flex">
@@ -101,20 +118,35 @@ function TopBreadcrumb({ projects }: { projects: Project[] }) {
                     <path d="M9 8l-4 4 4 4M15 8l4 4-4 4" />
                 </svg>
             </span>
-            {crumbs.map((c, i) => (
-                <span key={i} className="flex min-w-0 items-center gap-1.5">
-                    {i > 0 && <span className="text-[color:var(--c-text-dim)]" aria-hidden>›</span>}
-                    <span
-                        className={
-                            i === crumbs.length - 1
-                                ? "max-w-[200px] truncate text-[12.5px] font-semibold text-[color:var(--c-text)]"
-                                : "max-w-[140px] truncate text-[12.5px] font-medium text-[color:var(--c-text-muted)]"
-                        }
-                    >
-                        {c}
+            {crumbs.map((c, i) => {
+                // "Is this the page I'm on?" is href-vs-pathname, NOT "is it the last
+                // crumb". On a detail route (/projects/x/issues/42) the trail stops at
+                // "Issues", which is an ancestor, not where you are — keying off
+                // last-ness would mark it current and leave the one link most worth
+                // clicking inert.
+                const current = c.href === pathname
+                // Styling still keys off last-ness, so the trail keeps its existing
+                // shape: a solid trailing crumb, muted ancestors.
+                const style =
+                    i === crumbs.length - 1
+                        ? "max-w-[200px] truncate text-[12.5px] font-semibold text-[color:var(--c-text)]"
+                        : "max-w-[140px] truncate text-[12.5px] font-medium text-[color:var(--c-text-muted)]"
+                return (
+                    <span key={c.href} className="flex min-w-0 items-center gap-1.5">
+                        {i > 0 && <span className="text-[color:var(--c-text-dim)]" aria-hidden>›</span>}
+                        {current ? (
+                            <span aria-current="page" className={style}>{c.label}</span>
+                        ) : (
+                            <Link
+                                href={c.href}
+                                className={cn(style, "rounded-[4px] transition-colors hover:text-[color:var(--c-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--c-ring)]")}
+                            >
+                                {c.label}
+                            </Link>
+                        )}
                     </span>
-                </span>
-            ))}
+                )
+            })}
         </nav>
     )
 }

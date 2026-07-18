@@ -1,8 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
+import { motion, useAnimationControls, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion"
 import { MiniIcon, type Tone } from "@/components/ui/field-card"
+import { timeAgo } from "@/components/issues/issue-meta"
+import { createClient } from "@/lib/supabase/client"
+import type { Notification, NotificationKind } from "@/lib/supabase/types"
 
 // Notification popover for the topbar. The bell "chip" MORPHS into the panel
 // using the exact technique from the analyser effort selector
@@ -10,37 +14,31 @@ import { MiniIcon, type Tone } from "@/components/ui/field-card"
 // real width/height/border-radius/box-shadow animate between a measured chip
 // and panel size, with the chip and panel layers cross-fading on top (content
 // fades IN after the box grows, OUT before it shrinks). No transform scale, so
-// nothing distorts. Mock data for now — wire a real feed later.
+// nothing distorts.
+//
+// The feed is tracker.notifications (migration 0049), written entirely by DB
+// triggers — see that migration for why the events can't be emitted from route
+// handlers. This component only reads, marks read, and deletes.
+//
+// NO BANNER / TOAST: an arriving notification animates the bell and nothing
+// else. The row is already in the tray by the time the swing finishes, so the
+// bell is the notice — there is deliberately no interrupting surface to dismiss.
 
-type Notif = {
-    id: string
-    tone: Tone
-    icon: ReactNode
-    title: string
-    meta: string
-    time: string
-    unread?: boolean
+// Icon + tone live here, not in the database: the row records what happened,
+// the client decides how it looks. Same split as issue-meta.tsx's status/
+// priority vocabulary.
+const KIND_STYLE: Record<NotificationKind, { tone: Tone; icon: ReactNode }> = {
+    // The first index is the payoff moment — the rocket + emerald is the only
+    // celebratory pairing in the tray, and it can only ever fire once per project.
+    kb_ready:          { tone: "emerald", icon: <RocketIcon /> },
+    kb_updated:        { tone: "blue",    icon: <RefreshIcon /> },
+    pr_analysis_ready: { tone: "violet",  icon: <CheckGlyph /> },
+    pr_opened:         { tone: "indigo",  icon: <PrGlyph /> },
 }
 
-const SECTIONS: { label: string; items: Notif[] }[] = [
-    {
-        label: "New",
-        items: [
-            { id: "n1", tone: "rose", icon: <AlertIcon />, title: "Critical issue opened", meta: "Atlas API · #142", time: "2m", unread: true },
-            { id: "n2", tone: "violet", icon: <PrGlyph />, title: "Sam requested your review", meta: "Web Portal · PR #88", time: "18m", unread: true },
-        ],
-    },
-    {
-        label: "Earlier",
-        items: [
-            { id: "n3", tone: "emerald", icon: <CheckGlyph />, title: "CI passed on main", meta: "Bobby-ui · #134", time: "1h" },
-            { id: "n4", tone: "blue", icon: <CommentIcon />, title: "New comment from Alex", meta: "Mobile App · #98", time: "3h" },
-            { id: "n5", tone: "amber", icon: <RocketIcon />, title: "Deployment finished", meta: "Billing Service", time: "1d" },
-        ],
-    },
-]
-
-const UNREAD = SECTIONS.flatMap((s) => s.items).filter((n) => n.unread).length
+// Fallback for a kind added to the DB before this map catches up — an unstyled
+// row still beats a crash in the topbar of every page.
+const FALLBACK_STYLE = { tone: "zinc" as Tone, icon: <BellIcon /> }
 
 // The bell's footprint — width/height never animate below this, so the icon
 // can't spill out of a too-small box during the close bounce.
@@ -51,12 +49,121 @@ const FLOOR = 36
 const SIZE_SPRING = { stiffness: 420, damping: 20, mass: 0.78 }
 
 export function NotificationPopover() {
+    const router = useRouter()
     const [open, setOpen] = useState(false)
+    const [items, setItems] = useState<Notification[]>([])
+    const [loaded, setLoaded] = useState(false)
     const wrapRef = useRef<HTMLDivElement>(null)
     const chipRef = useRef<HTMLButtonElement>(null)
     const panelRef = useRef<HTMLDivElement>(null)
     const [chipSize, setChipSize] = useState({ w: 36, h: 36 })
     const [panelSize, setPanelSize] = useState({ w: 340, h: 420 })
+
+    const unread = items.filter((n) => n.read_at === null).length
+
+    // ── the bell swing ──────────────────────────────────────────────────────
+    // The whole "user is online" affordance. Driven imperatively rather than by
+    // an `animate` prop because it's a one-shot reaction to an event, not a
+    // state the bell rests in.
+    const swing = useAnimationControls()
+    const reducedMotion = useReducedMotion()
+    const ring = useCallback(() => {
+        // Respect the OS setting: the row still arrives, it just doesn't move.
+        // The unread dot carries the signal on its own.
+        if (reducedMotion) return
+        void swing.start({
+            rotate: [0, -14, 11, -8, 5, -2, 0],
+            transition: { duration: 0.75, ease: "easeInOut" },
+        })
+    }, [swing, reducedMotion])
+
+    // ── initial feed ────────────────────────────────────────────────────────
+    useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+            try {
+                const res = await fetch("/api/notifications", {
+                    cache: "no-store",
+                    credentials: "same-origin",
+                })
+                // A 401 is expected, not exceptional: AppShell (and therefore this
+                // bell) also renders in the unauthenticated app/preview/* harness.
+                // An empty tray is the honest result there — don't shout about it
+                // in the topbar of a page the user came to for something else.
+                if (!res.ok || cancelled) return
+                const body = (await res.json()) as { notifications: Notification[] }
+                if (!cancelled) setItems(body.notifications ?? [])
+            } catch {
+                // Offline / aborted — same reasoning as above.
+            } finally {
+                if (!cancelled) setLoaded(true)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [])
+
+    // ── live arrivals ───────────────────────────────────────────────────────
+    // NOTE the missing `filter:` — deliberate, and the reason this component
+    // needs no user id (it can't get one: useAuth() throws outside AuthProvider,
+    // and the preview harness mounts AppShell without one). Realtime enforces
+    // RLS per subscriber, and notifications_owner_select (0049) is
+    // `user_id = auth.uid()` — so "every row this connection can see" is already
+    // exactly "this user's notifications". The other call sites pass a filter
+    // because they scope to one issue, which RLS alone wouldn't narrow.
+    //
+    // No polling fallback, unlike issue-suggestions.tsx: there, a dropped WAL
+    // event strands the user on a spinner. Here the cost is a bell that swings
+    // late — the feed is re-fetched on mount, so a missed event resolves on the
+    // next navigation. Not worth a timer on every page.
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel("notifications-feed")
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "tracker", table: "notifications" },
+                (payload) => {
+                    const row = payload.new as Notification
+                    setItems((prev) => (prev.some((n) => n.id === row.id) ? prev : [row, ...prev]))
+                    ring()
+                },
+            )
+            .subscribe()
+        return () => { void supabase.removeChannel(channel) }
+    }, [ring])
+
+    // ── actions ─────────────────────────────────────────────────────────────
+    // All three mutate local state first and let the request settle in the
+    // background. Every endpoint is idempotent and the tray is not a system of
+    // record, so a failed write costs at most a stale row until the next load —
+    // cheaper than making the user watch a spinner to dismiss something.
+    const dismiss = useCallback(async (id: string) => {
+        setItems((prev) => prev.filter((n) => n.id !== id))
+        try {
+            await fetch(`/api/notifications/${id}`, { method: "DELETE", credentials: "same-origin" })
+        } catch {}
+    }, [])
+
+    const markAllRead = useCallback(async () => {
+        if (!unread) return
+        const now = new Date().toISOString()
+        setItems((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })))
+        try {
+            await fetch("/api/notifications", { method: "PATCH", credentials: "same-origin" })
+        } catch {}
+    }, [unread])
+
+    const openItem = useCallback(async (n: Notification) => {
+        setOpen(false)
+        if (n.read_at === null) {
+            const now = new Date().toISOString()
+            setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: now } : x)))
+            try {
+                await fetch(`/api/notifications/${n.id}`, { method: "PATCH", credentials: "same-origin" })
+            } catch {}
+        }
+        if (n.href) router.push(n.href)
+    }, [router])
 
     // Width/height ride springs (open AND close), CLAMPED to the bell's footprint
     // so the box can bounce but never shrinks below it. useSpring reads a raw
@@ -75,7 +182,7 @@ export function NotificationPopover() {
     }, [open, panelSize.w, panelSize.h, chipSize.w, chipSize.h, wTarget, hTarget])
 
     // Measure the chip + panel so the surface morphs to either exactly, and
-    // stays correct if content reflows.
+    // stays correct if content reflows (it now does — the list is live).
     useEffect(() => {
         const ro = new ResizeObserver((entries) => {
             for (const e of entries) {
@@ -106,6 +213,13 @@ export function NotificationPopover() {
             document.removeEventListener("keydown", onKey)
         }
     }, [open])
+
+    // Unread on top, everything else below — the read_at split IS the section
+    // split, so "New" can't disagree with the badge count.
+    const sections = [
+        { label: "New", items: items.filter((n) => n.read_at === null) },
+        { label: "Earlier", items: items.filter((n) => n.read_at !== null) },
+    ].filter((s) => s.items.length > 0)
 
     return (
         <div className="relative" ref={wrapRef}>
@@ -143,7 +257,7 @@ export function NotificationPopover() {
                     onClick={() => setOpen(true)}
                     aria-haspopup="dialog"
                     aria-expanded={open}
-                    aria-label={`Notifications${UNREAD ? `, ${UNREAD} unread` : ""}`}
+                    aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
                     className="absolute right-0 top-0 grid h-9 w-9 place-items-center text-[color:var(--c-text-muted)] transition-colors hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
                     style={{
                         opacity: open ? 0 : 1,
@@ -152,8 +266,17 @@ export function NotificationPopover() {
                         transitionDelay: open ? "0s" : ".16s",
                     }}
                 >
-                    <BellIcon />
-                    {UNREAD > 0 && (
+                    {/* Only the glyph swings — the button itself is the hit area and
+                        must stay put. Pivot at the bell's crown so it pendulums from
+                        its mount instead of spinning about its middle. */}
+                    <motion.span
+                        animate={swing}
+                        style={{ transformOrigin: "50% 18%" }}
+                        className="grid place-items-center"
+                    >
+                        <BellIcon />
+                    </motion.span>
+                    {unread > 0 && (
                         <span className="absolute right-[9px] top-[8px] h-2 w-2 rounded-full bg-[color:var(--c-primary)] ring-2 ring-[color:var(--c-surface)]" />
                     )}
                 </button>
@@ -175,66 +298,88 @@ export function NotificationPopover() {
                     <div className="flex items-center justify-between border-b border-[color:var(--c-border)] px-4 py-3">
                         <div className="flex items-center gap-2">
                             <span className="text-[13px] font-bold tracking-[-0.01em]">Notifications</span>
-                            {UNREAD > 0 && (
+                            {unread > 0 && (
                                 <span className="rounded-full bg-[color:var(--c-primary)] px-1.5 py-px text-[10px] font-bold tabular-nums text-white">
-                                    {UNREAD} new
+                                    {unread} new
                                 </span>
                             )}
                         </div>
-                        <button
-                            type="button"
-                            tabIndex={open ? 0 : -1}
-                            className="text-[11.5px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
-                        >
-                            Mark all read
-                        </button>
+                        {unread > 0 && (
+                            <button
+                                type="button"
+                                onClick={markAllRead}
+                                tabIndex={open ? 0 : -1}
+                                className="text-[11.5px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
+                            >
+                                Mark all read
+                            </button>
+                        )}
                     </div>
 
-                    <div className="max-h-[320px] overflow-y-auto py-1">
-                        {SECTIONS.map((section) => (
-                            <div key={section.label}>
-                                <div className="px-4 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
-                                    {section.label}
+                    <div className="max-h-[320px] min-h-[96px] overflow-y-auto py-1">
+                        {sections.length === 0 ? (
+                            <p className="px-4 py-9 text-center text-[12px] text-[color:var(--c-text-dim)]">
+                                {loaded ? "You're all caught up." : "Loading…"}
+                            </p>
+                        ) : (
+                            sections.map((section) => (
+                                <div key={section.label}>
+                                    <div className="px-4 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
+                                        {section.label}
+                                    </div>
+                                    <ul>
+                                        {section.items.map((n) => {
+                                            const style = KIND_STYLE[n.kind] ?? FALLBACK_STYLE
+                                            return (
+                                                <li key={n.id} className="group relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openItem(n)}
+                                                        tabIndex={open ? 0 : -1}
+                                                        className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[color:var(--c-overlay)]"
+                                                    >
+                                                        <MiniIcon tone={style.tone} size={30}>
+                                                            {style.icon}
+                                                        </MiniIcon>
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block truncate text-[12.5px] font-semibold text-[color:var(--c-text)]">
+                                                                {n.title}
+                                                            </span>
+                                                            <span className="block truncate text-[11.5px] text-[color:var(--c-text-muted)]">
+                                                                {n.meta}
+                                                            </span>
+                                                        </span>
+                                                        {/* Yields the corner to the dismiss button on hover — the
+                                                            row is too tight to carry both, and the timestamp is the
+                                                            less useful of the two once you're reaching for the X. */}
+                                                        <span className="flex shrink-0 items-center gap-1.5 pt-0.5 transition-opacity group-hover:opacity-0">
+                                                            <span className="text-[11px] tabular-nums text-[color:var(--c-text-dim)]">
+                                                                {timeAgo(n.created_at)}
+                                                            </span>
+                                                            {n.read_at === null && (
+                                                                <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--c-primary)]" />
+                                                            )}
+                                                        </span>
+                                                    </button>
+                                                    {/* A SIBLING of the row button, not a child — nesting buttons is
+                                                        invalid HTML and browsers resolve the click ambiguously. It
+                                                        overlays the timestamp instead. */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => dismiss(n.id)}
+                                                        tabIndex={open ? 0 : -1}
+                                                        aria-label={`Dismiss "${n.title}"`}
+                                                        className="absolute right-2.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-[color:var(--c-text-dim)] opacity-0 transition-[opacity,color,background-color] hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)] focus-visible:opacity-100 group-hover:opacity-100"
+                                                    >
+                                                        <XIcon />
+                                                    </button>
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
                                 </div>
-                                <ul>
-                                    {section.items.map((n) => (
-                                        <li key={n.id}>
-                                            <button
-                                                type="button"
-                                                tabIndex={open ? 0 : -1}
-                                                className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[color:var(--c-overlay)]"
-                                            >
-                                                <MiniIcon tone={n.tone} size={30}>
-                                                    {n.icon}
-                                                </MiniIcon>
-                                                <span className="min-w-0 flex-1">
-                                                    <span className="block truncate text-[12.5px] font-semibold text-[color:var(--c-text)]">
-                                                        {n.title}
-                                                    </span>
-                                                    <span className="block truncate text-[11.5px] text-[color:var(--c-text-muted)]">
-                                                        {n.meta}
-                                                    </span>
-                                                </span>
-                                                <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
-                                                    <span className="text-[11px] tabular-nums text-[color:var(--c-text-dim)]">{n.time}</span>
-                                                    {n.unread && <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--c-primary)]" />}
-                                                </span>
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="border-t border-[color:var(--c-border)] p-1.5">
-                        <button
-                            type="button"
-                            tabIndex={open ? 0 : -1}
-                            className="w-full rounded-[10px] py-2 text-center text-[12px] font-semibold text-[color:var(--c-primary)] transition-colors hover:bg-[color:var(--c-primary-tint)]"
-                        >
-                            View all notifications
-                        </button>
+                            ))
+                        )}
                     </div>
                 </div>
             </motion.div>
@@ -248,15 +393,6 @@ function BellIcon() {
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-        </svg>
-    )
-}
-function AlertIcon() {
-    return (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 8v5" />
-            <circle cx="12" cy="16.5" r="0.6" fill="currentColor" stroke="none" />
-            <circle cx="12" cy="12" r="9" />
         </svg>
     )
 }
@@ -277,10 +413,11 @@ function CheckGlyph() {
         </svg>
     )
 }
-function CommentIcon() {
+function RefreshIcon() {
     return (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z" />
+            <path d="M21 12a9 9 0 0 1-15.5 6.2L3 16M3 12a9 9 0 0 1 15.5-6.2L21 8" />
+            <path d="M21 4v4h-4M3 20v-4h4" />
         </svg>
     )
 }
@@ -289,6 +426,13 @@ function RocketIcon() {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M5 15c-1.5 1.3-2 5-2 5s3.7-.5 5-2M9 11a8 8 0 0 1 9-7 8 8 0 0 1-7 9l-4 4-2-2 4-4z" />
             <circle cx="14.5" cy="8.5" r="1.3" />
+        </svg>
+    )
+}
+function XIcon() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M18 6 6 18M6 6l12 12" />
         </svg>
     )
 }

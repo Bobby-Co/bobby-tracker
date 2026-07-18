@@ -5,6 +5,7 @@ import { useParams, usePathname, useRouter } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 import { ProjectTabs } from "@/components/projects/project-tabs"
+import { ProjectActivityChips } from "@/components/projects/project-activity-chips"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
 import { cn } from "@/components/ui/cn"
 import { isImmersiveMind, isProjectWizard } from "@/components/layout/immersive"
@@ -47,6 +48,13 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
                     <div className="min-w-0 max-w-full">
                         <ProjectHeader id={id} />
                     </div>
+                    {/* Right slot of the header row — background-work status. Lives here
+                        rather than in a tab because the work it reports (indexing,
+                        embedding) belongs to the project, not to whichever tab you
+                        happen to be on. Renders nothing when the project is idle.
+                        Skipped while chromeless: the header is collapsed to max-h-0
+                        there, so mounting it would only start a needless poll. */}
+                    {!chromeless && <ProjectActivityChips projectId={id} />}
                 </div>
                 <div className="w-full max-w-5xl px-4 sm:px-6">
                     <ProjectTabs projectId={id} />

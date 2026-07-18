@@ -3,6 +3,7 @@ import { kickoffJob } from "@/lib/analyser"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
+import { embedIssueAsync } from "@/lib/issues/issue-embedding"
 import { deleteIssueComment, upsertIssueComment } from "@/lib/issue-store"
 import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/lib/pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -282,6 +283,21 @@ async function handleIssue(
         // silently when the graph isn't indexed). Off the 202 ack path.
         if (action === "opened" && inserted) {
             after(() => ensureAnalysis(inserted.id, origin))
+        }
+
+        // (8b) …and gets embedded, so it joins the similarity corpus like an
+        // in-app issue. This is the fix for GitHub-origin issues being
+        // permanently absent from similarity: the row used to land here and
+        // never get a vector, and since the similarity RPCs INNER JOIN
+        // issue_embeddings it was invisible both as a subject and as a
+        // candidate. Unlike analysis above this is NOT gated on 'opened' —
+        // every action that inserts a row (an issue first seen via `edited` or
+        // `reopened`, say) needs a vector just as much.
+        //
+        // Fire-and-forget off the ack path, same as the analyser call. If it
+        // fails, ensureIssueEmbeddings() sweeps the row up later.
+        if (inserted) {
+            after(() => embedIssueAsync({ id: inserted.id, project_id: project.id, title, body }))
         }
     }
 
