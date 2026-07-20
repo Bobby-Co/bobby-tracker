@@ -14,6 +14,7 @@
 import { mergeVerdictLabel } from "@/lib/rendering/badge"
 import { findingState } from "@/modules/pull-requests"
 import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { NotificationKind, PRAnalysis } from "@/lib/supabase/types"
 
@@ -94,8 +95,8 @@ async function resolveUserEmail(svc: Svc, userId: string): Promise<string | null
 }
 
 async function loadProjectName(svc: Svc, projectId: string): Promise<string | null> {
-    const { data } = await svc.from("projects").select("name").eq("id", projectId).maybeSingle<{ name: string | null }>()
-    return data?.name ?? null
+    // Read through the Projects contract — notifications doesn't own the projects table.
+    return createSupabaseProjectsRepository(svc).findName(projectId)
 }
 
 // loadPrResult pulls the stored analysis so the review email can show the score,

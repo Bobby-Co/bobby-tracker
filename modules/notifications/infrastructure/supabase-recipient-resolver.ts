@@ -21,6 +21,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 import type { NotificationEvent } from "../domain/events"
 import type { ChannelId } from "../domain/events"
 import type { Recipient, RecipientResolver } from "../ports/recipient-resolver"
@@ -40,12 +41,9 @@ export function createSupabaseRecipientResolver(db: SupabaseClient): RecipientRe
     return {
         async resolve(event: NotificationEvent): Promise<Recipient[]> {
             // 1. The project's owning team. No team ⇒ nobody to notify.
-            const { data: proj } = await db
-                .from("projects")
-                .select("team_id")
-                .eq("id", event.projectId)
-                .maybeSingle()
-            const teamId = (proj as { team_id: string | null } | null)?.team_id
+            // Read through the Projects contract — notifications doesn't own the
+            // projects table.
+            const teamId = await createSupabaseProjectsRepository(db).findTeamId(event.projectId)
             if (!teamId) return []
 
             // 2. Every member of that team, with their role.

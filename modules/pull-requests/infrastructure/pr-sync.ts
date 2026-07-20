@@ -9,19 +9,19 @@ import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, 
 import { tryOrNull } from "@/lib/kernel"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/modules/github"
 import { repoFullName } from "@/modules/github"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import { cancelledComment, failedComment, loadingComment, resultComment } from "./pr-comment"
 import type { PRAnalysis, Project } from "@/lib/supabase/types"
 
-// The subset of a tracker.projects row PR analysis reads.
+// The subset of a tracker.projects row PR analysis reads. A superset of this is
+// fetched through the Projects contract (findGithubSyncContext) — pull-requests
+// doesn't own the projects table.
 type PRProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
     github_installation_id: number | null
     github_repo_id: number | null
     github_sync_enabled: boolean
 }
-
-const PR_PROJECT_COLS =
-    "id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled"
 
 // PRInput is the PR metadata from the webhook payload.
 export type PRInput = {
@@ -150,11 +150,7 @@ export async function applyPRResult(
     if (!row) return
 
     if (row.github_comment_id != null) {
-        const { data: project } = await svc
-            .from("projects")
-            .select(PR_PROJECT_COLS)
-            .eq("id", row.project_id)
-            .maybeSingle<PRProject>()
+        const project = await createSupabaseProjectsRepository(svc).findGithubSyncContext(row.project_id)
         if (project && prReady(project)) {
             const full = repoFullName(project)
             if (full) {

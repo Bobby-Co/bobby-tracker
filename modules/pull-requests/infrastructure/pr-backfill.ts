@@ -15,9 +15,9 @@ import {
 } from "@/modules/github"
 import { repoFullName } from "@/modules/github"
 import { upsertIssueComment } from "@/modules/issues"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { upsertPRComment, upsertPullRequest, type PRUpsert } from "./pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { Project } from "@/lib/supabase/types"
 
 type Svc = ReturnType<typeof createServiceClient>
 
@@ -26,24 +26,13 @@ type Svc = ReturnType<typeof createServiceClient>
 // is sorted updated-desc). Older PRs fill their thread lazily on detail open.
 const COMMENT_BACKFILL_MAX = 40
 
-type PRProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
-    github_installation_id: number | null
-    github_repo_id: number | null
-    github_sync_enabled: boolean
-}
-
-const PR_PROJECT_COLS =
-    "id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled"
-
 type Creds = { installationId: number; owner: string; repo: string }
 
 // Resolve the App creds + owner/repo for a sync-enabled, App-linked project.
+// Reads the project through the Projects contract — pull-requests doesn't own
+// the projects table.
 async function resolveCreds(svc: Svc, projectId: string): Promise<Creds | null> {
-    const { data: project } = await svc
-        .from("projects")
-        .select(PR_PROJECT_COLS)
-        .eq("id", projectId)
-        .maybeSingle<PRProject>()
+    const project = await createSupabaseProjectsRepository(svc).findGithubSyncContext(projectId)
     if (!project) return null
     if (!project.github_sync_enabled || project.github_installation_id == null || project.github_repo_id == null) {
         return null

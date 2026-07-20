@@ -29,4 +29,12 @@ export interface ProjectsRepository {
      *  visible to the caller (the injected client carries the caller's RLS
      *  scope). */
     findGithubSyncContext(projectId: string): Promise<GithubSyncContext | null>
+
+    /** The owning team id for a project, or null when absent / not visible.
+     *  Used by cross-context reactions (e.g. notification fan-out) that must
+     *  resolve recipients without querying the projects table directly. */
+    findTeamId(projectId: string): Promise<string | null>
+
+    /** The project's display name, or null when absent / not visible. */
+    findName(projectId: string): Promise<string | null>
 }
