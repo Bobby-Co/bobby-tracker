@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { ProjectGroup } from "@/lib/supabase/types"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { Spinner } from "@/components/ui/spinner"
 import { MultiDropdown } from "@/components/ui/multi-dropdown"
 
@@ -55,20 +56,18 @@ export function GroupManagePanel({
 
     const busy = action !== null
 
-    async function call(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown) {
+    // Returns the parsed payload (or null on a 204 / a handled server error) as
+    // `any`, mirroring the old res.json() — call sites read shape-specific fields.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function call(path: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<any> {
         setError(null)
-        const res = await fetch(path, {
-            method,
-            headers: body ? { "Content-Type": "application/json" } : undefined,
-            body: body ? JSON.stringify(body) : undefined,
-        })
-        if (!res.ok && res.status !== 204) {
-            const e = await res.json().catch(() => ({}))
-            setError(e?.error?.message || `Failed (${res.status})`)
+        try {
+            return (await apiMutate(path, { method, body })) ?? null
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e // network: propagate to run(), as before
+            setError(e.message || `Failed (${e.status})`)
             return null
         }
-        if (res.status === 204) return null
-        return await res.json().catch(() => ({}))
     }
 
     function run(a: Exclude<Action, null>, fn: () => Promise<void>) {
