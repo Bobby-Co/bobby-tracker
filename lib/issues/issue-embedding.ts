@@ -20,7 +20,7 @@
 // checks before calling here.
 
 import { createServiceClient } from "@/lib/supabase/server"
-import { embedText, type EmbedResult } from "@/lib/analyser"
+import { getAnalyser, type EmbedResult } from "@/modules/analysis"
 import { issueEmbeddingText } from "@/modules/issues"
 
 // tracker.issue_embeddings is PARTITIONED BY project_id (done for scale; the
@@ -56,7 +56,7 @@ const MISSING_EMBEDDING_SELECT = "id,project_id,title,body,issue_embeddings!left
 
 export async function embedIssueAsync(issue: MinimalIssue): Promise<void> {
     try {
-        const result: EmbedResult = await embedText(issueEmbeddingText(issue))
+        const result: EmbedResult = await getAnalyser().embed(issueEmbeddingText(issue))
         const svc = createServiceClient()
         const { error } = await svc
             .from("issue_embeddings")

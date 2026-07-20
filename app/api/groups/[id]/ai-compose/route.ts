@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, composeIssue, embedText } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { routingEmbeddingText } from "@/modules/issues"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
@@ -77,7 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Step 1: compose the draft.
     let proposal
     try {
-        proposal = await composeIssue({ paragraph, images })
+        proposal = await getAnalyser().compose({ paragraph, images })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
@@ -92,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const routingQuery = routingEmbeddingText(proposal)
     let queryVec: number[]
     try {
-        const embed = await embedText(routingQuery)
+        const embed = await getAnalyser().embed(routingQuery)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

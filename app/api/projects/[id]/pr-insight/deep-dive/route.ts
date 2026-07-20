@@ -1,4 +1,4 @@
-import { deepDivePRInsight, AnalyserError } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project } from "@/lib/supabase/types"
 
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
 
     try {
-        const { conversation_id, pr_number, pr_title } = await deepDivePRInsight(insightId)
+        const { conversation_id, pr_number, pr_title } = await getAnalyser().deepDivePRInsight(insightId)
         if (!conversation_id) return jsonError("deep_dive_failed", "no conversation returned", 502)
         return Response.json({ conversation_id, pr_number, pr_title })
     } catch (e) {

@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, composeIssue } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/issues/ai-compose
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     if (!project) return jsonError("not_found", "project not found", 404)
 
     try {
-        const proposal = await composeIssue({ paragraph, images })
+        const proposal = await getAnalyser().compose({ paragraph, images })
         return Response.json({ proposal })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

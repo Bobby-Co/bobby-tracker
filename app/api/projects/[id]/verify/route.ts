@@ -1,4 +1,4 @@
-import { verifyGraph, AnalyserError } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
@@ -42,7 +42,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-        const report = await verifyGraph({
+        const report = await getAnalyser().verify({
             repoUrl: project.repo_url,
             repoId: analyser.graph_id,
             // The analyser worker fetches this user's GitHub token from

@@ -5,10 +5,9 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { isAnalyserReady } from "@/modules/analysis"
+import { getAnalyser, isAnalyserReady, type PRAnalyseFile } from "@/modules/analysis"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
-import { cancelPRAnalysis as analyserCancelPR, runPRAnalysis, type PRAnalyseFile } from "@/lib/analyser"
 import { createServiceClient } from "@/lib/supabase/server"
 import { cancelledComment, failedComment, loadingComment, resultComment } from "@/lib/pulls/pr-comment"
 import type { PRAnalysis, Project } from "@/lib/supabase/types"
@@ -119,7 +118,7 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
         .single<{ id: string }>()
     if (!row) return
 
-    await runPRAnalysis(
+    await getAnalyser().startPRAnalysis(
         {
             repoId: analyser.graph_id,
             number: pr.number,
@@ -198,5 +197,5 @@ export async function cancelPRAnalysisForPR(projectId: string, prNumber: number)
         .eq("pr_number", prNumber)
         .maybeSingle<{ id: string; status: string | null }>()
     if (!row || row.status !== "analysing") return
-    await analyserCancelPR(row.id)
+    await getAnalyser().cancelPRAnalysis(row.id)
 }

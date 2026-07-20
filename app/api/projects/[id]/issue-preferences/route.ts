@@ -1,9 +1,9 @@
 import {
     AnalyserError,
-    getIssuePreferences,
+    getAnalyser,
     isAnalyseEffort,
-    setIssuePreferences,
-} from "@/lib/analyser"
+    type AnalyseEffort,
+} from "@/modules/analysis"
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 
@@ -39,7 +39,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (!resolved.graphId) return Response.json({ effort: "", indexed: false })
 
     try {
-        const prefs = await getIssuePreferences(resolved.graphId)
+        const prefs = await getAnalyser().getIssuePreferences(resolved.graphId)
         return Response.json({ effort: prefs.effort ?? "", indexed: true })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"
@@ -59,7 +59,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (raw !== "" && !isAnalyseEffort(raw)) {
         return jsonError("bad_request", "effort must be one of fast, medium, high, veryhigh (or \"\" to clear)", 400)
     }
-    const effort = raw as Parameters<typeof setIssuePreferences>[1]
+    const effort = raw as AnalyseEffort | ""
 
     const resolved = await resolveGraphId(id)
     if ("error" in resolved) return resolved.error
@@ -68,7 +68,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     try {
-        const prefs = await setIssuePreferences(resolved.graphId, effort)
+        const prefs = await getAnalyser().setIssuePreferences(resolved.graphId, effort)
         return Response.json({ effort: prefs.effort ?? "", indexed: true })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"

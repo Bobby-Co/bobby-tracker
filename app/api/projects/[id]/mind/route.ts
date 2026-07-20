@@ -1,4 +1,4 @@
-import { chatStream, AnalyserError, type ChatHistoryMsg } from "@/lib/analyser"
+import { AnalyserError, getAnalyser, type ChatHistoryMsg } from "@/modules/analysis"
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
@@ -72,7 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try {
         // Pass the project uuid (scopes the "issues" action, ADR-0048) and the
         // conversation id (keys the managed-context store, ADR-0049).
-        const upstream = await chatStream(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId)
+        const upstream = await getAnalyser().streamChat(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId)
         // Pipe the analyser's SSE stream straight to the browser.
         return new Response(upstream.body, {
             status: 200,

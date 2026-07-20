@@ -1,4 +1,4 @@
-import { analyseIssue, AnalyserError, isAnalyseEffort } from "@/lib/analyser"
+import { AnalyserError, getAnalyser, isAnalyseEffort } from "@/modules/analysis"
 import { jsonError, requireIssueAccess } from "@/lib/api"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type {
@@ -84,7 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
 
     try {
-        const result = await analyseIssue({
+        const result = await getAnalyser().analyseIssue({
             repoId:   analyser.graph_id,
             title:    issue.title,
             body:     issue.body || "",

@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { kickoffJob } from "@/lib/analyser"
+import { getAnalyser } from "@/modules/analysis"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
@@ -467,7 +467,7 @@ async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<R
     const graphId = analyser.graph_id
     after(async () => {
         try {
-            await kickoffJob({
+            await getAnalyser().startIndex({
                 job_type: "incremental",
                 repo_url: project.repo_url,
                 repo_id: graphId,

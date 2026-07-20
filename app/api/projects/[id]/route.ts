@@ -1,4 +1,4 @@
-import { deleteGraph } from "@/lib/analyser"
+import { getAnalyser } from "@/modules/analysis"
 import { forbidden, jsonError, requireUser } from "@/lib/api"
 import { assertProjectAccess, roleAtLeast } from "@/lib/auth/team-access"
 import { findIcon } from "@/lib/icons/iconly"
@@ -103,7 +103,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
     if (graphId) {
         try {
-            await deleteGraph(graphId)
+            await getAnalyser().deleteGraph(graphId)
         } catch (e) {
             console.error("[project delete] analyser graph teardown failed", id, graphId, e)
         }

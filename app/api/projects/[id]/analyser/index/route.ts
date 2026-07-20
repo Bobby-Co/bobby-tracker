@@ -1,4 +1,4 @@
-import { kickoffJob, AnalyserError } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 
@@ -69,7 +69,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (upErr) return jsonError("db_error", upErr.message, 500)
 
     try {
-        const result = await kickoffJob({
+        const result = await getAnalyser().startIndex({
             job_type: jobType,
             repo_url: project.repo_url,
             // Effort scales grouper aggressiveness + per-cluster turn budget on

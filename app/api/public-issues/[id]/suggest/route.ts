@@ -1,4 +1,4 @@
-import { analyseIssue, AnalyserError } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { jsonError } from "@/lib/api"
 import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-        const result = await analyseIssue({
+        const result = await getAnalyser().analyseIssue({
             repoId:   analyser.graph_id,
             title:    issue.title,
             body:     issue.body || "",

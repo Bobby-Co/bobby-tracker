@@ -5,7 +5,6 @@
 // echo-suppression primitive, the status↔state mappers, the outbound push /
 // update, and the auto-analysis comment path. See plan Phases 4–6.
 
-import { cancelIssueAnalysis, runIssueAnalysis, type IssueAnalysis } from "@/lib/analyser"
 import {
     createGithubIssue,
     createIssueComment,
@@ -24,7 +23,7 @@ import {
 import { repoFullName } from "@/lib/integrations/github"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import { createServiceClient } from "@/lib/supabase/server"
-import { isAnalyserReady } from "@/modules/analysis"
+import { getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
 import type {
     GithubSyncDirection,
     IssueAnalysisData,
@@ -336,7 +335,7 @@ export async function ensureAnalysis(
 
     // Kick the single detached run; its callback caches to issue_suggestions
     // (the web box picks it up via realtime) and edits the GitHub comment.
-    await runIssueAnalysis(
+    await getAnalyser().startIssueAnalysis(
         {
             repoId: analyser.graph_id,
             title: issue.title,
@@ -454,7 +453,7 @@ export async function applyAnalysisResult(
 // analyser then reports status=cancelled via the callback, which edits the
 // comment. Best-effort — a cancel for an already-finished task is a no-op.
 export async function cancelAnalysis(issueId: string): Promise<void> {
-    await cancelIssueAnalysis(issueId)
+    await getAnalyser().cancelIssueAnalysis(issueId)
 }
 
 // ─── Hard sync (backfill) ───────────────────────────────────────────────────

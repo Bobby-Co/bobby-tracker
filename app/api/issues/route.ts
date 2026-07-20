@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
-import { isAnalyseEffort } from "@/lib/analyser"
+import { isAnalyseEffort } from "@/modules/analysis"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"

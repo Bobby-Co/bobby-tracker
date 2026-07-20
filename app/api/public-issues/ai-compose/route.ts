@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { AnalyserError, composeIssue, embedText } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { routingEmbeddingText } from "@/modules/issues"
 import { requireInviteAccess, resolvePublicSession } from "@/lib/public/public-session"
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
             return jsonError("bad_request", "this project isn't part of the session", 400)
         }
         try {
-            const proposal = await composeIssue({ paragraph, images })
+            const proposal = await getAnalyser().compose({ paragraph, images })
             return Response.json({ proposal, ranking: null })
         } catch (e) {
             if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
     let proposal
     try {
-        proposal = await composeIssue({ paragraph, images })
+        proposal = await getAnalyser().compose({ paragraph, images })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     const routingQuery = routingEmbeddingText(proposal)
     let queryVec: number[]
     try {
-        const embed = await embedText(routingQuery)
+        const embed = await getAnalyser().embed(routingQuery)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
