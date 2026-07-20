@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
 import { severityLabel } from "@/lib/rendering/badge"
-import { findingState } from "@/modules/pull-requests"
+import { findingState } from "@/lib/rendering/finding-state"
 import { apiMutate } from "@/lib/platform/http/api-client"
 import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 

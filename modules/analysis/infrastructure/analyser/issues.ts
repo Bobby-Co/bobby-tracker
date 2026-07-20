@@ -4,18 +4,13 @@
 import type { AnalyseEffort } from "@/lib/supabase/types"
 import { AnalyserError, assertConfigured, authHeader } from "./client"
 
-// How thorough the analyser is when investigating an issue. Higher levels
-// explore more before answering: slower + more expensive, but better on hard
-// multi-file bugs. These exact lowercase strings are the wire values the
-// analyser expects on /issues/analyse and /issues/preferences. NB: distinct
-// from the indexing `effort` ("low"|"medium"|"high") on KickoffJobInput.
+// Thoroughness level for issue analysis. The lowercase wire values the analyser
+// expects on /issues/analyse and /issues/preferences. NB: distinct from the
+// indexing `effort` ("low"|"medium"|"high") on KickoffJobInput. The list +
+// guard live in ../../domain/effort (client-safe); re-exported here for callers
+// that pair them with the analyse functions.
 export type { AnalyseEffort }
-
-export const ANALYSE_EFFORTS: AnalyseEffort[] = ["fast", "medium", "high", "veryhigh"]
-
-export function isAnalyseEffort(v: unknown): v is AnalyseEffort {
-    return typeof v === "string" && (ANALYSE_EFFORTS as string[]).includes(v)
-}
+export { ANALYSE_EFFORTS, isAnalyseEffort } from "../../domain/effort"
 
 export interface IssueFinding {
     file:        string

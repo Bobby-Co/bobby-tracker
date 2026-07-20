@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
 import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, IssueSuggestion } from "@/lib/supabase/types"
 import { Spinner } from "@/components/ui/spinner"
-import { reporterDisplay } from "@/modules/public"
+import { reporterDisplay } from "@/modules/public/domain/public-reporter"
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { publicIssueSuggestionChannel } from "@/lib/util/realtime-channels"
 

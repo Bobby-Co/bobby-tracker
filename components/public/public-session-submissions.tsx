@@ -7,7 +7,7 @@ import type {
     PublicParentRow,
     PublicReporterGroup,
 } from "@/modules/public"
-import { reporterDisplay } from "@/modules/public"
+import { reporterDisplay } from "@/modules/public/domain/public-reporter"
 import { StatusChip } from "@/components/ui/status-chip"
 
 // Public-side counterpart to the auth issues list.
