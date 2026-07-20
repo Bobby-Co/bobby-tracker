@@ -1,6 +1,6 @@
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { startPRAnalysis } from "@/lib/pr-sync"
+import { startPRAnalysis } from "@/modules/pull-requests"
 import { repoFullName } from "@/lib/integrations/github"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 

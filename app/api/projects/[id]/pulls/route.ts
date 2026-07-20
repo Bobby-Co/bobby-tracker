@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireProjectAccess } from "@/lib/api"
-import { backfillPullRequests } from "@/lib/pr-backfill"
+import { backfillPullRequests } from "@/modules/pull-requests"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/pulls

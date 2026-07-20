@@ -3,10 +3,10 @@ import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/
 import { tryOrNull } from "@/lib/kernel"
 import { verifyWebhookSignature } from "@/modules/github"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/modules/github"
-import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
+import { cancelPRAnalysisForPR, startPRAnalysis } from "@/modules/pull-requests"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"
 import { deleteIssueComment, upsertIssueComment } from "@/lib/issue-store"
-import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/lib/pr-store"
+import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/modules/pull-requests"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Issue, Project } from "@/lib/supabase/types"
 

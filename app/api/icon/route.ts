@@ -1,4 +1,4 @@
-import { isBadgeTone, renderIcon } from "@/lib/badge"
+import { isBadgeTone, renderIcon } from "@/lib/rendering/badge"
 
 // GET /api/icon?name=<glyph>&tone=<tone>
 //

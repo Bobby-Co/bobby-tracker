@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { backfillIssueComments } from "@/lib/pr-backfill"
+import { backfillIssueComments } from "@/modules/pull-requests"
 import type {
     Issue,
     IssueComment,

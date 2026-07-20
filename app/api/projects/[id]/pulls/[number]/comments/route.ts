@@ -1,7 +1,7 @@
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import { resolveCommentContext } from "@/lib/comment-actions"
 import { createUserIssueComment, GithubReauthError } from "@/modules/github"
-import { upsertPRComment } from "@/lib/pr-store"
+import { upsertPRComment } from "@/modules/pull-requests"
 import { createServiceClient } from "@/lib/supabase/server"
 
 // POST /api/projects/[id]/pulls/[number]/comments

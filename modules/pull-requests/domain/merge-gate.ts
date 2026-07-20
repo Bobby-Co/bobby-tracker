@@ -15,8 +15,21 @@
 //   1. Don't allow merge until the review has FINISHED.
 //   2. Don't allow merge when the review found something CRITICAL.
 
-import { findingState } from "@/modules/pull-requests"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import { findingState } from "./finding-severity"
+
+// Domain value-objects — the minimal PR + review shape this policy reads. Kept
+// local (not the DB row types) so the gate stays a PURE domain rule with no SDK
+// dependency; the persisted rows are structurally assignable to these.
+export interface MergePull {
+    merged: boolean
+    state: "open" | "closed"
+    draft: boolean
+}
+
+export interface MergeReview {
+    status: "analysing" | "done" | "failed" | "cancelled" | null
+    result: { findings?: { severity: string }[] } | null
+}
 
 export type MergeBlockCode =
     | "merged" // already merged — nothing to do
@@ -47,12 +60,12 @@ export interface MergeGate {
  *  review panel groups by (@/modules/pull-requests findingState) so the gate and the visible
  *  "Blockers" section can never disagree — if the panel shows a blocker, the gate
  *  counts it, and vice-versa. */
-export function criticalFindingCount(analysis: PullRequestAnalysis | null): number {
+export function criticalFindingCount(analysis: MergeReview | null): number {
     const findings = analysis?.result?.findings ?? []
     return findings.filter((f) => findingState(f.severity) === "critical").length
 }
 
-export function mergeGate(pull: PullRequest, analysis: PullRequestAnalysis | null): MergeGate {
+export function mergeGate(pull: MergePull, analysis: MergeReview | null): MergeGate {
     const ok = (): MergeGate => ({ mergeable: true, block: null, criticalCount: 0 })
     const no = (code: MergeBlockCode, label: string, transient: boolean, criticalCount = 0): MergeGate => ({
         mergeable: false,

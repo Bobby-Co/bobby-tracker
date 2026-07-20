@@ -15,7 +15,7 @@ import {
 } from "@/modules/github"
 import { repoFullName } from "@/lib/integrations/github"
 import { upsertIssueComment } from "@/lib/issue-store"
-import { upsertPRComment, upsertPullRequest, type PRUpsert } from "@/lib/pr-store"
+import { upsertPRComment, upsertPullRequest, type PRUpsert } from "./pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Project } from "@/lib/supabase/types"
 

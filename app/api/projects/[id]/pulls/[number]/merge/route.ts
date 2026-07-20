@@ -7,7 +7,7 @@ import {
     GithubMergeError,
     mergePullRequest,
 } from "@/modules/github"
-import { defaultMergeMethod, mergeGate, type MergeMethod, type MergeMethods } from "@/lib/pulls/merge-gate"
+import { defaultMergeMethod, mergeGate, type MergeMethod, type MergeMethods } from "@/modules/pull-requests"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // GET  /api/projects/[id]/pulls/[number]/merge — everything the merge bar needs:

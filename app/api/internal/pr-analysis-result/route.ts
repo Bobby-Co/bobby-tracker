@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api"
-import { applyPRResult } from "@/lib/pr-sync"
+import { applyPRResult } from "@/modules/pull-requests"
 import type { PRAnalysis } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"

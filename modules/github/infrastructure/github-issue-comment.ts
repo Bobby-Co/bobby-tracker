@@ -2,7 +2,7 @@
 // (Phase 3) — pure string building, no I/O.
 
 import type { IssueAnalysis } from "@/lib/analyser"
-import { badge, confidenceTone } from "@/lib/badge"
+import { badge, confidenceTone } from "@/lib/rendering/badge"
 import { blobUrl } from "@/lib/integrations/github"
 import type { Project } from "@/lib/supabase/types"
 

@@ -10,7 +10,7 @@ import { tryOrNull } from "@/lib/kernel"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/modules/github"
 import { repoFullName } from "@/lib/integrations/github"
 import { createServiceClient } from "@/lib/supabase/server"
-import { cancelledComment, failedComment, loadingComment, resultComment } from "@/lib/pulls/pr-comment"
+import { cancelledComment, failedComment, loadingComment, resultComment } from "./pr-comment"
 import type { PRAnalysis, Project } from "@/lib/supabase/types"
 
 // The subset of a tracker.projects row PR analysis reads.
