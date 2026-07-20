@@ -54,6 +54,47 @@ Deliberately thin. Fat kernels re-couple the modules you just separated.
 `@/lib/kernel` re-exports the **pure** surface only; import adapters explicitly
 from `@/lib/kernel/adapters`.
 
+## What lives in `lib/` vs `modules/`
+
+`lib/` is **not** a junk drawer. It holds only the shared technical foundation
+that any module may depend on — never a bounded context's domain logic. There is
+exactly one rule and it decides where any file goes:
+
+> **A file belongs in `modules/<context>/` if it encodes what the product *does*
+> (a capability: issues, pull-requests, github sync, analysis, notifications).
+> It belongs in `lib/` only if it is context-free plumbing that every capability
+> could reuse.**
+
+`lib/` therefore contains just these categories:
+
+| Folder | What it is | Example |
+| --- | --- | --- |
+| `lib/kernel/` | the pure runtime-agnostic core (above) | `Result`, `EventBus` |
+| `lib/platform/` | shared **infrastructure** adapters — the concrete runtime any module talks to | `platform/http/api.ts` (route envelope + `requireAccess`), `platform/http/api-client.ts`, `platform/email/jmap.ts` (JMAP transport), `platform/rate-limit.ts`, `supabase/` (DB client + generated types) |
+| `lib/rendering/` | shared **presentation** helpers consumed by more than one context and by the client | `badge.ts` (finding/score/verdict visual vocabulary) |
+| `lib/util/` | pure, product-agnostic helpers | `image-compress`, `realtime-channels`, `repo-url` |
+
+Everything else — anything that names an issue, a PR, a comment, an analysis, a
+notification — lives in `modules/`. When a pure domain policy needs a DB row's
+shape, it declares a **local value-object** for the fields it reads (e.g.
+`MergePull`/`MergeReview` in pull-requests, `ProjectInsightView` in projects)
+rather than importing `@/lib/supabase/types`, so it stays lint-clean under the
+DIP boundary and carries no SDK dependency.
+
+**Migration status (2026-07): `lib/` root is fully drained** — no loose files,
+only the category folders above. Six contexts are consolidated in `modules/`:
+`github`, `pull-requests`, `analysis`, `issues`, `projects`, `notifications`.
+**Still to carve** (each a safe, typecheck-guarded relocation, best done with a
+runtime pass since there is no test suite): `lib/public/` (reporter + session →
+`modules/public`; `public-profile` is browser-only and belongs with the client),
+`lib/teams/invites.ts` → `modules/teams`, `lib/integrations/relay.ts` →
+`modules/relay`. **Deliberately kept in `lib/`**: `lib/auth/` (team-access +
+access are cross-cutting authz used by every route — a supporting subdomain, not
+one context; its `*-context.tsx` React providers are frontend and could move to
+`components/`). `lib/icons/`, `lib/hooks/`, and the presentation half of
+`lib/timeline/` are frontend, not backend contexts, and are out of scope for the
+modules split.
+
 ## Composition root
 
 One small file per host wires modules with concrete adapters and injects them.
