@@ -8,6 +8,7 @@ import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
 import { severityLabel } from "@/lib/badge"
 import { findingState } from "@/modules/pull-requests"
+import { apiMutate } from "@/lib/api-client"
 import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
@@ -533,14 +534,11 @@ function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId
         setBusy(true)
         setErr(false)
         try {
-            const res = await fetch(`/api/projects/${projectId}/pr-insight/deep-dive`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ insight_id: insightId }),
-            })
-            if (!res.ok) throw new Error(String(res.status))
-            const j = (await res.json()) as { conversation_id?: string; pr_number?: number; pr_title?: string }
-            if (!j.conversation_id) throw new Error("no conversation")
+            const j = await apiMutate<{ conversation_id?: string; pr_number?: number; pr_title?: string }>(
+                `/api/projects/${projectId}/pr-insight/deep-dive`,
+                { method: "POST", body: { insight_id: insightId } },
+            )
+            if (!j?.conversation_id) throw new Error("no conversation")
             // Stash the PR reference so the Mind chat can open with a context bubble
             // + an auto-asked opener (read + cleared on arrival). Session-scoped.
             try {

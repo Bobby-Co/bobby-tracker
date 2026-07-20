@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import {
     mergeGate,
     MERGE_METHOD_LABEL,
@@ -89,20 +90,13 @@ function BlockedBar({
         setRunning(true)
         setErr(null)
         try {
-            const res = await fetch(`/api/projects/${projectId}/pulls/${pull.pr_number}/review`, {
-                method: "POST",
-                credentials: "same-origin",
-            })
-            const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-            if (!res.ok) {
-                setErr(body?.error?.message ?? "Couldn't start the review.")
-                return
-            }
+            await apiMutate(`/api/projects/${projectId}/pulls/${pull.pr_number}/review`, { method: "POST" })
             // Row is now 'analysing' (the route confirms it before returning) —
             // refetch so the bar flips to "Review in progress…".
             onReviewStarted()
-        } catch {
-            setErr("Network error — the review may not have started. Refresh to check.")
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message ?? "Couldn't start the review.")
+            else setErr("Network error — the review may not have started. Refresh to check.")
         } finally {
             setRunning(false)
         }
@@ -192,21 +186,14 @@ function MergeableBar({
         setMerging(true)
         setErr(null)
         try {
-            const res = await fetch(`/api/projects/${projectId}/pulls/${pull.pr_number}/merge`, {
+            await apiMutate(`/api/projects/${projectId}/pulls/${pull.pr_number}/merge`, {
                 method: "POST",
-                credentials: "same-origin",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ method }),
+                body: { method },
             })
-            const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-            if (!res.ok) {
-                setErr(body?.error?.message ?? "Merge failed.")
-                setArmed(false)
-                return
-            }
             onMerged()
-        } catch {
-            setErr("Network error — the merge may or may not have happened. Refresh to check.")
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message ?? "Merge failed.")
+            else setErr("Network error — the merge may or may not have happened. Refresh to check.")
             setArmed(false)
         } finally {
             setMerging(false)
