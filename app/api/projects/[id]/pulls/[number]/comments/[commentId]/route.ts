@@ -1,5 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/api"
-import { resolveCommentContext } from "@/lib/comment-actions"
+import { resolveCommentContext } from "@/modules/github"
 import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/modules/github"
 import { deletePRComment, upsertPRComment } from "@/modules/pull-requests"
 import { createServiceClient } from "@/lib/supabase/server"

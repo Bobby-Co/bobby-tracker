@@ -4,7 +4,7 @@
 // ready-to-send Response on any failed gate.
 
 import { jsonError } from "@/lib/api"
-import { getUserGithubToken } from "@/modules/github"
+import { getUserGithubToken } from "./github-user"
 import { repoFullName } from "@/lib/integrations/github"
 import type { createClient } from "@/lib/supabase/server"
 

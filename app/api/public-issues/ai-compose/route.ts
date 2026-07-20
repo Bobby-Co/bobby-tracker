@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { routingEmbeddingText } from "@/modules/issues"
 import { requireInviteAccess, resolvePublicSession } from "@/lib/public/public-session"
-import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
+import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // POST /api/public-issues/ai-compose
 //

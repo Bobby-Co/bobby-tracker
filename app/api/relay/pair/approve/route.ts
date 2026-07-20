@@ -1,7 +1,7 @@
 import { jsonError, requireUser } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { genToken, normalizeUserCode } from "@/lib/integrations/relay"
-import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
+import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // AUTH. The signed-in user approves a pending pairing by user_code (read
 // off the relay window). We mint the worker (with its opaque token), then

@@ -9,3 +9,7 @@ export { issueEmbeddingText, routingEmbeddingText } from "./domain/embedding-tex
 // ─── issues repository (Phase 1: inline .from("issues") → repository) ────────
 export type { IssuesRepository } from "./ports/issues-repository"
 export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues-repository"
+
+// ─── issue-comment mirror store (tracker's copy of GitHub issue comments) ────
+export type { IssueCommentUpsert } from "./infrastructure/issue-store"
+export { upsertIssueComment, deleteIssueComment } from "./infrastructure/issue-store"

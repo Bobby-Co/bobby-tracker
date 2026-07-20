@@ -6,7 +6,7 @@ import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, Issue
 import { Spinner } from "@/components/ui/spinner"
 import { reporterDisplay } from "@/lib/public/public-reporter"
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client"
-import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
+import { publicIssueSuggestionChannel } from "@/lib/util/realtime-channels"
 
 interface PublicIssue {
     id: string
