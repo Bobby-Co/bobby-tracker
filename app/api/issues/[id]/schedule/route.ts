@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import type { Issue } from "@/lib/supabase/types"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.
@@ -8,7 +8,7 @@ import type { Issue } from "@/lib/supabase/types"
 // ends_at >= starts_at and 0 <= lane_y <= 1.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

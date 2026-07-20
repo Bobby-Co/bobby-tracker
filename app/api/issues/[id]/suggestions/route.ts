@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import type { IssueSuggestion } from "@/lib/supabase/types"
 
 // GET /api/issues/[id]/suggestions
@@ -7,7 +7,7 @@ import type { IssueSuggestion } from "@/lib/supabase/types"
 // issue detail panel for instant display without re-running the analyser.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
     const { data, error: dbErr } = await supabase

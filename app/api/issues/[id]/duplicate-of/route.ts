@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import type { Issue, IssueStatus } from "@/lib/supabase/types"
 
 // POST /api/issues/[id]/duplicate-of
@@ -12,7 +12,7 @@ import type { Issue, IssueStatus } from "@/lib/supabase/types"
 // touch issues in projects they own.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

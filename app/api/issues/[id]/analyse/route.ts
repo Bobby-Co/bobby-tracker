@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import { ensureAnalysis } from "@/lib/github-sync"
 import type { IssueSuggestion } from "@/lib/supabase/types"
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 // INSERT the box is subscribed to.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
     // Ownership (RLS): the cookie client only sees the caller's issues.

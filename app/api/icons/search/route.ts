@@ -1,3 +1,4 @@
+import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
 import { AnalyserError, embedText } from "@/lib/analyser"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -50,7 +51,9 @@ export async function POST(request: Request) {
         console.error("icon_search_cache read failed:", cacheReadErr.message)
     }
     if (cached?.hits) {
-        void bumpLru(svc, q)
+        // Post-response LRU bump. after() (not bare `void`) so the write isn't
+        // cancelled when the Workers isolate is torn down after the response.
+        after(() => bumpLru(svc, q))
         return Response.json({
             icons: cached.hits.slice(0, limit),
             cached: true,
@@ -78,15 +81,17 @@ export async function POST(request: Request) {
 
     const hits = (ranked ?? []) as SemanticHit[]
 
-    void svc
-        .from("icon_search_cache")
-        .upsert(
-            { query: q, hits, model, version },
-            { onConflict: "query" },
-        )
-        .then(({ error }) => {
-            if (error) console.error("icon_search_cache write failed:", error.message)
-        })
+    // Post-response cache write via after() — a bare `void` promise is
+    // cancelled when the Workers isolate is torn down after the response.
+    after(async () => {
+        const { error } = await svc
+            .from("icon_search_cache")
+            .upsert(
+                { query: q, hits, model, version },
+                { onConflict: "query" },
+            )
+        if (error) console.error("icon_search_cache write failed:", error.message)
+    })
 
     return Response.json({
         icons: hits.slice(0, limit),

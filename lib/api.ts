@@ -120,3 +120,32 @@ export async function requireProjectAccess(projectId: string): Promise<ProjectOK
     }
     return { supabase, user, teamId: access.teamId, role: access.role, error: null }
 }
+
+type IssueOK = { supabase: SupabaseServer; user: User; projectId: string; teamId: string; role: TeamRole; error: null }
+type IssueFail = { supabase: SupabaseServer; user: null; projectId: null; teamId: null; role: null; error: Response }
+
+/** requireUser + resolve the issue's owning project + enforce the SAME
+ *  group-level access rule as requireProjectAccess. The top-level
+ *  /api/issues/[id]/** routes operate on an issue by id; without this they fell
+ *  back to the coarse team RLS backstop, letting a member OUTSIDE the project's
+ *  group read/mutate/delete it — the gap the parallel /api/projects/[id]/issues
+ *  routes already close. 404 on no access (don't reveal existence), matching
+ *  requireProjectAccess. Use in every /api/issues/[id]/** route:
+ *  `requireIssueAccess(id)`. */
+export async function requireIssueAccess(issueId: string): Promise<IssueOK | IssueFail> {
+    const base = await requireUser()
+    if (base.error) return { supabase: base.supabase, user: null, projectId: null, teamId: null, role: null, error: base.error }
+    const { supabase, user } = base
+
+    // Coarse RLS lets a team member read the issue row; we still resolve its
+    // project to apply the finer group gate. maybeSingle → null when the issue
+    // is invisible/absent, which we render as 404 (same as no-access).
+    const { data: issue } = await supabase.from("issues").select("project_id").eq("id", issueId).maybeSingle()
+    const projectId = (issue as { project_id: string } | null)?.project_id
+    const notFound: IssueFail = { supabase, user: null, projectId: null, teamId: null, role: null, error: jsonError("not_found", "issue not found", 404) }
+    if (!projectId) return notFound
+
+    const access = await assertProjectAccess(supabase, user.id, projectId)
+    if (!access.ok || !access.teamId || !access.role) return notFound
+    return { supabase, user, projectId, teamId: access.teamId, role: access.role, error: null }
+}

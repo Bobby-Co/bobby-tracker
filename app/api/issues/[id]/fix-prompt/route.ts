@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
 
@@ -14,7 +14,7 @@ import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
 // rediscovers that from the repo faster than it can read it.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
     const { data: issue, error: iErr } = await supabase

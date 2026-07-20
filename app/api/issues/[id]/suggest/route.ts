@@ -1,5 +1,5 @@
 import { analyseIssue, AnalyserError, isAnalyseEffort } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type {
     Issue,
@@ -23,7 +23,7 @@ import type {
 // so the drawer can copy it synchronously on click.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireIssueAccess(id)
     if (error) return error
 
     // Per-issue effort, resolved in priority order:

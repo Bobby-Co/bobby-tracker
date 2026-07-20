@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/api"
 import type { Issue } from "@/lib/supabase/types"
 
 // GET /api/issues/[id]/similar
@@ -45,7 +45,7 @@ interface SimilarRow {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
     const [{ data: similar, error: rpcErr }, { data: emb }, { data: issue }] = await Promise.all([
