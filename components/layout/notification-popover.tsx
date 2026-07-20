@@ -6,6 +6,7 @@ import { motion, useAnimationControls, useMotionValue, useReducedMotion, useSpri
 import { MiniIcon, type Tone } from "@/components/ui/field-card"
 import { timeAgo } from "@/components/issues/issue-meta"
 import { createClient } from "@/lib/supabase/client"
+import { apiMutate } from "@/lib/api-client"
 import type { Notification, NotificationKind } from "@/lib/supabase/types"
 
 // Notification popover for the topbar. The bell "chip" MORPHS into the panel
@@ -140,7 +141,7 @@ export function NotificationPopover() {
     const dismiss = useCallback(async (id: string) => {
         setItems((prev) => prev.filter((n) => n.id !== id))
         try {
-            await fetch(`/api/notifications/${id}`, { method: "DELETE", credentials: "same-origin" })
+            await apiMutate(`/api/notifications/${id}`, { method: "DELETE" })
         } catch {}
     }, [])
 
@@ -149,7 +150,7 @@ export function NotificationPopover() {
         const now = new Date().toISOString()
         setItems((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })))
         try {
-            await fetch("/api/notifications", { method: "PATCH", credentials: "same-origin" })
+            await apiMutate("/api/notifications", { method: "PATCH" })
         } catch {}
     }, [unread])
 
@@ -159,7 +160,7 @@ export function NotificationPopover() {
             const now = new Date().toISOString()
             setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: now } : x)))
             try {
-                await fetch(`/api/notifications/${n.id}`, { method: "PATCH", credentials: "same-origin" })
+                await apiMutate(`/api/notifications/${n.id}`, { method: "PATCH" })
             } catch {}
         }
         if (n.href) router.push(n.href)
