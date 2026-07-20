@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { countUnembeddedIssues, ensureIssueEmbeddings } from "@/lib/issues/issue-embedding"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 
@@ -36,7 +36,7 @@ export interface ProjectActivity {
 // returns first — schedules no sweep on their behalf.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     // Confirm the caller actually owns this project BEFORE scheduling any work

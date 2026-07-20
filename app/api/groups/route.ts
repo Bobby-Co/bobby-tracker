@@ -1,15 +1,18 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireTeam } from "@/lib/api"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
-// GET   — list all groups owned by the current user (newest first)
-// POST  — create a new group, optionally with an initial project list
+// "Collections" (project_groups): a group of PROJECTS for AI routing. Now scoped
+// to the active team (migration 0052) — distinct from a team's people Groups.
+// GET   — list the active team's collections (newest first)
+// POST  — create a collection, optionally with an initial project list
 
-export async function GET() {
-    const { supabase, error } = await requireUser()
+export async function GET(request: Request) {
+    const { supabase, teamId, error } = await requireTeam(request)
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("project_groups")
         .select("*")
+        .eq("team_id", teamId)
         .order("updated_at", { ascending: false })
         .returns<ProjectGroup[]>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
@@ -45,7 +48,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, teamId, error } = await requireTeam(request)
     if (error) return error
 
     let body: Record<string, unknown> = {}
@@ -61,7 +64,7 @@ export async function POST(request: Request) {
 
     const { data: group, error: insErr } = await supabase
         .from("project_groups")
-        .insert({ user_id: user.id, name, description })
+        .insert({ team_id: teamId, user_id: user.id, name, description })
         .select("*")
         .single<ProjectGroup>()
     if (insErr) return jsonError("db_error", insErr.message, 500)

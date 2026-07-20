@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { importExistingIssues } from "@/lib/github-sync"
 import { GITHUB_SYNC_DIRECTIONS } from "@/lib/supabase/types"
 import type { Project } from "@/lib/supabase/types"
@@ -11,7 +11,7 @@ import type { Project } from "@/lib/supabase/types"
 // project_analyser.enabled — sync and indexing are orthogonal.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     const body = (await request.json().catch(() => null)) as {

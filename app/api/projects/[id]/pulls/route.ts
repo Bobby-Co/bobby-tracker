@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { backfillPullRequests } from "@/lib/pr-backfill"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
@@ -12,7 +12,7 @@ import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 // can show a "syncing…" state; the next load is populated.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     const [pullsR, analysesR] = await Promise.all([

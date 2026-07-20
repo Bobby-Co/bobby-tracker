@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireTeam } from "@/lib/api"
 import type { PublicSession } from "@/lib/supabase/types"
 
 // GET    — list sessions owned by the current user (newest first)
@@ -18,12 +18,13 @@ function parseWindow(v: unknown): string | null | undefined {
     return new Date(t).toISOString()
 }
 
-export async function GET() {
-    const { supabase, error } = await requireUser()
+export async function GET(request: Request) {
+    const { supabase, teamId, error } = await requireTeam(request)
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("public_sessions")
         .select("*")
+        .eq("team_id", teamId)
         .order("updated_at", { ascending: false })
         .returns<PublicSession[]>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
@@ -31,7 +32,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, teamId, error } = await requireTeam(request)
     if (error) return error
 
     let body: Record<string, unknown> = {}
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
     const { data: session, error: insErr } = await supabase
         .from("public_sessions")
         .insert({
+            team_id: teamId,
             user_id: user.id,
             token: newToken(),
             enabled: true,

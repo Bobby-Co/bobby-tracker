@@ -178,7 +178,11 @@ export async function applyPRResult(
     }
 
     // Persist the structured review alongside the status so the Pull-requests
-    // tab can render it natively (not just via the GitHub comment).
+    // tab can render it natively (not just via the GitHub comment). This UPDATE
+    // is also what fires the 'pr_analysis_ready' feed notification (trigger in
+    // migration 0049), which in turn fans out the review email via the
+    // notifications → pg_net dispatch (migration 0051). No email code here — one
+    // path for every notification kind.
     await svc.from("pull_request_analyses").update({ status, result: result ?? null }).eq("id", taskId)
 }
 

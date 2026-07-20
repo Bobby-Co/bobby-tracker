@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { resolveCommentContext } from "@/lib/comment-actions"
 import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/lib/github-user"
 import { deletePRComment, upsertPRComment } from "@/lib/pr-store"
@@ -38,7 +38,7 @@ export async function PATCH(
     const ghId = Number(commentId)
     if (!Number.isInteger(ghId)) return jsonError("bad_request", "invalid comment id", 400)
 
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireProjectAccess(id)
     if (error) return error
 
     let body: string
@@ -84,7 +84,7 @@ export async function DELETE(
     const ghId = Number(commentId)
     if (!Number.isInteger(ghId)) return jsonError("bad_request", "invalid comment id", 400)
 
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireProjectAccess(id)
     if (error) return error
 
     const owned = await loadOwned(supabase, id, ghId, user.id)

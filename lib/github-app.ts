@@ -612,3 +612,136 @@ export async function listPullRequestReviews(
     }
     return out
 }
+
+// ─── merge ──────────────────────────────────────────────────────────────────
+
+// The three merge strategies a repo can enable. Which are allowed comes from the
+// repo settings (getRepoMergeMethods); GitHub 405s a merge that uses a disabled
+// one, so the tracker offers only the enabled set.
+export interface RepoMergeMethods {
+    allow_merge_commit: boolean
+    allow_squash_merge: boolean
+    allow_rebase_merge: boolean
+}
+
+// getRepoMergeMethods reads which merge strategies the repo permits. GitHub
+// defaults an omitted flag to true (a brand-new repo allows all three), so we
+// mirror that rather than defaulting to false and hiding every option.
+export async function getRepoMergeMethods(
+    installationId: number,
+    owner: string,
+    repo: string,
+): Promise<RepoMergeMethods> {
+    const res = await githubAppFetch(installationId, `/repos/${owner}/${repo}`)
+    if (!res.ok) return readError(res, "get repo")
+    const b = (await res.json()) as Partial<RepoMergeMethods>
+    return {
+        allow_merge_commit: b.allow_merge_commit ?? true,
+        allow_squash_merge: b.allow_squash_merge ?? true,
+        allow_rebase_merge: b.allow_rebase_merge ?? true,
+    }
+}
+
+// GitHub's live mergeability for one PR. `mergeable` is null while GitHub is
+// still computing the merge (a background job it kicks on demand) — the caller
+// should treat null as "unknown", not "unmergeable". `mergeable_state` is the
+// richer signal ("clean" | "dirty" (conflicts) | "blocked" (branch protection)
+// | "behind" | "unstable" | "unknown" | …), surfaced so the UI can warn before
+// the user commits to a merge that GitHub will reject.
+export interface PullMergeability {
+    mergeable: boolean | null
+    mergeable_state: string | null
+    head_sha: string | null
+    draft: boolean
+    state: string
+    merged: boolean
+}
+
+export async function getPullMergeability(
+    installationId: number,
+    owner: string,
+    repo: string,
+    number: number,
+): Promise<PullMergeability> {
+    const res = await githubAppFetch(installationId, `/repos/${owner}/${repo}/pulls/${number}`)
+    if (!res.ok) return readError(res, "get PR")
+    const b = (await res.json()) as {
+        mergeable?: boolean | null
+        mergeable_state?: string | null
+        head?: { sha?: string }
+        draft?: boolean
+        state?: string
+        merged?: boolean
+    }
+    return {
+        mergeable: b.mergeable ?? null,
+        mergeable_state: b.mergeable_state ?? null,
+        head_sha: b.head?.sha ?? null,
+        draft: b.draft ?? false,
+        state: b.state ?? "open",
+        merged: b.merged ?? false,
+    }
+}
+
+// A merge that GitHub refused, carrying its HTTP status so the caller can map
+// the well-known ones to specific messages instead of a generic 502:
+//   405 — not mergeable (conflicts, failing required checks, branch protection)
+//   409 — head SHA moved since the caller last saw it (`sha` guard, or a race)
+//   403 — the installation lacks `contents: write` to push the merge
+export class GithubMergeError extends Error {
+    constructor(
+        readonly status: number,
+        message: string,
+    ) {
+        super(message)
+        this.name = "GithubMergeError"
+    }
+}
+
+export interface MergeResult {
+    merged: boolean
+    sha: string | null
+    message: string
+}
+
+// mergePullRequest performs the merge. `sha`, when passed, makes GitHub reject
+// the merge (409) if the PR head has moved since — the caller sends the head it
+// showed the user, so a merge can't land on a commit they never saw.
+export async function mergePullRequest(
+    installationId: number,
+    owner: string,
+    repo: string,
+    number: number,
+    opts: {
+        merge_method: "merge" | "squash" | "rebase"
+        sha?: string
+        commit_title?: string
+        commit_message?: string
+    },
+): Promise<MergeResult> {
+    const res = await githubAppFetch(installationId, `/repos/${owner}/${repo}/pulls/${number}/merge`, {
+        method: "PUT",
+        body: JSON.stringify({
+            merge_method: opts.merge_method,
+            ...(opts.sha ? { sha: opts.sha } : {}),
+            ...(opts.commit_title ? { commit_title: opts.commit_title } : {}),
+            ...(opts.commit_message ? { commit_message: opts.commit_message } : {}),
+        }),
+    })
+
+    if (res.ok) {
+        const b = (await res.json()) as { merged?: boolean; sha?: string; message?: string }
+        return { merged: b.merged ?? true, sha: b.sha ?? null, message: b.message ?? "" }
+    }
+
+    // Pull GitHub's own message ("Pull Request is not mergeable", "Base branch
+    // was modified…") so the caller can pass real detail to the user.
+    const detail = await res.text().catch(() => "")
+    let ghMessage = ""
+    try {
+        ghMessage = (JSON.parse(detail) as { message?: string }).message ?? ""
+    } catch {
+        ghMessage = detail.slice(0, 200)
+    }
+    throw new GithubMergeError(res.status, ghMessage || `merge failed (HTTP ${res.status})`)
+}

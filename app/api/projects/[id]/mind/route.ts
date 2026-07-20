@@ -1,5 +1,5 @@
 import { chatStream, AnalyserError, type ChatHistoryMsg } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/mind
@@ -16,7 +16,7 @@ import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 // route so the UI can prompt the user identically).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}

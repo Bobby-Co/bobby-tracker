@@ -1,5 +1,5 @@
 import { deepDivePRInsight, AnalyserError } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/pr-insight/deep-dive
@@ -12,7 +12,7 @@ import type { Project } from "@/lib/supabase/types"
 // Body: { insight_id: string }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}

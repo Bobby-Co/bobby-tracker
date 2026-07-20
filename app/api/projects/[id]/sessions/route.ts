@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/api"
+import { requireProjectAccess } from "@/lib/api"
 import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/sessions — backs the Integrations tab: the
@@ -9,7 +9,7 @@ import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/typ
 // of erroring outright.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     const [{ data: integration, error: intErr }, { data: links, error: linkErr }] = await Promise.all([

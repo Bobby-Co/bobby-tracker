@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { resolveCommentContext } from "@/lib/comment-actions"
 import { createUserIssueComment, GithubReauthError } from "@/lib/github-user"
 import { upsertIssueComment } from "@/lib/issue-store"
@@ -12,7 +12,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; issueId: string }> }) {
     const { id, issueId } = await params
 
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireProjectAccess(id)
     if (error) return error
 
     let body: string

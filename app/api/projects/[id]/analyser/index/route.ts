@@ -1,5 +1,5 @@
 import { kickoffJob, AnalyserError } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/analyser/index
@@ -29,7 +29,7 @@ import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 //   4. Return 202
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}

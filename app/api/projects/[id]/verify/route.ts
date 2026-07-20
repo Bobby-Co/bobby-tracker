@@ -1,5 +1,5 @@
 import { verifyGraph, AnalyserError } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/verify
@@ -13,7 +13,7 @@ import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 // isn't ready.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}

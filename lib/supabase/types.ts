@@ -12,6 +12,14 @@ export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "fa
 
 export interface Project {
     id: string
+    /** The team that OWNS this project (migration 0052). Access is scoped to
+     *  members of this team; the finer "which member sees it" gate lives in
+     *  lib/auth/team-access.ts, not in RLS. */
+    team_id: string
+    /** The creator. Since 0052 this is provenance only ("created_by") — ownership
+     *  is team_id. Left named user_id (and typed non-null) to avoid churning ~30
+     *  call sites; the DB FK is ON DELETE SET NULL, so it can be null only after
+     *  the creator's account is deleted — an edge the app doesn't branch on. */
     user_id: string
     name: string
     repo_url: string
@@ -39,6 +47,10 @@ export interface Project {
      *  an incremental graph update (ADR-0058). Independent of github_sync_enabled;
      *  the webhook no-ops unless the App is installed and a graph exists. */
     auto_index_on_push: boolean
+    /** User-chosen icon: a canonical Iconly slug (same value space as
+     *  ProjectLabelIcon.icon_name), set from the settings page. Null → the app
+     *  falls back to a stable hash-derived glyph on the tile and header. */
+    icon_name: string | null
     created_at: string
     updated_at: string
 }
@@ -587,6 +599,9 @@ export type PublicSessionSubmissionsVisibility = "all" | "own"
  *  Replaces the old per-project ProjectPublicSession (migration 0009). */
 export interface PublicSession {
     id: string
+    /** Owning team (migration 0052). */
+    team_id: string
+    /** Creator ("created_by"); ownership is team_id. See Project.user_id. */
     user_id: string
     token: string
     enabled: boolean
@@ -636,6 +651,9 @@ export interface PublicSessionWithProjects extends PublicSession {
  *  routing — see find_similar_projects RPC + migration 0019. */
 export interface ProjectGroup {
     id: string
+    /** Owning team (migration 0052). */
+    team_id: string
+    /** Creator ("created_by"); ownership is team_id. See Project.user_id. */
     user_id: string
     name: string
     description: string | null
@@ -677,4 +695,110 @@ export interface Notification {
     /** Null = unread. */
     read_at: string | null
     created_at: string
+}
+
+// ─── Collaboration: teams, members, people-groups (migration 0052) ──────────
+
+/** A member's standing in a team. Drives the app-layer authz decisions in
+ *  lib/auth/team-access.ts (owner/admin see all team projects; member sees only
+ *  projects granted to a group they're in). RLS itself is coarse (team membership
+ *  only) — roles are NOT a DB gate except on the escalation-sensitive tables. */
+export type TeamRole = "owner" | "admin" | "member"
+export const TEAM_ROLES: TeamRole[] = ["owner", "admin", "member"]
+
+/** A team owns resources (projects, public sessions, project_groups). Every user
+ *  has exactly one personal team (is_personal) created lazily on first authed
+ *  request via the ensure_personal_team RPC. */
+export interface Team {
+    id: string
+    name: string
+    is_personal: boolean
+    /** Creator; null after the creator's account is deleted (FK SET NULL). */
+    created_by: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** A team plus the caller's own role in it — the shape of GET /api/teams. */
+export interface TeamWithRole extends Team {
+    role: TeamRole
+}
+
+/** Row in tracker.team_members. */
+export interface TeamMember {
+    team_id: string
+    user_id: string
+    role: TeamRole
+    created_at: string
+    updated_at: string
+}
+
+/** A member row enriched with the resolved auth profile (email/name/avatar),
+ *  looked up server-side via the service-role client since auth.users is outside
+ *  the tracker schema. Backs the Members management tab. */
+export interface TeamMemberView {
+    user_id: string
+    role: TeamRole
+    email: string | null
+    name: string | null
+    avatar_url: string | null
+    created_at: string
+}
+
+/** A people-group inside a team (tracker.access_groups). NOT the same as
+ *  ProjectGroup ("Collections", a group of projects for AI routing). Admins
+ *  assign which projects each group's members may access. */
+export interface AccessGroup {
+    id: string
+    team_id: string
+    name: string
+    description: string | null
+    created_by: string | null
+    created_at: string
+    updated_at: string
+}
+
+/** Minimal profile for a group member (their team role isn't shown here). */
+export interface GroupMemberProfile {
+    user_id: string
+    email: string | null
+    name: string | null
+    avatar_url: string | null
+}
+
+/** An access group with its resolved members + granted project ids — backs the
+ *  Groups management tab. */
+export interface AccessGroupWithDetail extends AccessGroup {
+    members: GroupMemberProfile[]
+    project_ids: string[]
+}
+
+/** Person↔group membership (tracker.access_group_members). */
+export interface AccessGroupMember {
+    group_id: string
+    team_id: string
+    user_id: string
+    created_at: string
+}
+
+/** Group↔project access grant (tracker.access_group_projects). */
+export interface AccessGroupProject {
+    group_id: string
+    team_id: string
+    project_id: string
+    created_at: string
+}
+
+/** A pending email invitation to a team (tracker.team_invites). The token is the
+ *  accept-link secret; only surfaced to admins and to the invitee's accept flow. */
+export interface TeamInvite {
+    id: string
+    team_id: string
+    email: string
+    role: TeamRole
+    token: string
+    invited_by: string | null
+    created_at: string
+    accepted_at: string | null
+    expires_at: string | null
 }

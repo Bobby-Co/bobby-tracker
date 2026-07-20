@@ -5,10 +5,13 @@ import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { useAuth } from "@/lib/auth/auth-context"
+import { useTeam } from "@/lib/auth/team-context"
+import { useApi } from "@/lib/hooks/use-api"
+import { TeamSelector } from "@/components/layout/team-selector"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
 import PixelGradient, { DARK_EMBER_STOPS } from "@/components/ui/pixel-gradient"
 import PixelScatter from "@/components/ui/pixel-scatter"
-import type { Project } from "@/lib/supabase/types"
+import type { AccessGroup, Project } from "@/lib/supabase/types"
 import { motion } from "framer-motion"
 
 interface SidebarProps {
@@ -35,9 +38,19 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
     const pathname = usePathname()
     const router = useRouter()
     const { user, signOut } = useAuth()
+    const { activeTeam } = useTeam()
+    // The active team's people-groups (access control), shown as a live section.
+    const { data: groupsData } = useApi<{ groups: AccessGroup[] }>(
+        activeTeam ? `/api/teams/${activeTeam.id}/groups` : null,
+        { enabled: !!activeTeam },
+    )
+    const groups = groupsData?.groups ?? []
+    // "Featured" = the most recently active projects, capped so the rail stays
+    // compact. The /api/projects list arrives ordered updated_at desc, so the
+    // head is the most-recently-touched; the full list lives on the Projects page.
+    const featured = projects.slice(0, 5)
     const [projectsOpen, setProjectsOpen] = useState(true)
-    const [teamsOpen, setTeamsOpen] = useState(true)
-    const [engOpen, setEngOpen] = useState(true)
+    const [groupsOpen, setGroupsOpen] = useState(true)
     const [signingOut, setSigningOut] = useState(false)
 
     const isInbox = pathname === "/projects"
@@ -107,23 +120,33 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                 </button>
             </div>
 
+            {/* Team switcher — the active workspace. Sits above the scroll body so
+                its dropdown isn't clipped by the nav's overflow. */}
+            <div className="relative z-30 px-2.5 pt-1.5 pb-1">
+                <div className="mb-1 px-0.5 text-[11.5px] font-semibold tracking-wide text-[color:var(--c-text-muted)]">
+                    Team
+                </div>
+                <TeamSelector />
+            </div>
+
             {/* Scrollable nav body */}
-            <div className="flex-1 overflow-y-auto px-2.5 pb-3 pt-4">
+            <div className="flex-1 overflow-y-auto px-2.5 pb-3 pt-3">
                 <div className="flex flex-col gap-[4px]">
                     <NavItem href="/projects" active={isInbox} onNavigate={onNavigate} icon={<RepoIcon />} label="Projects" />
-                    <NavItem href="/groups" active={isGroups} onNavigate={onNavigate} icon={<GroupsIcon />} label="Groups" />
+                    <NavItem href="/groups" active={isGroups} onNavigate={onNavigate} icon={<GroupsIcon />} label="Collections" />
                     <NavItem href="/sessions" active={isSessions} onNavigate={onNavigate} icon={<SessionsIcon />} label="Public sessions" />
                     <NavItem href="/workers" active={isWorkers} onNavigate={onNavigate} icon={<WorkersIcon />} label="Local models" />
                 </div>
 
-                {/* Projects — real, collapsible, colourful circle items */}
-                <SectionHeader label="Projects" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} />
+                {/* Featured — the most recently active projects (up to 5). The
+                    full list lives on the Projects page. */}
+                <SectionHeader label="Featured" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} />
                 {projectsOpen && (
                     <motion.div layout="position" className="mt-0.5 flex flex-col gap-[4px] pl-3">
-                        {projects.length === 0 ? (
+                        {featured.length === 0 ? (
                             <p className="px-2 py-1.5 text-[12px] text-[color:var(--c-text-dim)]">No projects yet.</p>
                         ) : (
-                            projects.map((p, i) => {
+                            featured.map((p, i) => {
                                 const active = p.id === activeProj
                                 return (
                                     <Link
@@ -148,28 +171,36 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                     </motion.div>
                 )}
 
-                {/* Teams — stubbed nested tree mirroring the reference. */}
-                <SectionHeader label="Teams" open={teamsOpen} onToggle={() => setTeamsOpen((o) => !o)} />
-                {teamsOpen && (
-                    <motion.div layout="position" className="mt-0.5 flex flex-col gap-[2px]">
-                        <button
-                            type="button"
-                            onClick={() => setEngOpen((o) => !o)}
-                            aria-expanded={engOpen}
-                            className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-[3px] text-[13px] font-medium text-zinc-700 transition-colors hover:bg-[color:var(--c-overlay)]"
-                        >
-                            <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[6px] bg-emerald-50 text-emerald-600">
-                                <CodeBadgeIcon />
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-left">Engineering</span>
-                            <Caret open={engOpen} />
-                        </button>
-                        {engOpen && (
-                            <div className="mt-0.5 flex flex-col pl-3 gap-[4px]">
-                                <TeamLeaf icon={<WorkstreamsIcon />} label="Workstreams" active />
-                                <TeamLeaf icon={<ReviewsIcon />} label="Code Reviews" />
-                                <TeamLeaf icon={<ModulesIcon />} label="Modules" />
-                            </div>
+                {/* Groups — the active team's people-groups (repo access control).
+                    Each links to the team's management page. */}
+                <SectionHeader label="Groups" open={groupsOpen} onToggle={() => setGroupsOpen((o) => !o)} />
+                {groupsOpen && (
+                    <motion.div layout="position" className="mt-0.5 flex flex-col gap-[2px] pl-3">
+                        {groups.length === 0 ? (
+                            <Link
+                                href="/team?tab=groups"
+                                onClick={onNavigate}
+                                className="px-2.5 py-1.5 text-[12px] text-[color:var(--c-text-dim)] transition-colors hover:text-[color:var(--c-text)]"
+                            >
+                                No groups yet — manage team →
+                            </Link>
+                        ) : (
+                            groups.map((g) => (
+                                <Link
+                                    key={g.id}
+                                    href="/team?tab=groups"
+                                    onClick={onNavigate}
+                                    className={cn(
+                                        "flex items-center gap-2.5 w-max rounded-sq-l pl-2.5 pr-3 py-[3px] text-[13px]",
+                                        ROW_IDLE,
+                                    )}
+                                >
+                                    <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[6px] bg-emerald-50 text-emerald-600">
+                                        <GroupLeafIcon />
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-left">{g.name}</span>
+                                </Link>
+                            ))
                         )}
                     </motion.div>
                 )}
@@ -251,30 +282,11 @@ function SectionHeader({ label, open, onToggle }: { label: string; open: boolean
             type="button"
             onClick={onToggle}
             aria-expanded={open}
-            className="mt-[14px] mb-px flex w-full items-center gap-1.5 px-2.5 py-1 text-[11.5px] font-semibold tracking-[0.01em] text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
+            className="mt-[14px] mb-px flex w-full items-center gap-1.5 px-1 py-1 text-[11.5px] font-semibold tracking-[0.01em] text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
         >
             <span>{label}</span>
             <Caret open={open} />
         </motion.button>
-    )
-}
-
-// A nested team leaf (stub). Rendered as a button so it reads as a row
-// without pretending to be a working link.
-function TeamLeaf({ icon, label, active }: { icon: React.ReactNode; label: string; active?: boolean }) {
-    return (
-        <button
-            type="button"
-            className={cn(
-                "flex items-center gap-2.5 w-max rounded-sq-l pl-2.5 pr-3 py-[3px] text-[13px]",
-                active ? ROW_ACTIVE : ROW_IDLE,
-            )}
-        >
-            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-amber-500" : "text-zinc-400")}>
-                {icon}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-        </button>
     )
 }
 
@@ -350,38 +362,11 @@ function WorkersIcon() {
         </svg>
     )
 }
-function CodeBadgeIcon() {
+function GroupLeafIcon() {
     return (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M9 8l-4 4 4 4M15 8l4 4-4 4" />
-        </svg>
-    )
-}
-function WorkstreamsIcon() {
-    return (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <circle cx="6" cy="6" r="2.5" />
-            <circle cx="6" cy="18" r="2.5" />
-            <circle cx="18" cy="12" r="2.5" />
-            <path d="M8.5 6H13a3 3 0 0 1 3 3v0M8.5 18H13a3 3 0 0 0 3-3v0" />
-        </svg>
-    )
-}
-function ReviewsIcon() {
-    return (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <circle cx="11" cy="11" r="7" />
-            <path d="M21 21l-4.3-4.3M8.5 11l2 2 3.5-3.5" />
-        </svg>
-    )
-}
-function ModulesIcon() {
-    return (
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <rect x="4" y="4" width="7" height="7" rx="1.5" />
-            <rect x="13" y="4" width="7" height="7" rx="1.5" />
-            <rect x="4" y="13" width="7" height="7" rx="1.5" />
-            <rect x="13" y="13" width="7" height="7" rx="1.5" />
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="9" cy="8" r="3" />
+            <path d="M15.5 8a3 3 0 1 0 0 .01M4 20a5 5 0 0 1 10 0M14 20a5 5 0 0 1 6-4.5" />
         </svg>
     )
 }

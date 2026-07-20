@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth/auth-context"
 import { isAllowed } from "@/lib/auth/access"
+import { TeamProvider } from "@/lib/auth/team-context"
 import { useApi } from "@/lib/hooks/use-api"
 import { AppShell, ShellSkeleton } from "@/components/layout/app-shell"
 import type { Project } from "@/lib/supabase/types"
@@ -50,5 +51,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         return <ShellSkeleton />
     }
 
-    return <AppShell projects={projects}>{children}</AppShell>
+    return (
+        <TeamProvider>
+            <AppShell projects={projects}>{children}</AppShell>
+        </TeamProvider>
+    )
 }

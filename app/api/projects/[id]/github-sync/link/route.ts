@@ -1,4 +1,4 @@
-import { requireUser, jsonError } from "@/lib/api"
+import { requireProjectAccess, jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { githubAppFetch, githubJwtFetch } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
@@ -15,7 +15,7 @@ import type { Project } from "@/lib/supabase/types"
 // installation is derived from the project's own repo, not a user-supplied id.
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireProjectAccess(id)
     if (error) return error
 
     try {

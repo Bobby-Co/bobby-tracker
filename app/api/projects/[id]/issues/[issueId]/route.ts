@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { backfillIssueComments } from "@/lib/pr-backfill"
 import type {
     Issue,
@@ -32,7 +32,7 @@ export async function GET(
     { params }: { params: Promise<{ id: string; issueId: string }> },
 ) {
     const { id, issueId } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     const [issueR, projectR, analyserR, suggestionR, peekR, iconsR, colorsR] =

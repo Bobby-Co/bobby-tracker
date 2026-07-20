@@ -7,6 +7,7 @@ import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 import { ProjectTabs } from "@/components/projects/project-tabs"
 import { ProjectActivityChips } from "@/components/projects/project-activity-chips"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
+import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { cn } from "@/components/ui/cn"
 import { isImmersiveMind, isProjectWizard } from "@/components/layout/immersive"
 
@@ -87,7 +88,7 @@ function useSetupGate(id: string, exempt: boolean) {
 
 function ProjectHeader({ id }: { id: string }) {
     const { data, loading } = useApi<{
-        project: Pick<Project, "id" | "name" | "repo_url" | "repo_full_name"> | null
+        project: Pick<Project, "id" | "name" | "repo_url" | "repo_full_name" | "icon_name"> | null
     }>(`/api/projects/${id}`)
 
     if (loading) return <HeaderSkeleton />
@@ -102,7 +103,7 @@ function ProjectHeader({ id }: { id: string }) {
     return (
         <div className="mt-1.5 flex items-center gap-3">
             <MiniIcon tone={toneFromString(project.name)} size={40}>
-                <BoxIcon size={19} />
+                {project.icon_name ? <IconlyIcon name={project.icon_name} size={20} /> : <BoxIcon size={19} />}
             </MiniIcon>
             <div className="min-w-0">
                 <h1 className="truncate text-[20px] font-bold tracking-[-0.012em] sm:text-[22px]">

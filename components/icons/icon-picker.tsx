@@ -5,7 +5,8 @@ import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { useHoverTooltip } from "@/components/icons/icon-tooltip"
 import { Modal } from "@/components/ui/modal"
-import { ICONLY_CATALOG, type IconlyCatalogEntry } from "@/lib/icons/iconly-catalog"
+import { type IconlyCatalogEntry } from "@/lib/icons/iconly-catalog"
+import { CATALOG_BY_NAME, filterIconsLocal } from "@/lib/icons/suggest"
 
 // IconPicker — searchable gallery for assigning an icon to a label.
 //
@@ -25,17 +26,23 @@ import { ICONLY_CATALOG, type IconlyCatalogEntry } from "@/lib/icons/iconly-cata
 const SEARCH_DEBOUNCE_MS = 250
 const SEMANTIC_MIN_CHARS = 3
 const SKELETON_COUNT = 8
+const SUGGESTION_COUNT = 12
 
 export function IconPicker({
     open,
     label,
     current,
+    suggestFor,
     onClose,
     onPick,
 }: {
     open: boolean
     label: string
     current: string | null
+    /** Optional seed text (e.g. a project's description or name). When set and
+     *  the search box is empty, the picker leads with a "Suggested for …" row
+     *  ranked by this text — the same local + semantic engine the labels use. */
+    suggestFor?: string
     onClose: () => void
     onPick: (iconName: string) => void
 }) {
@@ -43,12 +50,24 @@ export function IconPicker({
     const { direct, extra, loading } = useFilteredCatalog(q)
     const empty = direct.length === 0 && extra.length === 0 && !loading
 
+    // Suggestions are keyed off `suggestFor`, independent of the search box, so
+    // they stay warm (session + DB cache) and only show when the user hasn't
+    // started searching.
+    const seed = (suggestFor ?? "").trim()
+    const { direct: sugDirect, extra: sugExtra, loading: sugLoading } = useFilteredCatalog(seed)
+    const suggestions = useMemo(
+        () => (seed ? [...sugDirect, ...sugExtra].slice(0, SUGGESTION_COUNT) : []),
+        [seed, sugDirect, sugExtra],
+    )
+    const searching = q.trim() !== ""
+    const showSuggested = !searching && !!seed && (suggestions.length > 0 || sugLoading)
+
     return (
         <Modal
             open={open}
             onClose={onClose}
             title={`Choose an icon for "${label}"`}
-            description="Iconly Bold. Used wherever this label appears on the timeline."
+            description="Powered by Iconly"
             size="lg"
         >
             <div className="flex flex-col gap-4">
@@ -59,31 +78,60 @@ export function IconPicker({
                     placeholder="Search icons (e.g. bug, calendar, raindrop, weather)…"
                     className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
                 />
-                <div
-                    className="grid max-h-[60vh] gap-2 overflow-y-auto pr-1"
-                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}
-                >
-                    {direct.map((icon) => (
-                        <IconTile
-                            key={icon.name}
-                            icon={icon}
-                            active={current === icon.name}
-                            onPick={onPick}
-                        />
-                    ))}
-                    {direct.length > 0 && (loading || extra.length > 0) && <RelatedDivider />}
-                    {loading && Array.from({ length: SKELETON_COUNT }, (_, i) => <SkeletonTile key={`s-${i}`} />)}
-                    {extra.map((icon) => (
-                        <IconTile
-                            key={icon.name}
-                            icon={icon}
-                            active={current === icon.name}
-                            onPick={onPick}
-                        />
-                    ))}
-                    {empty && (
-                        <div className="col-span-full rounded-[10px] border border-dashed border-[color:var(--c-border)] px-4 py-6 text-center text-[12.5px] text-[color:var(--c-text-muted)]">
-                            No icons match “{q}”.
+                {/* Fixed-height scroll area so the modal keeps a stable size no
+                    matter how many results there are — a short/empty result set
+                    no longer collapses the card. Icons fill from the top and
+                    scroll; the empty state centres in the reserved space. */}
+                <div className="h-[56vh] overflow-y-auto pr-1">
+                    {empty ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-1.5 px-4 text-center">
+                            <span className="text-[13px] font-medium text-[color:var(--c-text)]">
+                                No icons match “{q}”.
+                            </span>
+                            <span className="text-[12px] text-[color:var(--c-text-muted)]">
+                                Try a different word — like “bug”, “rocket”, or “calendar”.
+                            </span>
+                        </div>
+                    ) : (
+                        <div
+                            className="grid gap-2"
+                            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))" }}
+                        >
+                            {showSuggested && (
+                                <>
+                                    <SectionDivider first>
+                                        Suggested for{" "}
+                                        <span className="normal-case text-[color:var(--c-text)]">“{seed}”</span>
+                                    </SectionDivider>
+                                    {suggestions.map((icon) => (
+                                        <IconTile key={`sug-${icon.name}`} icon={icon} active={current === icon.name} onPick={onPick} />
+                                    ))}
+                                    {sugLoading &&
+                                        suggestions.length < SUGGESTION_COUNT &&
+                                        Array.from({ length: SUGGESTION_COUNT - suggestions.length }, (_, i) => (
+                                            <SkeletonTile key={`sug-s-${i}`} />
+                                        ))}
+                                    <SectionDivider>All icons</SectionDivider>
+                                </>
+                            )}
+                            {direct.map((icon) => (
+                                <IconTile
+                                    key={icon.name}
+                                    icon={icon}
+                                    active={current === icon.name}
+                                    onPick={onPick}
+                                />
+                            ))}
+                            {direct.length > 0 && (loading || extra.length > 0) && <RelatedDivider />}
+                            {loading && Array.from({ length: SKELETON_COUNT }, (_, i) => <SkeletonTile key={`s-${i}`} />)}
+                            {extra.map((icon) => (
+                                <IconTile
+                                    key={icon.name}
+                                    icon={icon}
+                                    active={current === icon.name}
+                                    onPick={onPick}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>
@@ -167,9 +215,20 @@ export function SkeletonTile({
 // Full-row label that separates direct substring matches from
 // semantic-only ones. Spans the grid via col-span-full.
 export function RelatedDivider() {
+    return <SectionDivider>Related</SectionDivider>
+}
+
+// Labelled full-row divider used to head a grid section (e.g. "Suggested for
+// …" / "All icons"). `first` drops the top padding for the leading section.
+function SectionDivider({ children, first = false }: { children: React.ReactNode; first?: boolean }) {
     return (
-        <div className="col-span-full flex items-center gap-2 pt-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
-            <span>Related</span>
+        <div
+            className={cn(
+                "col-span-full flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]",
+                first ? "pt-0" : "pt-1",
+            )}
+        >
+            <span className="max-w-full truncate">{children}</span>
             <div className="h-px flex-1 bg-[color:var(--c-border)]" />
         </div>
     )
@@ -188,7 +247,7 @@ export interface FilteredCatalogResult {
 // Shared search hook — used by both IconPicker and NewLabelModal.
 export function useFilteredCatalog(query: string): FilteredCatalogResult {
     const trimmed = query.trim().toLowerCase()
-    const direct = useMemo(() => filterLocal(trimmed), [trimmed])
+    const direct = useMemo(() => filterIconsLocal(trimmed), [trimmed])
     const { hits, loading } = useSemanticIconRanking(trimmed)
 
     const extra = useMemo(() => {
@@ -205,38 +264,6 @@ export function useFilteredCatalog(query: string): FilteredCatalogResult {
 
     return { direct, extra, loading }
 }
-
-// Local substring scoring. Returns 0 for "no match", or a value in
-// (0, 1] reflecting the strongest tag confidence that matches. Slug
-// matches always score 1.0 (the slug is canonical). Sorting by this
-// score keeps "true" matches above icons that picked up the term as
-// a low-confidence software-context tag.
-function localScore(needle: string, entry: IconlyCatalogEntry): number {
-    if (!needle) return 1
-    if (entry.name.includes(needle)) return 1
-    let best = 0
-    for (const t of entry.tags) {
-        if (t.name.includes(needle) && t.confidence > best) {
-            best = t.confidence
-        }
-    }
-    return best
-}
-
-function filterLocal(needle: string): IconlyCatalogEntry[] {
-    if (!needle) return ICONLY_CATALOG
-    const scored: { entry: IconlyCatalogEntry; score: number }[] = []
-    for (const entry of ICONLY_CATALOG) {
-        const score = localScore(needle, entry)
-        if (score > 0) scored.push({ entry, score })
-    }
-    scored.sort((a, b) => b.score - a.score)
-    return scored.map((s) => s.entry)
-}
-
-const CATALOG_BY_NAME: Record<string, IconlyCatalogEntry> = Object.fromEntries(
-    ICONLY_CATALOG.map((i) => [i.name, i]),
-)
 
 interface SemanticHit { name: string; similarity: number }
 

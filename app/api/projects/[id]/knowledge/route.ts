@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/knowledge — the project's repo identity plus
@@ -7,7 +7,7 @@ import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 // links and the analyser state to decide whether the graph is ready.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     const [{ data: project }, { data: analyser, error: analyserErr }] = await Promise.all([

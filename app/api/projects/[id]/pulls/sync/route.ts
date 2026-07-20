@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import { backfillPullRequests } from "@/lib/pr-backfill"
 
 // POST /api/projects/[id]/pulls/sync
@@ -10,7 +10,7 @@ import { backfillPullRequests } from "@/lib/pr-backfill"
 // service-role backfill (detached, off the response path).
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(id)
     if (error) return error
 
     const { data: project, error: projErr } = await supabase

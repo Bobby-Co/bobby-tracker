@@ -1,13 +1,27 @@
 import { deleteGraph } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { assertProjectAccess, roleAtLeast } from "@/lib/auth/team-access"
+import { findIcon } from "@/lib/icons/iconly"
+import { ICONLY_NAMES } from "@/lib/icons/iconly-catalog"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Project } from "@/lib/supabase/types"
 
+// Same gate as the label-icons route: only slugs the renderer can actually draw
+// (the 361-icon catalog, or a legacy path-based icon) are allowed to be stored.
+function isKnownIconName(name: string): boolean {
+    return ICONLY_NAMES.has(name) || !!findIcon(name)
+}
+
 // GET /api/projects/[id] — single project. Shape: { project: Project | null }.
+// RLS blocks cross-team reads; assertProjectAccess adds the group-level gate so a
+// plain member can't open a same-team project they weren't granted (returns 404,
+// not 403, so we don't reveal the project exists).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
+    const access = await assertProjectAccess(supabase, user.id, id)
+    if (!access.ok) return Response.json({ project: null })
     const { data, error: dbErr } = await supabase
         .from("projects")
         .select("*")
@@ -19,8 +33,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
+    // Renaming/reconfiguring a project is an admin action within its team.
+    const access = await assertProjectAccess(supabase, user.id, id)
+    if (!access.ok) return Response.json({ project: null })
+    if (!roleAtLeast(access.role, "admin")) return forbidden("only team admins can edit a project")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -31,6 +49,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.repo_url === "string") allowed.repo_url = body.repo_url.trim()
     // Project settings (setup page). Add new toggles here as settings grow.
     if (typeof body.auto_index_on_push === "boolean") allowed.auto_index_on_push = body.auto_index_on_push
+    // Icon: a canonical Iconly slug, or null to reset to the hash-derived glyph.
+    if ("icon_name" in body) {
+        if (body.icon_name === null) allowed.icon_name = null
+        else if (typeof body.icon_name === "string" && isKnownIconName(body.icon_name.trim()))
+            allowed.icon_name = body.icon_name.trim()
+        else return jsonError("bad_request", "unknown icon_name", 400)
+    }
     if (Object.keys(allowed).length === 0) return jsonError("bad_request", "no fields to update", 400)
 
     const { data, error: dbErr } = await supabase
@@ -59,8 +84,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 //      the user shouldn't be blocked by an unreachable analyser.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, user, error } = await requireUser()
     if (error) return error
+    // Deleting a project (and its knowledge graph) is an admin action.
+    const access = await assertProjectAccess(supabase, user.id, id)
+    if (!access.ok) return Response.json({ project: null })
+    if (!roleAtLeast(access.role, "admin")) return forbidden("only team admins can delete a project")
 
     const { data: analyser } = await supabase
         .from("project_analyser")

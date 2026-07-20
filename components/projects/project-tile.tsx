@@ -17,6 +17,7 @@ import { IconlyDiamondstar } from "@/icons/Iconly-diamond-star-icon"
 import { IconlyChartcircle } from "@/icons/Iconly-chart-circle-icon"
 import { IconlyPaper } from "@/icons/Iconly-paper-icon"
 import { motion } from "framer-motion"
+import { IconlyIcon } from "@/components/icons/iconly-icon"
 
 // Reference-driven project tile: a coloured org header bar (org name +
 // people, top-right), a colour-matched circular project glyph, the field
@@ -205,7 +206,7 @@ export function ProjectTile({
                 <div className="flex flex-col z-20 relative -mt-5 gap-3 px-3.5 py-3">
                     <div className={cn("flex gap-3", desc ? "items-start" : "items-center")}>
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full" style={{ backgroundColor: chip.bg, color: chip.fg }}>
-                        <Icon size={20} />
+                        {project.icon_name ? <IconlyIcon name={project.icon_name} size={20} /> : <Icon size={20} />}
                     </span>
                         <div className="min-w-0 flex-1">
                             <h3 className="truncate text-[14px] font-bold leading-snug tracking-[-0.005em] text-[color:var(--c-text)]">

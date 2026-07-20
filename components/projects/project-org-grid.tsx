@@ -18,7 +18,10 @@ import type { ProjectWithInsight } from "@/lib/supabase/types"
 // tile uses for its header tint, so a group header always matches the tiles under
 // it.
 
-const STORAGE_KEY = "projects:collapsed-orgs"
+// Holds the OPEN orgs now (default is all-collapsed), so a fresh key: the old
+// "collapsed-orgs" value carried the opposite meaning and must not be read back
+// as an open-set.
+const STORAGE_KEY = "projects:open-orgs"
 
 type Org = {
     key: string
@@ -44,13 +47,17 @@ function groupByOrg(projects: ProjectWithInsight[]): Org[] {
 
 export function ProjectOrgGrid({ projects }: { projects: ProjectWithInsight[] }) {
     const orgs = groupByOrg(projects)
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+    // Default is all-collapsed: the page opens as a light list of org headers and
+    // mounts a section's (SVG-mask-heavy) tiles only when it's expanded. The set
+    // holds the OPEN orgs — empty means everything closed.
+    const [open, setOpen] = useState<Set<string>>(new Set())
 
-    // Read persisted state in an effect, not in useState's initialiser: this
-    // component is server-rendered before it hydrates, and localStorage doesn't
-    // exist there — seeding from it would make the server and client markup
-    // disagree. The cost is that a collapsed org flashes open for one frame on
-    // first paint, which is the cheaper of the two problems.
+    // Restore the previously-open orgs in an effect, not in useState's
+    // initialiser: this component is server-rendered before it hydrates, and
+    // localStorage doesn't exist there — seeding from it would make the server and
+    // client markup disagree. The cost is that a restored-open org spends one
+    // frame collapsed before it expands — the cheaper of the two problems, and
+    // cheaper still now that a collapsed section renders no tiles at all.
     //
     // setState-in-effect is the correct pattern here for the same reason
     // mobile-sidebar.tsx suppresses this rule: localStorage IS the external
@@ -59,14 +66,14 @@ export function ProjectOrgGrid({ projects }: { projects: ProjectWithInsight[] })
         try {
             const raw = window.localStorage.getItem(STORAGE_KEY)
             // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
-            if (raw) setCollapsed(new Set(JSON.parse(raw) as string[]))
+            if (raw) setOpen(new Set(JSON.parse(raw) as string[]))
         } catch {
-            // Private mode / corrupt value — start expanded.
+            // Private mode / corrupt value — start fully collapsed.
         }
     }, [])
 
     const toggle = (key: string) => {
-        setCollapsed((prev) => {
+        setOpen((prev) => {
             const next = new Set(prev)
             if (next.has(key)) next.delete(key)
             else next.add(key)
@@ -85,7 +92,7 @@ export function ProjectOrgGrid({ projects }: { projects: ProjectWithInsight[] })
                 <OrgSection
                     key={org.key}
                     org={org}
-                    open={!collapsed.has(org.key)}
+                    open={open.has(org.key)}
                     onToggle={() => toggle(org.key)}
                 />
             ))}
@@ -99,6 +106,17 @@ function OrgSection({ org, open, onToggle }: { org: Org; open: boolean; onToggle
     // first row. Clip only while the height is actually animating — the same trap
     // the topbar's overflow-hidden set for the notification popover.
     const [animating, setAnimating] = useState(false)
+
+    // Lazy-mount: the tiles are graphic-heavy (hyperellipse squircle masks + a
+    // per-tile motion layer), so we don't render them until the section is first
+    // opened. Once mounted we keep them — re-expanding is then instant, and a
+    // section the user never opens never pays the cost. With the grid defaulting
+    // to all-collapsed, the first paint therefore mounts zero tiles.
+    const [mounted, setMounted] = useState(open)
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- mount tiles on first open; see above
+        if (open && !mounted) setMounted(true)
+    }, [open, mounted])
 
     return (
         <section>
@@ -137,16 +155,18 @@ function OrgSection({ org, open, onToggle }: { org: Org; open: boolean; onToggle
                 }}
                 style={{ overflow: open && !animating ? "visible" : "hidden" }}
             >
-                <ul
-                    className="grid gap-4"
-                    style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}
-                >
-                    {org.projects.map((p) => (
-                        <li key={p.id}>
-                            <ProjectTile project={p} insight={p.insight} minimal />
-                        </li>
-                    ))}
-                </ul>
+                {mounted && (
+                    <ul
+                        className="grid gap-4"
+                        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}
+                    >
+                        {org.projects.map((p) => (
+                            <li key={p.id}>
+                                <ProjectTile project={p} insight={p.insight} minimal />
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </motion.div>
         </section>
     )

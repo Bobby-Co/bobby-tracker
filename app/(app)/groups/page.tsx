@@ -27,9 +27,9 @@ export default function GroupsPage() {
         <div className="w-full px-5 py-6 sm:px-7 sm:py-7">
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-[22px] font-bold tracking-[-0.012em]">Groups</h1>
+                    <h1 className="text-[22px] font-bold tracking-[-0.012em]">Collections</h1>
                     <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
-                        Collections of related projects. AI compose inside a group routes the issue to the project that matches best — modules, overview, features, and stack are all weighed.
+                        Collections of related projects. AI compose inside a collection routes the issue to the project that matches best — modules, overview, features, and stack are all weighed. (Not the same as a team’s people <strong>Groups</strong>.)
                     </p>
                 </div>
                 <NewGroupButton projects={allProjects} />

@@ -81,9 +81,10 @@ function SearchIcon() {
 
 const SECTION_LABEL: Record<string, string> = {
     projects: "Projects",
-    groups: "Groups",
+    groups: "Collections",
     sessions: "Public sessions",
     workers: "Local models",
+    team: "Team",
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -105,7 +106,7 @@ function TopBreadcrumb({ projects }: { projects: Project[] }) {
     if (segs[1]) {
         const href = `/${segs[0]}/${segs[1]}`
         if (segs[0] === "projects") crumbs.push({ label: projects.find((p) => p.id === segs[1])?.name ?? "Project", href })
-        else if (segs[0] === "groups") crumbs.push({ label: "Group", href })
+        else if (segs[0] === "groups") crumbs.push({ label: "Collection", href })
         else if (segs[0] === "sessions") crumbs.push({ label: "Session", href })
     }
     if (segs[2]) crumbs.push({ label: cap(segs[2]), href: `/${segs[0]}/${segs[1]}/${segs[2]}` })

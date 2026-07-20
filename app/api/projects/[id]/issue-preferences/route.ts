@@ -4,7 +4,7 @@ import {
     isAnalyseEffort,
     setIssuePreferences,
 } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/api"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 
 // GET/PUT /api/projects/[id]/issue-preferences
@@ -18,7 +18,7 @@ import type { ProjectAnalyser } from "@/lib/supabase/types"
 // analyser knows about: GET reports an empty default, PUT returns 409.
 
 async function resolveGraphId(projectId: string) {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireProjectAccess(projectId)
     if (error) return { error } as const
     const { data, error: dbErr } = await supabase
         .from("project_analyser")

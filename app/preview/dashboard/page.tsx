@@ -6,15 +6,17 @@
 // are OAuth-gated, so this unauthed route is the only way to eyeball the tile.
 
 import { AppShell } from "@/components/layout/app-shell"
+import { TeamProvider } from "@/lib/auth/team-context"
 import { ProjectTile } from "@/components/projects/project-tile"
 import { ProjectOrgGrid } from "@/components/projects/project-org-grid"
 import type { Project, ProjectInsight } from "@/lib/supabase/types"
 
 const mk = (id: string, name: string, repo: string, description: string | null): Project => ({
-    id, user_id: "u", name, repo_url: `https://github.com/${repo}`, repo_full_name: repo,
+    id, user_id: "u", team_id: "t", name, repo_url: `https://github.com/${repo}`, repo_full_name: repo,
     description, created_at: "2026-06-01T00:00:00.000Z", updated_at: "2026-06-20T00:00:00.000Z",
     github_installation_id: null, github_repo_id: null, github_sync_enabled: false,
     github_sync_direction: "both", github_sync_deletes: false, auto_index_on_push: true,
+    icon_name: null,
 })
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()
@@ -75,6 +77,7 @@ const GRID = "repeat(auto-fill, minmax(300px, 1fr))"
 
 export default function PreviewDashboard() {
     return (
+        <TeamProvider>
         <AppShell projects={PROJECTS.map((x) => x.p)}>
             <div className="flex w-full flex-col gap-6 px-5 py-6 sm:px-7 sm:py-7">
                 <h1 className="h-page">Project tiles</h1>
@@ -109,5 +112,6 @@ export default function PreviewDashboard() {
                 </section>
             </div>
         </AppShell>
+        </TeamProvider>
     )
 }
