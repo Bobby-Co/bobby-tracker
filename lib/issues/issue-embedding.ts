@@ -20,7 +20,8 @@
 // checks before calling here.
 
 import { createServiceClient } from "@/lib/supabase/server"
-import { embedText, issueEmbeddingText, type EmbedResult } from "@/lib/analyser"
+import { embedText, type EmbedResult } from "@/lib/analyser"
+import { issueEmbeddingText } from "@/modules/issues"
 
 // tracker.issue_embeddings is PARTITIONED BY project_id (done for scale; the
 // partitioned definition lives outside supabase/migrations, which still shows

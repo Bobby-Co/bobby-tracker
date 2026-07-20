@@ -18,6 +18,7 @@ import {
 import { blobUrl, repoFullName } from "@/lib/integrations/github"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import { createServiceClient } from "@/lib/supabase/server"
+import { isAnalyserReady } from "@/modules/analysis"
 import type {
     GithubSyncDirection,
     IssueAnalysisData,
@@ -398,7 +399,7 @@ export async function ensureAnalysis(
         .eq("project_id", issue.project_id)
         .maybeSingle<ProjectAnalyser>()
     // No run unless the graph is indexed.
-    if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) return "not_ready"
+    if (!isAnalyserReady(analyser)) return "not_ready"
 
     const update: Record<string, unknown> = { analysis_status: "analysing" }
 

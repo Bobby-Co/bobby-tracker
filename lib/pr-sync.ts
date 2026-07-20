@@ -6,6 +6,7 @@
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
 import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/badge"
+import { isAnalyserReady } from "@/modules/analysis"
 import { findingState } from "@/modules/pull-requests"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
 import { repoFullName } from "@/lib/integrations/github"
@@ -55,7 +56,7 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
         .select("enabled,status,graph_id")
         .eq("project_id", project.id)
         .maybeSingle<{ enabled: boolean; status: string; graph_id: string | null }>()
-    if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) return
+    if (!isAnalyserReady(analyser)) return
 
     // Idempotency: don't start a second run while one is in flight for this PR.
     const { data: existing } = await svc
