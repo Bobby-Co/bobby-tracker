@@ -6,6 +6,7 @@ import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { IconPicker } from "@/components/icons/icon-picker"
 import { createClient } from "@/lib/supabase/client"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 // ProjectIdentityPanel — rename a project, edit its description, and give it an
 // icon.
@@ -77,17 +78,16 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
     const suggestSeed = description.trim() || trimmedName
 
     async function patch(body: Record<string, unknown>): Promise<boolean> {
-        const res = await fetch(`/api/projects/${projectId}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-        })
-        if (!res.ok) {
-            const b = await res.json().catch(() => ({}))
-            setErr(b?.error?.message || `Failed (${res.status})`)
+        try {
+            await apiMutate(`/api/projects/${projectId}`, { method: "PATCH", body })
+            return true
+        } catch (e) {
+            // Network errors propagate to the caller's try/catch (as before);
+            // a server error sets the inline message and returns false.
+            if (!(e instanceof ApiError)) throw e
+            setErr(e.message || `Failed (${e.status})`)
             return false
         }
-        return true
     }
 
     async function saveText() {

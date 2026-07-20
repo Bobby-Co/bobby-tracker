@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Spinner } from "@/components/ui/spinner"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 // Significant characters in a pairing code — keep in sync with
 // USER_CODE_LEN in lib/relay.ts.
@@ -46,26 +47,24 @@ export function RelayPairApprove({
         setPhase("approving")
         setError(null)
         try {
-            const res = await fetch("/api/relay/pair/approve", {
+            const data = await apiMutate<{ name?: string }>("/api/relay/pair/approve", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userCode }),
+                body: { userCode },
             })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok) {
-                if (res.status === 404) {
-                    setError("Code invalid or expired. Check the Bobby Relay app for the current code.")
-                } else {
-                    setError(data?.error?.message || `Couldn't link (${res.status}).`)
-                }
-                setPhase("idle")
-                return
-            }
             setLinkedName(typeof data?.name === "string" ? data.name : null)
             setPhase("done")
             onDone?.()
-        } catch {
-            setError("Network error — try again.")
+        } catch (e) {
+            if (!(e instanceof ApiError)) {
+                setError("Network error — try again.")
+                setPhase("idle")
+                return
+            }
+            if (e.status === 404) {
+                setError("Code invalid or expired. Check the Bobby Relay app for the current code.")
+            } else {
+                setError(e.message || `Couldn't link (${e.status}).`)
+            }
             setPhase("idle")
         }
     }

@@ -7,6 +7,7 @@ import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { IconPicker } from "@/components/icons/icon-picker"
 import { Modal } from "@/components/ui/modal"
 import { defaultLabelColor } from "@/lib/timeline/labels"
+import { apiMutate } from "@/lib/api-client"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"
 
 // LabelIconManager — modal for managing the project's label
@@ -71,13 +72,10 @@ export function LabelIconManager({
         payload.icon_name = body.icon_name ?? cur?.icon_name ?? "tag"
         if ("color" in body) payload.color = body.color
         else if (cur?.color != null) payload.color = cur.color
-        const res = await fetch(`/api/projects/${projectId}/label-icons`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error("save failed")
-        const { icon } = (await res.json()) as { icon: ProjectLabelIcon }
+        const { icon } = await apiMutate<{ icon: ProjectLabelIcon }>(
+            `/api/projects/${projectId}/label-icons`,
+            { method: "PUT", body: payload },
+        )
         setIcons((prev) => {
             const next = prev.filter((p) => p.label !== icon.label)
             next.push(icon)

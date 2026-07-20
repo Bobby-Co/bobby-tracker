@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { NewLabelModal } from "@/components/issues/new-label-modal"
 import { defaultLabelColor, softLabelChipStyle } from "@/lib/timeline/labels"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"
 
 // Single transition reused across chip layout / enter / exit.
@@ -69,12 +70,15 @@ export function LabelsEditor({
 
     async function createLabel(name: string, iconName: string, color: string) {
         if (!projectId) return
-        const res = await fetch(`/api/projects/${projectId}/label-icons`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ label: name, icon_name: iconName, color }),
-        })
-        if (!res.ok) return
+        try {
+            await apiMutate(`/api/projects/${projectId}/label-icons`, {
+                method: "PUT",
+                body: { label: name, icon_name: iconName, color },
+            })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+            return // server error: leave the label unattached, as before
+        }
         // Attach the new label to this issue and refresh server
         // data so labelIcons picks up the new row.
         onChange([...value, name])
