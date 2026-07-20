@@ -22,6 +22,7 @@ import {
 } from "./github-issue-comment"
 import { repoFullName } from "../domain/repo-ref"
 import { composeIssueFixPrompt } from "@/modules/issues"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
@@ -55,9 +56,6 @@ type SyncProject = Pick<Project, "repo_url" | "repo_full_name"> & {
     github_sync_deletes: boolean
 }
 
-// Columns a caller must select to build a SyncProject.
-export const SYNC_PROJECT_COLS =
-    "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes"
 
 // Direction gates. 'inbound' = GitHub → ucelot, 'outbound' = ucelot → GitHub.
 export function allowsInbound(p: { github_sync_direction: GithubSyncDirection }): boolean {
@@ -250,16 +248,8 @@ type AnalysisIssueRow = {
     github_analysis_comment_id: number | null
     analysis_status: string | null
 }
-type AnalysisProjectRow = Pick<Project, "name" | "repo_url" | "repo_full_name" | "description"> & {
-    github_installation_id: number | null
-    github_repo_id: number | null
-    github_sync_enabled: boolean
-}
-
 const ANALYSIS_ISSUE_COLS =
     "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status"
-const ANALYSIS_PROJECT_COLS =
-    "name,repo_url,repo_full_name,description,github_installation_id,github_repo_id,github_sync_enabled"
 
 // ensureAnalysis kicks off the SINGLE analysis run for an issue and is the one
 // entry point for both surfaces: the tracker's suggestion box (via the
@@ -305,11 +295,8 @@ export async function ensureAnalysis(
     // Post the "analysing…" placeholder comment only when the issue is
     // GitHub-linked and sync is on. For web-only projects the analysis still
     // runs and caches — there's just no GitHub comment.
-    const { data: project } = await svc
-        .from("projects")
-        .select(ANALYSIS_PROJECT_COLS)
-        .eq("id", issue.project_id)
-        .maybeSingle<AnalysisProjectRow>()
+    // Project context via the Projects contract — github doesn't own the projects table.
+    const project = await createSupabaseProjectsRepository(svc).findAnalysisContext(issue.project_id)
     if (project && syncReady(project) && issue.github_issue_number != null) {
         const full = repoFullName(project)
         if (full) {
@@ -366,11 +353,8 @@ export async function applyAnalysisResult(
         .maybeSingle<AnalysisIssueRow>()
     if (!issue) return
 
-    const { data: project } = await svc
-        .from("projects")
-        .select(ANALYSIS_PROJECT_COLS)
-        .eq("id", issue.project_id)
-        .maybeSingle<AnalysisProjectRow>()
+    // Project context via the Projects contract — github doesn't own the projects table.
+    const project = await createSupabaseProjectsRepository(svc).findAnalysisContext(issue.project_id)
 
     // Edit the placeholder in place (when we still have its id + a linked repo).
     if (project && syncReady(project) && issue.github_analysis_comment_id != null) {
@@ -463,11 +447,8 @@ export async function importExistingIssues(
 ): Promise<{ imported: number; total: number; skipped: number }> {
     const svc = createServiceClient()
 
-    const { data: project } = await svc
-        .from("projects")
-        .select(SYNC_PROJECT_COLS)
-        .eq("id", projectId)
-        .maybeSingle<SyncProject & { user_id: string }>()
+    // Project context via the Projects contract — github doesn't own the projects table.
+    const project = await createSupabaseProjectsRepository(svc).findGithubSyncContext(projectId)
     if (!project || !syncReady(project) || !allowsInbound(project)) {
         return { imported: 0, total: 0, skipped: 0 }
     }

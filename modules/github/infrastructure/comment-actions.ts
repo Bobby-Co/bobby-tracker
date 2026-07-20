@@ -6,6 +6,8 @@
 import { jsonError } from "@/lib/platform/http/api"
 import { getUserGithubToken } from "./github-user"
 import { repoFullName } from "../domain/repo-ref"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { RepositoryError } from "@/lib/kernel"
 import type { createClient } from "@/lib/supabase/server"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -17,12 +19,17 @@ export async function resolveCommentContext(
     userId: string,
     projectId: string,
 ): Promise<CommentContext | { error: Response }> {
-    const { data: project, error } = await supabase
-        .from("projects")
-        .select("id,repo_url,repo_full_name")
-        .eq("id", projectId)
-        .maybeSingle<{ id: string; repo_url: string; repo_full_name: string | null }>()
-    if (error) return { error: jsonError("db_error", error.message, 500) }
+    // Read the project through the Projects contract — github doesn't own the
+    // projects table. findRepoRef throws on a genuine DB error so we keep the
+    // 500-vs-404 distinction the gate relied on.
+    const projects = createSupabaseProjectsRepository(supabase)
+    let project: Awaited<ReturnType<typeof projects.findRepoRef>>
+    try {
+        project = await projects.findRepoRef(projectId)
+    } catch (e) {
+        if (e instanceof RepositoryError) return { error: jsonError("db_error", e.message, 500) }
+        throw e
+    }
     if (!project) return { error: jsonError("not_found", "project not found", 404) }
 
     const full = repoFullName(project)
