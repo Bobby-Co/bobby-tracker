@@ -6,7 +6,7 @@
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
 import { getAnalyser, isAnalyserReady, type PRAnalyseFile } from "@/modules/analysis"
-import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app"
+import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app-rest"
 import { repoFullName } from "@/lib/integrations/github"
 import { createServiceClient } from "@/lib/supabase/server"
 import { cancelledComment, failedComment, loadingComment, resultComment } from "@/lib/pulls/pr-comment"

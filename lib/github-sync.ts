@@ -12,7 +12,7 @@ import {
     listRepoIssues,
     updateGithubIssue,
     updateIssueComment,
-} from "@/lib/github-app"
+} from "@/lib/github-app-rest"
 import {
     cancelledCommentBody,
     type CommentCtx,
