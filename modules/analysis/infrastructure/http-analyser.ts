@@ -1,6 +1,6 @@
 // Analysis module — the HTTP/WS analyser ADAPTER. Implements AnalyserPort by
 // delegating, one-to-one, to the existing bobby-analyser client in
-// @/lib/analyser. This is a THIN wrapper (point-free delegation): the wire
+// the analyser adapter (infrastructure/analyser). This is a THIN wrapper (point-free delegation): the wire
 // protocol, env config, and AnalyserError semantics stay in lib/analyser for now
 // — the port just gives callers a runtime-agnostic seam to depend on. A later
 // step can inline the transport here and retire lib/analyser (see modules/README.md).
@@ -23,7 +23,7 @@ import {
     verifyGraph,
     kickoffJob,
     deleteGraph,
-} from "@/lib/analyser"
+} from "./analyser"
 
 import type { AnalyserPort } from "../ports/analyser-port"
 

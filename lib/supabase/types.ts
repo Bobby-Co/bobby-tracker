@@ -4,7 +4,7 @@
 
 // Type-only import — elided at compile, so the server-only analyser module
 // (which pulls in `ws`) never reaches client bundles through this file.
-import type { AnalyseEffort } from "@/lib/analyser"
+import type { AnalyseEffort } from "@/modules/analysis"
 
 export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"

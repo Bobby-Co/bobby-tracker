@@ -9,16 +9,16 @@ export { createSupabaseProjectAnalyserRepository } from "./infrastructure/supaba
 
 // ─── The analyser port + its composition seam ───────────────────────────────
 // Callers depend on the AnalyserPort interface and obtain an implementation via
-// getAnalyser(); they must NOT import @/lib/analyser's functions directly.
+// getAnalyser(); they must NOT import the analyser adapter's functions directly.
 export type { AnalyserPort, AnalyserRunCallback, DeepDiveResult } from "./ports/analyser-port"
 export { getAnalyser } from "./composition"
 
 // ─── Re-exported analyser surface ───────────────────────────────────────────
 // So a call site gets its whole analyser dependency from this module contract
-// rather than reaching into @/lib/analyser: the error class, the pure effort
+// rather than reaching into the analyser adapter (infrastructure/analyser): the error class, the pure effort
 // helpers, and the wire DTOs. (Transport-only WS types — JobSpec/JobResult/etc. —
 // are intentionally excluded: they belong to the CLI-only runJob path.)
-export { AnalyserError, ANALYSE_EFFORTS, isAnalyseEffort } from "@/lib/analyser"
+export { AnalyserError, ANALYSE_EFFORTS, isAnalyseEffort } from "./infrastructure/analyser"
 export type {
     AnalyseEffort,
     QueryResult,
@@ -47,4 +47,4 @@ export type {
     IssuePreferences,
     KickoffJobInput,
     KickoffResult,
-} from "@/lib/analyser"
+} from "./infrastructure/analyser"

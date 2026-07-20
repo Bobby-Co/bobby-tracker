@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/platform/http/api"
 import { applyAnalysisResult } from "@/modules/github"
-import type { IssueAnalysis } from "@/lib/analyser"
+import type { IssueAnalysis } from "@/modules/analysis"
 
 export const dynamic = "force-dynamic"
 

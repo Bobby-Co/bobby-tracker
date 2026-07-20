@@ -8,7 +8,7 @@
 //
 // This file is in ports/ (not domain/ or application/), so — like
 // modules/projects/ports/projects-repository.ts referencing the DB row type — it
-// may TYPE-import the analyser wire DTOs from @/lib/analyser. No client or SDK is
+// may TYPE-import the analyser wire DTOs from the analyser adapter (infrastructure/analyser). No client or SDK is
 // imported here; the concrete transport stays in infrastructure.
 
 import type {
@@ -26,7 +26,7 @@ import type {
     VerifyReport,
     KickoffJobInput,
     KickoffResult,
-} from "@/lib/analyser"
+} from "../infrastructure/analyser"
 
 /** Where a detached run POSTs its terminal result. `token` (when set) is sent as
  *  `Authorization: Bearer <token>` on the callback. */

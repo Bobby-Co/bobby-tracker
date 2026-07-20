@@ -1,7 +1,7 @@
 // GitHub auto-analysis comment rendering, extracted from lib/github-sync.ts
 // (Phase 3) — pure string building, no I/O.
 
-import type { IssueAnalysis } from "@/lib/analyser"
+import type { IssueAnalysis } from "@/modules/analysis"
 import { badge, confidenceTone } from "@/lib/rendering/badge"
 import { blobUrl } from "@/lib/integrations/github"
 import type { Project } from "@/lib/supabase/types"

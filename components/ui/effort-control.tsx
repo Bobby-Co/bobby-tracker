@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/components/ui/cn"
-import { ANALYSE_EFFORTS, type AnalyseEffort } from "@/lib/analyser"
+import { ANALYSE_EFFORTS, type AnalyseEffort } from "@/modules/analysis"
 
 // Short labels under the slider.
 const EFFORT_LABEL: Record<AnalyseEffort, string> = {

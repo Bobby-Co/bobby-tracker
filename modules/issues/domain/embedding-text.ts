@@ -9,7 +9,7 @@
 // type-only from the analyser client (it stays the return type of composeIssue
 // there); the erased import creates no runtime dependency or cycle.
 
-import type { IssueComposeProposal } from "@/lib/analyser"
+import type { IssueComposeProposal } from "@/modules/analysis"
 
 // Compose the text we feed to the embedder. We concatenate title +
 // body so similarity reflects what the issue is *about*, not just
