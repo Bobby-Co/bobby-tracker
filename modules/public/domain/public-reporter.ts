@@ -2,13 +2,16 @@
 // Lives outside any "use client" file so server components can call
 // it directly when prepping data for the public submissions panel.
 
-import type { IssueStatus } from "@/lib/supabase/types"
+// Local status vocabulary — kept in-domain (not @/lib/supabase/types) so this
+// pure grouping policy carries no SDK dependency. Byte-identical to the stored
+// IssueStatus union, so rows remain assignable both ways.
+export type PublicIssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 
 export interface PublicListedIssue {
     id: string
     issue_number: number
     title: string
-    status: IssueStatus
+    status: PublicIssueStatus
     project_name: string
     public_reporter_id: string | null
     public_reporter_name: string | null

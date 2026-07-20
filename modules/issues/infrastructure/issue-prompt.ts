@@ -1,5 +1,12 @@
 // Compose a "fix this issue" prompt for handing off to a coding AI.
 //
+// Placement: this is an OUTPUT RENDERER — it turns an issue + analyser findings
+// into an external-facing prompt string, the same category as
+// github-issue-comment (which renders GitHub comment markdown). Output rendering
+// belongs in infrastructure, so this reads the DB row types directly rather than
+// carrying decoupled value-objects. (Contrast issues/domain/embedding-text,
+// which shapes text for an INTERNAL similarity algorithm — a domain rule.)
+//
 // Optimised for SIGNAL over context: the receiving AI already knows how
 // to read a repo, so we hand it just the things it can't easily derive
 // — the issue body, and the analyser's pre-resolved file/line citations
