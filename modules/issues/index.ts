@@ -16,3 +16,7 @@ export { upsertIssueComment, deleteIssueComment } from "./infrastructure/issue-s
 
 // ─── issue embedding (semantic index maintenance) ────────────────────────────
 export { embedIssueAsync, countUnembeddedIssues, ensureIssueEmbeddings } from "./infrastructure/issue-embedding"
+
+// ─── issue fix-prompt composer (renders a coding-agent prompt from an issue) ──
+export type { IssuePromptInput } from "./infrastructure/issue-prompt"
+export { composeIssueFixPrompt } from "./infrastructure/issue-prompt"

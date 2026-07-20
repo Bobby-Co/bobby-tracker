@@ -8,7 +8,7 @@
 import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type PRAnalyseFile } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/modules/github"
-import { repoFullName } from "@/lib/integrations/github"
+import { repoFullName } from "@/modules/github"
 import { createServiceClient } from "@/lib/supabase/server"
 import { cancelledComment, failedComment, loadingComment, resultComment } from "./pr-comment"
 import type { PRAnalysis, Project } from "@/lib/supabase/types"

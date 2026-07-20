@@ -3,7 +3,7 @@
 
 import type { IssueAnalysis } from "@/modules/analysis"
 import { badge, confidenceTone } from "@/lib/rendering/badge"
-import { blobUrl } from "@/lib/integrations/github"
+import { blobUrl } from "../domain/repo-ref"
 import type { Project } from "@/lib/supabase/types"
 
 // Hidden marker so a later pass can find/dedupe Ucelot's own comment.

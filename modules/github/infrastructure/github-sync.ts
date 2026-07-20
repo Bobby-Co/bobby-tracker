@@ -20,8 +20,8 @@ import {
     loadingCommentBody,
     resultCommentBody,
 } from "./github-issue-comment"
-import { repoFullName } from "@/lib/integrations/github"
-import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
+import { repoFullName } from "../domain/repo-ref"
+import { composeIssueFixPrompt } from "@/modules/issues"
 import { createServiceClient } from "@/lib/supabase/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"

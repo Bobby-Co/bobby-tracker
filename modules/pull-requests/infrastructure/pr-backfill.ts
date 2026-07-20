@@ -13,7 +13,7 @@ import {
     listPullRequests,
     type GithubPullRequest,
 } from "@/modules/github"
-import { repoFullName } from "@/lib/integrations/github"
+import { repoFullName } from "@/modules/github"
 import { upsertIssueComment } from "@/modules/issues"
 import { upsertPRComment, upsertPullRequest, type PRUpsert } from "./pr-store"
 import { createServiceClient } from "@/lib/supabase/server"

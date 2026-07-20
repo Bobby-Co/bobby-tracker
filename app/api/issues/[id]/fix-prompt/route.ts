@@ -1,5 +1,5 @@
 import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
+import { composeIssueFixPrompt } from "@/modules/issues"
 import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
 
 // GET /api/issues/[id]/fix-prompt

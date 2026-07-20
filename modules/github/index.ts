@@ -3,6 +3,7 @@
 // Anti-corruption layer over the GitHub App / REST / GraphQL APIs plus the
 // tracker⇄GitHub issue-sync orchestration. Other code imports ONLY this barrel,
 // never the infrastructure files directly.
+export * from "./domain/repo-ref"
 export * from "./infrastructure/github-app"
 export * from "./infrastructure/github-app-rest"
 export * from "./infrastructure/github-app-crypto"

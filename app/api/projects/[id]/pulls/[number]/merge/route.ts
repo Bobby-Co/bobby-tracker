@@ -1,6 +1,6 @@
 import { jsonError, requireUser, requireProjectAccess } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { repoFullName } from "@/lib/integrations/github"
+import { repoFullName } from "@/modules/github"
 import {
     getPullMergeability,
     getRepoMergeMethods,

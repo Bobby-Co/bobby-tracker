@@ -3,7 +3,7 @@ import { jsonError, requireRole, requireTeam } from "@/lib/platform/http/api"
 import { getAccessibleProjectIds } from "@/lib/auth/team-access"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/icons/suggest"
-import { canonicalRepoUrl, validateRepoUrl } from "@/lib/integrations/repo-url"
+import { canonicalRepoUrl, validateRepoUrl } from "@/lib/util/repo-url"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/supabase/types"
 

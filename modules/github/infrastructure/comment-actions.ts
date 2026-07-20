@@ -5,7 +5,7 @@
 
 import { jsonError } from "@/lib/platform/http/api"
 import { getUserGithubToken } from "./github-user"
-import { repoFullName } from "@/lib/integrations/github"
+import { repoFullName } from "../domain/repo-ref"
 import type { createClient } from "@/lib/supabase/server"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>

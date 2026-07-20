@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { githubAppFetch } from "@/modules/github"
-import { repoFullName } from "@/lib/integrations/github"
+import { repoFullName } from "@/modules/github"
 import type { Project } from "@/lib/supabase/types"
 
 // GET /api/github/app/callback — GitHub sends the user here after they install

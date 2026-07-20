@@ -1,7 +1,7 @@
 import { requireProjectAccess, jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { githubAppFetch, githubJwtFetch } from "@/modules/github"
-import { repoFullName } from "@/lib/integrations/github"
+import { repoFullName } from "@/modules/github"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/github-sync/link — link an ALREADY-installed GitHub
