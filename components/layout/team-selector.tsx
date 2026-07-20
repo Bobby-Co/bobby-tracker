@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { cn } from "@/components/ui/cn"
 import { useTeam } from "@/lib/auth/team-context"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 // Top-bar workspace switcher. Shows the active team and, on open, the full list
 // (switch), a link to manage the current team, and an inline create-team form.
@@ -33,20 +34,15 @@ export function TeamSelector() {
         setBusy(true)
         setErr(null)
         try {
-            const res = await fetch("/api/teams", {
+            const body = await apiMutate<{ team?: { id?: string } }>("/api/teams", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: trimmed }),
+                body: { name: trimmed },
             })
-            const body = await res.json().catch(() => null)
-            if (!res.ok) {
-                setErr(body?.error?.message ?? "Couldn't create team")
-                return
-            }
             refetch()
             if (body?.team?.id) setActiveTeam(body.team.id) // switches + reloads
-        } catch {
-            setErr("Network error")
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message ?? "Couldn't create team")
+            else setErr("Network error")
         } finally {
             setBusy(false)
         }

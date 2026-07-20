@@ -5,6 +5,7 @@ import { useState, useTransition } from "react"
 import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { MultiDropdown } from "@/components/ui/multi-dropdown"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 interface ProjectOption {
     id: string
@@ -25,22 +26,20 @@ export function NewGroupButton({ projects }: { projects: ProjectOption[] }) {
         e.preventDefault()
         setError(null)
         startTransition(async () => {
-            const res = await fetch("/api/groups", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, project_ids: picked }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setError(e?.error?.message || `Failed (${res.status})`)
-                return
+            try {
+                const { group } = await apiMutate<{ group?: { id?: string } }>("/api/groups", {
+                    method: "POST",
+                    body: { name, project_ids: picked },
+                })
+                setOpen(false)
+                setName("")
+                setPicked([])
+                router.refresh()
+                if (group?.id) router.push(`/groups/${group.id}`)
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setError(e.message || `Failed (${e.status})`)
             }
-            const { group } = await res.json()
-            setOpen(false)
-            setName("")
-            setPicked([])
-            router.refresh()
-            if (group?.id) router.push(`/groups/${group.id}`)
         })
     }
 

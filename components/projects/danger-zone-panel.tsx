@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 // DangerZonePanel — irreversible project teardown. Delete removes the project,
 // its analyser knowledge graph, and every tracked issue/PR/review/comment (see
@@ -40,18 +41,13 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
         setErr(null)
         setBusy(true)
         try {
-            const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" })
-            if (!res.ok && res.status !== 204) {
-                const body = await res.json().catch(() => ({}))
-                setErr(body?.error?.message || `Failed (${res.status})`)
-                setBusy(false)
-                return
-            }
+            await apiMutate(`/api/projects/${projectId}`, { method: "DELETE" })
             // Gone — leave the (now-deleted) project's pages for the list.
             router.push("/projects")
             router.refresh()
-        } catch {
-            setErr("Network error")
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message || `Failed (${e.status})`)
+            else setErr("Network error")
             setBusy(false)
         }
     }

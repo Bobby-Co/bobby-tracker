@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 interface ProjectOption {
     id: string
@@ -35,25 +36,20 @@ export function NewSessionButton({ projects }: { projects: ProjectOption[] }) {
         e.preventDefault()
         setError(null)
         startTransition(async () => {
-            const res = await fetch("/api/sessions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name,
-                    project_ids: Array.from(picked),
-                }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setError(e?.error?.message || `Failed (${res.status})`)
-                return
+            try {
+                const { session } = await apiMutate<{ session?: { id?: string } }>("/api/sessions", {
+                    method: "POST",
+                    body: { name, project_ids: Array.from(picked) },
+                })
+                setOpen(false)
+                setName("")
+                setPicked(new Set())
+                router.refresh()
+                if (session?.id) router.push(`/sessions/${session.id}`)
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setError(e.message || `Failed (${e.status})`)
             }
-            const { session } = await res.json()
-            setOpen(false)
-            setName("")
-            setPicked(new Set())
-            router.refresh()
-            if (session?.id) router.push(`/sessions/${session.id}`)
         })
     }
 
@@ -94,7 +90,7 @@ export function NewSessionButton({ projects }: { projects: ProjectOption[] }) {
                             </span>
                             {projects.length === 0 ? (
                                 <p className="rounded-[10px] bg-[color:var(--c-surface-2)] px-3 py-2 text-[12.5px] text-[color:var(--c-text-muted)]">
-                                    No projects with the public-submissions integration enabled. Open a project's Integrations tab to enable it, then come back.
+                                    No projects with the public-submissions integration enabled. Open a project&apos;s Integrations tab to enable it, then come back.
                                 </p>
                             ) : (
                                 <ul className="max-h-56 overflow-auto rounded-[10px] border border-[color:var(--c-border)]">

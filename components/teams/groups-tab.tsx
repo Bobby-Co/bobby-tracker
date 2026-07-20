@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useApi } from "@/lib/hooks/use-api"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { cn } from "@/components/ui/cn"
 import type { AccessGroupWithDetail, Project, TeamMemberView, TeamWithRole } from "@/lib/supabase/types"
 
@@ -68,24 +69,44 @@ function GroupCard({
     const projectName = (id: string) => allProjects.find((p) => p.id === id)?.name ?? id
 
     async function addMember(userId: string) {
-        await fetch(`${base}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: userId }) })
+        try {
+            await apiMutate(`${base}/members`, { method: "POST", body: { user_id: userId } })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+        }
         onChange()
     }
     async function removeMember(userId: string) {
-        await fetch(`${base}/members/${userId}`, { method: "DELETE" })
+        try {
+            await apiMutate(`${base}/members/${userId}`, { method: "DELETE" })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+        }
         onChange()
     }
     async function grantProject(projectId: string) {
-        await fetch(`${base}/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project_id: projectId }) })
+        try {
+            await apiMutate(`${base}/projects`, { method: "POST", body: { project_id: projectId } })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+        }
         onChange()
     }
     async function revokeProject(projectId: string) {
-        await fetch(`${base}/projects/${projectId}`, { method: "DELETE" })
+        try {
+            await apiMutate(`${base}/projects/${projectId}`, { method: "DELETE" })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+        }
         onChange()
     }
     async function remove() {
         if (!confirm(`Delete the group “${group.name}”? Its members lose access to its projects.`)) return
-        await fetch(base, { method: "DELETE" })
+        try {
+            await apiMutate(base, { method: "DELETE" })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+        }
         onChange()
     }
 
@@ -185,11 +206,11 @@ function NewGroup({ teamId, onCreated }: { teamId: string; onCreated: () => void
         if (!name.trim()) return
         setBusy(true)
         try {
-            const res = await fetch(`/api/teams/${teamId}/groups`, {
-                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }),
-            })
-            if (res.ok) { setName(""); setOpen(false); onCreated() }
-            else alert((await res.json().catch(() => null))?.error?.message ?? "Couldn't create group")
+            await apiMutate(`/api/teams/${teamId}/groups`, { method: "POST", body: { name: name.trim() } })
+            setName(""); setOpen(false); onCreated()
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+            alert(e.message ?? "Couldn't create group")
         } finally { setBusy(false) }
     }
 

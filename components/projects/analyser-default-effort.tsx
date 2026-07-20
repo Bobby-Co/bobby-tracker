@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { EffortControl } from "@/components/ui/effort-control"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { AnalyseEffort } from "@/lib/analyser"
 
 type Current = AnalyseEffort | ""
@@ -51,22 +52,16 @@ export function AnalyserDefaultEffort({ projectId }: { projectId: string }) {
         const prev = current
         setCurrent(next)
         try {
-            const res = await fetch(`/api/projects/${projectId}/issue-preferences`, {
+            const body = await apiMutate<{ effort?: Current }>(`/api/projects/${projectId}/issue-preferences`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ effort: next }),
+                body: { effort: next },
             })
-            const body = await res.json().catch(() => ({}))
-            if (!res.ok) {
-                setCurrent(prev)
-                setError(body?.error?.message || `Failed (${res.status})`)
-                return
-            }
             setCurrent((body?.effort as Current) || "")
             setSaved(true)
-        } catch {
+        } catch (e) {
             setCurrent(prev)
-            setError("Could not save the analyser preference.")
+            if (e instanceof ApiError) setError(e.message || `Failed (${e.status})`)
+            else setError("Could not save the analyser preference.")
         } finally {
             setSaving(false)
         }
