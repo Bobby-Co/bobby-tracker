@@ -1,7 +1,8 @@
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { startPRAnalysis } from "@/lib/pr-sync"
 import { repoFullName } from "@/lib/integrations/github"
-import type { Project, ProjectAnalyser, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/pulls/[number]/review — manually kick a PR review.
 //
@@ -45,11 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .eq("project_id", id)
             .eq("pr_number", prNumber)
             .maybeSingle<PullRequest>(),
-        supabase
-            .from("project_analyser")
-            .select("enabled,status,graph_id")
-            .eq("project_id", id)
-            .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id">>(),
+        repoRead(() => createSupabaseProjectAnalyserRepository(supabase).findReadiness(id)),
         supabase
             .from("pull_request_analyses")
             .select("status")
@@ -57,7 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .eq("pr_number", prNumber)
             .maybeSingle<Pick<PullRequestAnalysis, "status">>(),
     ])
-    const dbErr = projectR.error || pullR.error || analyserR.error || analysisR.error
+    if (analyserR.error) return analyserR.error
+    const dbErr = projectR.error || pullR.error || analysisR.error
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 
     const project = projectR.data

@@ -1,12 +1,12 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { backfillIssueComments } from "@/lib/pr-backfill"
 import type {
     Issue,
     IssueComment,
     IssueSuggestion,
     Project,
-    ProjectAnalyser,
     ProjectLabelIcon,
     ProjectStatusColor,
 } from "@/lib/supabase/types"
@@ -39,7 +39,7 @@ export async function GET(
         await Promise.all([
             supabase.from("issues").select("*").eq("id", issueId).eq("project_id", id).maybeSingle<Issue>(),
             supabase.from("projects").select("*").eq("id", id).maybeSingle<Project>(),
-            supabase.from("project_analyser").select("*").eq("project_id", id).maybeSingle<ProjectAnalyser>(),
+            repoRead(() => createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id)),
             supabase
                 .from("issue_suggestions")
                 .select("*")
@@ -58,8 +58,9 @@ export async function GET(
             supabase.from("project_status_colors").select("*").eq("project_id", id).returns<ProjectStatusColor[]>(),
         ])
 
+    if (analyserR.error) return analyserR.error
     const dbErr =
-        issueR.error || projectR.error || analyserR.error ||
+        issueR.error || projectR.error ||
         suggestionR.error || peekR.error || iconsR.error || colorsR.error
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 

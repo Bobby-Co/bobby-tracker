@@ -60,5 +60,41 @@ export function createSupabaseProjectAnalyserRepository(db: AnyDb): ProjectAnaly
                 .eq("project_id", projectId)
             if (error) throw new RepositoryError(`project_analyser health-report write failed: ${error.message}`, { cause: error })
         },
+        async enable(projectId) {
+            const { data, error } = await db
+                .from("project_analyser")
+                .upsert({ project_id: projectId, enabled: true, status: "pending" }, { onConflict: "project_id" })
+                .select("*")
+                .single<ProjectAnalyser>()
+            if (error) throw new RepositoryError(`project_analyser enable failed: ${error.message}`, { cause: error })
+            return data
+        },
+        async disable(projectId) {
+            const { data, error } = await db
+                .from("project_analyser")
+                .upsert({ project_id: projectId, enabled: false, status: "disabled" }, { onConflict: "project_id" })
+                .select("*")
+                .single<ProjectAnalyser>()
+            if (error) throw new RepositoryError(`project_analyser disable failed: ${error.message}`, { cause: error })
+            return data
+        },
+        async markIndexing(projectId, progress) {
+            const { error } = await db
+                .from("project_analyser")
+                .upsert(
+                    { project_id: projectId, enabled: true, status: "indexing", last_error: null, progress },
+                    { onConflict: "project_id" },
+                )
+            if (error) throw new RepositoryError(`project_analyser mark-indexing failed: ${error.message}`, { cause: error })
+        },
+        async markFailed(projectId, message) {
+            const { error } = await db
+                .from("project_analyser")
+                .upsert(
+                    { project_id: projectId, enabled: true, status: "failed", last_error: message, progress: {} },
+                    { onConflict: "project_id" },
+                )
+            if (error) throw new RepositoryError(`project_analyser mark-failed failed: ${error.message}`, { cause: error })
+        },
     }
 }

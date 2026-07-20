@@ -33,4 +33,18 @@ export interface ProjectAnalyserRepository {
     /** Persist a graph-health report (a jsonb value) + its timestamp onto the
      *  analyser row. Throws {@link RepositoryError} on failure. */
     saveHealthReport(projectId: string, report: unknown, checkedAt: string): Promise<void>
+
+    /** Turn the analyser on for a project (status → pending) and return the row.
+     *  Idempotent upsert; throws on failure. */
+    enable(projectId: string): Promise<ProjectAnalyser>
+
+    /** Turn the analyser off (status → disabled) and return the row. Throws. */
+    disable(projectId: string): Promise<ProjectAnalyser>
+
+    /** Flag an index run as started (enabled, status → indexing, clears last_error,
+     *  seeds `progress`). Throws on failure. */
+    markIndexing(projectId: string, progress: unknown): Promise<void>
+
+    /** Flag an index run as failed (status → failed, records `last_error`). Throws. */
+    markFailed(projectId: string, message: string): Promise<void>
 }

@@ -1,5 +1,6 @@
-import { jsonError, requireProjectAccess } from "@/lib/api"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { repoRead, requireProjectAccess } from "@/lib/api"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import type { Project } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/knowledge — the project's repo identity plus
 // its analyser row. Backs both the Knowledge and Ask tabs, which each
@@ -16,13 +17,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             .select("id,repo_url,repo_full_name")
             .eq("id", id)
             .single<Pick<Project, "id" | "repo_url" | "repo_full_name">>(),
-        supabase
-            .from("project_analyser")
-            .select("*")
-            .eq("project_id", id)
-            .maybeSingle<ProjectAnalyser>(),
+        repoRead(() => createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id)),
     ])
-    if (analyserErr) return jsonError("db_error", analyserErr.message, 500)
+    if (analyserErr) return analyserErr
 
     return Response.json({ project: project ?? null, analyser: analyser ?? null })
 }

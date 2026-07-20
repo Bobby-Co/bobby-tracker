@@ -31,7 +31,6 @@ import type {
     IssuePriority,
     IssueStatus,
     Project,
-    ProjectAnalyser,
 } from "@/lib/supabase/types"
 
 // The subset of a tracker.issues row the sync functions read. Kept structural
@@ -398,12 +397,9 @@ export async function applyAnalysisResult(
     // Cache the successful analysis so the tracker UI mirrors the comment.
     if (status === "done" && result && project) {
         try {
-            const { data: analyser } = await svc
-                .from("project_analyser")
-                .select("graph_id")
-                .eq("project_id", issue.project_id)
-                .maybeSingle<Pick<ProjectAnalyser, "graph_id">>()
-            const graphId = analyser?.graph_id ?? null
+            const graphId = await tryOrNull(() =>
+                createSupabaseProjectAnalyserRepository(svc).findGraphId(issue.project_id),
+            )
             const dataWithPrompt: IssueAnalysisData = {
                 ...result,
                 fix_prompt: composeIssueFixPrompt({

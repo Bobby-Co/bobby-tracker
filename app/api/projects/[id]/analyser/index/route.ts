@@ -1,5 +1,5 @@
-import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
 import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/analyser/index
@@ -54,19 +54,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // updates as the job runs.
     const initialPhase = jobType === "incremental" ? "Update — starting…" : "Starting…"
     const initial: AnalyserProgress = { phase: initialPhase, started_at: new Date().toISOString() }
-    const { error: upErr } = await supabase
-        .from("project_analyser")
-        .upsert(
-            {
-                project_id: id,
-                enabled: true,
-                status: "indexing",
-                last_error: null,
-                progress: initial,
-            },
-            { onConflict: "project_id" },
-        )
-    if (upErr) return jsonError("db_error", upErr.message, 500)
+    const { error: upErr } = await repoRead(() =>
+        createSupabaseProjectAnalyserRepository(supabase).markIndexing(id, initial),
+    )
+    if (upErr) return upErr
 
     try {
         const result = await getAnalyser().startIndex({
@@ -94,12 +85,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const code = e instanceof AnalyserError ? e.code : "kickoff_failed"
         // Roll back the optimistic 'indexing' upsert so the UI doesn't
         // get stuck at "Starting…" if the analyser was unreachable.
-        await supabase
-            .from("project_analyser")
-            .upsert(
-                { project_id: id, enabled: true, status: "failed", last_error: message, progress: {} },
-                { onConflict: "project_id" },
-            )
+        // Best-effort: a failed rollback must not mask the real 502.
+        await createSupabaseProjectAnalyserRepository(supabase).markFailed(id, message).catch(() => {})
         return jsonError(code, message, 502)
     }
 }

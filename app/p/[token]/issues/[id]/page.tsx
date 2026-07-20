@@ -1,7 +1,9 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, Project, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/kernel"
+import type { IssueSuggestion, Project, PublicIssueReporter } from "@/lib/supabase/types"
 import { checkInviteAccess, fetchPublicIssue, requireOwnVisibility, resolvePublicSession } from "@/lib/public/public-session"
 import { PublicIssueView } from "@/components/public/public-issue-view"
 import { PublicIssueDetailSkeleton } from "@/components/public/public-issue-detail-skeleton"
@@ -78,11 +80,9 @@ async function PublicIssueDetailContent({
         .eq("issue_id", issue.id)
         .maybeSingle<Pick<PublicIssueReporter, "reporter_id" | "reporter_name">>()
 
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,status,graph_id,last_indexed_sha")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id" | "last_indexed_sha">>()
+    const analyser = await tryOrNull(() =>
+        createSupabaseProjectAnalyserRepository(svc).findByProjectId(issue.project_id),
+    )
     const analyserReady =
         !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
 
