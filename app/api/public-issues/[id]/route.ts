@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
 import type { IssueSuggestion, PublicIssueReporter } from "@/lib/supabase/types"
-import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public/public-session"
+import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/modules/public"
 
 // GET /api/public-issues/[id]?token=<session_token>
 //

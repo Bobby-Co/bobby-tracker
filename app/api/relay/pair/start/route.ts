@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { genDeviceCode, genUserCode, normalizeUserCode } from "@/lib/integrations/relay"
+import { genDeviceCode, genUserCode, normalizeUserCode } from "@/modules/relay"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // PUBLIC. Called by the bobby-relay app (no Supabase session) to start a

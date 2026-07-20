@@ -7,8 +7,8 @@ import { PublicProfileBadge } from "@/components/public/public-profile-badge"
 import { PublicSessionSubmissions } from "@/components/public/public-session-submissions"
 import { PublicSessionSkeleton } from "@/components/public/public-session-skeleton"
 import { PublicSessionGate } from "@/components/public/public-session-gate"
-import { checkInviteAccess, getCurrentPublicUser } from "@/lib/public/public-session"
-import { groupByParent, groupParentsByReporter, type PublicListedIssue } from "@/lib/public/public-reporter"
+import { checkInviteAccess, getCurrentPublicUser } from "@/modules/public"
+import { groupByParent, groupParentsByReporter, type PublicListedIssue } from "@/modules/public"
 
 export const dynamic = "force-dynamic"
 

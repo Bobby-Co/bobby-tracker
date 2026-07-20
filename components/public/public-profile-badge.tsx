@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { readName, writeName } from "@/lib/public/public-profile"
+import { readName, writeName } from "@/components/public/public-profile"
 
 // Anonymous profile pill at the top of /p/<token>. Reads the name
 // from localStorage (synced across tabs + intra-tab via the custom

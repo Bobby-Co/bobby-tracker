@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import { baseUrl, isValidEmail, newInviteToken, normalizeEmail, sendInviteEmail } from "@/lib/teams/invites"
+import { baseUrl, isValidEmail, newInviteToken, normalizeEmail, sendInviteEmail } from "@/modules/teams"
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/supabase/types"
 
 // GET /api/teams/[id]/invites — pending (unaccepted) invites (admins). RLS on

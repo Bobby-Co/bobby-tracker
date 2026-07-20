@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { normalizeEmail } from "@/lib/teams/invites"
+import { normalizeEmail } from "@/modules/teams"
 import type { TeamInvite } from "@/lib/supabase/types"
 
 // The invitee is not (yet) a team admin, so RLS on team_invites hides the row
