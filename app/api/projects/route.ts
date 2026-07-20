@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { jsonError, requireRole, requireTeam } from "@/lib/api"
 import { getAccessibleProjectIds } from "@/lib/auth/team-access"
-import { embedText } from "@/lib/analyser"
+import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/icons/suggest"
 import { canonicalRepoUrl, validateRepoUrl } from "@/lib/integrations/repo-url"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -143,7 +143,7 @@ async function topSuggestedIcon(seed: string): Promise<string | null> {
     if (!text) return null
     const local = filterIconsLocal(text)
     if (local.length > 0) return local[0].name
-    const { vector } = await embedText(text)
+    const { vector } = await getAnalyser().embed(text)
     const svc = createServiceClient()
     const { data } = await svc.rpc("find_similar_icons", {
         p_embedding: vector as unknown as string,

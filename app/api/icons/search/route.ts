@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, embedText } from "@/lib/analyser"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { createServiceClient } from "@/lib/supabase/server"
 
 // POST /api/icons/search — semantic icon lookup.
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     let vector: number[]
     let model: string
     try {
-        const result = await embedText(q)
+        const result = await getAnalyser().embed(q)
         vector = result.vector
         model = result.model
     } catch (e) {
