@@ -28,6 +28,7 @@ import {
 } from "@/lib/timeline/scale"
 import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
 import { ScheduleOutbox, type SchedulePatch } from "@/lib/timeline/outbox"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { Issue, IssuePriority, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
 
 // IssueTimeline — Gantt-flavoured planning canvas. Tiles are
@@ -1042,12 +1043,16 @@ function StatusSwatch({
     async function save(next: string) {
         if (!/^#[0-9a-fA-F]{6}$/.test(next)) return
         setDraft(next)
-        const res = await fetch(`/api/projects/${projectId}/status-colors`, {
-            method: "PUT",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ status, color: next }),
-        })
-        if (res.ok) onSaved()
+        try {
+            await apiMutate(`/api/projects/${projectId}/status-colors`, {
+                method: "PUT",
+                body: { status, color: next },
+            })
+            onSaved()
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e // network: propagate as before
+            // server error: silent (no onSaved), as before
+        }
     }
 
     return (

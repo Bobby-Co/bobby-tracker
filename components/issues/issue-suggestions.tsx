@@ -5,6 +5,7 @@ import { cn } from "@/components/ui/cn"
 import { EffortControl, EFFORT_LABEL } from "@/components/ui/effort-control"
 import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/integrations/github"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { AnalyseEffort } from "@/lib/analyser"
 import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/supabase/types"
 
@@ -85,25 +86,21 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
         setPending(true)
         void (async () => {
             try {
-                const res = await fetch(`/api/issues/${issueId}/suggest`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(effort ? { effort } : {}),
-                })
-                if (!aliveRef.current) return
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}))
-                    setError(body?.error?.message || `Failed (${res.status})`)
-                    setErrorCode(body?.error?.code || "unknown")
-                    return
-                }
-                const { suggestion: next } = await res.json()
+                const { suggestion: next } = await apiMutate<{ suggestion: IssueSuggestion | null }>(
+                    `/api/issues/${issueId}/suggest`,
+                    { method: "POST", body: effort ? { effort } : {} },
+                )
                 if (!aliveRef.current) return
                 setSuggestion(next)
             } catch (e) {
                 if (!aliveRef.current) return
-                setError(e instanceof Error ? e.message : "Network error")
-                setErrorCode("network_error")
+                if (e instanceof ApiError) {
+                    setError(e.message || `Failed (${e.status})`)
+                    setErrorCode(e.code || "unknown")
+                } else {
+                    setError(e instanceof Error ? e.message : "Network error")
+                    setErrorCode("network_error")
+                }
             } finally {
                 if (aliveRef.current) setPending(false)
             }
@@ -121,21 +118,12 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
         setPending(true)
         void (async () => {
             try {
-                const res = await fetch(`/api/issues/${issueId}/analyse`, { method: "POST" })
+                const body = await apiMutate<{ status?: string; suggestion?: IssueSuggestion | null }>(
+                    `/api/issues/${issueId}/analyse`,
+                    { method: "POST" },
+                )
                 if (!aliveRef.current) return
-                if (!res.ok) {
-                    const body = await res.json().catch(() => ({}))
-                    setError(body?.error?.message || `Failed (${res.status})`)
-                    setErrorCode(body?.error?.code || "unknown")
-                    setPending(false)
-                    return
-                }
-                const body = (await res.json().catch(() => ({}))) as {
-                    status?: string
-                    suggestion?: IssueSuggestion | null
-                }
-                if (!aliveRef.current) return
-                if (body.suggestion) {
+                if (body?.suggestion) {
                     setSuggestion(body.suggestion)
                     setPending(false)
                 }
@@ -143,8 +131,13 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                 // INSERT subscription below; stay pending until then.
             } catch (e) {
                 if (!aliveRef.current) return
-                setError(e instanceof Error ? e.message : "Network error")
-                setErrorCode("network_error")
+                if (e instanceof ApiError) {
+                    setError(e.message || `Failed (${e.status})`)
+                    setErrorCode(e.code || "unknown")
+                } else {
+                    setError(e instanceof Error ? e.message : "Network error")
+                    setErrorCode("network_error")
+                }
                 setPending(false)
             }
         })()

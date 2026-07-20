@@ -7,6 +7,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { defaultLabelColor, softLabelChipStyle } from "@/lib/timeline/labels"
 import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
 import type {
@@ -181,15 +182,17 @@ function DrawerBody({
         const next = localLabels.filter((l) => l !== label)
         setLocalLabels(next)
         try {
-            await fetch(`/api/issues/${issue.id}`, {
-                method: "PATCH",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ labels: next }),
-            })
+            await apiMutate(`/api/issues/${issue.id}`, { method: "PATCH", body: { labels: next } })
             router.refresh()
-        } catch {
-            // Revert on failure so the chip reappears.
-            setLocalLabels(localLabels)
+        } catch (e) {
+            if (!(e instanceof ApiError)) {
+                // Network failure: revert on failure so the chip reappears.
+                setLocalLabels(localLabels)
+                return
+            }
+            // Server error: as before, fall through to refresh (the reload
+            // reconciles the label back from the server).
+            router.refresh()
         }
     }
 
@@ -589,7 +592,10 @@ function RegenerateButton({ issueId }: { issueId: string }) {
     async function trigger() {
         setBusy(true)
         try {
-            await fetch(`/api/issues/${issueId}/suggest`, { method: "POST" })
+            await apiMutate(`/api/issues/${issueId}/suggest`, { method: "POST" })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e // network: propagate as before
+            // server error: ignore (the original ignored non-2xx)
         } finally {
             setBusy(false)
         }
