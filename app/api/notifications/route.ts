@@ -1,4 +1,7 @@
+import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
+import { createServiceClient } from "@/lib/supabase/server"
+import { drainNotifications } from "@/modules/notifications"
 import type { Notification } from "@/lib/supabase/types"
 
 // The tray renders a bounded list, and migration 0049 trims each user's feed to
@@ -16,6 +19,15 @@ const LIMIT = 50
 export async function GET() {
     const { supabase, error } = await requireUser()
     if (error) return error
+
+    // Belt-and-braces drain: if the pg_net wake-up (migration 0054) was missed,
+    // surface pending events when someone opens the bell — a repair path this
+    // no-cron/no-retry stack otherwise lacks. Self-gating on the drain token;
+    // after() so it never delays or fails the response. No-op when the outbox is
+    // empty (i.e. before cutover).
+    if (process.env.NOTIFY_DRAIN_TOKEN) {
+        after(() => drainNotifications(createServiceClient(), 10).catch(() => {}))
+    }
 
     const { data, error: dbErr } = await supabase
         .from("notifications")

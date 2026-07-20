@@ -28,3 +28,5 @@ export { createInAppFeedChannel } from "./infrastructure/in-app-feed-channel"
 export { createEmailChannel } from "./infrastructure/email-channel"
 export { createSupabaseRecipientResolver } from "./infrastructure/supabase-recipient-resolver"
 export { createSupabaseOutboxStore } from "./infrastructure/supabase-outbox-store"
+
+export { createNotificationService, drainNotifications } from "./composition"
