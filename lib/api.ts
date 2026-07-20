@@ -3,7 +3,7 @@
 import { cookies } from "next/headers"
 import type { User } from "@supabase/supabase-js"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
-import { assertProjectAccess, resolveActiveTeam, roleAtLeast } from "@/lib/auth/team-access"
+import { assertProjectAccess, getTeamRole, resolveActiveTeam, roleAtLeast } from "@/lib/auth/team-access"
 import type { TeamRole, TeamWithRole } from "@/lib/supabase/types"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -148,4 +148,51 @@ export async function requireIssueAccess(issueId: string): Promise<IssueOK | Iss
     const access = await assertProjectAccess(supabase, user.id, projectId)
     if (!access.ok || !access.teamId || !access.role) return notFound
     return { supabase, user, projectId, teamId: access.teamId, role: access.role, error: null }
+}
+
+type TeamRowOK = { supabase: SupabaseServer; user: User; teamId: string; role: TeamRole; isCreator: boolean; error: null }
+type TeamRowFail = { supabase: SupabaseServer; user: null; teamId: null; role: null; isCreator: false; error: Response }
+
+/** Guard for a TEAM-OWNED resource keyed by (team_id, user_id=creator) —
+ *  project_groups (Collections) and public_sessions. Coarse RLS already blocks
+ *  CROSS-team access; this adds the intra-team rule the DB doesn't: a MUTATION
+ *  (opts.write) requires the caller to be the creator OR a team admin/owner, so
+ *  a plain member can't edit/delete another member's Collection or session.
+ *  Reads only need membership. 404 when the row is absent or the caller isn't a
+ *  member (don't reveal existence); 403 when a member mutates what they don't own.
+ *
+ *  POLICY NOTE: "creator-or-admin" is a deliberate, conservative default — adjust
+ *  here (one place) if the product wants member-wide edit or strict admin-only. */
+async function requireTeamRowAccess(
+    table: "project_groups" | "public_sessions",
+    id: string,
+    opts?: { write?: boolean },
+): Promise<TeamRowOK | TeamRowFail> {
+    const base = await requireUser()
+    if (base.error) return { supabase: base.supabase, user: null, teamId: null, role: null, isCreator: false, error: base.error }
+    const { supabase, user } = base
+    const notFound: TeamRowFail = { supabase, user: null, teamId: null, role: null, isCreator: false, error: jsonError("not_found", "not found", 404) }
+
+    const { data: row } = await supabase.from(table).select("team_id,user_id").eq("id", id).maybeSingle()
+    const r = row as { team_id: string; user_id: string } | null
+    if (!r?.team_id) return notFound
+
+    const role = await getTeamRole(supabase, r.team_id, user.id)
+    if (!role) return notFound
+
+    const isCreator = r.user_id === user.id
+    if (opts?.write && !isCreator && !roleAtLeast(role, "admin")) {
+        return { supabase, user: null, teamId: null, role: null, isCreator: false, error: forbidden("only the creator or a team admin can change this") }
+    }
+    return { supabase, user, teamId: r.team_id, role, isCreator, error: null }
+}
+
+/** Team-owned Collection (project_groups) guard. `{ write: true }` for mutations. */
+export function requireCollectionAccess(id: string, opts?: { write?: boolean }): Promise<TeamRowOK | TeamRowFail> {
+    return requireTeamRowAccess("project_groups", id, opts)
+}
+
+/** Team-owned public submission session (public_sessions) guard. `{ write: true }` for mutations. */
+export function requireSessionAccess(id: string, opts?: { write?: boolean }): Promise<TeamRowOK | TeamRowFail> {
+    return requireTeamRowAccess("public_sessions", id, opts)
 }

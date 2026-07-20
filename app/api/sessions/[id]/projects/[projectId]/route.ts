@@ -1,11 +1,11 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireSessionAccess } from "@/lib/api"
 
 export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string; projectId: string }> },
 ) {
     const { id, projectId } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireSessionAccess(id, { write: true })
     if (error) return error
     const { error: dbErr } = await supabase
         .from("public_session_projects")

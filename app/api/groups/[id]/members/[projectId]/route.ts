@@ -1,10 +1,10 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireCollectionAccess } from "@/lib/api"
 
 // DELETE — remove a project from a group. Owner-only via RLS on the
 // membership table; no extra check needed here.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; projectId: string }> }) {
     const { id, projectId } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireCollectionAccess(id, { write: true })
     if (error) return error
 
     const { error: dbErr } = await supabase

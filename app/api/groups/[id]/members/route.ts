@@ -1,11 +1,11 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireCollectionAccess } from "@/lib/api"
 
 // POST — add a project to a group. Membership row's RLS with-check
 // already enforces same-owner on both sides, so a stray project id
 // returns a row-level error rather than silently linking.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await requireCollectionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>

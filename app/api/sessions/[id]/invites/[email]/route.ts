@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireSessionAccess } from "@/lib/api"
 
 // DELETE /api/sessions/[id]/invites/[email] — remove a whitelisted
 // email. The email path segment is URL-encoded by the caller; we
@@ -10,7 +10,7 @@ import { jsonError, requireUser } from "@/lib/api"
 // boundary on its own.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; email: string }> }) {
     const { id, email: rawEmail } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await requireSessionAccess(id, { write: true })
     if (error) return error
 
     const email = decodeURIComponent(rawEmail).trim().toLowerCase()
