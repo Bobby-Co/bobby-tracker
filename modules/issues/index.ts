@@ -20,3 +20,14 @@ export { embedIssueAsync, countUnembeddedIssues, ensureIssueEmbeddings } from ".
 // ─── issue fix-prompt composer (renders a coding-agent prompt from an issue) ──
 export type { IssuePromptInput } from "./infrastructure/issue-prompt"
 export { composeIssueFixPrompt } from "./infrastructure/issue-prompt"
+
+// ─── service-role issue ops for the GitHub-sync / analysis flow ──────────────
+export type { IssueAnalysisRow, IssueSyncPatch, ImportedIssueInsert, IssueSuggestionInsert } from "./infrastructure/issue-sync-store"
+export {
+    findIssueAnalysisRow,
+    listLinkedGithubNumbers,
+    updateIssueSyncFields,
+    insertImportedIssue,
+    countIssueSuggestions,
+    insertIssueSuggestion,
+} from "./infrastructure/issue-sync-store"

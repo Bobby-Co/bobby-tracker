@@ -21,7 +21,16 @@ import {
     resultCommentBody,
 } from "./github-issue-comment"
 import { repoFullName } from "../domain/repo-ref"
-import { composeIssueFixPrompt } from "@/modules/issues"
+import {
+    composeIssueFixPrompt,
+    countIssueSuggestions,
+    findIssueAnalysisRow,
+    insertImportedIssue,
+    insertIssueSuggestion,
+    listLinkedGithubNumbers,
+    updateIssueSyncFields,
+    type IssueSyncPatch,
+} from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
@@ -130,16 +139,13 @@ export async function pushIssueToGithub(issue: SyncIssue, project: SyncProject):
     const hash = await syncHash(issue.title, issue.body ?? "", "open")
 
     const svc = createServiceClient()
-    await svc
-        .from("issues")
-        .update({
-            github_issue_number: created.number,
-            github_node_id: created.node_id,
-            sync_source: "tracker",
-            last_synced_hash: hash,
-            github_synced_at: new Date().toISOString(),
-        })
-        .eq("id", issue.id)
+    await updateIssueSyncFields(svc, issue.id, {
+        github_issue_number: created.number,
+        github_node_id: created.node_id,
+        sync_source: "tracker",
+        last_synced_hash: hash,
+        github_synced_at: new Date().toISOString(),
+    })
 }
 
 // ─── Outbound: update ───────────────────────────────────────────────────────
@@ -171,14 +177,11 @@ export async function updateGithubIssueFromTracker(
 
     const hash = await syncHash(issue.title, issue.body ?? "", state)
     const svc = createServiceClient()
-    await svc
-        .from("issues")
-        .update({
-            sync_source: "tracker",
-            last_synced_hash: hash,
-            github_synced_at: new Date().toISOString(),
-        })
-        .eq("id", issue.id)
+    await updateIssueSyncFields(svc, issue.id, {
+        sync_source: "tracker",
+        last_synced_hash: hash,
+        github_synced_at: new Date().toISOString(),
+    })
 }
 
 // syncReady gates work on the project being fully wired for sync: toggled on +
@@ -234,22 +237,6 @@ export async function deleteGithubIssueFromTracker(issue: SyncIssue, project: Sy
 // result → applyAnalysisResult edits the placeholder comment in place. Closing
 // the issue cancels the run. See the analyser's issue_async.go + ADR-0051.
 
-// Structural subset the analysis flow reads from tracker.issues / .projects.
-type AnalysisIssueRow = {
-    id: string
-    project_id: string
-    issue_number: number
-    title: string
-    body: string | null
-    status: IssueStatus
-    priority: string | null
-    labels: string[] | null
-    github_issue_number: number | null
-    github_analysis_comment_id: number | null
-    analysis_status: string | null
-}
-const ANALYSIS_ISSUE_COLS =
-    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status"
 
 // ensureAnalysis kicks off the SINGLE analysis run for an issue and is the one
 // entry point for both surfaces: the tracker's suggestion box (via the
@@ -269,20 +256,13 @@ export async function ensureAnalysis(
 ): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue"> {
     const svc = createServiceClient()
 
-    const { data: issue } = await svc
-        .from("issues")
-        .select(ANALYSIS_ISSUE_COLS)
-        .eq("id", issueId)
-        .maybeSingle<AnalysisIssueRow>()
+    // Issue + suggestions via the Issues contract — github doesn't own those tables.
+    const issue = await findIssueAnalysisRow(svc, issueId)
     if (!issue) return "no_issue"
 
     // Idempotent / one-shot: don't start a second run.
     if (issue.analysis_status === "analysing") return "in_flight"
-    const { count } = await svc
-        .from("issue_suggestions")
-        .select("id", { count: "exact", head: true })
-        .eq("issue_id", issueId)
-    if ((count ?? 0) > 0) return "done"
+    if ((await countIssueSuggestions(svc, issueId)) > 0) return "done"
 
     // Fail-safe: a query error folds to null → treated as not-ready, exactly as
     // the old inline read (which ignored the error) did.
@@ -290,7 +270,7 @@ export async function ensureAnalysis(
     // No run unless the graph is indexed.
     if (!isAnalyserReady(analyser)) return "not_ready"
 
-    const update: Record<string, unknown> = { analysis_status: "analysing" }
+    const update: IssueSyncPatch = { analysis_status: "analysing" }
 
     // Post the "analysing…" placeholder comment only when the issue is
     // GitHub-linked and sync is on. For web-only projects the analysis still
@@ -316,7 +296,7 @@ export async function ensureAnalysis(
         }
     }
 
-    await svc.from("issues").update(update).eq("id", issueId)
+    await updateIssueSyncFields(svc, issueId, update)
 
     // Kick the single detached run; its callback caches to issue_suggestions
     // (the web box picks it up via realtime) and edits the GitHub comment.
@@ -346,11 +326,7 @@ export async function applyAnalysisResult(
 ): Promise<void> {
     const svc = createServiceClient()
 
-    const { data: issue } = await svc
-        .from("issues")
-        .select(ANALYSIS_ISSUE_COLS)
-        .eq("id", taskId)
-        .maybeSingle<AnalysisIssueRow>()
+    const issue = await findIssueAnalysisRow(svc, taskId)
     if (!issue) return
 
     // Project context via the Projects contract — github doesn't own the projects table.
@@ -376,7 +352,7 @@ export async function applyAnalysisResult(
         }
     }
 
-    await svc.from("issues").update({ analysis_status: status }).eq("id", taskId)
+    await updateIssueSyncFields(svc, taskId, { analysis_status: status })
 
     // Cache the successful analysis so the tracker UI mirrors the comment.
     if (status === "done" && result && project) {
@@ -411,7 +387,7 @@ export async function applyAnalysisResult(
                     },
                 }),
             }
-            await svc.from("issue_suggestions").insert({
+            await insertIssueSuggestion(svc, {
                 issue_id: issue.id,
                 data: dataWithPrompt,
                 markdown: result.markdown ?? result.summary ?? "",
@@ -459,14 +435,8 @@ export async function importExistingIssues(
     const gh = await listRepoIssues(project.github_installation_id!, owner, repo, { state: "all" })
 
     // Numbers already linked to this project → skip (idempotent re-runs).
-    const { data: existing } = await svc
-        .from("issues")
-        .select("github_issue_number")
-        .eq("project_id", projectId)
-        .not("github_issue_number", "is", null)
-    const seen = new Set(
-        (existing ?? []).map((r: { github_issue_number: number | null }) => r.github_issue_number),
-    )
+    // Issues via the Issues contract — github doesn't own the issues table.
+    const seen = new Set(await listLinkedGithubNumbers(svc, projectId))
 
     let imported = 0
     let skipped = 0
@@ -476,7 +446,7 @@ export async function importExistingIssues(
             continue
         }
         const closed = it.state === "closed"
-        const { error } = await svc.from("issues").insert({
+        const ok = await insertImportedIssue(svc, {
             project_id: projectId,
             user_id: project.user_id,
             title: it.title,
@@ -488,7 +458,7 @@ export async function importExistingIssues(
             last_synced_hash: await syncHash(it.title, it.body ?? "", closed ? "closed" : "open"),
             github_synced_at: new Date().toISOString(),
         })
-        if (!error) imported++
+        if (ok) imported++
     }
     return { imported, total: gh.length, skipped }
 }
