@@ -4,6 +4,7 @@ import { use, useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useApi } from "@/lib/hooks/use-api"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 interface InviteInfo {
     email: string
@@ -29,15 +30,14 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         setAccepting(true)
         setAcceptErr(null)
         try {
-            const res = await fetch(`/api/invites/${token}`, { method: "POST" })
-            const body = await res.json().catch(() => null)
-            if (!res.ok) { setAcceptErr(body?.error?.message ?? "Couldn't accept the invitation"); return }
+            const body = await apiMutate<{ team_id?: string }>(`/api/invites/${token}`, { method: "POST" })
             // Switch into the joined team, then land in the app.
             if (body?.team_id) document.cookie = `team_id=${encodeURIComponent(body.team_id)}; path=/; max-age=31536000; samesite=lax`
             setAccepted(true)
             window.location.assign("/projects")
-        } catch {
-            setAcceptErr("Network error")
+        } catch (e) {
+            if (e instanceof ApiError) setAcceptErr(e.message ?? "Couldn't accept the invitation")
+            else setAcceptErr("Network error")
         } finally {
             setAccepting(false)
         }

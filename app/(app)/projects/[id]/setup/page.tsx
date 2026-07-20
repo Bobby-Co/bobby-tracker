@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { apiMutate } from "@/lib/api-client"
 import { SetupWizard, type WizardDir, type WizardEffort } from "@/components/projects/setup-wizard"
 import type { GithubSyncDirection } from "@/lib/supabase/types"
 
@@ -43,26 +44,27 @@ export default function SetupWizardPage() {
     }, [id])
 
     function saveGithub(dir: WizardDir) {
-        void fetch(`/api/projects/${id}/github-sync`, {
+        // Fire-and-forget: swallow every outcome, as before.
+        void apiMutate(`/api/projects/${id}/github-sync`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(dir === "off" ? { enabled: false } : { enabled: true, direction: dir }),
+            body: dir === "off" ? { enabled: false } : { enabled: true, direction: dir },
         }).catch(() => {})
     }
 
     function saveAutoUpdate(on: boolean) {
-        void fetch(`/api/projects/${id}`, {
+        void apiMutate(`/api/projects/${id}`, {
             method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ auto_index_on_push: on }),
+            body: { auto_index_on_push: on },
         }).catch(() => {})
     }
 
     async function connect() {
         try {
-            const res = await fetch(`/api/projects/${id}/github-sync/link`, { method: "POST" })
-            const data = (await res.json().catch(() => ({}))) as { installed?: boolean; linked?: boolean }
-            if (data.installed && data.linked) {
+            const data = await apiMutate<{ installed?: boolean; linked?: boolean }>(
+                `/api/projects/${id}/github-sync/link`,
+                { method: "POST" },
+            )
+            if (data?.installed && data?.linked) {
                 window.location.reload()
                 return
             }

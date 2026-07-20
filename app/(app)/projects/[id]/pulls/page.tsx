@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation"
 import { useState } from "react"
 import { useApi } from "@/lib/hooks/use-api"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { PrList, type PullRequestRow } from "@/components/pulls/pr-list"
 import { SegBar } from "@/components/ui/field-card"
 
@@ -19,7 +20,13 @@ export default function PullsPage() {
     async function sync() {
         setSyncing(true)
         try {
-            await fetch(`/api/projects/${id}/pulls/sync`, { method: "POST", credentials: "same-origin" })
+            try {
+                await apiMutate(`/api/projects/${id}/pulls/sync`, { method: "POST" })
+            } catch (e) {
+                // A server error is ignored (the sync runs detached) — fall through
+                // to the refetch, as before; only a network error skips it.
+                if (!(e instanceof ApiError)) throw e
+            }
             // The backfill runs detached; give it a moment, then refetch.
             await new Promise((r) => setTimeout(r, 1500))
             refetch()
