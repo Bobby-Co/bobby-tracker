@@ -5,9 +5,6 @@
 export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
-// The stored analyser-effort setting (project_analyser.analyse_effort). Defined
-// here with the other DB enums; the analysis module imports it from this file.
-export type AnalyseEffort = "fast" | "medium" | "high" | "veryhigh"
 
 export interface Project {
     id: string
@@ -405,7 +402,7 @@ export interface Issue {
      *  create time (advanced settings) and overridable per-run. Null =
      *  no per-issue choice, so the analyse call omits effort and the
      *  analyser falls back to the project default → its own default. */
-    analyse_effort: AnalyseEffort | null
+    analyse_effort: "fast" | "medium" | "high" | "veryhigh" | null
     created_at: string
     updated_at: string
 }

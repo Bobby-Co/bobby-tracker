@@ -1,7 +1,7 @@
 // /issues/analyse (structured issue analysis, sync + detached) and
 // /issues/preferences (per-project analyse defaults).
 
-import type { AnalyseEffort } from "@/lib/supabase/types"
+import type { AnalyseEffort } from "../../domain/effort"
 import { AnalyserError, assertConfigured, authHeader } from "./client"
 
 // Thoroughness level for issue analysis. The lowercase wire values the analyser
