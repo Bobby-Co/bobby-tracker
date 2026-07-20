@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test"
-import { findingState } from "./finding-severity"
+import { findingState } from "./finding-state"
 
 test("findingState — critical vocabulary blocks, legacy 'bug' still blocks", () => {
     expect(findingState("critical")).toBe("critical")

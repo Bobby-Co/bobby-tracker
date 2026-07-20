@@ -15,7 +15,7 @@
 //   1. Don't allow merge until the review has FINISHED.
 //   2. Don't allow merge when the review found something CRITICAL.
 
-import { findingState } from "./finding-severity"
+import { findingState } from "@/lib/rendering/finding-state"
 
 // Domain value-objects — the minimal PR + review shape this policy reads. Kept
 // local (not the DB row types) so the gate stays a PURE domain rule with no SDK
@@ -57,7 +57,7 @@ export interface MergeGate {
 }
 
 /** Count findings the review marked as blocking, using the SAME normaliser the
- *  review panel groups by (@/modules/pull-requests findingState) so the gate and the visible
+ *  review panel groups by (the shared findingState) so the gate and the visible
  *  "Blockers" section can never disagree — if the panel shows a blocker, the gate
  *  counts it, and vice-versa. */
 export function criticalFindingCount(analysis: MergeReview | null): number {

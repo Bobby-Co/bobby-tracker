@@ -2,7 +2,7 @@
 // (Phase 3) — pure string building, no I/O.
 
 import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/rendering/badge"
-import { findingState } from "../domain/finding-severity"
+import { findingState } from "@/lib/rendering/finding-state"
 import type { PRAnalysis, PRFinding } from "@/lib/supabase/types"
 
 const PR_MARKER = "<!-- bobby:pr-analysis -->"

@@ -9,7 +9,7 @@
 // (system stack only), and each distinct chip is its own URL — a status change
 // swaps the URL, so per-URL caching never shows a stale chip.
 
-import { findingState } from "@/modules/pull-requests"
+import { findingState } from "./finding-state"
 
 export type BadgeTone =
     | "emerald" | "amber" | "rose" | "violet" | "blue" | "indigo" | "cyan" | "zinc"
