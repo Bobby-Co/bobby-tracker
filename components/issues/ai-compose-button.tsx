@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { Dropdown } from "@/components/ui/dropdown"
 import { compressImage, type CompressedImage } from "@/lib/image-compress"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { ISSUE_PRIORITIES, type IssuePriority } from "@/lib/supabase/types"
 
 interface IssueProposal {
@@ -109,25 +110,14 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
         setComposeError(null)
         setComposing(true)
         try {
-            const res = await fetch("/api/issues/ai-compose", {
+            const data = await apiMutate<{ proposal: IssueProposal }>("/api/issues/ai-compose", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    project_id: projectId,
-                    paragraph,
-                    images: images.map((i) => i.dataUrl),
-                }),
+                body: { project_id: projectId, paragraph, images: images.map((i) => i.dataUrl) },
             })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setComposeError(e?.error?.message || `Failed (${res.status})`)
-                return
-            }
-            const data = await res.json()
-            const p = data.proposal as IssueProposal
-            setProposal(p)
+            setProposal(data.proposal)
         } catch (e) {
-            setComposeError(e instanceof Error ? e.message : String(e))
+            if (e instanceof ApiError) setComposeError(e.message || `Failed (${e.status})`)
+            else setComposeError(e instanceof Error ? e.message : String(e))
         } finally {
             setComposing(false)
         }
@@ -141,31 +131,29 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
         if (!proposal) return
         setCreateError(null)
         startCreate(async () => {
-            const res = await fetch("/api/issues", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    project_id: projectId,
-                    title: proposal.title,
-                    body: proposal.body,
-                    priority: proposal.priority,
-                    labels: proposal.labels,
-                    ai_proposed: true,
-                }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setCreateError(e?.error?.message || `Failed (${res.status})`)
-                return
+            try {
+                const { issue } = await apiMutate<{ issue?: { id?: string } }>("/api/issues", {
+                    method: "POST",
+                    body: {
+                        project_id: projectId,
+                        title: proposal.title,
+                        body: proposal.body,
+                        priority: proposal.priority,
+                        labels: proposal.labels,
+                        ai_proposed: true,
+                    },
+                })
+                onClose()
+                router.refresh()
+                // Route to the new issue's detail page — the
+                // similar-issues card there will populate as soon as
+                // the embedding lands and the user can mark it as a
+                // duplicate from that surface if appropriate.
+                if (issue?.id) router.push(`/projects/${projectId}/issues/${issue.id}`)
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setCreateError(e.message || `Failed (${e.status})`)
             }
-            const { issue } = await res.json()
-            onClose()
-            router.refresh()
-            // Route to the new issue's detail page — the
-            // similar-issues card there will populate as soon as
-            // the embedding lands and the user can mark it as a
-            // duplicate from that surface if appropriate.
-            if (issue?.id) router.push(`/projects/${projectId}/issues/${issue.id}`)
         })
     }
 

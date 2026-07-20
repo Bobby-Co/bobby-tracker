@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { useApi } from "@/lib/hooks/use-api"
 import { createClient } from "@/lib/supabase/client"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { timeAgo } from "@/components/issues/issue-meta"
 
 // Shared GitHub comment thread for PRs and issues. Comments carry a provenance:
@@ -206,36 +207,30 @@ function CommentRow({
         if (!body) return
         setBusy(true)
         setError(null)
-        const res = await fetch(`${basePath}/${c.github_comment_id}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({ body }),
-        })
-        setBusy(false)
-        if (!res.ok) {
-            const j = await res.json().catch(() => null)
-            setError(j?.error?.message ?? "Couldn't save the edit.")
-            return
+        try {
+            await apiMutate(`${basePath}/${c.github_comment_id}`, { method: "PATCH", body: { body } })
+            setBusy(false)
+            setEditing(false)
+            onChanged()
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e // network: leave busy as-is + propagate, as before
+            setBusy(false)
+            setError(e.message ?? "Couldn't save the edit.")
         }
-        setEditing(false)
-        onChanged()
     }
 
     async function remove() {
         setBusy(true)
         setError(null)
-        const res = await fetch(`${basePath}/${c.github_comment_id}`, {
-            method: "DELETE",
-            credentials: "same-origin",
-        })
-        setBusy(false)
-        if (!res.ok) {
-            const j = await res.json().catch(() => null)
-            setError(j?.error?.message ?? "Couldn't delete the comment.")
-            return
+        try {
+            await apiMutate(`${basePath}/${c.github_comment_id}`, { method: "DELETE" })
+            setBusy(false)
+            onChanged()
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e // network: leave busy as-is + propagate, as before
+            setBusy(false)
+            setError(e.message ?? "Couldn't delete the comment.")
         }
-        onChanged()
     }
 
     return (
@@ -343,24 +338,20 @@ function Composer({
         setBusy(true)
         setError(null)
         setReauth(false)
-        const res = await fetch(basePath, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify({ body: text }),
-        })
-        setBusy(false)
-        if (!res.ok) {
-            const j = await res.json().catch(() => null)
-            if (j?.error?.code === "github_reauth_required") {
+        try {
+            await apiMutate(basePath, { method: "POST", body: { body: text } })
+            setBusy(false)
+            setBody("")
+            onChanged()
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e // network: leave busy as-is + propagate, as before
+            setBusy(false)
+            if (e.code === "github_reauth_required") {
                 setReauth(true)
                 return
             }
-            setError(j?.error?.message ?? "Couldn't post the comment.")
-            return
+            setError(e.message ?? "Couldn't post the comment.")
         }
-        setBody("")
-        onChanged()
     }
 
     if (reauth) return <ConnectPrompt />
