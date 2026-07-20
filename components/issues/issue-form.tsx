@@ -8,6 +8,7 @@ import { ANALYSE_EFFORTS, type AnalyseEffort } from "@/lib/analyser"
 import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
@@ -48,32 +49,30 @@ export function IssueForm({ projectId, onSuccess, onCancel }: IssueFormProps) {
         e.preventDefault()
         setError(null)
         startTransition(async () => {
-            const res = await fetch("/api/issues", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    project_id: projectId,
-                    title,
-                    body,
-                    status,
-                    priority,
-                    labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
-                    // Omit when "" so the issue inherits the project default.
-                    analyse_effort: effort || undefined,
-                }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setError(e?.error?.message || `Failed (${res.status})`)
-                return
+            try {
+                const { issue } = await apiMutate<{ issue?: { id?: string } }>("/api/issues", {
+                    method: "POST",
+                    body: {
+                        project_id: projectId,
+                        title,
+                        body,
+                        status,
+                        priority,
+                        labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
+                        // Omit when "" so the issue inherits the project default.
+                        analyse_effort: effort || undefined,
+                    },
+                })
+                onSuccess?.()
+                // Land on the new issue's detail page so the suggestions panel
+                // can auto-trigger investigation. Refresh the issues list too
+                // so when the user navigates back it's already up to date.
+                router.refresh()
+                if (issue?.id) router.push(`/projects/${projectId}/issues/${issue.id}`)
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setError(e.message || `Failed (${e.status})`)
             }
-            const { issue } = await res.json()
-            onSuccess?.()
-            // Land on the new issue's detail page so the suggestions panel
-            // can auto-trigger investigation. Refresh the issues list too
-            // so when the user navigates back it's already up to date.
-            router.refresh()
-            if (issue?.id) router.push(`/projects/${projectId}/issues/${issue.id}`)
         })
     }
 

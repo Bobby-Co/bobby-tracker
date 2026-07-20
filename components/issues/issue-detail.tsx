@@ -13,6 +13,7 @@ import type {
     ProjectStatusColor,
 } from "@/lib/supabase/types"
 import { PriorityChip, StatusChip } from "@/components/ui/status-chip"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { Dropdown } from "@/components/ui/dropdown"
 import { LabelsEditor } from "@/components/issues/labels-editor"
 import { TimelinePeek } from "@/components/timeline/timeline-peek"
@@ -64,12 +65,13 @@ export function IssueDetail({
 
     function patch(values: Partial<Issue>) {
         startTransition(async () => {
-            const res = await fetch(`/api/issues/${issue.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(values),
-            })
-            if (res.ok) router.refresh()
+            try {
+                await apiMutate(`/api/issues/${issue.id}`, { method: "PATCH", body: values })
+                router.refresh()
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                // Server error: silently ignore, as before (no refresh).
+            }
         })
     }
 

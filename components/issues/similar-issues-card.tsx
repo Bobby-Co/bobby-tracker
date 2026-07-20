@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Spinner } from "@/components/ui/spinner"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 export interface SimilarIssue {
     id: string
@@ -142,21 +143,16 @@ export function SimilarIssuesCard({
         setMarkErr(null)
         setMarking(target.id)
         try {
-            const res = await fetch(`/api/issues/${issueId}/duplicate-of`, {
+            await apiMutate(`/api/issues/${issueId}/duplicate-of`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ duplicate_of_issue_id: target.id }),
+                body: { duplicate_of_issue_id: target.id },
             })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setMarkErr(e?.error?.message || `Failed (${res.status})`)
-                return
-            }
             // Soft-reload: easiest way to refresh the page's
             // duplicate banner + remove this card.
             window.location.reload()
         } catch (e) {
-            setMarkErr(e instanceof Error ? e.message : String(e))
+            if (e instanceof ApiError) setMarkErr(e.message || `Failed (${e.status})`)
+            else setMarkErr(e instanceof Error ? e.message : String(e))
         } finally {
             setMarking(null)
         }
