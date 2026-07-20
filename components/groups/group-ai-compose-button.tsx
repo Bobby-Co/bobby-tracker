@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { Dropdown } from "@/components/ui/dropdown"
 import { compressImage, type CompressedImage } from "@/lib/image-compress"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { ISSUE_PRIORITIES, type IssuePriority } from "@/lib/supabase/types"
 
 interface MemberInfo {
@@ -138,19 +139,15 @@ function Body({
         setComposeError(null)
         setComposing(true)
         try {
-            const res = await fetch(`/api/groups/${groupId}/ai-compose`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ paragraph, images: images.map((i) => i.dataUrl) }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setComposeError(e?.error?.message || `Failed (${res.status})`)
-                return
-            }
-            const data = await res.json()
-            const p = data.proposal as IssueProposal
-            const r = (data.ranking as RankedProject[]) ?? []
+            const data = await apiMutate<{ proposal: IssueProposal; ranking: RankedProject[] | null; routing_query?: string }>(
+                `/api/groups/${groupId}/ai-compose`,
+                {
+                    method: "POST",
+                    body: { paragraph, images: images.map((i) => i.dataUrl) },
+                },
+            )
+            const p = data.proposal
+            const r = data.ranking ?? []
             setProposal(p)
             setRanking(r)
             setRoutingQuery(typeof data.routing_query === "string" ? data.routing_query : null)
@@ -161,7 +158,8 @@ function Body({
                 ?? r.find((x) => x.analyser_ready)
             setPicked(top ? new Set([top.project_id]) : new Set())
         } catch (e) {
-            setComposeError(e instanceof Error ? e.message : String(e))
+            if (e instanceof ApiError) setComposeError(e.message || `Failed (${e.status})`)
+            else setComposeError(e instanceof Error ? e.message : String(e))
         } finally {
             setComposing(false)
         }
@@ -193,24 +191,25 @@ function Body({
             // landing in each project; each gets its own embedding
             // via the existing fire-and-forget on POST /api/issues.
             const results = await Promise.all(targets.map(async (project_id) => {
-                const res = await fetch("/api/issues", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        project_id,
-                        title: proposal.title,
-                        body: proposal.body,
-                        priority: proposal.priority,
-                        labels: proposal.labels,
-                        ai_proposed: true,
-                    }),
-                })
-                if (!res.ok) {
-                    const e = await res.json().catch(() => ({}))
-                    return { project_id, error: e?.error?.message || `Failed (${res.status})` }
+                try {
+                    const data = await apiMutate<{ issue?: { id?: string } }>("/api/issues", {
+                        method: "POST",
+                        body: {
+                            project_id,
+                            title: proposal.title,
+                            body: proposal.body,
+                            priority: proposal.priority,
+                            labels: proposal.labels,
+                            ai_proposed: true,
+                        },
+                    })
+                    return { project_id, issueId: data?.issue?.id as string | undefined }
+                } catch (e) {
+                    // Per-target error collection; a network error rejects the
+                    // Promise.all into the outer catch, as before.
+                    if (!(e instanceof ApiError)) throw e
+                    return { project_id, error: e.message || `Failed (${e.status})` }
                 }
-                const data = await res.json().catch(() => ({}))
-                return { project_id, issueId: data?.issue?.id as string | undefined }
             }))
             const failed = results.filter((r) => "error" in r)
             const created = results.filter((r) => "issueId" in r && r.issueId)

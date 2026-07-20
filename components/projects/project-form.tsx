@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { GithubRepoSummary } from "@/lib/supabase/types"
 
 // GitHub's per-app authorization page lets the user grant access to
@@ -97,26 +98,24 @@ export function ProjectForm() {
             return
         }
         startTransition(async () => {
-            const res = await fetch("/api/projects", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: name || selected.name,
-                    repo_url: selected.html_url,
-                    repo_full_name: selected.full_name,
-                    description,
-                }),
-            })
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}))
-                setError(body?.error?.message || `Failed (${res.status})`)
-                return
+            try {
+                const { project } = await apiMutate<{ project: { id: string } }>("/api/projects", {
+                    method: "POST",
+                    body: {
+                        name: name || selected.name,
+                        repo_url: selected.html_url,
+                        repo_full_name: selected.full_name,
+                        description,
+                    },
+                })
+                // Land on the setup page first — connect GitHub, confirm auto-index
+                // on push, pick analyser effort — then the user moves into the project.
+                router.push(`/projects/${project.id}/setup`)
+                router.refresh()
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setError(e.message || `Failed (${e.status})`)
             }
-            const { project } = await res.json()
-            // Land on the setup page first — connect GitHub, confirm auto-index
-            // on push, pick analyser effort — then the user moves into the project.
-            router.push(`/projects/${project.id}/setup`)
-            router.refresh()
         })
     }
 
