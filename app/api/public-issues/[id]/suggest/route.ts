@@ -1,4 +1,5 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/kernel"
 import { jsonError } from "@/lib/api"
 import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -40,7 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (found.error) return found.error
     const issue = found.issue
 
-    const analyser = await createSupabaseProjectAnalyserRepository(svc).findReadiness(issue.project_id)
+    const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(svc).findReadiness(issue.project_id))
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",

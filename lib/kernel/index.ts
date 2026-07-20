@@ -6,3 +6,4 @@
 export * from "./result"
 export * from "./events"
 export * from "./ports"
+export * from "./repository"

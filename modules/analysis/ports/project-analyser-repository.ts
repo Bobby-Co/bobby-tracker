@@ -16,12 +16,21 @@ import type { ProjectAnalyser } from "@/lib/supabase/types"
 export type AnalyserReadinessRow = Pick<ProjectAnalyser, "enabled" | "status" | "graph_id">
 
 export interface ProjectAnalyserRepository {
-    /** The full analyser row for a project, or null when none exists, the query
-     *  fails, or it isn't visible to the caller (the injected client carries the
-     *  caller's RLS scope). */
+    /** The full analyser row for a project, or null when none exists / isn't
+     *  visible to the caller (the injected client carries the caller's RLS scope).
+     *  Throws {@link RepositoryError} on a genuine query failure — a fail-safe
+     *  caller folds that back to null with `tryOrNull` (see @/lib/kernel). */
     findByProjectId(projectId: string): Promise<ProjectAnalyser | null>
 
     /** Just the readiness-gate columns (enabled/status/graph_id) — pair with
-     *  isAnalyserReady(). Same null semantics as findByProjectId. */
+     *  isAnalyserReady(). Null for an absent row; throws on query failure. */
     findReadiness(projectId: string): Promise<AnalyserReadinessRow | null>
+
+    /** The project's indexed graph id (the analyser repo_id), or null when it has
+     *  never indexed. Throws on query failure. */
+    findGraphId(projectId: string): Promise<string | null>
+
+    /** Persist a graph-health report + its timestamp onto the analyser row.
+     *  Throws {@link RepositoryError} on failure. */
+    saveHealthReport(projectId: string, report: ProjectAnalyser["last_health_report"], checkedAt: string): Promise<void>
 }

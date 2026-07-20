@@ -9,6 +9,7 @@
 // db_error 500 must keep their inline query until the port grows an error channel.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { RepositoryError } from "@/lib/kernel"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 import type { AnalyserReadinessRow, ProjectAnalyserRepository } from "../ports/project-analyser-repository"
 
@@ -26,20 +27,38 @@ type AnyDb = SupabaseClient<any, any, any>
 export function createSupabaseProjectAnalyserRepository(db: AnyDb): ProjectAnalyserRepository {
     return {
         async findByProjectId(projectId) {
-            const { data } = await db
+            const { data, error } = await db
                 .from("project_analyser")
                 .select("*")
                 .eq("project_id", projectId)
                 .maybeSingle<ProjectAnalyser>()
+            if (error) throw new RepositoryError(`project_analyser lookup failed: ${error.message}`, { cause: error })
             return data ?? null
         },
         async findReadiness(projectId) {
-            const { data } = await db
+            const { data, error } = await db
                 .from("project_analyser")
                 .select(READINESS_COLS)
                 .eq("project_id", projectId)
                 .maybeSingle<AnalyserReadinessRow>()
+            if (error) throw new RepositoryError(`project_analyser readiness lookup failed: ${error.message}`, { cause: error })
             return data ?? null
+        },
+        async findGraphId(projectId) {
+            const { data, error } = await db
+                .from("project_analyser")
+                .select("graph_id")
+                .eq("project_id", projectId)
+                .maybeSingle<Pick<ProjectAnalyser, "graph_id">>()
+            if (error) throw new RepositoryError(`project_analyser graph_id lookup failed: ${error.message}`, { cause: error })
+            return data?.graph_id ?? null
+        },
+        async saveHealthReport(projectId, report, checkedAt) {
+            const { error } = await db
+                .from("project_analyser")
+                .update({ last_health_report: report, last_health_check_at: checkedAt })
+                .eq("project_id", projectId)
+            if (error) throw new RepositoryError(`project_analyser health-report write failed: ${error.message}`, { cause: error })
         },
     }
 }

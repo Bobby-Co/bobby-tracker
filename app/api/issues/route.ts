@@ -1,6 +1,7 @@
 import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
 import { createSupabaseProjectAnalyserRepository, isAnalyseEffort } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     // bootstrapped at least once. The UI mirrors this with a banner +
     // disabled "New issue" button on the issues page; this is the
     // server-side enforcement so direct API calls can't bypass it.
-    const analyser = await createSupabaseProjectAnalyserRepository(supabase).findReadiness(project_id)
+    const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(supabase).findReadiness(project_id))
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",

@@ -25,6 +25,7 @@ const eslintConfig = defineConfig([
       "lib/kernel/result.ts",
       "lib/kernel/events.ts",
       "lib/kernel/ports.ts",
+      "lib/kernel/repository.ts",
       "lib/kernel/index.ts",
     ],
     rules: {
