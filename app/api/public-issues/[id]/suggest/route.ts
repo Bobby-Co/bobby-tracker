@@ -1,8 +1,8 @@
-import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
 import { jsonError } from "@/lib/api"
 import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
+import type { IssueSuggestion } from "@/lib/supabase/types"
 import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public/public-session"
 import { clientKey, enforceRateLimit } from "@/lib/rate-limit"
 
@@ -40,11 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (found.error) return found.error
     const issue = found.issue
 
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,status,graph_id")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id">>()
+    const analyser = await createSupabaseProjectAnalyserRepository(svc).findReadiness(issue.project_id)
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",

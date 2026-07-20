@@ -5,7 +5,7 @@
 // GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
 // See the analyser's ADR-0052 + pr.go/pr_async.go.
 
-import { getAnalyser, isAnalyserReady, type PRAnalyseFile } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type PRAnalyseFile } from "@/modules/analysis"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/lib/github-app-rest"
 import { repoFullName } from "@/lib/integrations/github"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -49,11 +49,7 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
     const svc = createServiceClient()
 
     // Gate: the graph must be indexed for the review to have codebase context.
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,status,graph_id")
-        .eq("project_id", project.id)
-        .maybeSingle<{ enabled: boolean; status: string; graph_id: string | null }>()
+    const analyser = await createSupabaseProjectAnalyserRepository(svc).findReadiness(project.id)
     if (!isAnalyserReady(analyser)) return
 
     // Idempotency: don't start a second run while one is in flight for this PR.

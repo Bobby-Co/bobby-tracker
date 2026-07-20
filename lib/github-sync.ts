@@ -23,7 +23,7 @@ import {
 import { repoFullName } from "@/lib/integrations/github"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
 import type {
     GithubSyncDirection,
     IssueAnalysisData,
@@ -294,11 +294,7 @@ export async function ensureAnalysis(
         .eq("issue_id", issueId)
     if ((count ?? 0) > 0) return "done"
 
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("*")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<ProjectAnalyser>()
+    const analyser = await createSupabaseProjectAnalyserRepository(svc).findByProjectId(issue.project_id)
     // No run unless the graph is indexed.
     if (!isAnalyserReady(analyser)) return "not_ready"
 

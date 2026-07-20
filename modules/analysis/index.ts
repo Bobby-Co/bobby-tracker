@@ -3,6 +3,10 @@
 
 export { isAnalyserReady } from "./domain/analyser-readiness"
 
+// ─── project_analyser repository (Phase 1: inline .from() → repository) ──────
+export type { AnalyserReadinessRow, ProjectAnalyserRepository } from "./ports/project-analyser-repository"
+export { createSupabaseProjectAnalyserRepository } from "./infrastructure/supabase-project-analyser-repository"
+
 // ─── The analyser port + its composition seam ───────────────────────────────
 // Callers depend on the AnalyserPort interface and obtain an implementation via
 // getAnalyser(); they must NOT import @/lib/analyser's functions directly.
