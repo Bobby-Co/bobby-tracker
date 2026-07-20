@@ -11,7 +11,8 @@
 // Everything here is best-effort and self-gating: if SMTP_* is unset,
 // isEmailConfigured() short-circuits before any work or any Workers-only import.
 
-import { findingState, mergeVerdictLabel } from "@/lib/badge"
+import { mergeVerdictLabel } from "@/lib/badge"
+import { findingState } from "@/modules/pull-requests"
 import { isEmailConfigured, sendMail } from "@/lib/email/jmap"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { NotificationKind, PRAnalysis } from "@/lib/supabase/types"

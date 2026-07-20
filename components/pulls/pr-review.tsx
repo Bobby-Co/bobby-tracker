@@ -6,7 +6,8 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
-import { findingState, severityLabel } from "@/lib/badge"
+import { severityLabel } from "@/lib/badge"
+import { findingState } from "@/modules/pull-requests"
 import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the

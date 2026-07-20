@@ -9,6 +9,8 @@
 // (system stack only), and each distinct chip is its own URL — a status change
 // swaps the URL, so per-URL caching never shows a stale chip.
 
+import { findingState } from "@/modules/pull-requests"
+
 export type BadgeTone =
     | "emerald" | "amber" | "rose" | "violet" | "blue" | "indigo" | "cyan" | "zinc"
 
@@ -41,16 +43,9 @@ export function confidenceLevelTone(level: string): BadgeTone {
 export function verdictTone(v: string): BadgeTone {
     return v === "likely" ? "emerald" : v === "partial" ? "amber" : v === "unlikely" ? "rose" : "zinc"
 }
-// A finding's STATE — the traffic-light disposition the chip shows (analyser
-// ADR-0056): "critical" (block), "review" (worth a manual look), "good". Chosen
-// by impact, not by the topic (which lives in the title). Normalises the legacy
-// bug/risk/style/nit vocabulary so old stored rows still render.
-export function findingState(s: string): "critical" | "review" | "good" {
-    if (s === "critical" || s === "bug") return "critical"
-    if (s === "good") return "good"
-    return "review" // review, risk, style, nit, or anything else
-}
-// The chip label IS the state word.
+// The chip label IS the state word. (findingState — the classification rule —
+// now lives in the PR domain, @/modules/pull-requests, imported above; badge is
+// rendering, not the owner of the merge-relevant severity rule.)
 export function severityLabel(s: string): string {
     return findingState(s)
 }
