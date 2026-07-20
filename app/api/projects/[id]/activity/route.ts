@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { countUnembeddedIssues, ensureIssueEmbeddings } from "@/lib/issues/issue-embedding"
+import { countUnembeddedIssues, ensureIssueEmbeddings } from "@/modules/issues"
 
 // How many issues one sweep embeds. Small on purpose: this runs in the request's
 // after() on a Worker, so the batch has to finish inside that budget. A backlog

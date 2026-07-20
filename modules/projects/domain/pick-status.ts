@@ -1,4 +1,14 @@
-import type { ProjectInsight } from "@/lib/supabase/types"
+// Domain value-object — the minimal insight shape this policy reads. Kept local
+// (not the DB row type) so the status derivation stays a PURE domain rule with
+// no SDK dependency; the persisted ProjectInsight row is structurally assignable.
+export interface ProjectInsightView {
+    open_total: number
+    done_total: number
+    urgent_open: number
+    last_urgent_at: string | null
+    last_issue_created_at: string | null
+    recent_pr_opens: string[]
+}
 
 // Which footer a project tile shows, derived from its insight row (0047/0048).
 //
@@ -34,7 +44,7 @@ function age(ts: string | null | undefined, now: number): number {
 /** Strict priority — first match wins. Rotating between signals would just
  *  make a grid of tiles flicker, so a louder signal simply outranks a quieter
  *  one until its window lapses. */
-export function pickStatus(insight: ProjectInsight | null | undefined, now = Date.now()): ProjectStatus {
+export function pickStatus(insight: ProjectInsightView | null | undefined, now = Date.now()): ProjectStatus {
     if (!insight) return { kind: "clear", at: null }
 
     if (insight.urgent_open > 0 && age(insight.last_urgent_at, now) < URGENT_WINDOW_MS) {

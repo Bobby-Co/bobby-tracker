@@ -1,6 +1,6 @@
 // Helpers for team email invitations (migration 0052 `team_invites`).
 
-import { isEmailConfigured, sendMail } from "@/lib/email/jmap"
+import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 import type { TeamRole } from "@/lib/supabase/types"
 
 /** A 64-hex, URL-safe invite token (satisfies the length>=16 DB check). */

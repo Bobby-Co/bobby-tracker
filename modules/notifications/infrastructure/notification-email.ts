@@ -13,7 +13,7 @@
 
 import { mergeVerdictLabel } from "@/lib/rendering/badge"
 import { findingState } from "@/modules/pull-requests"
-import { isEmailConfigured, sendMail } from "@/lib/email/jmap"
+import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { NotificationKind, PRAnalysis } from "@/lib/supabase/types"
 

@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/platform/http/api"
-import { sendNotificationEmail } from "@/lib/email/notifications"
+import { sendNotificationEmail } from "@/modules/notifications"
 
 export const dynamic = "force-dynamic"
 

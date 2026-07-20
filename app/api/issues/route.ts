@@ -4,7 +4,7 @@ import { createSupabaseProjectAnalyserRepository, isAnalyseEffort } from "@/modu
 import { tryOrNull } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus } from "@/lib/supabase/types"
-import { embedIssueAsync } from "@/lib/issues/issue-embedding"
+import { embedIssueAsync } from "@/modules/issues"
 import { pushIssueToGithub, ensureAnalysis } from "@/modules/github"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 

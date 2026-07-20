@@ -30,3 +30,7 @@ export { createSupabaseRecipientResolver } from "./infrastructure/supabase-recip
 export { createSupabaseOutboxStore } from "./infrastructure/supabase-outbox-store"
 
 export { createNotificationService, drainNotifications } from "./composition"
+
+// Legacy trigger-path email renderer (still serves /api/internal/notification-email
+// until the outbox cutover retires it).
+export { sendNotificationEmail } from "./infrastructure/notification-email"

@@ -13,3 +13,6 @@ export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues
 // ─── issue-comment mirror store (tracker's copy of GitHub issue comments) ────
 export type { IssueCommentUpsert } from "./infrastructure/issue-store"
 export { upsertIssueComment, deleteIssueComment } from "./infrastructure/issue-store"
+
+// ─── issue embedding (semantic index maintenance) ────────────────────────────
+export { embedIssueAsync, countUnembeddedIssues, ensureIssueEmbeddings } from "./infrastructure/issue-embedding"

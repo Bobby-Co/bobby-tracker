@@ -1,13 +1,13 @@
 // Notifications infrastructure — the email NotificationChannel adapter. Renders
 // the event via the domain and sends a minimal transactional email through the
-// existing JMAP transport (lib/email/jmap.ts).
+// existing JMAP transport (lib/platform/email/jmap.ts).
 //
 // DORMANT reference code: it typechecks but isn't wired to producers yet.
 //
 // This is a MINIMAL template; migrating to the rich per-kind templates in
 // lib/email/notifications.ts is a cutover follow-up.
 
-import { isEmailConfigured, sendMail } from "@/lib/email/jmap"
+import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 
 import type { NotificationEvent } from "../domain/events"
 import { renderNotification } from "../domain/events"
