@@ -2,13 +2,12 @@
 // in the supabase CLI codegen toolchain just for Phase 2; regenerate with
 // `supabase gen types typescript --schema tracker` once the schema settles.
 
-// Type-only import — elided at compile, so the server-only analyser module
-// (which pulls in `ws`) never reaches client bundles through this file.
-import type { AnalyseEffort } from "@/modules/analysis"
-
 export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
+// The stored analyser-effort setting (project_analyser.analyse_effort). Defined
+// here with the other DB enums; the analysis module imports it from this file.
+export type AnalyseEffort = "fast" | "medium" | "high" | "veryhigh"
 
 export interface Project {
     id: string

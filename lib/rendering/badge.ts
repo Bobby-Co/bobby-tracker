@@ -43,9 +43,9 @@ export function confidenceLevelTone(level: string): BadgeTone {
 export function verdictTone(v: string): BadgeTone {
     return v === "likely" ? "emerald" : v === "partial" ? "amber" : v === "unlikely" ? "rose" : "zinc"
 }
-// The chip label IS the state word. (findingState — the classification rule —
-// now lives in the PR domain, @/modules/pull-requests, imported above; badge is
-// rendering, not the owner of the merge-relevant severity rule.)
+// The chip label IS the state word. (findingState — the shared classification
+// rule in lib/rendering/finding-state, imported above — is the single source the
+// merge gate and this rendering both use; badge doesn't own the severity rule.)
 export function severityLabel(s: string): string {
     return findingState(s)
 }

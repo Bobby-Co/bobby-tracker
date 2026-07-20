@@ -10,6 +10,7 @@
 // browser. See bobby-analyser/docs/subsystems/server.md for protocol details.
 
 import WebSocket from "ws"
+import type { AnalyseEffort } from "@/lib/supabase/types"
 
 const ANALYSER_URL = process.env.BOBBY_ANALYSER_URL || ""
 const ANALYSER_TOKEN = process.env.BOBBY_ANALYSER_TOKEN || ""
@@ -148,7 +149,7 @@ export async function chatStream(
 // multi-file bugs. These exact lowercase strings are the wire values the
 // analyser expects on /issues/analyse and /issues/preferences. NB: distinct
 // from the indexing `effort` ("low"|"medium"|"high") on KickoffJobInput.
-export type AnalyseEffort = "fast" | "medium" | "high" | "veryhigh"
+export type { AnalyseEffort }
 
 export const ANALYSE_EFFORTS: AnalyseEffort[] = ["fast", "medium", "high", "veryhigh"]
 
