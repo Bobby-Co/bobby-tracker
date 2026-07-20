@@ -1,6 +1,6 @@
-import { AnalyserError, getAnalyser, type ChatHistoryMsg } from "@/modules/analysis"
-import { jsonError, requireProjectAccess } from "@/lib/api"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, type ChatHistoryMsg } from "@/modules/analysis"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/mind
 //
@@ -55,12 +55,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .single<Pick<Project, "id">>()
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await supabase
-        .from("project_analyser")
-        .select("*")
-        .eq("project_id", id)
-        .maybeSingle<ProjectAnalyser>()
-    if (aErr) return jsonError("db_error", aErr.message, 500)
+    const { data: analyser, error: aErr } = await repoRead(() =>
+        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id),
+    )
+    if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",

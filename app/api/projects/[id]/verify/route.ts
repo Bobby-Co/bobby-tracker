@@ -1,6 +1,7 @@
-import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { jsonError, requireProjectAccess } from "@/lib/api"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { RepositoryError } from "@/lib/kernel"
+import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/verify
 //
@@ -27,12 +28,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .single<Project>()
     if (pErr || !project) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await supabase
-        .from("project_analyser")
-        .select("*")
-        .eq("project_id", id)
-        .maybeSingle<ProjectAnalyser>()
-    if (aErr) return jsonError("db_error", aErr.message, 500)
+    const { data: analyser, error: aErr } = await repoRead(() =>
+        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id),
+    )
+    if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",
@@ -59,15 +58,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         //     up the change.
         // Best-effort: a Supabase failure here doesn't fail the response
         // (the report is still returned to the client this round-trip).
-        const { error: upErr } = await supabase
-            .from("project_analyser")
-            .update({
-                last_health_report: report,
-                last_health_check_at: new Date().toISOString(),
-            })
-            .eq("project_id", id)
-        if (upErr) {
-            console.warn("verify: persist failed:", upErr.message)
+        try {
+            await createSupabaseProjectAnalyserRepository(supabase).saveHealthReport(
+                id,
+                report,
+                new Date().toISOString(),
+            )
+        } catch (e) {
+            if (!(e instanceof RepositoryError)) throw e
+            console.warn("verify: persist failed:", e.message)
         }
         return Response.json(report)
     } catch (e) {

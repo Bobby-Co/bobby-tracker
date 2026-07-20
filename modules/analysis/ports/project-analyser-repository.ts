@@ -30,7 +30,7 @@ export interface ProjectAnalyserRepository {
      *  never indexed. Throws on query failure. */
     findGraphId(projectId: string): Promise<string | null>
 
-    /** Persist a graph-health report + its timestamp onto the analyser row.
-     *  Throws {@link RepositoryError} on failure. */
-    saveHealthReport(projectId: string, report: ProjectAnalyser["last_health_report"], checkedAt: string): Promise<void>
+    /** Persist a graph-health report (a jsonb value) + its timestamp onto the
+     *  analyser row. Throws {@link RepositoryError} on failure. */
+    saveHealthReport(projectId: string, report: unknown, checkedAt: string): Promise<void>
 }

@@ -1,11 +1,11 @@
 import {
     AnalyserError,
+    createSupabaseProjectAnalyserRepository,
     getAnalyser,
     isAnalyseEffort,
     type AnalyseEffort,
 } from "@/modules/analysis"
-import { jsonError, requireProjectAccess } from "@/lib/api"
-import type { ProjectAnalyser } from "@/lib/supabase/types"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
 
 // GET/PUT /api/projects/[id]/issue-preferences
 //
@@ -20,13 +20,11 @@ import type { ProjectAnalyser } from "@/lib/supabase/types"
 async function resolveGraphId(projectId: string) {
     const { supabase, error } = await requireProjectAccess(projectId)
     if (error) return { error } as const
-    const { data, error: dbErr } = await supabase
-        .from("project_analyser")
-        .select("graph_id")
-        .eq("project_id", projectId)
-        .maybeSingle<Pick<ProjectAnalyser, "graph_id">>()
-    if (dbErr) return { error: jsonError("db_error", dbErr.message, 500) } as const
-    return { graphId: data?.graph_id ?? null } as const
+    const { data, error: dbErr } = await repoRead(() =>
+        createSupabaseProjectAnalyserRepository(supabase).findGraphId(projectId),
+    )
+    if (dbErr) return { error: dbErr } as const
+    return { graphId: data } as const
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

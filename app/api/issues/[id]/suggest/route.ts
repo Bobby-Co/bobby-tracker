@@ -1,12 +1,11 @@
-import { AnalyserError, getAnalyser, isAnalyseEffort } from "@/modules/analysis"
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyseEffort } from "@/modules/analysis"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/api"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type {
     Issue,
     IssueAnalysisData,
     IssueSuggestion,
     Project,
-    ProjectAnalyser,
 } from "@/lib/supabase/types"
 
 // POST /api/issues/[id]/suggest
@@ -62,12 +61,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // undefined (analyser falls back to project default → server default).
     const effort = overrideEffort ?? (isAnalyseEffort(issue.analyse_effort) ? issue.analyse_effort : undefined)
 
-    const { data: analyser, error: aErr } = await supabase
-        .from("project_analyser")
-        .select("*")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<ProjectAnalyser>()
-    if (aErr) return jsonError("db_error", aErr.message, 500)
+    const { data: analyser, error: aErr } = await repoRead(() =>
+        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(issue.project_id),
+    )
+    if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",
