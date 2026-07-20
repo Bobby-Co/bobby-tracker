@@ -2,7 +2,8 @@ import { after } from "next/server"
 import { jsonError, requireIssueAccess } from "@/lib/api"
 import { deleteGithubIssueFromTracker, updateGithubIssueFromTracker } from "@/lib/github-sync"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { Issue, Project } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/supabase/types"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 // GET /api/issues/[id]?project_id=... — single issue. The optional
 // project_id query param scopes the lookup to a project (matching the
@@ -55,26 +56,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         status: "status" in patch,
     }
     if (data?.github_issue_number && (changed.title || changed.body || changed.status)) {
-        const { data: project } = await supabase
-            .from("projects")
-            .select(
-                "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
-            )
-            .eq("id", data.project_id)
-            .maybeSingle<
-                Pick<
-                    Project,
-                    | "id"
-                    | "user_id"
-                    | "repo_url"
-                    | "repo_full_name"
-                    | "github_installation_id"
-                    | "github_repo_id"
-                    | "github_sync_enabled"
-                    | "github_sync_direction"
-                    | "github_sync_deletes"
-                >
-            >()
+        const project = await createSupabaseProjectsRepository(supabase).findGithubSyncContext(data.project_id)
         if (project?.github_sync_enabled && project.github_installation_id && project.github_repo_id) {
             after(() => updateGithubIssueFromTracker(data, project, changed))
         }
@@ -99,26 +81,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     // opted into delete-sync (outbound). deleteGithubIssueFromTracker itself
     // re-checks direction + the deletes flag. Fire-and-forget via after().
     if (issue && (issue.github_issue_number != null || issue.github_node_id)) {
-        const { data: project } = await supabase
-            .from("projects")
-            .select(
-                "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
-            )
-            .eq("id", issue.project_id)
-            .maybeSingle<
-                Pick<
-                    Project,
-                    | "id"
-                    | "user_id"
-                    | "repo_url"
-                    | "repo_full_name"
-                    | "github_installation_id"
-                    | "github_repo_id"
-                    | "github_sync_enabled"
-                    | "github_sync_direction"
-                    | "github_sync_deletes"
-                >
-            >()
+        const project = await createSupabaseProjectsRepository(supabase).findGithubSyncContext(issue.project_id)
         if (project) after(() => deleteGithubIssueFromTracker(issue, project))
     }
 

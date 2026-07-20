@@ -2,9 +2,10 @@ import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/api"
 import { isAnalyseEffort } from "@/lib/analyser"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { Issue, IssuePriority, IssueStatus, Project, ProjectAnalyser } from "@/lib/supabase/types"
+import type { Issue, IssuePriority, IssueStatus, ProjectAnalyser } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"
 import { pushIssueToGithub, ensureAnalysis } from "@/lib/github-sync"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
@@ -88,26 +89,7 @@ export async function POST(request: Request) {
     // after() (same reason as the embed above — a bare `void` gets cancelled
     // when the response returns on Workers). Independent of the needs_indexing
     // gate above; a no-op when the project isn't sync-wired.
-    const { data: project } = await supabase
-        .from("projects")
-        .select(
-            "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
-        )
-        .eq("id", project_id)
-        .maybeSingle<
-            Pick<
-                Project,
-                | "id"
-                | "user_id"
-                | "repo_url"
-                | "repo_full_name"
-                | "github_installation_id"
-                | "github_repo_id"
-                | "github_sync_enabled"
-                | "github_sync_direction"
-                | "github_sync_deletes"
-            >
-        >()
+    const project = await createSupabaseProjectsRepository(supabase).findGithubSyncContext(project_id)
     if (project?.github_sync_enabled && project.github_installation_id && project.github_repo_id) {
         const origin = new URL(request.url).origin
         after(async () => {
