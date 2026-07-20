@@ -1,4 +1,4 @@
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { genDeviceCode, genUserCode, normalizeUserCode } from "@/lib/integrations/relay"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"

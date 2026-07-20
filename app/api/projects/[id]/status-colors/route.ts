@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import { ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { ProjectStatusColor } from "@/lib/supabase/types"
 

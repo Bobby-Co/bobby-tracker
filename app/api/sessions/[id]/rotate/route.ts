@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireSessionAccess } from "@/lib/api"
+import { jsonError, requireSessionAccess } from "@/lib/platform/http/api"
 import type { PublicSession } from "@/lib/supabase/types"
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {

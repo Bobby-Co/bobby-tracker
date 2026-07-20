@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/api"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
 import { tryOrNull } from "@/lib/kernel"
 import { deleteGithubIssueFromTracker, updateGithubIssueFromTracker } from "@/modules/github"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"

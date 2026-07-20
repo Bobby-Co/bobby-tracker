@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare"
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 
 // Rate limiting for the UNAUTHENTICATED attack surface (public issue
 // submission/AI calls and the relay device-pairing handshake). These routes

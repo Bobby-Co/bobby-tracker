@@ -1,5 +1,5 @@
 import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { tryOrNull } from "@/lib/kernel"
 import { assertProjectAccess, roleAtLeast } from "@/lib/auth/team-access"
 import { findIcon } from "@/lib/icons/iconly"

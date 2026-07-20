@@ -1,5 +1,5 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/analyser/index

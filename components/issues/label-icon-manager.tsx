@@ -7,7 +7,7 @@ import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { IconPicker } from "@/components/icons/icon-picker"
 import { Modal } from "@/components/ui/modal"
 import { defaultLabelColor } from "@/lib/timeline/labels"
-import { apiMutate } from "@/lib/api-client"
+import { apiMutate } from "@/lib/platform/http/api-client"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"
 
 // LabelIconManager — modal for managing the project's label

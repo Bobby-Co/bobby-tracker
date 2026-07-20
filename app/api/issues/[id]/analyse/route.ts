@@ -1,4 +1,4 @@
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
 import { ensureAnalysis } from "@/modules/github"
 import type { IssueSuggestion } from "@/lib/supabase/types"
 

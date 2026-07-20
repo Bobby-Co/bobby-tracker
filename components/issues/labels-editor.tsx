@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { NewLabelModal } from "@/components/issues/new-label-modal"
 import { defaultLabelColor, softLabelChipStyle } from "@/lib/timeline/labels"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"
 
 // Single transition reused across chip layout / enter / exit.

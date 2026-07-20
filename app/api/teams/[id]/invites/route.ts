@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
 import { baseUrl, isValidEmail, newInviteToken, normalizeEmail, sendInviteEmail } from "@/lib/teams/invites"
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/supabase/types"

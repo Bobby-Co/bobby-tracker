@@ -1,4 +1,4 @@
-import { requireProjectAccess } from "@/lib/api"
+import { requireProjectAccess } from "@/lib/platform/http/api"
 import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/sessions — backs the Integrations tab: the

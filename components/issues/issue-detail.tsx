@@ -13,7 +13,7 @@ import type {
     ProjectStatusColor,
 } from "@/lib/supabase/types"
 import { PriorityChip, StatusChip } from "@/components/ui/status-chip"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { Dropdown } from "@/components/ui/dropdown"
 import { LabelsEditor } from "@/components/issues/labels-editor"
 import { TimelinePeek } from "@/components/timeline/timeline-peek"

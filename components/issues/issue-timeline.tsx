@@ -28,7 +28,7 @@ import {
 } from "@/lib/timeline/scale"
 import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
 import { ScheduleOutbox, type SchedulePatch } from "@/lib/timeline/outbox"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { Issue, IssuePriority, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
 
 // IssueTimeline — Gantt-flavoured planning canvas. Tiles are

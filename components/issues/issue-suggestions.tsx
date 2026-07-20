@@ -5,7 +5,7 @@ import { cn } from "@/components/ui/cn"
 import { EffortControl, EFFORT_LABEL } from "@/components/ui/effort-control"
 import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/integrations/github"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { AnalyseEffort } from "@/lib/analyser"
 import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/supabase/types"
 

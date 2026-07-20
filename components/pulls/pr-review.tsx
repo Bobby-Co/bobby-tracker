@@ -8,7 +8,7 @@ import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
 import { severityLabel } from "@/lib/rendering/badge"
 import { findingState } from "@/modules/pull-requests"
-import { apiMutate } from "@/lib/api-client"
+import { apiMutate } from "@/lib/platform/http/api-client"
 import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the

@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import type { GithubRepoSummary, GithubToken } from "@/lib/supabase/types"
 
 // GET /api/github/repos

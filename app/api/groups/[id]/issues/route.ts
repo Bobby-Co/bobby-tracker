@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import type { Issue, ProjectAnalyser, ProjectGroup } from "@/lib/supabase/types"
 
 // GET — cross-project issue feed for a group's Issues tab. Returns the

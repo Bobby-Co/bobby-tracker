@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import type { ProjectPublicIntegration } from "@/lib/supabase/types"
 import { Spinner } from "@/components/ui/spinner"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 
 // Owner-facing toggle for the public-submissions integration. Lives
 // on the project's Integrations tab next to the "Sessions covering

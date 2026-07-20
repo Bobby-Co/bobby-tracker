@@ -1,4 +1,4 @@
-import { jsonError, requireTeam } from "@/lib/api"
+import { jsonError, requireTeam } from "@/lib/platform/http/api"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
 // "Collections" (project_groups): a group of PROJECTS for AI routing. Now scoped

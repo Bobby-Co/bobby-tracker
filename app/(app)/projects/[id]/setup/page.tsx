@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { apiMutate } from "@/lib/api-client"
+import { apiMutate } from "@/lib/platform/http/api-client"
 import { SetupWizard, type WizardDir, type WizardEffort } from "@/components/projects/setup-wizard"
 import type { GithubSyncDirection } from "@/lib/supabase/types"
 

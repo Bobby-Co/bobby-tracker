@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository, isAnalyseEffort } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"

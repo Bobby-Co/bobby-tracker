@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { drainNotifications } from "@/modules/notifications"
 import type { Notification } from "@/lib/supabase/types"

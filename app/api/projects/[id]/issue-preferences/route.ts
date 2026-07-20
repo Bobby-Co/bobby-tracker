@@ -5,7 +5,7 @@ import {
     isAnalyseEffort,
     type AnalyseEffort,
 } from "@/modules/analysis"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 
 // GET/PUT /api/projects/[id]/issue-preferences
 //

@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 
 // AUTH. Revoke a worker by stamping revoked_at. RLS scopes the update to
 // the owner. Revoked rows stop resolving in /api/relay/resolve, so the

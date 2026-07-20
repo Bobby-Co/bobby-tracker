@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useApi } from "@/lib/hooks/use-api"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { cn } from "@/components/ui/cn"
 import type { AccessGroupWithDetail, Project, TeamMemberView, TeamWithRole } from "@/lib/supabase/types"
 

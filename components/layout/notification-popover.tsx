@@ -6,7 +6,7 @@ import { motion, useAnimationControls, useMotionValue, useReducedMotion, useSpri
 import { MiniIcon, type Tone } from "@/components/ui/field-card"
 import { timeAgo } from "@/components/issues/issue-meta"
 import { createClient } from "@/lib/supabase/client"
-import { apiMutate } from "@/lib/api-client"
+import { apiMutate } from "@/lib/platform/http/api-client"
 import type { Notification, NotificationKind } from "@/lib/supabase/types"
 
 // Notification popover for the topbar. The bell "chip" MORPHS into the panel

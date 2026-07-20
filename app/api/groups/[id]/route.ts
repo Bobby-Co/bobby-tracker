@@ -1,4 +1,4 @@
-import { jsonError, requireCollectionAccess, requireUser } from "@/lib/api"
+import { jsonError, requireCollectionAccess, requireUser } from "@/lib/platform/http/api"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

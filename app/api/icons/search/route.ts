@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { createServiceClient } from "@/lib/supabase/server"
 

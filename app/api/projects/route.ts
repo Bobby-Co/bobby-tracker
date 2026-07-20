@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireRole, requireTeam } from "@/lib/api"
+import { jsonError, requireRole, requireTeam } from "@/lib/platform/http/api"
 import { getAccessibleProjectIds } from "@/lib/auth/team-access"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/icons/suggest"

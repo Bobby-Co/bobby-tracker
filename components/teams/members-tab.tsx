@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useApi } from "@/lib/hooks/use-api"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { cn } from "@/components/ui/cn"
 import { TEAM_ROLES, type TeamInvite, type TeamMemberView, type TeamRole, type TeamWithRole } from "@/lib/supabase/types"
 

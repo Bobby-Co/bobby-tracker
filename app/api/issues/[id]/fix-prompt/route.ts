@@ -1,4 +1,4 @@
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
 

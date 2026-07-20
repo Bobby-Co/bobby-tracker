@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { countUnembeddedIssues, ensureIssueEmbeddings } from "@/lib/issues/issue-embedding"
 

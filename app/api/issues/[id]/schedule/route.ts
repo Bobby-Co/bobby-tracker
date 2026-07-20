@@ -1,4 +1,4 @@
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
 import type { Issue } from "@/lib/supabase/types"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.

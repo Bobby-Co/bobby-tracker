@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import { findIcon } from "@/lib/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/icons/iconly-catalog"
 import type { ProjectLabelIcon } from "@/lib/supabase/types"

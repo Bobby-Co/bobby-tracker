@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import { backfillPullRequests } from "@/modules/pull-requests"
 
 // POST /api/projects/[id]/pulls/sync

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api"
+import { requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { githubAppFetch } from "@/modules/github"
 import { repoFullName } from "@/lib/integrations/github"

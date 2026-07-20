@@ -1,4 +1,4 @@
-import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
 
 // DELETE /api/teams/[id]/invites/[token] — revoke a pending invite (admins).

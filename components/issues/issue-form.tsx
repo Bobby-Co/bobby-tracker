@@ -8,7 +8,7 @@ import { ANALYSE_EFFORTS, type AnalyseEffort } from "@/lib/analyser"
 import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 
 const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))

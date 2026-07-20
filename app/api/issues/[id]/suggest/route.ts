@@ -1,5 +1,5 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyseEffort } from "@/modules/analysis"
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/api"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import type {
     Issue,

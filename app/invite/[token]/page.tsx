@@ -4,7 +4,7 @@ import { use, useState } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useApi } from "@/lib/hooks/use-api"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 
 interface InviteInfo {
     email: string

@@ -1,4 +1,4 @@
-import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
 import type { AccessGroup } from "@/lib/supabase/types"
 

@@ -1,4 +1,4 @@
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { applyAnalysisResult } from "@/modules/github"
 import type { IssueAnalysis } from "@/lib/analyser"
 

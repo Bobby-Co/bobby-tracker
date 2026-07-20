@@ -1,4 +1,4 @@
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { applyPRResult } from "@/modules/pull-requests"
 import type { PRAnalysis } from "@/lib/supabase/types"
 

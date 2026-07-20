@@ -1,4 +1,4 @@
-import { repoRead, requireProjectAccess } from "@/lib/api"
+import { repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

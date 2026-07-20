@@ -1,6 +1,6 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { publicIssueSuggestionChannel } from "@/lib/util/realtime-channels"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueSuggestion } from "@/lib/supabase/types"

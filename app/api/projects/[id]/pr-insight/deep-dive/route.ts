@@ -1,5 +1,5 @@
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/pr-insight/deep-dive

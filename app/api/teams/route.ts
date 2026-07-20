@@ -1,4 +1,4 @@
-import { jsonError, personalTeamName, requireUser } from "@/lib/api"
+import { jsonError, personalTeamName, requireUser } from "@/lib/platform/http/api"
 import { getUserTeams } from "@/lib/auth/team-access"
 import type { Team, TeamRole, TeamWithRole } from "@/lib/supabase/types"
 

@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation"
 import { useState } from "react"
 import { useApi } from "@/lib/hooks/use-api"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { PrList, type PullRequestRow } from "@/components/pulls/pr-list"
 import { SegBar } from "@/components/ui/field-card"
 

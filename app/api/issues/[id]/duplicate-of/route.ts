@@ -1,4 +1,4 @@
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
 import type { Issue, IssueStatus } from "@/lib/supabase/types"
 
 // POST /api/issues/[id]/duplicate-of

@@ -1,4 +1,4 @@
-import { jsonError, requireSessionAccess, requireUser } from "@/lib/api"
+import { jsonError, requireSessionAccess, requireUser } from "@/lib/platform/http/api"
 import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
 
 function parseWindow(v: unknown): string | null | undefined {

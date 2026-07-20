@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import type { ProjectPublicIntegration } from "@/lib/supabase/types"
 
 // Per-project toggle for the public-submissions integration.

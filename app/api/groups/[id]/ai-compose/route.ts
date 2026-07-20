@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { routingEmbeddingText } from "@/modules/issues"
 import type { ProjectGroup } from "@/lib/supabase/types"

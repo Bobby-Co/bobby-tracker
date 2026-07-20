@@ -5,7 +5,7 @@
 // issue was filed publicly, invite-only access enforcement) live in
 // one place.
 
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient, getCurrentUser } from "@/lib/supabase/server"
 import type {
     Issue,

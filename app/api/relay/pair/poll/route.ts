@@ -1,4 +1,4 @@
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 
 // PUBLIC. The bobby-relay app polls this with its device_code until the

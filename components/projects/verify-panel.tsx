@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/integrations/github"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/lib/analyser"
 
 // VerifyPanel shows a "graph health" coverage report for a project.

@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { defaultLabelColor, softLabelChipStyle } from "@/lib/timeline/labels"
 import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
 import type {

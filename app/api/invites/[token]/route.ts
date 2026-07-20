@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { normalizeEmail } from "@/lib/teams/invites"
 import type { TeamInvite } from "@/lib/supabase/types"

@@ -3,7 +3,7 @@
 // fetches the caller's personal GitHub token so we can post AS THEM. Returns a
 // ready-to-send Response on any failed gate.
 
-import { jsonError } from "@/lib/api"
+import { jsonError } from "@/lib/platform/http/api"
 import { getUserGithubToken } from "./github-user"
 import { repoFullName } from "@/lib/integrations/github"
 import type { createClient } from "@/lib/supabase/server"

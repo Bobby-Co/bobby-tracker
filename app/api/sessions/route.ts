@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireTeam } from "@/lib/api"
+import { jsonError, requireTeam } from "@/lib/platform/http/api"
 import type { PublicSession } from "@/lib/supabase/types"
 
 // GET    — list sessions owned by the current user (newest first)

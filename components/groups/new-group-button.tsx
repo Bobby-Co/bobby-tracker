@@ -5,7 +5,7 @@ import { useState, useTransition } from "react"
 import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { MultiDropdown } from "@/components/ui/multi-dropdown"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 
 interface ProjectOption {
     id: string

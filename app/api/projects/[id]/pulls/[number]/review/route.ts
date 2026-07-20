@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { startPRAnalysis } from "@/modules/pull-requests"
 import { repoFullName } from "@/lib/integrations/github"

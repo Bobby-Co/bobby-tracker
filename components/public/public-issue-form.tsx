@@ -9,7 +9,7 @@ import { Dropdown } from "@/components/ui/dropdown"
 import { Spinner } from "@/components/ui/spinner"
 import { PublicAiComposeButton } from "@/components/public/public-ai-compose-button"
 import { readName, readReporterId } from "@/lib/public/public-profile"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 const MAX_TITLE = 200

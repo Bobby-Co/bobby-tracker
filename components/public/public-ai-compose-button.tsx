@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { compressImage, type CompressedImage } from "@/lib/util/image-compress"
 import { readName, readReporterId } from "@/lib/public/public-profile"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { IssuePriority } from "@/lib/supabase/types"
 
 interface RankedProject {

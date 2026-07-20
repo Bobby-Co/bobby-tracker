@@ -1,4 +1,4 @@
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
 import type { Issue } from "@/lib/supabase/types"
 
 // GET /api/issues/[id]/similar

@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { Dropdown } from "@/components/ui/dropdown"
 import { compressImage, type CompressedImage } from "@/lib/util/image-compress"
-import { ApiError, apiMutate } from "@/lib/api-client"
+import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { ISSUE_PRIORITIES, type IssuePriority } from "@/lib/supabase/types"
 
 interface IssueProposal {

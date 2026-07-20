@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import { resolveCommentContext } from "@/modules/github"
 import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/modules/github"
 import { deleteIssueComment, upsertIssueComment } from "@/modules/issues"

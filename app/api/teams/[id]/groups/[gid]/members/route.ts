@@ -1,4 +1,4 @@
-import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
 
 // POST /api/teams/[id]/groups/[gid]/members — add a team member to a people-group

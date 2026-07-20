@@ -1,4 +1,4 @@
-import { jsonError, requireSessionAccess, requireUser } from "@/lib/api"
+import { jsonError, requireSessionAccess, requireUser } from "@/lib/platform/http/api"
 import type { PublicSessionInvite } from "@/lib/supabase/types"
 
 // GET — list whitelisted emails for a session.
