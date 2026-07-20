@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import type { ProjectPublicIntegration } from "@/lib/supabase/types"
 import { Spinner } from "@/components/ui/spinner"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 // Owner-facing toggle for the public-submissions integration. Lives
 // on the project's Integrations tab next to the "Sessions covering
@@ -33,21 +34,19 @@ export function PublicIntegrationPanel({
         }
         setError(null)
         startTransition(async () => {
-            const res = await fetch(`/api/projects/${projectId}/public-integration`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ enabled: next }),
-            })
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}))
-                setError(body?.error?.message || `Failed (${res.status})`)
-                return
+            try {
+                const { integration } = await apiMutate<{ integration?: { enabled?: boolean } }>(
+                    `/api/projects/${projectId}/public-integration`,
+                    { method: "PATCH", body: { enabled: next } },
+                )
+                setEnabled(!!integration?.enabled)
+                // Server-rendered "Sessions covering this project" reflects
+                // the unlink — refresh so the count drops to 0.
+                router.refresh()
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setError(e.message || `Failed (${e.status})`)
             }
-            const { integration } = await res.json()
-            setEnabled(!!integration?.enabled)
-            // Server-rendered "Sessions covering this project" reflects
-            // the unlink — refresh so the count drops to 0.
-            router.refresh()
         })
     }
 

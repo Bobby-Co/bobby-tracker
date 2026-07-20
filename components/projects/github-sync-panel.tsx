@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/supabase/client"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { GithubSyncDirection } from "@/lib/supabase/types"
 
 // GitHub App slug for the install deep-link. Read from a public env at build
@@ -68,24 +69,19 @@ export function GithubSyncPanel({ projectId }: { projectId: string }) {
         setErr(null)
         setBusy(true)
         try {
-            const res = await fetch(`/api/projects/${projectId}/github-sync/link`, { method: "POST" })
-            const data = (await res.json().catch(() => ({}))) as {
-                installed?: boolean
-                linked?: boolean
-                error?: { message?: string }
-            }
-            if (!res.ok) {
-                setErr(data?.error?.message || `Failed (${res.status})`)
-                return
-            }
-            if (data.installed && data.linked) {
+            const data = await apiMutate<{ installed?: boolean; linked?: boolean }>(
+                `/api/projects/${projectId}/github-sync/link`,
+                { method: "POST" },
+            )
+            if (data?.installed && data?.linked) {
                 await load()
                 return
             }
             // App not installed on the repo yet → send the user to install it.
             window.location.href = installUrl
-        } catch {
-            setErr("Network error")
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message || `Failed (${e.status})`)
+            else setErr("Network error")
         } finally {
             setBusy(false)
         }
@@ -101,31 +97,21 @@ export function GithubSyncPanel({ projectId }: { projectId: string }) {
         if (patch.direction !== undefined) setDirection(patch.direction)
         if (patch.deletes !== undefined) setDeletes(patch.deletes)
         try {
-            const res = await fetch(`/api/projects/${projectId}/github-sync`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(patch),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setErr(e?.error?.message || `Failed (${res.status})`)
-                await load()
-                return
-            }
-            const data = (await res.json().catch(() => null)) as {
+            const data = await apiMutate<{
                 project?: {
                     github_sync_enabled: boolean
                     github_sync_direction: GithubSyncDirection
                     github_sync_deletes: boolean
                 }
-            } | null
+            }>(`/api/projects/${projectId}/github-sync`, { method: "POST", body: patch })
             if (data?.project) {
                 setEnabled(data.project.github_sync_enabled)
                 setDirection(data.project.github_sync_direction)
                 setDeletes(data.project.github_sync_deletes)
             }
-        } catch {
-            setErr("Network error")
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message || `Failed (${e.status})`)
+            else setErr("Network error")
             await load()
         } finally {
             setBusy(false)
@@ -138,23 +124,17 @@ export function GithubSyncPanel({ projectId }: { projectId: string }) {
         setImportMsg(null)
         setImporting(true)
         try {
-            const res = await fetch(`/api/projects/${projectId}/github-sync/import`, { method: "POST" })
-            const data = (await res.json().catch(() => ({}))) as {
-                imported?: number
-                total?: number
-                skipped?: number
-                error?: { message?: string }
-            }
-            if (!res.ok) {
-                setErr(data?.error?.message || `Import failed (${res.status})`)
-                return
-            }
-            setImportMsg(
-                `Imported ${data.imported ?? 0} of ${data.total ?? 0} issue(s)` +
-                    (data.skipped ? ` · ${data.skipped} already synced` : ""),
+            const data = await apiMutate<{ imported?: number; total?: number; skipped?: number }>(
+                `/api/projects/${projectId}/github-sync/import`,
+                { method: "POST" },
             )
-        } catch {
-            setErr("Network error")
+            setImportMsg(
+                `Imported ${data?.imported ?? 0} of ${data?.total ?? 0} issue(s)` +
+                    (data?.skipped ? ` · ${data.skipped} already synced` : ""),
+            )
+        } catch (e) {
+            if (e instanceof ApiError) setErr(e.message || `Import failed (${e.status})`)
+            else setErr("Network error")
         } finally {
             setImporting(false)
         }

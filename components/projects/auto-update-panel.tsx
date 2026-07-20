@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/supabase/client"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 // AutoUpdatePanel — the setup toggle for auto-indexing on push. When on, a push
 // to the repo's default branch triggers an incremental graph update through the
@@ -39,19 +40,14 @@ export function AutoUpdatePanel({ projectId }: { projectId: string }) {
         setBusy(true)
         setOn(next) // optimistic
         try {
-            const res = await fetch(`/api/projects/${projectId}`, {
+            await apiMutate(`/api/projects/${projectId}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ auto_index_on_push: next }),
+                body: { auto_index_on_push: next },
             })
-            if (!res.ok) {
-                const body = await res.json().catch(() => ({}))
-                setOn(!next) // revert
-                setErr(body?.error?.message || `Failed (${res.status})`)
-            }
-        } catch {
-            setOn(!next)
-            setErr("Network error")
+        } catch (e) {
+            setOn(!next) // revert
+            if (e instanceof ApiError) setErr(e.message || `Failed (${e.status})`)
+            else setErr("Network error")
         } finally {
             setBusy(false)
         }

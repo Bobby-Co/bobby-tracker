@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/supabase/client"
 import { blobUrl, type RepoRef } from "@/lib/integrations/github"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/lib/analyser"
 
 // VerifyPanel shows a "graph health" coverage report for a project.
@@ -88,20 +89,15 @@ export function VerifyPanel({
         setBusy(true)
         setError(null)
         try {
-            const res = await fetch(`/api/projects/${projectId}/verify`, { method: "POST" })
-            if (!res.ok) {
-                const e = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
-                setError(e?.error?.message || `Failed (${res.status})`)
-                return
-            }
-            const r = (await res.json()) as VerifyReport
+            const r = await apiMutate<VerifyReport>(`/api/projects/${projectId}/verify`, { method: "POST" })
             setReport(r)
             setCheckedAt(new Date().toISOString())
             setFlash(true)
             // The route also persists to Supabase; realtime will deliver
             // the same payload to other tabs / sessions automatically.
         } catch (err) {
-            setError(err instanceof Error ? err.message : String(err))
+            if (err instanceof ApiError) setError(err.message || `Failed (${err.status})`)
+            else setError(err instanceof Error ? err.message : String(err))
         } finally {
             setBusy(false)
         }
