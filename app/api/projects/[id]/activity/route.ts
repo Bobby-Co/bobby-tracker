@@ -1,7 +1,7 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/api"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { countUnembeddedIssues, ensureIssueEmbeddings } from "@/lib/issues/issue-embedding"
-import type { ProjectAnalyser } from "@/lib/supabase/types"
 
 // How many issues one sweep embeds. Small on purpose: this runs in the request's
 // after() on a Worker, so the batch has to finish inside that budget. A backlog
@@ -51,12 +51,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (pErr) return jsonError("db_error", pErr.message, 500)
     if (!project) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await supabase
-        .from("project_analyser")
-        .select("status,progress")
-        .eq("project_id", id)
-        .maybeSingle<Pick<ProjectAnalyser, "status" | "progress">>()
-    if (aErr) return jsonError("db_error", aErr.message, 500)
+    const { data: analyser, error: aErr } = await repoRead(() =>
+        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id),
+    )
+    if (aErr) return aErr
 
     const unembedded = await countUnembeddedIssues(id)
 

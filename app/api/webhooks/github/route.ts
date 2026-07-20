@@ -1,5 +1,6 @@
 import { after } from "next/server"
-import { getAnalyser } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/kernel"
 import { verifyWebhookSignature } from "@/lib/github-app"
 import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/lib/github-sync"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/lib/pr-sync"
@@ -7,7 +8,7 @@ import { embedIssueAsync } from "@/lib/issues/issue-embedding"
 import { deleteIssueComment, upsertIssueComment } from "@/lib/issue-store"
 import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/lib/pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
-import type { Issue, Project, ProjectAnalyser } from "@/lib/supabase/types"
+import type { Issue, Project } from "@/lib/supabase/types"
 
 // INBOUND WEBHOOK — public (NO requireUser). GitHub signs each delivery with
 // the app webhook secret; we prove authenticity by HMAC over the RAW body
@@ -453,11 +454,9 @@ async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<R
     // Incremental needs a prior successful bootstrap: a graph_id must exist.
     // We deliberately do NOT gate on status==='ready' — a push that lands
     // mid-update must still reach the analyser so its queue can coalesce it.
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,graph_id,last_indexed_sha")
-        .eq("project_id", project.id)
-        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "graph_id" | "last_indexed_sha">>()
+    const analyser = await tryOrNull(() =>
+        createSupabaseProjectAnalyserRepository(svc).findByProjectId(project.id),
+    )
     if (!analyser?.enabled || !analyser.graph_id) return ack()
 
     // Already indexed at this exact commit → nothing to do (the analyser would

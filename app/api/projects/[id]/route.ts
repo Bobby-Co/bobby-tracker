@@ -1,5 +1,6 @@
-import { getAnalyser } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
 import { forbidden, jsonError, requireUser } from "@/lib/api"
+import { tryOrNull } from "@/lib/kernel"
 import { assertProjectAccess, roleAtLeast } from "@/lib/auth/team-access"
 import { findIcon } from "@/lib/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/icons/iconly-catalog"
@@ -91,12 +92,11 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     if (!access.ok) return Response.json({ project: null })
     if (!roleAtLeast(access.role, "admin")) return forbidden("only team admins can delete a project")
 
-    const { data: analyser } = await supabase
-        .from("project_analyser")
-        .select("graph_id")
-        .eq("project_id", id)
-        .maybeSingle<{ graph_id: string | null }>()
-    const graphId = analyser?.graph_id ?? null
+    // Fail-safe: a query error folds to null → skip the (best-effort) graph
+    // teardown, exactly as the old inline read (which ignored the error) did.
+    const graphId = await tryOrNull(() =>
+        createSupabaseProjectAnalyserRepository(supabase).findGraphId(id),
+    )
 
     const { error: dbErr } = await supabase.from("projects").delete().eq("id", id)
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
