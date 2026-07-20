@@ -9,6 +9,7 @@ import { Dropdown } from "@/components/ui/dropdown"
 import { Spinner } from "@/components/ui/spinner"
 import { PublicAiComposeButton } from "@/components/public/public-ai-compose-button"
 import { readName, readReporterId } from "@/lib/public/public-profile"
+import { ApiError, apiMutate } from "@/lib/api-client"
 
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 const MAX_TITLE = 200
@@ -53,24 +54,22 @@ export function PublicIssueForm({
         startTransition(async () => {
             const reporter = readName()
             const reporter_id = readReporterId()
-            const res = await fetch("/api/public-issues", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token, project_id: projectId, reporter, reporter_id, title, body, priority }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setError(e?.error?.message || `Failed (${res.status})`)
-                return
-            }
-            const data = await res.json()
-            const issue = data.issue
-            if (issue?.id && issue?.issue_number) {
-                setSubmitted({ id: issue.id, issue_number: issue.issue_number })
-                // Refresh so the new issue lands in the server-rendered
-                // "All submissions" list under the visitor's reporter
-                // group when they hit "Submit another" or scroll down.
-                router.refresh()
+            try {
+                const data = await apiMutate<{ issue?: { id?: string; issue_number?: number } }>("/api/public-issues", {
+                    method: "POST",
+                    body: { token, project_id: projectId, reporter, reporter_id, title, body, priority },
+                })
+                const issue = data?.issue
+                if (issue?.id && issue?.issue_number) {
+                    setSubmitted({ id: issue.id, issue_number: issue.issue_number })
+                    // Refresh so the new issue lands in the server-rendered
+                    // "All submissions" list under the visitor's reporter
+                    // group when they hit "Submit another" or scroll down.
+                    router.refresh()
+                }
+            } catch (e) {
+                if (!(e instanceof ApiError)) throw e
+                setError(e.message || `Failed (${e.status})`)
             }
         })
     }

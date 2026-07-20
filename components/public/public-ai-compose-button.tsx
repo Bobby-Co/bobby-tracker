@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
 import { compressImage, type CompressedImage } from "@/lib/image-compress"
 import { readName, readReporterId } from "@/lib/public/public-profile"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import type { IssuePriority } from "@/lib/supabase/types"
 
 interface RankedProject {
@@ -124,24 +125,15 @@ function ComposeBody({
         setComposeError(null)
         setComposing(true)
         try {
-            const res = await fetch("/api/public-issues/ai-compose", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    token,
-                    project_id: projectId,
-                    paragraph,
-                    images: images.map((i) => i.dataUrl),
-                }),
-            })
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}))
-                setComposeError(e?.error?.message || `Failed (${res.status})`)
-                return
-            }
-            const data = await res.json()
-            const p = data.proposal as PublicProposal
-            const r = (data.ranking as RankedProject[] | null) ?? []
+            const data = await apiMutate<{ proposal: PublicProposal; ranking: RankedProject[] | null; routing_query?: string }>(
+                "/api/public-issues/ai-compose",
+                {
+                    method: "POST",
+                    body: { token, project_id: projectId, paragraph, images: images.map((i) => i.dataUrl) },
+                },
+            )
+            const p = data.proposal
+            const r = data.ranking ?? []
             setProposal(p)
             setRanking(r)
             setRoutingQuery(typeof data.routing_query === "string" ? data.routing_query : null)
@@ -182,25 +174,26 @@ function ComposeBody({
             // its own row with its own embedding + reporter_id;
             // sharing the same draft content but routed by the user.
             const results = await Promise.all(targets.map(async (project_id) => {
-                const res = await fetch("/api/public-issues", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        token,
-                        project_id,
-                        reporter,
-                        reporter_id,
-                        title: proposal.title,
-                        body: proposal.body,
-                        priority: proposal.priority,
-                    }),
-                })
-                if (!res.ok) {
-                    const e = await res.json().catch(() => ({}))
-                    return { project_id, error: e?.error?.message || `Failed (${res.status})` }
+                try {
+                    const data = await apiMutate<{ issue?: { id?: string } }>("/api/public-issues", {
+                        method: "POST",
+                        body: {
+                            token,
+                            project_id,
+                            reporter,
+                            reporter_id,
+                            title: proposal.title,
+                            body: proposal.body,
+                            priority: proposal.priority,
+                        },
+                    })
+                    return { project_id, issueId: data?.issue?.id as string | undefined }
+                } catch (e) {
+                    // Per-target error collection (not a throw) — a network error
+                    // still rejects the Promise.all and hits the outer catch, as before.
+                    if (!(e instanceof ApiError)) throw e
+                    return { project_id, error: e.message || `Failed (${e.status})` }
                 }
-                const data = await res.json().catch(() => ({}))
-                return { project_id, issueId: data?.issue?.id as string | undefined }
             }))
             const failed = results.filter((r): r is { project_id: string; error: string } => "error" in r)
             const created = results.filter((r): r is { project_id: string; issueId: string } => "issueId" in r && !!r.issueId)
