@@ -6,7 +6,7 @@ import {
     getRepoMergeMethods,
     GithubMergeError,
     mergePullRequest,
-} from "@/lib/github-app-rest"
+} from "@/modules/github"
 import { defaultMergeMethod, mergeGate, type MergeMethod, type MergeMethods } from "@/lib/pulls/merge-gate"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 

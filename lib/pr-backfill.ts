@@ -12,7 +12,7 @@ import {
     listPullRequestReviews,
     listPullRequests,
     type GithubPullRequest,
-} from "@/lib/github-app-rest"
+} from "@/modules/github"
 import { repoFullName } from "@/lib/integrations/github"
 import { upsertIssueComment } from "@/lib/issue-store"
 import { upsertPRComment, upsertPullRequest, type PRUpsert } from "@/lib/pr-store"

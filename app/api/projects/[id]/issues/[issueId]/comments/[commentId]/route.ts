@@ -1,6 +1,6 @@
 import { jsonError, requireProjectAccess } from "@/lib/api"
 import { resolveCommentContext } from "@/lib/comment-actions"
-import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/lib/github-user"
+import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/modules/github"
 import { deleteIssueComment, upsertIssueComment } from "@/lib/issue-store"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"

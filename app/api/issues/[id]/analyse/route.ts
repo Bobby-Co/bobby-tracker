@@ -1,5 +1,5 @@
 import { jsonError, requireIssueAccess } from "@/lib/api"
-import { ensureAnalysis } from "@/lib/github-sync"
+import { ensureAnalysis } from "@/modules/github"
 import type { IssueSuggestion } from "@/lib/supabase/types"
 
 export const dynamic = "force-dynamic"

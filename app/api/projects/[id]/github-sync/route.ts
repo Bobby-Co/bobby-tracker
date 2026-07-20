@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireProjectAccess } from "@/lib/api"
-import { importExistingIssues } from "@/lib/github-sync"
+import { importExistingIssues } from "@/modules/github"
 import { GITHUB_SYNC_DIRECTIONS } from "@/lib/supabase/types"
 import type { Project } from "@/lib/supabase/types"
 

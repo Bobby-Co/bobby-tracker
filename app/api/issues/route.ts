@@ -5,7 +5,7 @@ import { tryOrNull } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue, IssuePriority, IssueStatus } from "@/lib/supabase/types"
 import { embedIssueAsync } from "@/lib/issues/issue-embedding"
-import { pushIssueToGithub, ensureAnalysis } from "@/lib/github-sync"
+import { pushIssueToGithub, ensureAnalysis } from "@/modules/github"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 export async function POST(request: Request) {

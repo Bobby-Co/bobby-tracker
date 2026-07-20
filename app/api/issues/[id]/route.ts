@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { jsonError, repoRead, requireIssueAccess } from "@/lib/api"
 import { tryOrNull } from "@/lib/kernel"
-import { deleteGithubIssueFromTracker, updateGithubIssueFromTracker } from "@/lib/github-sync"
+import { deleteGithubIssueFromTracker, updateGithubIssueFromTracker } from "@/modules/github"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue } from "@/lib/supabase/types"
 import { createSupabaseProjectsRepository } from "@/modules/projects"

@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api"
-import { applyAnalysisResult } from "@/lib/github-sync"
+import { applyAnalysisResult } from "@/modules/github"
 import type { IssueAnalysis } from "@/lib/analyser"
 
 export const dynamic = "force-dynamic"

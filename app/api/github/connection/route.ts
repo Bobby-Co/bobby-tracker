@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/api"
-import { getUserGithubToken } from "@/lib/github-user"
+import { getUserGithubToken } from "@/modules/github"
 
 // GET /api/github/connection
 //

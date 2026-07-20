@@ -1,6 +1,6 @@
 import { requireProjectAccess, jsonError } from "@/lib/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { githubAppFetch, githubJwtFetch } from "@/lib/github-app"
+import { githubAppFetch, githubJwtFetch } from "@/modules/github"
 import { repoFullName } from "@/lib/integrations/github"
 import type { Project } from "@/lib/supabase/types"
 

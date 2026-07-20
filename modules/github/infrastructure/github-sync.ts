@@ -12,14 +12,14 @@ import {
     listRepoIssues,
     updateGithubIssue,
     updateIssueComment,
-} from "@/lib/github-app-rest"
+} from "./github-app-rest"
 import {
     cancelledCommentBody,
     type CommentCtx,
     failedCommentBody,
     loadingCommentBody,
     resultCommentBody,
-} from "@/lib/github-issue-comment"
+} from "./github-issue-comment"
 import { repoFullName } from "@/lib/integrations/github"
 import { composeIssueFixPrompt } from "@/lib/issues/issue-prompt"
 import { createServiceClient } from "@/lib/supabase/server"
