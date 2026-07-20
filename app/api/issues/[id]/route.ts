@@ -1,9 +1,11 @@
 import { after } from "next/server"
-import { jsonError, requireIssueAccess } from "@/lib/api"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/api"
+import { tryOrNull } from "@/lib/kernel"
 import { deleteGithubIssueFromTracker, updateGithubIssueFromTracker } from "@/lib/github-sync"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { Issue } from "@/lib/supabase/types"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 // GET /api/issues/[id]?project_id=... — single issue. The optional
 // project_id query param scopes the lookup to a project (matching the
@@ -71,11 +73,12 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     if (error) return error
 
     // Capture the row (esp. its GitHub linkage) BEFORE deleting so we can
-    // propagate the deletion afterwards.
-    const { data: issue } = await supabase.from("issues").select("*").eq("id", id).maybeSingle<Issue>()
+    // propagate the deletion afterwards. Fail-safe: a read error → null → we
+    // skip GitHub propagation, exactly as the old inline read did.
+    const issue = await tryOrNull(() => createSupabaseIssuesRepository(supabase).findById(id))
 
-    const { error: dbErr } = await supabase.from("issues").delete().eq("id", id)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => createSupabaseIssuesRepository(supabase).deleteById(id))
+    if (dbErr) return dbErr
 
     // Propagate the delete to GitHub when the issue was linked and the project
     // opted into delete-sync (outbound). deleteGithubIssueFromTracker itself

@@ -5,3 +5,7 @@
 // callers that pair it with routingEmbeddingText.
 
 export { issueEmbeddingText, routingEmbeddingText } from "./domain/embedding-text"
+
+// ─── issues repository (Phase 1: inline .from("issues") → repository) ────────
+export type { IssuesRepository } from "./ports/issues-repository"
+export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues-repository"

@@ -4,7 +4,8 @@ import { cookies } from "next/headers"
 import type { User } from "@supabase/supabase-js"
 import { createClient, getCurrentUser } from "@/lib/supabase/server"
 import { assertProjectAccess, getTeamRole, resolveActiveTeam, roleAtLeast } from "@/lib/auth/team-access"
-import { RepositoryError } from "@/lib/kernel"
+import { RepositoryError, tryOrNull } from "@/lib/kernel"
+import { createSupabaseIssuesRepository } from "@/modules/issues"
 import type { TeamRole, TeamWithRole } from "@/lib/supabase/types"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -155,10 +156,10 @@ export async function requireIssueAccess(issueId: string): Promise<IssueOK | Iss
     const { supabase, user } = base
 
     // Coarse RLS lets a team member read the issue row; we still resolve its
-    // project to apply the finer group gate. maybeSingle → null when the issue
-    // is invisible/absent, which we render as 404 (same as no-access).
-    const { data: issue } = await supabase.from("issues").select("project_id").eq("id", issueId).maybeSingle()
-    const projectId = (issue as { project_id: string } | null)?.project_id
+    // project to apply the finer group gate. null when the issue is
+    // invisible/absent, which we render as 404 (same as no-access). Fail-safe:
+    // a query error also folds to null → 404 (fail closed), as before.
+    const projectId = await tryOrNull(() => createSupabaseIssuesRepository(supabase).findProjectId(issueId))
     const notFound: IssueFail = { supabase, user: null, projectId: null, teamId: null, role: null, error: jsonError("not_found", "issue not found", 404) }
     if (!projectId) return notFound
 
