@@ -12,7 +12,7 @@
 // isEmailConfigured() short-circuits before any work or any Workers-only import.
 
 import { mergeVerdictLabel } from "@/lib/rendering/badge"
-import { findingState } from "@/modules/pull-requests"
+import { findingState, findPRAnalysisResult } from "@/modules/pull-requests"
 import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -111,14 +111,11 @@ async function loadPrResult(
     const m = href.match(/\/pulls\/(\d+)/)
     if (!m) return null
     const prNumber = Number(m[1])
-    const { data } = await svc
-        .from("pull_request_analyses")
-        .select("result")
-        .eq("project_id", projectId)
-        .eq("pr_number", prNumber)
-        .maybeSingle<{ result: PRAnalysis | null }>()
-    if (!data?.result) return null
-    return { prNumber, result: data.result }
+    // Read through the Pull Requests contract — notifications doesn't own the
+    // pull_request_analyses table.
+    const result = await findPRAnalysisResult(svc, projectId, prNumber)
+    if (!result) return null
+    return { prNumber, result }
 }
 
 // absoluteUrl turns a notification's relative href into a full link for email.

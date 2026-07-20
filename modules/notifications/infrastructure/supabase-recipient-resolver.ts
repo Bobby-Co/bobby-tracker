@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { createSupabaseTeamMembershipRepository } from "@/modules/teams"
 import type { NotificationEvent } from "../domain/events"
 import type { ChannelId } from "../domain/events"
 import type { Recipient, RecipientResolver } from "../ports/recipient-resolver"
@@ -30,8 +31,6 @@ import type { Recipient, RecipientResolver } from "../ports/recipient-resolver"
 // results are cast to concrete row shapes at each call site (same convention as
 // lib/auth/team-access.ts and the rest of the app).
 type DB = SupabaseClient
-
-type TeamRole = "owner" | "admin" | "member"
 
 // Until a preferences store exists, every recipient gets every channel; the
 // dispatcher narrows this to each event's default channels.
@@ -46,13 +45,9 @@ export function createSupabaseRecipientResolver(db: SupabaseClient): RecipientRe
             const teamId = await createSupabaseProjectsRepository(db).findTeamId(event.projectId)
             if (!teamId) return []
 
-            // 2. Every member of that team, with their role.
-            const { data: memberRows, error: membersErr } = await db
-                .from("team_members")
-                .select("user_id,role")
-                .eq("team_id", teamId)
-            if (membersErr) throw new Error(membersErr.message)
-            const members = (memberRows ?? []) as { user_id: string; role: TeamRole }[]
+            // 2. Every member of that team, with their role — through the Teams
+            //    contract (notifications doesn't own the membership tables).
+            const members = await createSupabaseTeamMembershipRepository(db).listTeamMembers(teamId)
 
             // 3. The set of userIds to notify. Owners/admins always; a plain
             //    member only if the project is granted to a group they're in.
@@ -86,21 +81,10 @@ export function createSupabaseRecipientResolver(db: SupabaseClient): RecipientRe
 // reverse: there we walk user → groups → projects; here we walk project →
 // granting groups → member userIds.
 async function resolveGroupMemberUserIds(db: DB, teamId: string, projectId: string): Promise<Set<string>> {
-    const { data: gp, error: e1 } = await db
-        .from("access_group_projects")
-        .select("group_id")
-        .eq("project_id", projectId)
-    if (e1) throw new Error(e1.message)
-    const groupIds = Array.from(new Set(((gp ?? []) as { group_id: string }[]).map((r) => r.group_id)))
+    const teams = createSupabaseTeamMembershipRepository(db)
+    const groupIds = Array.from(new Set(await teams.listGroupIdsForProject(projectId)))
     if (groupIds.length === 0) return new Set<string>()
-
-    const { data: gm, error: e2 } = await db
-        .from("access_group_members")
-        .select("user_id")
-        .in("group_id", groupIds)
-        .eq("team_id", teamId)
-    if (e2) throw new Error(e2.message)
-    return new Set(((gm ?? []) as { user_id: string }[]).map((r) => r.user_id))
+    return new Set(await teams.listGroupMemberUserIds(teamId, groupIds))
 }
 
 // resolveUserEmail looks up an auth.users email via the service-role admin API.

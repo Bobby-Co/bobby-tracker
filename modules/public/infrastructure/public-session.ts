@@ -6,6 +6,9 @@
 // one place.
 
 import { jsonError } from "@/lib/platform/http/api"
+import { createSupabaseIssuesRepository } from "@/modules/issues"
+import { createSupabaseTeamMembershipRepository } from "@/modules/teams"
+import { tryOrNull } from "@/lib/kernel"
 import { createServiceClient, getCurrentUser } from "@/lib/supabase/server"
 import type {
     Issue,
@@ -71,13 +74,9 @@ export async function resolvePublicSession(
         // adds to public_session_projects; for groups we apply the
         // same filter at read time so a project added to the group
         // before public-submissions is enabled doesn't get exposed.
-        const { data: members } = await svc
-            .from("project_group_members")
-            .select("project_id,projects!inner(project_public_integration!inner(enabled))")
-            .eq("group_id", data.group_id)
-            .eq("projects.project_public_integration.enabled", true)
-            .returns<{ project_id: string }[]>()
-        project_ids = (members ?? []).map((r) => r.project_id)
+        // Collections are Teams-owned — read the group's public-enabled projects
+        // through the Teams contract, not the project_group_members table.
+        project_ids = await createSupabaseTeamMembershipRepository(svc).listPublicEnabledProjectIdsInGroup(data.group_id)
     } else {
         const { data: links } = await svc
             .from("public_session_projects")
@@ -100,11 +99,10 @@ export async function fetchPublicIssue(
     issueId: string,
     sessionProjectIds: string[],
 ): Promise<{ issue: Issue; error: null } | { issue: null; error: Response }> {
-    const { data } = await svc
-        .from("issues")
-        .select("*")
-        .eq("id", issueId)
-        .maybeSingle<Issue>()
+    // Read through the Issues contract — public doesn't own the issues table.
+    // Fail-safe: fold a query error to null (→ 404), matching the original read
+    // that ignored the error.
+    const data = await tryOrNull(() => createSupabaseIssuesRepository(svc).findById(issueId))
     if (!data || !sessionProjectIds.includes(data.project_id)) {
         return { issue: null, error: jsonError("not_found", "issue not found", 404) }
     }

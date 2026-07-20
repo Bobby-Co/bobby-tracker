@@ -8,8 +8,22 @@
 // additions/deletions) never clobbers a value an earlier, richer event set.
 
 import type { createServiceClient } from "@/lib/supabase/server"
+import type { PRAnalysis } from "@/lib/supabase/types"
 
 type Svc = ReturnType<typeof createServiceClient>
+
+// Read the stored review result for one PR. Exposed so other contexts (e.g. the
+// notification email) can show the score/verdict without querying this module's
+// pull_request_analyses table directly.
+export async function findPRAnalysisResult(svc: Svc, projectId: string, prNumber: number): Promise<PRAnalysis | null> {
+    const { data } = await svc
+        .from("pull_request_analyses")
+        .select("result")
+        .eq("project_id", projectId)
+        .eq("pr_number", prNumber)
+        .maybeSingle<{ result: PRAnalysis | null }>()
+    return data?.result ?? null
+}
 
 export type PRUpsert = {
     pr_number: number
