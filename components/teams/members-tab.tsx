@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useApi } from "@/lib/hooks/use-api"
+import { ApiError, apiMutate } from "@/lib/api-client"
 import { cn } from "@/components/ui/cn"
 import { TEAM_ROLES, type TeamInvite, type TeamMemberView, type TeamRole, type TeamWithRole } from "@/lib/supabase/types"
 
@@ -15,20 +16,29 @@ export function MembersTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boo
     const invites = invitesQ.data?.invites ?? []
 
     async function changeRole(userId: string, role: TeamRole) {
-        await fetch(`/api/teams/${team.id}/members/${userId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role }),
-        }).then((r) => { if (!r.ok) alertError(r) })
+        try {
+            await apiMutate(`/api/teams/${team.id}/members/${userId}`, { method: "PATCH", body: { role } })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+            alert(e.message)
+        }
         membersQ.refetch()
     }
     async function removeMember(userId: string) {
-        const res = await fetch(`/api/teams/${team.id}/members/${userId}`, { method: "DELETE" })
-        if (!res.ok) return alertError(res)
+        try {
+            await apiMutate(`/api/teams/${team.id}/members/${userId}`, { method: "DELETE" })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+            return alert(e.message)
+        }
         membersQ.refetch()
     }
     async function revokeInvite(token: string) {
-        await fetch(`/api/teams/${team.id}/invites/${token}`, { method: "DELETE" })
+        try {
+            await apiMutate(`/api/teams/${team.id}/invites/${token}`, { method: "DELETE" })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+        }
         invitesQ.refetch()
     }
 
@@ -122,18 +132,12 @@ function InviteForm({ teamId, onInvited }: { teamId: string; onInvited: () => vo
         setBusy(true)
         setMsg(null)
         try {
-            const res = await fetch(`/api/teams/${teamId}/invites`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: email.trim(), role }),
-            })
-            const body = await res.json().catch(() => null)
-            if (!res.ok) { setMsg({ ok: false, text: body?.error?.message ?? "Couldn't send invite" }); return }
+            await apiMutate(`/api/teams/${teamId}/invites`, { method: "POST", body: { email: email.trim(), role } })
             setMsg({ ok: true, text: `Invitation sent to ${email.trim()}` })
             setEmail("")
             onInvited()
-        } catch {
-            setMsg({ ok: false, text: "Network error" })
+        } catch (e) {
+            setMsg({ ok: false, text: e instanceof ApiError ? e.message : "Network error" })
         } finally {
             setBusy(false)
         }
@@ -186,10 +190,6 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
             {initials}
         </span>
     )
-}
-
-function alertError(res: Response) {
-    res.json().then((b) => alert(b?.error?.message ?? "Action failed")).catch(() => alert("Action failed"))
 }
 
 function TrashIcon() {
