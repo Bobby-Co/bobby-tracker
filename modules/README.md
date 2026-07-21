@@ -132,6 +132,26 @@ Moves it demonstrates, worth imitating:
   analysis flow lives in `modules/analysis` and posts comments via
   `VcsAppService.postComment(...)`; it never learns a token or an owner/repo.
 
+### The same shape in every module
+
+The discipline isn't `vcs`-only — every module names a role, hides the vendor/IO
+behind an adapter, and owns its behaviour in a class. A floating grab-bag of
+functions is the anti-pattern; each of these replaced one:
+
+| Module | Role (port) | Adapter (owns the IO) | Owned behaviour |
+|---|---|---|---|
+| `analysis` | `Analyser`, `PullRequestAnalysisStore` | `HttpAnalyser` (all bobby-analyser transport), `SupabasePullRequestAnalysisStore` | `IssueAnalysisService`, `PullRequestAnalysisService` |
+| `issues` | `IssuesRepository`, `EmbeddingIndex`, `IssueSyncStore` | `SupabaseIssuesRepository`, `SupabaseEmbeddingIndex` | `IssueEmbedder`, the `Issue` aggregate |
+| `public` | `PublicSessionRepository` | `SupabasePublicSessionRepository` | `PublicSessionService` gate + the `PublicSession` aggregate |
+| `teams` | `InviteNotifier`, `TeamMembershipRepository` | `JmapInviteNotifier`, `SupabaseTeamMembershipRepository` | `domain/Invite` value helpers |
+| `notifications` | `NotificationChannel`, `RecipientResolver`, `OutboxStore` | `EmailChannel`, `InAppFeedChannel`, `Supabase*` | `NotificationService.drain()`, `NotificationDispatcher` |
+| `relay` | `AnalyserWorkerDirectory` | `HttpAnalyserWorkerDirectory` | `domain/PairingCodes` value helpers |
+| `projects` | `ProjectsRepository` | `SupabaseProjectsRepository` | the `Project` aggregate + `pickStatus` policy |
+
+Pure value/domain helpers (`RepoRef`, `SyncHash`, `PairingCodes`, `Invite`,
+`pickStatus`) stay as functions in a well-named concept file — a class there would
+be ceremony. The test is ownership, not "is it a class."
+
 ## Naming conventions (Java / adjective-trait style)
 
 - **Interface = the role/capability** — a noun or adjective: `VcsAppInstance`,
@@ -148,11 +168,10 @@ Moves it demonstrates, worth imitating:
 - **Concrete classes with no interface** keep a plain descriptive name
   (`VcsAppService`, `PullRequestService`, `GithubAppClient`, `NotificationDispatcher`).
 - **Files are PascalCase, named after the primary type** they export, one type per
-  file (`GithubVcsAppInstance.ts`, `VcsAppInstance.ts`); `index.ts` stays lowercase
-  (it is the barrel). *Status:* `vcs` is the reference and the only module on the
-  PascalCase-file convention so far; the other modules keep kebab-case file names
-  and migrate toward it when next touched. The **identifier** rules above already
-  apply everywhere.
+  file (`GithubVcsAppInstance.ts`, `VcsAppInstance.ts`); `index.ts`, `Composition.ts`
+  are the fixed exceptions. *Status:* **all seven hexagon modules now follow this
+  convention** — PascalCase files and the Java identifier rules throughout. `vcs`
+  is the reference; the others mirror it. New modules start here.
 
 ## The shared kernel — `lib/kernel/`
 
