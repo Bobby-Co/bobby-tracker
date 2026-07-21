@@ -4,8 +4,8 @@
 // Type-only: no runtime output.
 
 import type { GithubSyncDirection, ProjectInsight } from "@/lib/supabase/types"
-import type { ProjectInsightView } from "../domain/pick-status"
-import type { SyncDirection } from "../domain/project"
+import type { ProjectInsightView } from "../domain/PickStatus"
+import type { SyncDirection } from "../domain/Project"
 
 /** Errors unless `Sub` is assignable to `Sup`. */
 type Assignable<Sub extends Sup, Sup> = Sub

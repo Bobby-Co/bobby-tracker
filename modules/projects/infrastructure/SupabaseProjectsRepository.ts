@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/kernel"
-import type { AnalysisProjectContext, GithubSyncContext, ProjectsRepository } from "../ports/projects-repository"
+import type { AnalysisProjectContext, GithubSyncContext, ProjectsRepository } from "../ports/ProjectsRepository"
 
 const GITHUB_SYNC_COLS =
     "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes"

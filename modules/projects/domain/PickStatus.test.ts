@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
-import { pickStatus } from "./pick-status"
-import type { ProjectInsightView } from "./pick-status"
+import { pickStatus } from "./PickStatus"
+import type { ProjectInsightView } from "./PickStatus"
 
 const NOW = Date.parse("2026-07-20T12:00:00.000Z")
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()

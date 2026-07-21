@@ -2,13 +2,13 @@
 // here, never the module internals (ports/ or infrastructure/ directly). As the
 // module grows this barrel exposes its commands, queries, and events.
 
-export type { GithubSyncContext, ProjectsRepository } from "./ports/projects-repository"
-export { createSupabaseProjectsRepository } from "./infrastructure/supabase-projects-repository"
+export type { GithubSyncContext, ProjectsRepository } from "./ports/ProjectsRepository"
+export { createSupabaseProjectsRepository } from "./infrastructure/SupabaseProjectsRepository"
 
 // ─── project-status policy (which footer a project tile shows) ───────────────
-export type { ProjectStatus, ProjectInsightView } from "./domain/pick-status"
-export { pickStatus, URGENT_WINDOW_MS, PR_WINDOW_MS } from "./domain/pick-status"
+export type { ProjectStatus, ProjectInsightView } from "./domain/PickStatus"
+export { pickStatus, URGENT_WINDOW_MS, PR_WINDOW_MS } from "./domain/PickStatus"
 
 // ─── Project aggregate — the GitHub-sync invariants (sync-ready, direction) ──
-export type { ProjectSyncState, SyncDirection } from "./domain/project"
-export { Project } from "./domain/project"
+export type { ProjectSyncState, SyncDirection } from "./domain/Project"
+export { Project } from "./domain/Project"

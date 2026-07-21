@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
-import { Project } from "./project"
-import type { ProjectSyncState } from "./project"
+import { Project } from "./Project"
+import type { ProjectSyncState } from "./Project"
 
 const wired: ProjectSyncState = {
     github_sync_enabled: true,
