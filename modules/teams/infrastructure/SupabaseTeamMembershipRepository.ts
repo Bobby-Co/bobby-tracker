@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/kernel"
-import type { TeamMember, TeamMembershipRepository } from "../ports/team-membership-repository"
+import type { TeamMember, TeamMembershipRepository } from "../ports/TeamMembershipRepository"
 
 // The RLS client and the service-role client carry different schema generics
 // ("public" vs "tracker"); accept any schema so both are assignable.

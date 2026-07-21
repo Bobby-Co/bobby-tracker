@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import { baseUrl, isValidEmail, newInviteToken, normalizeEmail, sendInviteEmail } from "@/modules/teams"
+import { baseUrl, createInviteNotifier, isValidEmail, newInviteToken, normalizeEmail } from "@/modules/teams"
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/supabase/types"
 
 // GET /api/teams/[id]/invites — pending (unaccepted) invites (admins). RLS on
@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const acceptUrl = `${baseUrl(request)}/invite/${token}`
     after(async () => {
         try {
-            await sendInviteEmail({ to: email, teamName: team?.name ?? "a team", inviterName, acceptUrl, role: inviteRole })
+            await createInviteNotifier().sendInvite({ to: email, teamName: team?.name ?? "a team", inviterName, acceptUrl, role: inviteRole })
         } catch (e) {
             console.error("[team invite] email send failed", id, email, e)
         }
