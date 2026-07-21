@@ -4,11 +4,11 @@
 // client. IssueComposeProposal is re-exported (type-only) from lib/analyser for
 // callers that pair it with routingEmbeddingText.
 
-export { issueEmbeddingText, routingEmbeddingText } from "./domain/embedding-text"
+export { issueEmbeddingText, routingEmbeddingText } from "./domain/EmbeddingText"
 
 // ─── Issue aggregate — status lifecycle + GitHub-state mapping ───────────────
-export type { IssueStatusValue, IssueState } from "./domain/issue"
-export { Issue } from "./domain/issue"
+export type { IssueStatusValue, IssueState } from "./domain/Issue"
+export { Issue } from "./domain/Issue"
 
 // ─── issues repository (Phase 1: inline .from("issues") → repository) ────────
 export type {
@@ -20,15 +20,21 @@ export type {
     NewIssueSuggestion,
     SimilarIssue,
     IssueSimilarityState,
-} from "./ports/issues-repository"
-export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues-repository"
+} from "./ports/IssuesRepository"
+export { createSupabaseIssuesRepository } from "./infrastructure/SupabaseIssuesRepository"
 
 // ─── issue embedding (semantic index maintenance) ────────────────────────────
-export { embedIssueAsync, countUnembeddedIssues, ensureIssueEmbeddings } from "./infrastructure/issue-embedding"
+// The EmbeddingIndex PORT + its service-role adapter, and the IssueEmbedder
+// application service that owns embed-one / sweep / count. Callers obtain the
+// embedder via createIssueEmbedder().
+export type { EmbeddingIndex, EmbeddingUpsert, UnembeddedIssue } from "./ports/EmbeddingIndex"
+export { createServiceEmbeddingIndex } from "./infrastructure/SupabaseEmbeddingIndex"
+export type { EmbeddableIssue } from "./application/IssueEmbedder"
+export { IssueEmbedder, createIssueEmbedder } from "./application/IssueEmbedder"
 
 // ─── issue fix-prompt composer (renders a coding-agent prompt from an issue) ──
-export type { IssuePromptInput } from "./infrastructure/issue-prompt"
-export { composeIssueFixPrompt } from "./infrastructure/issue-prompt"
+export type { IssuePromptInput } from "./infrastructure/IssuePrompt"
+export { composeIssueFixPrompt } from "./infrastructure/IssuePrompt"
 
 // ─── service-role issues store (GitHub-sync / analysis, incl. the issue-comment
 //     mirror) — the IssueSyncStore PORT + its service-backed factory. Cross-module
@@ -40,5 +46,5 @@ export type {
     IssueSuggestionInsert,
     IssueCommentUpsert,
     IssueSyncStore,
-} from "./infrastructure/issue-sync-store"
-export { createServiceIssueSyncStore } from "./infrastructure/issue-sync-store"
+} from "./infrastructure/IssueSyncStore"
+export { createServiceIssueSyncStore } from "./infrastructure/IssueSyncStore"

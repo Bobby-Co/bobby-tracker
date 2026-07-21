@@ -12,7 +12,7 @@ import { IssuesViewToggle, type IssuesView } from "@/components/issues/issues-vi
 import { SegBar } from "@/components/ui/field-card"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
-import { Issue as IssueEntity } from "@/modules/issues/domain/issue"
+import { Issue as IssueEntity } from "@/modules/issues"
 
 export default function IssuesPage() {
     const { id } = useParams<{ id: string }>()

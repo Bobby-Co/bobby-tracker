@@ -14,7 +14,7 @@ import type {
     NewIssue,
     NewIssueSuggestion,
     SimilarIssue,
-} from "../ports/issues-repository"
+} from "../ports/IssuesRepository"
 
 // The suggest / fix-prompt projection — kept in one place so the port type and
 // the select string can't drift apart.

@@ -3,7 +3,7 @@ import { createSupabaseProjectAnalyserRepository, getAnalyser, cancelAnalysis, e
 import { tryOrNull } from "@/lib/kernel"
 import { getWebhookVerifier, syncHash } from "@/modules/vcs"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/modules/analysis"
-import { embedIssueAsync, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
+import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
 import { createServicePullRequestStore } from "@/modules/vcs"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -296,9 +296,9 @@ async function handleIssue(
         // `reopened`, say) needs a vector just as much.
         //
         // Fire-and-forget off the ack path, same as the analyser call. If it
-        // fails, ensureIssueEmbeddings() sweeps the row up later.
+        // fails, the embedder's ensureEmbeddings() sweep picks the row up later.
         if (inserted) {
-            after(() => embedIssueAsync({ id: inserted.id, project_id: project.id, title, body }))
+            after(() => createIssueEmbedder().embedIssue({ id: inserted.id, project_id: project.id, title, body }))
         }
     }
 

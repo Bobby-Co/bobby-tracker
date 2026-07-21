@@ -6,7 +6,7 @@
 // so the real gate rules are exercised.
 
 import { test, expect, describe, mock, beforeAll, beforeEach } from "bun:test"
-import { Issue as RealIssue } from "@/modules/issues/domain/issue"
+import { Issue as RealIssue } from "@/modules/issues/domain/Issue"
 import { Project as RealProject } from "@/modules/projects/domain/project"
 
 // ── leaf mocks (stable refs) ──────────────────────────────────────────────────

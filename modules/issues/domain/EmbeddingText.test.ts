@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { issueEmbeddingText, routingEmbeddingText } from "./embedding-text"
+import { issueEmbeddingText, routingEmbeddingText } from "./EmbeddingText"
 
 describe("issueEmbeddingText", () => {
     test("concatenates title and body, trimmed", () => {

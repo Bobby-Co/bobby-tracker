@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { Issue } from "./issue"
+import { Issue } from "./Issue"
 
 describe("Issue.isClosed — the app's closed set", () => {
     test("done / archived / duplicated are closed", () => {
@@ -47,7 +47,7 @@ describe("Issue GitHub link + inbound mapping", () => {
 // Invariants a refactor must preserve — if you add a status or move these rules
 // onto transition methods, these stay the fixed contract.
 describe("Issue — refactor-guard invariants", () => {
-    const ALL: import("./issue").IssueStatusValue[] =
+    const ALL: import("./Issue").IssueStatusValue[] =
         ["open", "in_progress", "blocked", "done", "archived", "duplicated"]
 
     test("every status is classified open XOR closed (no unclassified status)", () => {

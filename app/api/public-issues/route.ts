@@ -3,7 +3,7 @@ import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
 import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/modules/public"
-import { embedIssueAsync } from "@/modules/issues"
+import { createIssueEmbedder } from "@/modules/issues"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // Anonymous issue submission. The caller proves authority with the
@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     // Index the new issue for similarity search alongside owner-filed
     // ones. after() (not a bare `void`) so the Worker isn't frozen
     // before the embed completes — see POST /api/issues for why.
-    after(() => embedIssueAsync({ id: issue.id, project_id: project.id, title: issue.title, body: finalBody }))
+    after(() => createIssueEmbedder().embedIssue({ id: issue.id, project_id: project.id, title: issue.title, body: finalBody }))
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).

@@ -4,7 +4,7 @@ import { ProjectAnalyser, createSupabaseProjectAnalyserRepository, ensureAnalysi
 import { tryOrNull, RepositoryError } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
-import { createSupabaseIssuesRepository, embedIssueAsync } from "@/modules/issues"
+import { createSupabaseIssuesRepository, createIssueEmbedder } from "@/modules/issues"
 import { getVcsAppService } from "@/modules/vcs"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     // abandoned the instant the response returns, so the embed fetch
     // gets cancelled and the issue is never indexed. after() registers
     // the work with the runtime's waitUntil so it runs to completion.
-    after(() => embedIssueAsync(issue))
+    after(() => createIssueEmbedder().embedIssue(issue))
 
     // If the project is linked to GitHub with two-way sync on, mirror the new
     // issue to GitHub and post the auto-analysis comment. Fire-and-forget via
