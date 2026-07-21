@@ -1,5 +1,6 @@
 import { cn } from "@/components/ui/cn"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import { PullRequest as PullRequestEntity } from "@/modules/pull-requests/domain/pull-request"
 
 // Single source of truth for how a PR's state + Bobby's review status read
 // across the Pull-requests surfaces (list rows, detail header) — mirrors the
@@ -9,10 +10,7 @@ import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 export type PRState = "open" | "draft" | "merged" | "closed"
 
 export function prState(pr: Pick<PullRequest, "state" | "merged" | "draft">): PRState {
-    if (pr.merged) return "merged"
-    if (pr.state === "closed") return "closed"
-    if (pr.draft) return "draft"
-    return "open"
+    return PullRequestEntity.of(pr).lifecycle()
 }
 
 export const PR_STATE_META: Record<PRState, { dot: string; chip: string; label: string }> = {

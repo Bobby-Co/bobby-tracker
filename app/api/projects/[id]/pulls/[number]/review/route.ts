@@ -1,6 +1,6 @@
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { startPRAnalysis } from "@/modules/pull-requests"
+import { startPRAnalysis, PullRequest as PullRequestEntity } from "@/modules/pull-requests"
 import { repoFullName } from "@/modules/github"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
@@ -72,10 +72,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Reviewing a closed/merged PR is pointless — its diff is history and there's
     // nothing to gate a merge on. The button only surfaces for open PRs, so this
     // is the belt to that suspenders.
-    if (pull.merged || pull.state === "closed") {
+    const pr = PullRequestEntity.of(pull)
+    if (pr.isClosed()) {
         return jsonError("closed", "This pull request is already closed.", 409)
     }
-    if (pull.draft) {
+    if (pr.isDraft()) {
         return jsonError("draft", "Draft pull requests aren't reviewed.", 409)
     }
 

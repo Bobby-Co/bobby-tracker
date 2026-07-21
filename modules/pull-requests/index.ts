@@ -8,6 +8,10 @@
 export type { FindingState } from "@/lib/rendering/finding-state"
 export { findingState } from "@/lib/rendering/finding-state"
 
+// PullRequest aggregate — the PR lifecycle (merged/closed/draft/open)
+export type { PullRequestState, PullRequestLifecycle } from "./domain/pull-request"
+export { PullRequest } from "./domain/pull-request"
+
 // Merge policy (domain)
 export type { MergeMethod, MergeMethods, MergeGate, MergeBlock, MergeBlockCode } from "./domain/merge-gate"
 export { mergeGate, criticalFindingCount, defaultMergeMethod, MERGE_METHOD_LABEL } from "./domain/merge-gate"
