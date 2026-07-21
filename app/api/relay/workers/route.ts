@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { fetchAnalyserWorkers, type RelayModel, type RelayWorker } from "@/modules/relay"
+import { getAnalyserWorkerDirectory, type RelayModel, type RelayWorker } from "@/modules/relay"
 
 // AUTH. List the signed-in user's active (non-revoked) workers, enriched
 // with live connection state from the analyser. The analyser lookup is
@@ -15,7 +15,7 @@ export async function GET() {
         .order("created_at", { ascending: false })
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 
-    const live = await fetchAnalyserWorkers()
+    const live = await getAnalyserWorkerDirectory().listConnected()
 
     const workers: RelayWorker[] = (rows ?? []).map((row) => {
         // Prefer matching on workerId (the analyser sends it when it has
