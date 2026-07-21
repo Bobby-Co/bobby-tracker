@@ -1,5 +1,5 @@
 // VCS module — the vendor-neutral DTOs shared by every provider port
-// (VCSAppInstance, VCSUserInstance, WebhookVerifier). Kept in one place so the
+// (VcsAppInstance, VcsUserInstance, WebhookVerifier). Kept in one place so the
 // app-authority and user-authority ports speak the same nouns, and so a provider
 // adapter has a single target to map its API onto.
 //

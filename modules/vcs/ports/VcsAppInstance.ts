@@ -1,7 +1,7 @@
-// VCS module — the APP-AUTHORITY provider port. `VCSAppInstance` is the vendor-
+// VCS module — the APP-AUTHORITY provider port. `VcsAppInstance` is the vendor-
 // neutral interface for operations performed as the INSTALLED APP / bot (GitHub
 // App installation token today): opening/patching/deleting issues, posting bot
-// comments, and reading/merging pull requests. Its sibling `VCSUserInstance`
+// comments, and reading/merging pull requests. Its sibling `VcsUserInstance`
 // covers the other principal — actions taken as the signed-in USER (personal
 // token). They are split because they are DIFFERENT identities with different
 // credentials, rate limits, and authorization; one interface would conflate them.
@@ -23,12 +23,12 @@ import type {
     VcsPullRequest,
     VcsPullRequestFile,
     VcsReview,
-} from "./vcs-types"
+} from "./VcsTypes"
 
-/** The app/bot-authority operations `VCSAppService` orchestrates. An
+/** The app/bot-authority operations `VcsAppService` orchestrates. An
  *  implementation is bound to a single repo + its app credentials; nothing here
  *  mentions tokens, installation ids, owner/repo, or the REST/GraphQL split. */
-export interface VCSAppInstance {
+export interface VcsAppInstance {
     // ─── issues ─────────────────────────────────────────────────────────────
     /** Open an issue; returns the provider ids to store back on our row. */
     createIssue(input: { title: string; body?: string }): Promise<VcsIssueRef>

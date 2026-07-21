@@ -1,7 +1,7 @@
 // Analysis orchestration — the durable, cancellable auto-analysis lifecycle for
 // an issue. Moved here from the vcs module: kicking off / finishing an analyser
 // run is an ANALYSIS concern. The GitHub side is now just "post/edit a comment",
-// reached through the vcs module's generic VCSAppService — this flow never
+// reached through the vcs module's generic VcsAppService — this flow never
 // touches a token, owner/repo, or the REST client.
 //
 // Flow: on issue open we post an "analysing…" placeholder comment, store its id,

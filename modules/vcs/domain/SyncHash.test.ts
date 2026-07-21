@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { syncHash } from "./sync-hash"
+import { syncHash } from "./SyncHash"
 
 // syncHash: the echo-suppression fingerprint. Correctness of the whole sync loop
 // rests on ONE property: both sides must compute the identical hash for equivalent

@@ -4,7 +4,7 @@
 // in place when the analyser calls back. Closing the PR cancels the run.
 //
 // The GitHub side is now just "read the diff / post a comment", reached through
-// the vcs module's VCSAppService — this flow never touches a token, owner/repo,
+// the vcs module's VcsAppService — this flow never touches a token, owner/repo,
 // or the REST client. The pull_request_analyses table is analysis-owned state.
 
 import { tryOrNull } from "@/lib/kernel"

@@ -1,7 +1,7 @@
 // VCS application — PullRequestService: the provider-agnostic orchestrator for
 // the PR mirror. It backfills a repo's pull requests + their comment threads from
 // the remote into tracker's mirror, expressed purely over two ports:
-//   • VCSAppInstance     — the remote reads (listPullRequests/…); vendor-neutral.
+//   • VcsAppInstance     — the remote reads (listPullRequests/…); vendor-neutral.
 //   • PullRequestStore   — our mirror persistence (pull_requests / pr_comments).
 // Issue-comment backfill shares the same remote-comment machinery, so it lives
 // here too, writing through an injected issue-comment sink (the issues context
@@ -11,9 +11,9 @@
 // Pure application: imports only ports + neutral DTOs (enforced by the DIP rule).
 
 import type { IssueCommentUpsert } from "@/modules/issues"
-import type { VCSAppInstance } from "../ports/vcs-app-instance"
-import type { PRUpsert, PullRequestStore } from "../ports/pull-request-store"
-import type { VcsComment, VcsPullRequest, VcsReview } from "../ports/vcs-types"
+import type { VcsAppInstance } from "../ports/VcsAppInstance"
+import type { PRUpsert, PullRequestStore } from "../ports/PullRequestStore"
+import type { VcsComment, VcsPullRequest, VcsReview } from "../ports/VcsTypes"
 
 // Comment/review threads are the expensive part (2 API calls per PR), so a full
 // backfill only pulls them for the N most-recently-updated PRs. Older PRs fill
@@ -54,7 +54,7 @@ function prRow(pr: VcsPullRequest): PRUpsert {
 
 export class PullRequestService {
     constructor(
-        private readonly vcs: VCSAppInstance,
+        private readonly vcs: VcsAppInstance,
         private readonly store: PullRequestStore,
         private readonly issueComments: IssueCommentSink,
     ) {}

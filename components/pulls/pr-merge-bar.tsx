@@ -10,7 +10,7 @@ import {
     type MergeGate,
     type MergeMethod,
     type MergeMethods,
-} from "@/modules/vcs/domain/merge-gate"
+} from "@/modules/vcs/domain/MergeGate"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // The merge control on the PR-detail page. Sits between the header and the

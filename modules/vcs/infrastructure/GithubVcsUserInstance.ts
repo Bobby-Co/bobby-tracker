@@ -1,4 +1,4 @@
-// VCS module — the GitHub adapter for the VCSUserInstance port (user authority).
+// VCS module — the GitHub adapter for the VcsUserInstance port (user authority).
 // Bound to one repo + the signed-in user's personal token, it posts/edits/deletes
 // comments AS THE USER. The user-token fetch + comment DTO mapping are private
 // methods; an auth failure surfaces as the neutral VcsReauthError so callers
@@ -8,15 +8,15 @@
 // PRs (a PR is an issue for the comments API). Workers' fetch omits User-Agent
 // and GitHub 403s without one, so we set it on every call.
 
-import type { VCSUserInstance } from "../ports/vcs-user-instance"
-import { VcsReauthError, type VcsComment } from "../ports/vcs-types"
+import type { VcsUserInstance } from "../ports/VcsUserInstance"
+import { VcsReauthError, type VcsComment } from "../ports/VcsTypes"
 
 const GITHUB_API = "https://api.github.com"
 const USER_AGENT = "ucelot-tracker"
 
-/** The GitHub VCSUserInstance — bound to one repo + the user's token. Construct
+/** The GitHub VcsUserInstance — bound to one repo + the user's token. Construct
  *  via the composition root (resolveVcsUserInstance); callers depend on the port. */
-export class GithubUserInstance implements VCSUserInstance {
+export class GithubVcsUserInstance implements VcsUserInstance {
     constructor(
         private readonly token: string,
         private readonly owner: string,

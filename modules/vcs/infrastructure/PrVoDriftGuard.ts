@@ -11,7 +11,7 @@
 // which this environment can't run — the types in supabase/types are hand-kept.)
 
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
-import type { MergePull, MergeReview } from "../domain/merge-gate"
+import type { MergePull, MergeReview } from "../domain/MergeGate"
 
 /** Errors unless `Sub` is assignable to `Sup`. */
 type Assignable<Sub extends Sup, Sup> = Sub

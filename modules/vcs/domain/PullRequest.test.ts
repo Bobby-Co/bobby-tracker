@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { PullRequest } from "./pull-request"
+import { PullRequest } from "./PullRequest"
 
 const pr = (over: Partial<Parameters<typeof PullRequest.of>[0]> = {}) =>
     PullRequest.of({ merged: false, state: "open", draft: false, ...over })

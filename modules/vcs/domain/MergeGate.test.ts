@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
-import { mergeGate, criticalFindingCount, defaultMergeMethod } from "./merge-gate"
-import type { MergePull, MergeReview } from "./merge-gate"
+import { mergeGate, criticalFindingCount, defaultMergeMethod } from "./MergeGate"
+import type { MergePull, MergeReview } from "./MergeGate"
 
 // Characterization tests — lock in the CURRENT behaviour of the merge gate so a
 // later data/ownership refactor can't silently change what may be merged.

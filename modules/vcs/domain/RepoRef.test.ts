@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { repoFullName, blobUrl } from "./repo-ref"
+import { repoFullName, blobUrl } from "./RepoRef"
 
 describe("repoFullName", () => {
     test("prefers the stored repo_full_name", () => {

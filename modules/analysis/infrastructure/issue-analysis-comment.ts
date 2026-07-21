@@ -1,7 +1,7 @@
 // Analysis presentation — rendering an analyser run as the markdown body of the
 // bot comment on the linked issue. Moved here from the vcs module: HOW an
 // analysis result reads as a comment is an analysis concern; the vcs module only
-// provides the generic "post/edit a comment" tool (VCSAppService). Pure string
+// provides the generic "post/edit a comment" tool (VcsAppService). Pure string
 // building, no I/O. The blob deep-links use the vcs domain's repo helper.
 
 import type { IssueAnalysis } from "./analyser/issues"

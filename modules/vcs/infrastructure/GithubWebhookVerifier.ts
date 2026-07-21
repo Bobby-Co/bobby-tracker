@@ -3,7 +3,7 @@
 // (constant-time) against the "sha256=<hex>" x-hub-signature-256 header. Never
 // uses ===. The HMAC key + hex/compare are private methods.
 
-import type { WebhookVerifier } from "../ports/webhook-verifier"
+import type { WebhookVerifier } from "../ports/WebhookVerifier"
 
 export class GithubWebhookVerifier implements WebhookVerifier {
     private keyPromise: Promise<CryptoKey> | null = null

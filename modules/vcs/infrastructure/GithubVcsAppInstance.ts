@@ -3,13 +3,13 @@
 //   • GithubAppClient   — the GitHub App HTTP transport: JWT minting, installation
 //                         -token cache, the choke-point fetch. Shared singleton;
 //                         also used by the install/link flow.
-//   • GithubAppInstance — implements VCSAppInstance for one bound repo. Its REST/
+//   • GithubVcsAppInstance — implements VcsAppInstance for one bound repo. Its REST/
 //                         GraphQL calls + GitHub⇄neutral mapping are private
 //                         methods over the client. Construct via the composition
 //                         root (resolveVcsAppInstance); callers depend on the port.
 
 import { createServiceClient } from "@/lib/supabase/server"
-import type { VCSAppInstance } from "../ports/vcs-app-instance"
+import type { VcsAppInstance } from "../ports/VcsAppInstance"
 import {
     VcsMergeError,
     type VcsActor,
@@ -22,7 +22,7 @@ import {
     type VcsPullRequest,
     type VcsPullRequestFile,
     type VcsReview,
-} from "../ports/vcs-types"
+} from "../ports/VcsTypes"
 
 const GITHUB_API = "https://api.github.com"
 const USER_AGENT = "ucelot-tracker"
@@ -247,9 +247,9 @@ export class GithubAppClient {
  *  instance keeps the whole app on one cache. */
 export const githubAppClient = new GithubAppClient()
 
-/** The GitHub VCSAppInstance — bound to one repo + installation. Every REST/
+/** The GitHub VcsAppInstance — bound to one repo + installation. Every REST/
  *  GraphQL call and GitHub⇄neutral mapping is a private method over the client. */
-export class GithubAppInstance implements VCSAppInstance {
+export class GithubVcsAppInstance implements VcsAppInstance {
     constructor(
         private readonly installationId: number,
         private readonly owner: string,

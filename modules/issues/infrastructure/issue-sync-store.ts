@@ -86,7 +86,7 @@ export type IssueCommentUpsert = {
 }
 
 /** The service-role issues store — the injectable PORT the cross-module
- *  orchestrators (vcs' VCSAppService, the analysis flow) depend on. */
+ *  orchestrators (vcs' VcsAppService, the analysis flow) depend on. */
 export interface IssueSyncStore {
     /** The analysis-flow view of an issue by id (or task id, which is the id). */
     findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null>

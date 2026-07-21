@@ -4,20 +4,20 @@
 // ready-to-send Response on any failed gate.
 
 import { jsonError } from "@/lib/platform/http/api"
-import { createGithubTokenRepository } from "./user-token"
-import { repoFullName } from "../domain/repo-ref"
-import { getVcsUserService } from "../composition"
-import type { VCSUserService } from "../application/vcs-user-service"
+import { createGithubTokenRepository } from "./GithubTokenRepository"
+import { repoFullName } from "../domain/RepoRef"
+import { getVcsUserService } from "../Composition"
+import type { VcsUserService } from "../application/VcsUserService"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { RepositoryError } from "@/lib/kernel"
 import type { createClient } from "@/lib/supabase/server"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
-// The comment-authoring actor: a VCSUserService already bound to the project's
+// The comment-authoring actor: a VcsUserService already bound to the project's
 // repo + the caller's personal token (so it posts AS THEM), plus the login for
 // provenance display.
-export type CommentActor = { vcs: VCSUserService; login: string | null }
+export type CommentActor = { vcs: VcsUserService; login: string | null }
 
 export async function resolveCommentContext(
     supabase: SupabaseServer,

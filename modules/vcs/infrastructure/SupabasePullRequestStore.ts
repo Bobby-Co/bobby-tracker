@@ -10,7 +10,7 @@ import type {
     PRCommentUpsert,
     PRUpsert,
     PullRequestStore,
-} from "../ports/pull-request-store"
+} from "../ports/PullRequestStore"
 
 /** The service-role Supabase adapter for PullRequestStore. Construct via the
  *  factory below from a composition root (webhook / backfill / detached contexts

@@ -1,9 +1,9 @@
 // Characterization tests for the issue-sync USE-CASES — the orchestration the
 // issue routes + webhook call (outbound push/update/delete + hard-sync backfill).
 //
-// After the VCS-module refactor the shims are gone: routes call VCSAppService
+// After the VCS-module refactor the shims are gone: routes call VcsAppService
 // directly (and importExistingIssues from the composition root). The remote is
-// the VCSAppInstance port, so we mock its GitHub adapter (createGithubAppInstance)
+// the VcsAppInstance port, so we mock its GitHub adapter (createGithubVcsAppInstance)
 // with a fake instance and assert the SERVICE hits the right port methods with
 // vendor-neutral args. We keep the PURE entities (Issue, Project) real so the real
 // gate rules are exercised. (The adapter's own REST/GraphQL mapping + the
@@ -32,10 +32,10 @@ const instance = {
     listIssues: mock(),
 }
 
-// Composition news up GithubAppInstance; a constructor that returns our fake
+// Composition news up GithubVcsAppInstance; a constructor that returns our fake
 // instance object stands in for it (a JS constructor may return an object).
-mock.module("./github-app-instance", () => ({
-    GithubAppInstance: class {
+mock.module("./GithubVcsAppInstance", () => ({
+    GithubVcsAppInstance: class {
         constructor() {
             return instance
         }
@@ -62,13 +62,13 @@ mock.module("@/modules/projects", () => ({
     createSupabaseProjectsRepository: () => projectsRepo,
 }))
 
-// The issue-sync shims were deleted; the routes now call VCSAppService directly
+// The issue-sync shims were deleted; the routes now call VcsAppService directly
 // (and importExistingIssues from composition). This wrapper keeps the existing
 // call sites while exercising exactly that path through the composition.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-let comp: typeof import("../composition")
+let comp: typeof import("../Composition")
 beforeAll(async () => {
-    comp = await import("../composition")
+    comp = await import("../Composition")
 })
 const sync = {
     pushIssueToGithub: (i: any, p: any) => comp.getVcsAppService(p)?.syncIssueCreated(i, p) ?? Promise.resolve(),

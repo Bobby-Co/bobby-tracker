@@ -1,8 +1,8 @@
-// VCS application — VCSAppService: the provider-AGNOSTIC orchestrator for actions
+// VCS application — VcsAppService: the provider-AGNOSTIC orchestrator for actions
 // taken as the installed app/bot. It owns the two-way issue-sync use cases
 // (create/update/delete/import) and the bot-comment primitives, expressed purely
 // in terms of our domain (Issue, Project) + two ports:
-//   • VCSAppInstance  — the remote (createIssue, updateIssue, …); vendor-neutral.
+//   • VcsAppInstance  — the remote (createIssue, updateIssue, …); vendor-neutral.
 //   • IssueSyncStore  — our persistence of the sync bookkeeping (issues context).
 // It handles NO tokens, owner/repo, REST/GraphQL, or DB SDK — those live in the
 // adapters wired at the composition root (../composition.ts). This is what makes
@@ -12,15 +12,15 @@
 
 import { Issue, type IssueStatusValue, type IssueSyncStore } from "@/modules/issues"
 import { Project, type ProjectSyncState } from "@/modules/projects"
-import { syncHash } from "../domain/sync-hash"
-import type { VCSAppInstance } from "../ports/vcs-app-instance"
+import { syncHash } from "../domain/SyncHash"
+import type { VcsAppInstance } from "../ports/VcsAppInstance"
 import type {
     VcsMergeInput,
     VcsMergeMethods,
     VcsMergeResult,
     VcsMergeability,
     VcsPullRequestFile,
-} from "../ports/vcs-types"
+} from "../ports/VcsTypes"
 
 /** The issue fields the sync use cases read. Structural (not the full Issue row)
  *  so a freshly-inserted/updated row can be passed straight in. */
@@ -47,9 +47,9 @@ export interface ImportContext {
     userId: string
 }
 
-export class VCSAppService {
+export class VcsAppService {
     constructor(
-        private readonly vcs: VCSAppInstance,
+        private readonly vcs: VcsAppInstance,
         private readonly sync: IssueSyncStore,
     ) {}
 

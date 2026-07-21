@@ -24,7 +24,7 @@ const SVC = {}
 const projectsRepo = { findAnalysisContext: mock() }
 const analyserRepo = { findByProjectId: mock(), findGraphId: mock() }
 const analyser = { startIssueAnalysis: mock(), cancelIssueAnalysis: mock() }
-// The vcs comment service the flow now posts through (VCSAppService).
+// The vcs comment service the flow now posts through (VcsAppService).
 const vcsSvc = { postComment: mock(), updateComment: mock() }
 
 mock.module("@/lib/supabase/server", () => ({ createServiceClient: () => ({}) }))

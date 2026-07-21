@@ -1,6 +1,6 @@
 // VCS infrastructure — read the signed-in user's personal GitHub token. This is
 // the credential the user-authority path posts comments with (bound into a
-// VCSUserInstance by the comment gate) and the /github/connection route reports
+// VcsUserInstance by the comment gate) and the /github/connection route reports
 // on. The same token + `repo`-scope gate that /api/github/repos uses
 // (tracker.github_tokens, migration 0031).
 

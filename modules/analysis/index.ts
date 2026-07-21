@@ -13,7 +13,7 @@ export { createSupabaseProjectAnalyserRepository } from "./infrastructure/supaba
 
 // ─── Auto-analysis orchestration (durable, cancellable bot-comment lifecycle) ─
 // Moved in from the vcs module: the analyser-run lifecycle is an analysis
-// concern; the GitHub side is just a comment posted via vcs' VCSAppService.
+// concern; the GitHub side is just a comment posted via vcs' VcsAppService.
 export { ensureAnalysis, applyAnalysisResult, cancelAnalysis } from "./infrastructure/issue-analysis-flow"
 export { startPRAnalysis, applyPRResult, cancelPRAnalysisForPR } from "./infrastructure/pr-analysis-flow"
 export type { PRInput } from "./infrastructure/pr-analysis-flow"
