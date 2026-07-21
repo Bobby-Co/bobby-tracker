@@ -7,7 +7,7 @@ import { PublicProfileBadge } from "@/components/public/public-profile-badge"
 import { PublicSessionSubmissions } from "@/components/public/public-session-submissions"
 import { PublicSessionSkeleton } from "@/components/public/public-session-skeleton"
 import { PublicSessionGate } from "@/components/public/public-session-gate"
-import { checkInviteAccess, getCurrentPublicUser } from "@/modules/public"
+import { getPublicSessionService, getCurrentPublicUser } from "@/modules/public"
 import { groupByParent, groupParentsByReporter, type PublicListedIssue } from "@/modules/public"
 
 export const dynamic = "force-dynamic"
@@ -61,7 +61,7 @@ async function PublicSessionContent({
     // data. We still render the public heading so the visitor knows
     // which session they're being invited into.
     if (session.enabled && session.access_mode === "invite") {
-        const access = await checkInviteAccess({
+        const access = await getPublicSessionService(svc).checkInviteAccess({
             id: session.id,
             access_mode: session.access_mode as PublicSessionAccessMode,
         })

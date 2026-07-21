@@ -4,8 +4,8 @@
 // both directions, since they must stay identical). Type-only: no runtime output.
 
 import type { IssueStatus, PublicSessionAccessMode, PublicSessionSubmissionsVisibility } from "@/lib/supabase/types"
-import type { PublicIssueStatus } from "../domain/public-reporter"
-import type { PublicSessionAccessModeValue, PublicSessionSubmissionsVisibilityValue } from "../domain/session"
+import type { PublicIssueStatus } from "../domain/PublicReporter"
+import type { PublicSessionAccessModeValue, PublicSessionSubmissionsVisibilityValue } from "../domain/PublicSession"
 
 /** Errors unless `Sub` is assignable to `Sup`. */
 type Assignable<Sub extends Sup, Sup> = Sub

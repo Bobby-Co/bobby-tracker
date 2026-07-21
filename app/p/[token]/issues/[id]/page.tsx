@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
 import type { IssueSuggestion, Project, PublicIssueReporter } from "@/lib/supabase/types"
-import { checkInviteAccess, fetchPublicIssue, requireOwnVisibility, resolvePublicSession } from "@/modules/public"
+import { getPublicSessionService } from "@/modules/public"
 import { PublicIssueView } from "@/components/public/public-issue-view"
 import { PublicIssueDetailSkeleton } from "@/components/public/public-issue-detail-skeleton"
 import { PublicSessionGate } from "@/components/public/public-session-gate"
@@ -35,12 +35,13 @@ async function PublicIssueDetailContent({
 }) {
     const { token, id } = await params
     const svc = createServiceClient()
+    const gate = getPublicSessionService(svc)
 
-    const sess = await resolvePublicSession(svc, token, { requireOpen: false })
+    const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) notFound()
 
     if (sess.session.access_mode === "invite") {
-        const access = await checkInviteAccess(sess.session)
+        const access = await gate.checkInviteAccess(sess.session)
         if (!access.ok) {
             return (
                 <PublicSessionGate
@@ -53,10 +54,10 @@ async function PublicIssueDetailContent({
         }
     }
 
-    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    const visErr = await gate.requireOwnVisibility(sess.session, id)
     if (visErr) notFound()
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
+    const found = await gate.fetchPublicIssue(id, sess.session.project_ids)
     if (found.error) notFound()
     const issue = found.issue
 

@@ -2,7 +2,7 @@ import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { routingEmbeddingText } from "@/modules/issues"
-import { requireInviteAccess, resolvePublicSession } from "@/modules/public"
+import { getPublicSessionService } from "@/modules/public"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // POST /api/public-issues/ai-compose
@@ -47,10 +47,11 @@ export async function POST(request: Request) {
     }
 
     const svc = createServiceClient()
-    const sess = await resolvePublicSession(svc, token, { requireOpen: true })
+    const gate = getPublicSessionService(svc)
+    const sess = await gate.resolve(token, { requireOpen: true })
     if (sess.error) return sess.error
 
-    const inviteErr = await requireInviteAccess(sess.session)
+    const inviteErr = await gate.requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
 
     const isGroupBacked = !!sess.session.group_id

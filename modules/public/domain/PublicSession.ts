@@ -12,6 +12,11 @@
 export type PublicSessionAccessModeValue = "link" | "invite"
 export type PublicSessionSubmissionsVisibilityValue = "all" | "own"
 
+/** The label every publicly-filed issue carries, so anonymous viewers only ever
+ *  see issues submitted through a public link — never the maintainer's private
+ *  ones. A public-session domain constant (the gate filters reads on it). */
+export const PUBLIC_ISSUE_LABEL = "public-session"
+
 /** The session state the rules read. Fields optional so the aggregate builds from
  *  the narrow projections the gates pass (some inspect only access_mode). */
 export interface PublicSessionState {

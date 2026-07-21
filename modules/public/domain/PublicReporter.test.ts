@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
-import { reporterDisplay, groupByParent, groupParentsByReporter } from "./public-reporter"
-import type { PublicListedIssue } from "./public-reporter"
+import { reporterDisplay, groupByParent, groupParentsByReporter } from "./PublicReporter"
+import type { PublicListedIssue } from "./PublicReporter"
 
 describe("reporterDisplay", () => {
     test("named submitter shows their name", () => {

@@ -2,7 +2,7 @@ import { after } from "next/server"
 import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
-import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/modules/public"
+import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, getPublicSessionService } from "@/modules/public"
 import { createIssueEmbedder } from "@/modules/issues"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
@@ -33,10 +33,11 @@ export async function POST(request: Request) {
     if (!project_id) return jsonError("bad_request", "project_id required", 400)
 
     const svc = createServiceClient()
-    const { session, error } = await resolvePublicSession(svc, token, { requireOpen: true })
+    const gate = getPublicSessionService(svc)
+    const { session, error } = await gate.resolve(token, { requireOpen: true })
     if (error) return error
 
-    const inviteErr = await requireInviteAccess(session)
+    const inviteErr = await gate.requireInviteAccess(session)
     if (inviteErr) return inviteErr
 
     if (!session.project_ids.includes(project_id)) {

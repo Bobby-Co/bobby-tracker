@@ -4,22 +4,21 @@
 // storage lives with the client, in components/public/public-profile.ts.
 
 // Reporter read-model (domain)
-export type { PublicListedIssue, PublicParentRow, PublicReporterGroup } from "./domain/public-reporter"
-export { reporterDisplay, groupByParent, groupParentsByReporter } from "./domain/public-reporter"
+export type { PublicListedIssue, PublicParentRow, PublicReporterGroup } from "./domain/PublicReporter"
+export { reporterDisplay, groupByParent, groupParentsByReporter } from "./domain/PublicReporter"
 
-// PublicSession aggregate — open-window + access rules
-export type { PublicSessionState } from "./domain/session"
-export { PublicSession } from "./domain/session"
+// PublicSession aggregate — open-window + access rules + the public-issue label
+export type { PublicSessionState } from "./domain/PublicSession"
+export { PublicSession, PUBLIC_ISSUE_LABEL } from "./domain/PublicSession"
 
-// Session / invite resolution + access gates
-export type { ResolvedPublicSession, InviteCheck } from "./infrastructure/public-session"
-export {
-    PUBLIC_ISSUE_LABEL,
-    resolvePublicSession,
-    fetchPublicIssue,
-    getCurrentPublicUser,
-    getIssueReporter,
-    requireOwnVisibility,
-    checkInviteAccess,
-    requireInviteAccess,
-} from "./infrastructure/public-session"
+// Session-gate persistence (port + Supabase adapter)
+export type { PublicSessionRepository, PublicSessionRow, IssueReporter } from "./ports/PublicSessionRepository"
+export { createSupabasePublicSessionRepository } from "./infrastructure/SupabasePublicSessionRepository"
+
+// The access gate (service) — resolve / fetchPublicIssue / require*; obtained via
+// getPublicSessionService(db). Plus the standalone current-visitor read.
+export type { ResolvedPublicSession, InviteCheck } from "./infrastructure/PublicSessionService"
+export { PublicSessionService } from "./infrastructure/PublicSessionService"
+export { getPublicSessionService } from "./Composition"
+export type { PublicVisitor } from "./infrastructure/CurrentVisitor"
+export { getCurrentPublicUser } from "./infrastructure/CurrentVisitor"
