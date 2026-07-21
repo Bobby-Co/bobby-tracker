@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { drainNotifications } from "@/modules/notifications"
+import { createNotificationService } from "@/modules/notifications"
 import type { Notification } from "@/lib/supabase/types"
 
 // The tray renders a bounded list, and migration 0049 trims each user's feed to
@@ -26,7 +26,7 @@ export async function GET() {
     // after() so it never delays or fails the response. No-op when the outbox is
     // empty (i.e. before cutover).
     if (process.env.NOTIFY_DRAIN_TOKEN) {
-        after(() => drainNotifications(createServiceClient(), 10).catch(() => {}))
+        after(() => createNotificationService(createServiceClient()).drain(10).catch(() => {}))
     }
 
     const { data, error: dbErr } = await supabase

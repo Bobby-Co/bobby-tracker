@@ -9,10 +9,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { NotificationEvent } from "../domain/events"
-import { renderNotification } from "../domain/events"
-import type { NotificationChannel } from "../ports/notification-channel"
-import type { Recipient } from "../ports/recipient-resolver"
+import type { NotificationEvent } from "../domain/Events"
+import { renderNotification } from "../domain/Events"
+import type { NotificationChannel } from "../ports/NotificationChannel"
+import type { Recipient } from "../ports/RecipientResolver"
 
 /** The in-app feed NotificationChannel. The caller injects a SERVICE-ROLE client
  *  (the notifications table forbids client-side inserts). Construct via the

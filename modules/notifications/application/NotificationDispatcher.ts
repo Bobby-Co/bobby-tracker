@@ -6,10 +6,10 @@
 //
 // Pure application: depends only on the domain + ports (no SDK/framework).
 
-import type { NotificationEvent } from "../domain/events"
-import { defaultChannelsFor } from "../domain/events"
-import type { NotificationChannel } from "../ports/notification-channel"
-import type { RecipientResolver } from "../ports/recipient-resolver"
+import type { NotificationEvent } from "../domain/Events"
+import { defaultChannelsFor } from "../domain/Events"
+import type { NotificationChannel } from "../ports/NotificationChannel"
+import type { RecipientResolver } from "../ports/RecipientResolver"
 
 export class NotificationDispatcher {
     private readonly channels = new Map<string, NotificationChannel>()

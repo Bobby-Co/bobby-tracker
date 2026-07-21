@@ -15,22 +15,24 @@ export type {
     NotificationKind,
     ChannelId,
     RenderedNotification,
-} from "./domain/events"
-export { renderNotification, defaultChannelsFor } from "./domain/events"
+} from "./domain/Events"
+export { renderNotification, defaultChannelsFor } from "./domain/Events"
 
-export type { NotificationChannel, DeliveryResult } from "./ports/notification-channel"
-export type { Recipient, RecipientResolver } from "./ports/recipient-resolver"
-export type { OutboxStore, OutboxRecord } from "./ports/outbox-store"
+export type { NotificationChannel, DeliveryResult } from "./ports/NotificationChannel"
+export type { Recipient, RecipientResolver } from "./ports/RecipientResolver"
+export type { OutboxStore, OutboxRecord } from "./ports/OutboxStore"
 
-export { NotificationDispatcher } from "./application/dispatcher"
+export { NotificationDispatcher } from "./application/NotificationDispatcher"
+export { NotificationService } from "./application/NotificationService"
 
-export { createInAppFeedChannel } from "./infrastructure/in-app-feed-channel"
-export { createEmailChannel } from "./infrastructure/email-channel"
-export { createSupabaseRecipientResolver } from "./infrastructure/supabase-recipient-resolver"
-export { createSupabaseOutboxStore } from "./infrastructure/supabase-outbox-store"
+export { createInAppFeedChannel } from "./infrastructure/InAppFeedChannel"
+export { createEmailChannel } from "./infrastructure/EmailChannel"
+export { createSupabaseRecipientResolver } from "./infrastructure/SupabaseRecipientResolver"
+export { createSupabaseOutboxStore } from "./infrastructure/SupabaseOutboxStore"
 
-export { createNotificationService, drainNotifications } from "./composition"
+// Composition root: assembles a NotificationService (which owns drain()).
+export { createNotificationService } from "./Composition"
 
 // Legacy trigger-path email renderer (still serves /api/internal/notification-email
 // until the outbox cutover retires it).
-export { sendNotificationEmail } from "./infrastructure/notification-email"
+export { sendNotificationEmail } from "./infrastructure/NotificationEmail"

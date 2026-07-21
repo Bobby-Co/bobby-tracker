@@ -9,10 +9,10 @@
 
 import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 
-import type { NotificationEvent } from "../domain/events"
-import { renderNotification } from "../domain/events"
-import type { NotificationChannel } from "../ports/notification-channel"
-import type { Recipient } from "../ports/recipient-resolver"
+import type { NotificationEvent } from "../domain/Events"
+import { renderNotification } from "../domain/Events"
+import type { NotificationChannel } from "../ports/NotificationChannel"
+import type { Recipient } from "../ports/RecipientResolver"
 
 /** The email NotificationChannel. Stateless; construct via the factory below. */
 export class EmailChannel implements NotificationChannel {

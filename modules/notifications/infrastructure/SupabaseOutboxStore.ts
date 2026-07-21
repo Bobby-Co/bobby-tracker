@@ -15,8 +15,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { NotificationEvent } from "../domain/events"
-import type { OutboxRecord, OutboxStore } from "../ports/outbox-store"
+import type { NotificationEvent } from "../domain/Events"
+import type { OutboxRecord, OutboxStore } from "../ports/OutboxStore"
 
 /** The Supabase adapter for OutboxStore. Construct via the factory below. */
 export class SupabaseOutboxStore implements OutboxStore {

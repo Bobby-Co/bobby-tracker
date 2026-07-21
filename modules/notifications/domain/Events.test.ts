@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
-import { renderNotification, defaultChannelsFor } from "./events"
-import type { NotificationEvent } from "./events"
+import { renderNotification, defaultChannelsFor } from "./Events"
+import type { NotificationEvent } from "./Events"
 
 const proj = { projectId: "p1", projectName: "Acme" }
 

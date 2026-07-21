@@ -23,9 +23,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createSupabaseTeamMembershipRepository } from "@/modules/teams"
-import type { NotificationEvent } from "../domain/events"
-import type { ChannelId } from "../domain/events"
-import type { Recipient, RecipientResolver } from "../ports/recipient-resolver"
+import type { NotificationEvent } from "../domain/Events"
+import type { ChannelId } from "../domain/Events"
+import type { Recipient, RecipientResolver } from "../ports/RecipientResolver"
 
 // Loosely-typed client: the tracker schema types are hand-written, so `.from`
 // results are cast to concrete row shapes at each call site (same convention as

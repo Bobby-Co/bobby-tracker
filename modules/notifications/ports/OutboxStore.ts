@@ -5,7 +5,7 @@
 // delivers it and marks it done. Delivery is at-least-once, which is exactly why
 // NotificationChannel.deliver must be idempotent.
 
-import type { NotificationEvent } from "../domain/events"
+import type { NotificationEvent } from "../domain/Events"
 
 export interface OutboxRecord {
     readonly id: string

@@ -3,7 +3,7 @@
 // only projects.user_id, so teammates and collections got nothing. A team-aware
 // resolver (infrastructure) fans an event out to every member who should see it.
 
-import type { ChannelId, NotificationEvent } from "../domain/events"
+import type { ChannelId, NotificationEvent } from "../domain/Events"
 
 export interface Recipient {
     readonly userId: string

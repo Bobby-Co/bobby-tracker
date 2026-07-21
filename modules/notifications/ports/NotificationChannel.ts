@@ -2,8 +2,8 @@
 // and later web-push/Slack) implement it; the dispatcher fans out to whichever
 // are registered (OCP).
 
-import type { ChannelId, NotificationEvent } from "../domain/events"
-import type { Recipient } from "./recipient-resolver"
+import type { ChannelId, NotificationEvent } from "../domain/Events"
+import type { Recipient } from "./RecipientResolver"
 
 export interface DeliveryResult {
     readonly delivered: boolean
