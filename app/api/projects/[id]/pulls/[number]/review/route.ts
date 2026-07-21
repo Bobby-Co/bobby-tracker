@@ -1,7 +1,8 @@
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { startPRAnalysis, PullRequest as PullRequestEntity } from "@/modules/pull-requests"
-import { repoFullName } from "@/modules/github"
+import { startPRAnalysis } from "@/modules/analysis"
+import { PullRequest as PullRequestEntity } from "@/modules/vcs"
+import { repoFullName } from "@/modules/vcs"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/pulls/[number]/review — manually kick a PR review.

@@ -2,7 +2,7 @@ import {
     AnalyserError,
     createSupabaseProjectAnalyserRepository,
     getAnalyser,
-    isAnalyseEffort,
+    ProjectAnalyser,
     type AnalyseEffort,
 } from "@/modules/analysis"
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
@@ -54,7 +54,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     // "" clears the default; otherwise it must be a known effort level.
     const raw = body?.effort
-    if (raw !== "" && !isAnalyseEffort(raw)) {
+    if (raw !== "" && !ProjectAnalyser.isValidEffort(raw)) {
         return jsonError("bad_request", "effort must be one of fast, medium, high, veryhigh (or \"\" to clear)", 400)
     }
     const effort = raw as AnalyseEffort | ""

@@ -43,3 +43,28 @@ describe("Issue GitHub link + inbound mapping", () => {
         expect(Issue.statusFromGithubState("open")).toBe("open")
     })
 })
+
+// Invariants a refactor must preserve — if you add a status or move these rules
+// onto transition methods, these stay the fixed contract.
+describe("Issue — refactor-guard invariants", () => {
+    const ALL: import("./issue").IssueStatusValue[] =
+        ["open", "in_progress", "blocked", "done", "archived", "duplicated"]
+
+    test("every status is classified open XOR closed (no unclassified status)", () => {
+        for (const s of ALL) {
+            const i = Issue.of({ status: s })
+            expect(i.isOpen()).toBe(!i.isClosed())
+        }
+    })
+    test("githubState only ever returns open or closed for every status", () => {
+        for (const s of ALL) {
+            expect(["open", "closed"]).toContain(Issue.of({ status: s }).githubState())
+        }
+    })
+    test("inbound state → status → githubState round-trips (open/closed stable)", () => {
+        for (const state of ["open", "closed"] as const) {
+            const status = Issue.statusFromGithubState(state)
+            expect(Issue.of({ status }).githubState()).toBe(state)
+        }
+    })
+})

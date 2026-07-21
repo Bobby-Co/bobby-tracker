@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { backfillPullRequests } from "@/modules/pull-requests"
+import { getPullRequestServiceForProject } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/sync
 //
@@ -21,6 +21,9 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     if (projErr) return jsonError("db_error", projErr.message, 500)
     if (!project) return jsonError("not_found", "project not found", 404)
 
-    after(() => backfillPullRequests(id))
+    after(async () => {
+        const prs = await getPullRequestServiceForProject(id)
+        await prs?.backfillPullRequests(id)
+    })
     return Response.json({ syncing: true })
 }

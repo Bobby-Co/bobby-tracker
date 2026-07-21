@@ -1,5 +1,5 @@
-import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import type { IssueSuggestion } from "@/lib/supabase/types"
+import { repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 // GET /api/issues/[id]/suggestions
 //
@@ -10,13 +10,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
-    const { data, error: dbErr } = await supabase
-        .from("issue_suggestions")
-        .select("*")
-        .eq("issue_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<IssueSuggestion>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const issues = createSupabaseIssuesRepository(supabase)
+    const { data, error: dbErr } = await repoRead(() => issues.findLatestSuggestion(id))
+    if (dbErr) return dbErr
     return Response.json({ suggestion: data })
 }

@@ -12,7 +12,7 @@
 // isEmailConfigured() short-circuits before any work or any Workers-only import.
 
 import { mergeVerdictLabel } from "@/lib/rendering/badge"
-import { findingState, findPRAnalysisResult } from "@/modules/pull-requests"
+import { findingState, createServicePullRequestStore } from "@/modules/vcs"
 import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -113,7 +113,7 @@ async function loadPrResult(
     const prNumber = Number(m[1])
     // Read through the Pull Requests contract — notifications doesn't own the
     // pull_request_analyses table.
-    const result = await findPRAnalysisResult(svc, projectId, prNumber)
+    const result = await createServicePullRequestStore().findAnalysisResult(projectId, prNumber)
     if (!result) return null
     return { prNumber, result }
 }

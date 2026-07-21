@@ -12,8 +12,6 @@ export { ask, chatStream } from "./query"
 
 export type { AnalyseEffort, IssueFinding, IssueAnalysis, IssueAnalyseInput, IssuePreferences } from "./issues"
 export {
-    ANALYSE_EFFORTS,
-    isAnalyseEffort,
     analyseIssue,
     runIssueAnalysis,
     cancelIssueAnalysis,

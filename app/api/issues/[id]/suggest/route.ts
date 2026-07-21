@@ -1,12 +1,8 @@
-import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyseEffort } from "@/modules/analysis"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
 import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
-import { composeIssueFixPrompt } from "@/modules/issues"
-import type {
-    Issue,
-    IssueAnalysisData,
-    IssueSuggestion,
-    Project,
-} from "@/lib/supabase/types"
+import { composeIssueFixPrompt, createSupabaseIssuesRepository } from "@/modules/issues"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
+import type { IssueAnalysisData } from "@/lib/supabase/types"
 
 // POST /api/issues/[id]/suggest
 //
@@ -33,37 +29,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Only (1) is read here; (2) is folded in once the issue row is loaded.
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch {}
-    const overrideEffort = isAnalyseEffort(body?.effort) ? body.effort : undefined
+    const overrideEffort = ProjectAnalyser.isValidEffort(body?.effort) ? body.effort : undefined
 
-    const { data: issue, error: iErr } = await supabase
-        .from("issues")
-        .select("id,project_id,issue_number,title,body,status,priority,labels,analyse_effort,created_at,updated_at")
-        .eq("id", id)
-        .single<
-            Pick<
-                Issue,
-                | "id"
-                | "project_id"
-                | "issue_number"
-                | "title"
-                | "body"
-                | "status"
-                | "priority"
-                | "labels"
-                | "analyse_effort"
-                | "created_at"
-                | "updated_at"
-            >
-        >()
-    if (iErr || !issue) return jsonError("not_found", "issue not found", 404)
+    const issues = createSupabaseIssuesRepository(supabase)
+    const projects = createSupabaseProjectsRepository(supabase)
+    const analyserRepo = createSupabaseProjectAnalyserRepository(supabase)
+    const { data: issue, error: iErr } = await repoRead(() => issues.findSuggestContext(id))
+    if (iErr) return iErr
+    if (!issue) return jsonError("not_found", "issue not found", 404)
 
     // Resolve effort: explicit request override → issue's stored choice →
     // undefined (analyser falls back to project default → server default).
-    const effort = overrideEffort ?? (isAnalyseEffort(issue.analyse_effort) ? issue.analyse_effort : undefined)
+    const effort = overrideEffort ?? (ProjectAnalyser.isValidEffort(issue.analyse_effort) ? issue.analyse_effort : undefined)
 
-    const { data: analyser, error: aErr } = await repoRead(() =>
-        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(issue.project_id),
-    )
+    const { data: analyser, error: aErr } = await repoRead(() => analyserRepo.findByProjectId(issue.project_id))
     if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
@@ -73,12 +52,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
 
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("name,repo_url,repo_full_name,description")
-        .eq("id", issue.project_id)
-        .single<Pick<Project, "name" | "repo_url" | "repo_full_name" | "description">>()
-    if (pErr || !project) return jsonError("not_found", "project not found", 404)
+    const { data: project, error: pErr } = await repoRead(() => projects.findAnalysisContext(issue.project_id))
+    if (pErr) return pErr
+    if (!project) return jsonError("not_found", "project not found", 404)
 
     try {
         const result = await getAnalyser().analyseIssue({
@@ -115,9 +91,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             }),
         }
 
-        const { data: row, error: insErr } = await supabase
-            .from("issue_suggestions")
-            .insert({
+        const { data: row, error: insErr } = await repoRead(() =>
+            issues.insertSuggestion({
                 issue_id:    issue.id,
                 data:        dataWithPrompt,
                 markdown:    result.markdown ?? result.summary ?? "",
@@ -127,10 +102,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 cost_usd:    result.cost_usd ?? 0,
                 duration_ms: result.duration_ms ?? 0,
                 graph_id:    analyser.graph_id,
-            })
-            .select("*")
-            .single<IssueSuggestion>()
-        if (insErr) return jsonError("db_error", insErr.message, 500)
+            }),
+        )
+        if (insErr) return insErr
         return Response.json({ suggestion: row })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"

@@ -4,22 +4,27 @@
 // ready-to-send Response on any failed gate.
 
 import { jsonError } from "@/lib/platform/http/api"
-import { getUserGithubToken } from "./github-user"
+import { getUserGithubToken } from "./user-token"
 import { repoFullName } from "../domain/repo-ref"
+import { getVcsUserService } from "../composition"
+import type { VCSUserService } from "../application/vcs-user-service"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { RepositoryError } from "@/lib/kernel"
 import type { createClient } from "@/lib/supabase/server"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
-export type CommentContext = { owner: string; repo: string; token: string; login: string | null }
+// The comment-authoring actor: a VCSUserService already bound to the project's
+// repo + the caller's personal token (so it posts AS THEM), plus the login for
+// provenance display.
+export type CommentActor = { vcs: VCSUserService; login: string | null }
 
 export async function resolveCommentContext(
     supabase: SupabaseServer,
     userId: string,
     projectId: string,
-): Promise<CommentContext | { error: Response }> {
-    // Read the project through the Projects contract — github doesn't own the
+): Promise<CommentActor | { error: Response }> {
+    // Read the project through the Projects contract — vcs doesn't own the
     // projects table. findRepoRef throws on a genuine DB error so we keep the
     // 500-vs-404 distinction the gate relied on.
     const projects = createSupabaseProjectsRepository(supabase)
@@ -31,13 +36,14 @@ export async function resolveCommentContext(
         throw e
     }
     if (!project) return { error: jsonError("not_found", "project not found", 404) }
-
-    const full = repoFullName(project)
-    if (!full) return { error: jsonError("not_github", "this project isn't linked to a GitHub repo", 400) }
-    const [owner, repo] = full.split("/")
+    if (!repoFullName(project)) {
+        return { error: jsonError("not_github", "this project isn't linked to a GitHub repo", 400) }
+    }
 
     const gh = await getUserGithubToken(supabase, userId)
     if (!gh) return { error: jsonError("github_reauth_required", "Connect GitHub to comment.", 401) }
 
-    return { owner, repo, token: gh.token, login: gh.login }
+    // repoFullName resolved above → the user service is non-null.
+    const vcs = getVcsUserService(project, gh.token)!
+    return { vcs, login: gh.login }
 }

@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { backfillPullRequests } from "@/modules/pull-requests"
+import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/pulls
@@ -36,7 +36,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const pulls = pullsR.data ?? []
     if (pulls.length === 0) {
-        after(() => backfillPullRequests(id))
+        after(async () => {
+            const prs = await getPullRequestServiceForProject(id)
+            await prs?.backfillPullRequests(id)
+        })
         return Response.json({ pulls: [], syncing: true })
     }
 

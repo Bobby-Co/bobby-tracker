@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { getUserGithubToken } from "@/modules/github"
+import { getUserGithubToken } from "@/modules/vcs"
 
 // GET /api/github/connection
 //

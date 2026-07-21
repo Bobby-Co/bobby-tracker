@@ -11,7 +11,16 @@ export type { IssueStatusValue, IssueState } from "./domain/issue"
 export { Issue } from "./domain/issue"
 
 // ─── issues repository (Phase 1: inline .from("issues") → repository) ────────
-export type { IssuesRepository } from "./ports/issues-repository"
+export type {
+    IssuesRepository,
+    NewIssue,
+    IssuePatch,
+    IssueSuggestContext,
+    IssueDuplicateGuardRow,
+    NewIssueSuggestion,
+    SimilarIssue,
+    IssueSimilarityState,
+} from "./ports/issues-repository"
 export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues-repository"
 
 // ─── issue-comment mirror store (tracker's copy of GitHub issue comments) ────
@@ -26,7 +35,10 @@ export type { IssuePromptInput } from "./infrastructure/issue-prompt"
 export { composeIssueFixPrompt } from "./infrastructure/issue-prompt"
 
 // ─── service-role issue ops for the GitHub-sync / analysis flow ──────────────
-export type { IssueAnalysisRow, IssueSyncPatch, ImportedIssueInsert, IssueSuggestionInsert } from "./infrastructure/issue-sync-store"
+// The IssueSyncStore PORT + its service-backed factory are the shape cross-module
+// orchestrators (vcs, analysis) depend on so their application layer stays
+// SDK-free; the free functions remain for the existing infrastructure callers.
+export type { IssueAnalysisRow, IssueSyncPatch, ImportedIssueInsert, IssueSuggestionInsert, IssueSyncStore } from "./infrastructure/issue-sync-store"
 export {
     findIssueAnalysisRow,
     listLinkedGithubNumbers,
@@ -34,4 +46,5 @@ export {
     insertImportedIssue,
     countIssueSuggestions,
     insertIssueSuggestion,
+    createServiceIssueSyncStore,
 } from "./infrastructure/issue-sync-store"

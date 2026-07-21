@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
-import { ANALYSE_EFFORTS, type AnalyseEffort } from "@/modules/analysis/domain/effort"
+import { ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis/domain/project-analyser"
 import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
@@ -17,7 +17,7 @@ const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 type EffortChoice = "" | AnalyseEffort
 const EFFORT_OPTIONS: { value: EffortChoice; label: string; description: string }[] = [
     { value: "", label: "Use project default", description: "Inherit the project's saved effort." },
-    ...ANALYSE_EFFORTS.map((level) => ({
+    ...ProjectAnalyser.EFFORTS.map((level) => ({
         value: level,
         label: EFFORT_LABEL[level],
         description: EFFORT_HINT[level],

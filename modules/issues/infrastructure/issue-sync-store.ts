@@ -11,7 +11,7 @@
 // ownership step; a later physical split (an integration-owned table/columns)
 // would remove the shared-table coupling entirely.
 
-import type { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import type { IssueStatus } from "@/lib/supabase/types"
 
 type Svc = ReturnType<typeof createServiceClient>
@@ -108,4 +108,52 @@ export type IssueSuggestionInsert = {
 
 export async function insertIssueSuggestion(svc: Svc, row: IssueSuggestionInsert): Promise<void> {
     await svc.from("issue_suggestions").insert(row)
+}
+
+// ─── Port shape ──────────────────────────────────────────────────────────────
+//
+// The same service-role operations above, as an injectable PORT bound to a
+// client. This is what the cross-module orchestrators (vcs' VCSAppService, the
+// analysis flow) depend on so their application layer stays SDK-free — they hold
+// an IssueSyncStore, never a Supabase client. The concrete instance is created at
+// a composition root via createServiceIssueSyncStore().
+
+export interface IssueSyncStore {
+    findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null>
+    listLinkedGithubNumbers(projectId: string): Promise<(number | null)[]>
+    updateSyncFields(issueId: string, patch: IssueSyncPatch): Promise<void>
+    insertImportedIssue(row: ImportedIssueInsert): Promise<boolean>
+    countSuggestions(issueId: string): Promise<number>
+    insertSuggestion(row: IssueSuggestionInsert): Promise<void>
+}
+
+/** The service-role IssueSyncStore adapter. Wraps the service-client operations
+ *  above as the injectable port. Construct via the factory below. */
+export class ServiceIssueSyncStore implements IssueSyncStore {
+    private readonly svc = createServiceClient()
+
+    findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null> {
+        return findIssueAnalysisRow(this.svc, issueId)
+    }
+    listLinkedGithubNumbers(projectId: string): Promise<(number | null)[]> {
+        return listLinkedGithubNumbers(this.svc, projectId)
+    }
+    updateSyncFields(issueId: string, patch: IssueSyncPatch): Promise<void> {
+        return updateIssueSyncFields(this.svc, issueId, patch)
+    }
+    insertImportedIssue(row: ImportedIssueInsert): Promise<boolean> {
+        return insertImportedIssue(this.svc, row)
+    }
+    countSuggestions(issueId: string): Promise<number> {
+        return countIssueSuggestions(this.svc, issueId)
+    }
+    insertSuggestion(row: IssueSuggestionInsert): Promise<void> {
+        return insertIssueSuggestion(this.svc, row)
+    }
+}
+
+/** Composition seam: an IssueSyncStore bound to a fresh service-role client. Call
+ *  from a composition root (fire-and-forget / webhook contexts that bypass RLS). */
+export function createServiceIssueSyncStore(): IssueSyncStore {
+    return new ServiceIssueSyncStore()
 }

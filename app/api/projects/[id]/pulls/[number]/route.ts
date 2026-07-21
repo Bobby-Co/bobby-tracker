@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { backfillPullRequestComments } from "@/modules/pull-requests"
+import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type { PRComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // GET /api/projects/[id]/pulls/[number]
@@ -52,7 +52,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const comments = commentsR.data ?? []
     // A mirrored PR with an empty thread: fill it lazily so the next load shows it.
     if (pullR.data && comments.length === 0) {
-        after(() => backfillPullRequestComments(id, prNumber))
+        after(async () => {
+            const prs = await getPullRequestServiceForProject(id)
+            await prs?.backfillPullRequestComments(id, prNumber)
+        })
     }
 
     return Response.json({

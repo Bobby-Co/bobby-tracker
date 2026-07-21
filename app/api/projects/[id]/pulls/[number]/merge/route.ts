@@ -1,13 +1,6 @@
 import { jsonError, requireUser, requireProjectAccess } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
-import { repoFullName } from "@/modules/github"
-import {
-    getPullMergeability,
-    getRepoMergeMethods,
-    GithubMergeError,
-    mergePullRequest,
-} from "@/modules/github"
-import { defaultMergeMethod, mergeGate, type MergeMethod, type MergeMethods } from "@/modules/pull-requests"
+import { getVcsAppService, VcsMergeError, createServicePullRequestStore } from "@/modules/vcs"
+import { defaultMergeMethod, mergeGate, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // GET  /api/projects/[id]/pulls/[number]/merge — everything the merge bar needs:
@@ -57,8 +50,8 @@ async function load(
     return { projectR, pullR, analysisR }
 }
 
-function toMethods(m: Awaited<ReturnType<typeof getRepoMergeMethods>>): MergeMethods {
-    return { merge: m.allow_merge_commit, squash: m.allow_squash_merge, rebase: m.allow_rebase_merge }
+function toMethods(m: VcsMergeMethods): MergeMethods {
+    return { merge: m.mergeCommit, squash: m.squash, rebase: m.rebase }
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; number: string }> }) {
@@ -84,26 +77,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     let methods: MergeMethods | null = null
     let mergeable: boolean | null = null
     let mergeableState: string | null = null
-    if (gate.mergeable && connected(project)) {
-        const full = repoFullName(project)
-        if (full) {
-            const [owner, repo] = full.split("/")
-            const iid = project.github_installation_id!
-            try {
-                // Both are independent GETs — run them together.
-                const [m, mg] = await Promise.all([
-                    getRepoMergeMethods(iid, owner, repo),
-                    getPullMergeability(iid, owner, repo, prNumber),
-                ])
-                methods = toMethods(m)
-                mergeable = mg.mergeable
-                mergeableState = mg.mergeable_state
-            } catch {
-                // A GitHub hiccup here shouldn't blank the bar — the POST re-checks
-                // and is the real gate. Fall back to offering all methods; GitHub
-                // rejects a disabled one with a clear 405 we translate.
-                methods = { merge: true, squash: true, rebase: true }
-            }
+    const vcs = gate.mergeable && connected(project) ? getVcsAppService(project) : null
+    if (vcs) {
+        try {
+            // Both are independent GETs — run them together.
+            const [m, mg] = await Promise.all([vcs.getMergeMethods(), vcs.getMergeability(prNumber)])
+            methods = toMethods(m)
+            mergeable = mg.mergeable
+            mergeableState = mg.mergeableState
+        } catch {
+            // A remote hiccup here shouldn't blank the bar — the POST re-checks
+            // and is the real gate. Fall back to offering all methods; the
+            // provider rejects a disabled one with a clear 405 we translate.
+            methods = { merge: true, squash: true, rebase: true }
         }
     }
 
@@ -154,44 +140,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!connected(project)) {
         return jsonError("not_connected", "Connect the GitHub App to merge from here.", 409)
     }
-    const full = repoFullName(project)
-    if (!full) return jsonError("not_connected", "This project has no GitHub repository.", 409)
-    const [owner, repo] = full.split("/")
-    const iid = project.github_installation_id!
+    const vcs = getVcsAppService(project)
+    if (!vcs) return jsonError("not_connected", "This project has no GitHub repository.", 409)
 
     const chosen: MergeMethod = method ?? "merge"
 
     try {
-        const result = await mergePullRequest(iid, owner, repo, prNumber, {
-            merge_method: chosen,
+        const result = await vcs.mergePullRequest(prNumber, {
+            method: chosen,
             // Pin to the head we mirrored, so the merge can't land on a commit the
-            // reviewer never saw — GitHub 409s if it moved.
-            ...(pull.head_sha ? { sha: pull.head_sha } : {}),
+            // reviewer never saw — the provider 409s if it moved.
+            sha: pull.head_sha ?? undefined,
         })
 
         // Reflect the merge immediately so the UI updates without waiting on the
-        // webhook's `closed` event. A partial upsert (merge-duplicates only
-        // touches the columns sent) so nothing richer gets clobbered. Written
-        // service-role because upsertPullRequest bypasses RLS by design.
-        const nowIso = new Date().toISOString()
-        const svc = createServiceClient()
-        await svc
-            .from("pull_requests")
-            .upsert(
-                {
-                    project_id: id,
-                    pr_number: prNumber,
-                    state: "closed",
-                    merged: true,
-                    merged_at: nowIso,
-                    closed_at: nowIso,
-                },
-                { onConflict: "project_id,pr_number" },
-            )
+        // webhook's `closed` event.
+        await createServicePullRequestStore().markMerged(id, prNumber, new Date().toISOString())
 
         return Response.json({ merged: true, sha: result.sha, method: chosen })
     } catch (e) {
-        if (e instanceof GithubMergeError) {
+        if (e instanceof VcsMergeError) {
             // Map GitHub's well-known refusals to messages the user can act on.
             if (e.status === 405) {
                 return jsonError(

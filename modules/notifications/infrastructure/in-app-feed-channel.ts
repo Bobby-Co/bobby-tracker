@@ -14,28 +14,38 @@ import { renderNotification } from "../domain/events"
 import type { NotificationChannel } from "../ports/notification-channel"
 import type { Recipient } from "../ports/recipient-resolver"
 
-export function createInAppFeedChannel(db: SupabaseClient): NotificationChannel {
-    return {
-        id: "in_app",
-        supports(): boolean {
-            return true
-        },
-        async deliver(event: NotificationEvent, recipient: Recipient) {
-            const { title, meta, href } = renderNotification(event)
+/** The in-app feed NotificationChannel. The caller injects a SERVICE-ROLE client
+ *  (the notifications table forbids client-side inserts). Construct via the
+ *  factory below. */
+export class InAppFeedChannel implements NotificationChannel {
+    readonly id = "in_app" as const
 
-            // Idempotency will come from an outbox idempotency key / unique
-            // constraint at cutover; a plain insert is fine while dormant.
-            const { error } = await db.from("notifications").insert({
-                user_id: recipient.userId,
-                project_id: event.projectId,
-                kind: event.kind,
-                title,
-                meta,
-                href,
-            })
+    constructor(private readonly db: SupabaseClient) {}
 
-            if (error) return { delivered: false, reason: error.message }
-            return { delivered: true }
-        },
+    supports(): boolean {
+        return true
     }
+
+    async deliver(event: NotificationEvent, recipient: Recipient) {
+        const { title, meta, href } = renderNotification(event)
+
+        // Idempotency will come from an outbox idempotency key / unique constraint
+        // at cutover; a plain insert is fine while dormant.
+        const { error } = await this.db.from("notifications").insert({
+            user_id: recipient.userId,
+            project_id: event.projectId,
+            kind: event.kind,
+            title,
+            meta,
+            href,
+        })
+
+        if (error) return { delivered: false, reason: error.message }
+        return { delivered: true }
+    }
+}
+
+/** Composition seam: bind an in-app feed channel to a service-role client. */
+export function createInAppFeedChannel(db: SupabaseClient): NotificationChannel {
+    return new InAppFeedChannel(db)
 }

@@ -1,9 +1,12 @@
-// GitHub auto-analysis comment rendering, extracted from lib/github-sync.ts
-// (Phase 3) — pure string building, no I/O.
+// Analysis presentation — rendering an analyser run as the markdown body of the
+// bot comment on the linked issue. Moved here from the vcs module: HOW an
+// analysis result reads as a comment is an analysis concern; the vcs module only
+// provides the generic "post/edit a comment" tool (VCSAppService). Pure string
+// building, no I/O. The blob deep-links use the vcs domain's repo helper.
 
-import type { IssueAnalysis } from "@/modules/analysis"
+import type { IssueAnalysis } from "./analyser/issues"
 import { badge, confidenceTone } from "@/lib/rendering/badge"
-import { blobUrl } from "../domain/repo-ref"
+import { blobUrl } from "@/modules/vcs"
 import type { Project } from "@/lib/supabase/types"
 
 // Hidden marker so a later pass can find/dedupe Ucelot's own comment.

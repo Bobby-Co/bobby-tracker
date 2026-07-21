@@ -1,5 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { importExistingIssues } from "@/modules/github"
+import { importExistingIssues } from "@/modules/vcs"
 
 export const dynamic = "force-dynamic"
 

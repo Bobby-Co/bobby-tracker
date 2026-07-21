@@ -40,6 +40,41 @@ Dependency rule (points inward): `interface → application → domain`;
 `infrastructure` implements `ports`; `domain` depends on nothing but itself and
 the kernel's pure types.
 
+## Objects, not bags of functions — the OOP contract
+
+This is an OOP codebase. The rules below are non-negotiable; a reviewer should
+reject a PR that breaks them.
+
+1. **A port is an `interface`. Every implementation is a `class … implements
+   Port`.** Never a factory that returns an object literal
+   (`export function createFoo(): Port { return { … } }` is banned — that's the
+   anti-pattern that keeps sneaking back in). The class name is the concrete noun
+   (`GithubAppInstance`, `SupabaseIssuesRepository`, `EmailChannel`); the
+   interface is the role (`VCSAppInstance`, `IssuesRepository`,
+   `NotificationChannel`).
+2. **Dependencies are constructor-injected** and held as `private readonly`
+   fields — the DB client, other ports, config. No hidden module singletons, no
+   reaching for a global.
+3. **Domain aggregates and application services are classes too** (`Issue`,
+   `Project`, `VCSAppService`, `PullRequestService`, `NotificationDispatcher`).
+   Domain aggregates use a private constructor + a static factory (`Issue.of(…)`)
+   so an instance can't be built in an invalid state.
+4. **Callers depend on the port type, and obtain a concrete instance from a
+   composition seam — they do NOT `new` an adapter directly.** The seam is a
+   small factory/resolver that returns the *interface* (`createSupabaseIssuesRepository(db): IssuesRepository`,
+   `resolveVcsAppInstance(project): VCSAppInstance | null`, `getVcsAppService(…)`),
+   or a per-host composition root. These factories are the ONLY place a concrete
+   class name appears at a call site; that's what keeps the DIP boundary intact
+   and makes swapping an adapter (GitHub → GitLab, Supabase → another store) a
+   one-line change in the seam rather than a sweep across the app. A `create*`
+   factory whose body is `return new ConcreteClass(deps)` is correct and expected
+   — it is a composition seam, not the banned object-literal factory from rule 1.
+
+Plain module-level **functions are still fine** for pure helpers and transport
+primitives that are NOT a port implementation (DTO mappers, a `syncHash`, the
+private REST/crypto helpers inside an adapter). The rule targets *port
+implementations*, not every function.
+
 ## The shared kernel — `lib/kernel/`
 
 Deliberately thin. Fat kernels re-couple the modules you just separated.

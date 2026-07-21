@@ -8,7 +8,7 @@ import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-ef
 import { VerifyPanel } from "@/components/projects/verify-panel"
 import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
-import { isAnalyserReady } from "@/modules/analysis/domain/analyser-readiness"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
 
 // Knowledge tab — single home for everything that drives the project's
 // analyser-backed knowledge graph: indexing controls (AnalyserPanel) +
@@ -40,7 +40,7 @@ export default function KnowledgePage() {
 
     const project = data?.project ?? null
     const state = data?.analyser ?? null
-    const ready = isAnalyserReady(state)
+    const ready = ProjectAnalyserModel.from(state).isReady()
 
     return (
         <div className="flex flex-col gap-4">

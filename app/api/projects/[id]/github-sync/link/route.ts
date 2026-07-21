@@ -1,7 +1,7 @@
 import { requireProjectAccess, jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { githubAppFetch, githubJwtFetch } from "@/modules/github"
-import { repoFullName } from "@/modules/github"
+import { githubAppClient } from "@/modules/vcs"
+import { repoFullName } from "@/modules/vcs"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/github-sync/link — link an ALREADY-installed GitHub
@@ -32,7 +32,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const [owner, repo] = full.split("/")
 
     // Which installation covers this repo? 404 → app not installed on it yet.
-    const instRes = await githubJwtFetch(`/repos/${owner}/${repo}/installation`)
+    const instRes = await githubAppClient.jwtFetch(`/repos/${owner}/${repo}/installation`)
     if (instRes.status === 404) {
         return Response.json({ installed: false })
     }
@@ -65,7 +65,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (instErr) return jsonError("db_error", instErr.message, 500)
 
     // Resolve the repo's stable numeric id (the inbound-webhook join key).
-    const repoRes = await githubAppFetch(installationId, `/repos/${owner}/${repo}`)
+    const repoRes = await githubAppClient.fetch(installationId, `/repos/${owner}/${repo}`)
     if (!repoRes.ok) return jsonError("github_error", `resolve repo failed (${repoRes.status})`, 502)
     const repoObj = (await repoRes.json().catch(() => null)) as { id?: number } | null
     if (!repoObj?.id) return jsonError("github_error", "repo id missing", 502)

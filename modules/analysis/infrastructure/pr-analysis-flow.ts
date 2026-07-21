@@ -1,23 +1,28 @@
-// PR-analysis orchestration: on a GitHub pull_request event the tracker fetches
-// the diff, posts an "analysing…" comment, kicks a DETACHED analyser run
-// (/pr/analyse/run), and edits that comment in place when the analyser calls
-// back (/api/internal/pr-analysis-result). Closing the PR cancels the run.
-// GitHub I/O lives here (the App creds are here); the analyser is GitHub-free.
-// See the analyser's ADR-0052 + pr.go/pr_async.go.
+// PR-analysis orchestration — moved here from the vcs module (parallels the issue
+// analysis flow). On a pull_request event we fetch the diff, post an "analysing…"
+// comment, kick a DETACHED analyser run (/pr/analyse/run), and edit that comment
+// in place when the analyser calls back. Closing the PR cancels the run.
+//
+// The GitHub side is now just "read the diff / post a comment", reached through
+// the vcs module's VCSAppService — this flow never touches a token, owner/repo,
+// or the REST client. The pull_request_analyses table is analysis-owned state.
 
-import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type PRAnalyseFile } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
-import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/modules/github"
-import { repoFullName } from "@/modules/github"
-import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
-import { cancelledComment, failedComment, loadingComment, resultComment } from "./pr-comment"
-import type { PRAnalysis, Project as ProjectRow } from "@/lib/supabase/types"
+import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
+import { getVcsAppService } from "@/modules/vcs"
+import type { PRAnalysis } from "@/lib/supabase/types"
+import { getAnalyser } from "../composition"
+import { ProjectAnalyser } from "../domain/project-analyser"
+import { createSupabaseProjectAnalyserRepository } from "./supabase-project-analyser-repository"
+import type { PRAnalyseFile } from "./analyser"
+import { cancelledComment, failedComment, loadingComment, resultComment } from "./pr-analysis-comment"
 
-// The subset of a tracker.projects row PR analysis reads. A superset of this is
-// fetched through the Projects contract (findGithubSyncContext) — pull-requests
-// doesn't own the projects table.
-type PRProject = Pick<ProjectRow, "id" | "repo_url" | "repo_full_name"> & {
+// The project fields PR analysis reads: id + the sync-readiness/provider wiring.
+type PRProject = {
+    id: string
+    repo_url: string | null
+    repo_full_name: string | null
     github_installation_id: number | null
     github_repo_id: number | null
     github_sync_enabled: boolean
@@ -32,28 +37,20 @@ export type PRInput = {
     headSha: string | null
 }
 
-// Same rule as github-sync's syncReady — now the Project aggregate owns it.
-function prReady(p: PRProject): boolean {
-    return Project.of(p).isSyncReady()
-}
-
 // startPRAnalysis gates on the App being linked + the graph indexed, fetches the
 // PR diff, posts (or re-uses) the "analysing…" comment, upserts the tracking row
 // (its id is the analyser task_id), and kicks the detached run. Idempotent: a
 // run already in flight for this PR is left alone.
 export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: string): Promise<void> {
-    if (!prReady(project)) return
-    const full = repoFullName(project)
-    if (!full) return
-    const [owner, repo] = full.split("/")
-    const installationId = project.github_installation_id!
+    if (!Project.of(project).isSyncReady()) return
+    const vcs = getVcsAppService(project)
+    if (!vcs) return
 
     const svc = createServiceClient()
 
     // Gate: the graph must be indexed for the review to have codebase context.
-    // Fail-safe: a query error folds to null → not-ready, as the old read did.
     const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(svc).findReadiness(project.id))
-    if (!isAnalyserReady(analyser)) return
+    if (!ProjectAnalyser.from(analyser).isReady()) return
 
     // Idempotency: don't start a second run while one is in flight for this PR.
     const { data: existing } = await svc
@@ -64,13 +61,13 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
         .maybeSingle<{ id: string; status: string | null; github_comment_id: number | null }>()
     if (existing?.status === "analysing") return
 
-    // Fetch the diff (per-file patches).
+    // Fetch the diff (per-file patches) through the vcs service.
     let files: PRAnalyseFile[]
     try {
-        const gh = await listPullRequestFiles(installationId, owner, repo, pr.number)
+        const gh = await vcs.listPullRequestFiles(pr.number)
         files = gh.map((f) => ({
             path: f.filename,
-            previous_path: f.previous_filename,
+            previous_path: f.previousFilename,
             status: f.status,
             patch: f.patch,
             additions: f.additions,
@@ -86,14 +83,14 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
     let commentId = existing?.github_comment_id ?? null
     if (commentId != null) {
         try {
-            await updateIssueComment(installationId, owner, repo, commentId, loadingComment(origin, pr.title, loadingUrl))
+            await vcs.updateComment(commentId, loadingComment(origin, pr.title, loadingUrl))
         } catch {
             commentId = null
         }
     }
     if (commentId == null) {
         try {
-            const created = await createIssueComment(installationId, owner, repo, pr.number, loadingComment(origin, pr.title, loadingUrl))
+            const created = await vcs.postComment(pr.number, loadingComment(origin, pr.title, loadingUrl))
             commentId = created.id
         } catch {
             return
@@ -119,7 +116,8 @@ export async function startPRAnalysis(project: PRProject, pr: PRInput, origin: s
 
     await getAnalyser().startPRAnalysis(
         {
-            repoId: analyser.graph_id,
+            // isReady() above guarantees a non-null analyser with a graph_id.
+            repoId: analyser!.graph_id!,
             number: pr.number,
             title: pr.title,
             body: pr.body || "",
@@ -152,10 +150,9 @@ export async function applyPRResult(
 
     if (row.github_comment_id != null) {
         const project = await createSupabaseProjectsRepository(svc).findGithubSyncContext(row.project_id)
-        if (project && prReady(project)) {
-            const full = repoFullName(project)
-            if (full) {
-                const [owner, repo] = full.split("/")
+        if (project && Project.of(project).isSyncReady()) {
+            const vcs = getVcsAppService(project)
+            if (vcs) {
                 const uiUrl = `${origin}/projects/${row.project_id}/pulls/${row.pr_number}`
                 const body =
                     status === "done" && result
@@ -164,25 +161,22 @@ export async function applyPRResult(
                           ? cancelledComment(origin, row.pr_number)
                           : failedComment(origin, row.pr_number)
                 try {
-                    await updateIssueComment(project.github_installation_id!, owner, repo, row.github_comment_id, body)
+                    await vcs.updateComment(row.github_comment_id, body)
                 } catch {
-                    // Comment may have been deleted on GitHub — don't fail the callback.
+                    // Comment may have been deleted on the remote — don't fail the callback.
                 }
             }
         }
     }
 
-    // Persist the structured review alongside the status so the Pull-requests
-    // tab can render it natively (not just via the GitHub comment). This UPDATE
-    // is also what fires the 'pr_analysis_ready' feed notification (trigger in
-    // migration 0049), which in turn fans out the review email via the
-    // notifications → pg_net dispatch (migration 0051). No email code here — one
-    // path for every notification kind.
+    // Persist the structured review alongside the status so the Pull-requests tab
+    // can render it natively. This UPDATE also fires the 'pr_analysis_ready' feed
+    // notification (trigger in migration 0049) → review email via notifications.
     await svc.from("pull_request_analyses").update({ status, result: result ?? null }).eq("id", taskId)
 }
 
-// cancelPRAnalysisForPR cancels an in-flight run when a PR is closed. The
-// analyser reports 'cancelled' via the callback, which updates the comment.
+// cancelPRAnalysisForPR cancels an in-flight run when a PR is closed. The analyser
+// reports 'cancelled' via the callback, which updates the comment.
 export async function cancelPRAnalysisForPR(projectId: string, prNumber: number): Promise<void> {
     const svc = createServiceClient()
     const { data: row } = await svc

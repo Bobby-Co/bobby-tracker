@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/supabase/client"
-import { blobUrl, type RepoRef } from "@/modules/github/domain/repo-ref"
+import { blobUrl, type RepoRef } from "@/modules/vcs/domain/repo-ref"
 import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/modules/analysis"
 

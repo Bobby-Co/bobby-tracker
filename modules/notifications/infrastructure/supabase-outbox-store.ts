@@ -18,34 +18,36 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { NotificationEvent } from "../domain/events"
 import type { OutboxRecord, OutboxStore } from "../ports/outbox-store"
 
-export function createSupabaseOutboxStore(db: SupabaseClient): OutboxStore {
-    return {
-        async enqueue(event: NotificationEvent): Promise<void> {
-            const { error } = await db.from("notification_outbox").insert({ event })
-            if (error) throw new Error(`outbox enqueue failed: ${error.message}`)
-        },
+/** The Supabase adapter for OutboxStore. Construct via the factory below. */
+export class SupabaseOutboxStore implements OutboxStore {
+    constructor(private readonly db: SupabaseClient) {}
 
-        async pullPending(limit: number): Promise<OutboxRecord[]> {
-            const { data, error } = await db
-                .from("notification_outbox")
-                .select("id,event")
-                .eq("status", "pending")
-                .order("created_at", { ascending: true })
-                .limit(limit)
-            if (error) throw new Error(`outbox pullPending failed: ${error.message}`)
-
-            return (data ?? []).map((row) => ({
-                id: row.id as string,
-                event: row.event as NotificationEvent,
-            }))
-        },
-
-        async markDone(id: string): Promise<void> {
-            const { error } = await db
-                .from("notification_outbox")
-                .update({ status: "done", delivered_at: new Date().toISOString() })
-                .eq("id", id)
-            if (error) throw new Error(`outbox markDone failed: ${error.message}`)
-        },
+    async enqueue(event: NotificationEvent): Promise<void> {
+        const { error } = await this.db.from("notification_outbox").insert({ event })
+        if (error) throw new Error(`outbox enqueue failed: ${error.message}`)
     }
+
+    async pullPending(limit: number): Promise<OutboxRecord[]> {
+        const { data, error } = await this.db
+            .from("notification_outbox")
+            .select("id,event")
+            .eq("status", "pending")
+            .order("created_at", { ascending: true })
+            .limit(limit)
+        if (error) throw new Error(`outbox pullPending failed: ${error.message}`)
+        return (data ?? []).map((row) => ({ id: row.id as string, event: row.event as NotificationEvent }))
+    }
+
+    async markDone(id: string): Promise<void> {
+        const { error } = await this.db
+            .from("notification_outbox")
+            .update({ status: "done", delivered_at: new Date().toISOString() })
+            .eq("id", id)
+        if (error) throw new Error(`outbox markDone failed: ${error.message}`)
+    }
+}
+
+/** Composition seam: bind an OutboxStore to a Supabase client. */
+export function createSupabaseOutboxStore(db: SupabaseClient): OutboxStore {
+    return new SupabaseOutboxStore(db)
 }

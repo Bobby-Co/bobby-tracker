@@ -1,5 +1,5 @@
-import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import type { Issue, IssueStatus } from "@/lib/supabase/types"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
 
 // POST /api/issues/[id]/duplicate-of
 //
@@ -25,17 +25,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("bad_request", "An issue can't be a duplicate of itself.", 400)
     }
 
+    const issues = createSupabaseIssuesRepository(supabase)
+
     if (targetId) {
         // Same-project check + reject chains: a duplicate-of-a-
         // duplicate would either nest indefinitely or have to be
         // flattened by the UI on every render. Easier to forbid at
         // write time and keep the tree exactly one level deep.
-        const { data: rows, error: lookupErr } = await supabase
-            .from("issues")
-            .select("id,project_id,duplicate_of_issue_id")
-            .in("id", [id, targetId])
-            .returns<Pick<Issue, "id" | "project_id" | "duplicate_of_issue_id">[]>()
-        if (lookupErr) return jsonError("db_error", lookupErr.message, 500)
+        const { data: rows, error: lookupErr } = await repoRead(() => issues.findDuplicateGuardRows([id, targetId]))
+        if (lookupErr) return lookupErr
         if (!rows || rows.length !== 2) {
             return jsonError("not_found", "issue or target not found", 404)
         }
@@ -55,18 +53,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Marking → status flips to 'duplicated'. Unmarking → revert to
     // 'open' so the issue rejoins the working set; we don't try to
     // recover the prior status because that history isn't stored.
-    const patch: { duplicate_of_issue_id: string | null; status?: IssueStatus } = {
+    const patch: IssuePatch = {
         duplicate_of_issue_id: targetId,
         status: targetId ? "duplicated" : "open",
     }
 
-    const { data, error: upErr } = await supabase
-        .from("issues")
-        .update(patch)
-        .eq("id", id)
-        .select("id,duplicate_of_issue_id,status")
-        .single<Pick<Issue, "id" | "duplicate_of_issue_id" | "status">>()
-    if (upErr) return jsonError("db_error", upErr.message, 500)
+    const { data, error: upErr } = await repoRead(() => issues.update(id, patch))
+    if (upErr) return upErr
 
     return Response.json({ issue: data })
 }

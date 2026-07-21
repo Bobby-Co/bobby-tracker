@@ -1,6 +1,6 @@
-import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import { composeIssueFixPrompt } from "@/modules/issues"
-import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { composeIssueFixPrompt, createSupabaseIssuesRepository } from "@/modules/issues"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 // GET /api/issues/[id]/fix-prompt
 //
@@ -17,39 +17,18 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
-    const { data: issue, error: iErr } = await supabase
-        .from("issues")
-        .select("id,project_id,issue_number,title,body,status,priority,labels")
-        .eq("id", id)
-        .single<
-            Pick<
-                Issue,
-                | "id"
-                | "project_id"
-                | "issue_number"
-                | "title"
-                | "body"
-                | "status"
-                | "priority"
-                | "labels"
-            >
-        >()
-    if (iErr || !issue) return jsonError("not_found", "issue not found", 404)
+    const issues = createSupabaseIssuesRepository(supabase)
+    const projects = createSupabaseProjectsRepository(supabase)
+    const { data: issue, error: iErr } = await repoRead(() => issues.findSuggestContext(id))
+    if (iErr) return iErr
+    if (!issue) return jsonError("not_found", "issue not found", 404)
 
-    const [{ data: project }, { data: suggestion }] = await Promise.all([
-        supabase
-            .from("projects")
-            .select("name,repo_url,repo_full_name,description")
-            .eq("id", issue.project_id)
-            .single<Pick<Project, "name" | "repo_url" | "repo_full_name" | "description">>(),
-        supabase
-            .from("issue_suggestions")
-            .select("*")
-            .eq("issue_id", issue.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle<IssueSuggestion>(),
+    const [{ data: project, error: pErr }, { data: suggestion, error: sErr }] = await Promise.all([
+        repoRead(() => projects.findAnalysisContext(issue.project_id)),
+        repoRead(() => issues.findLatestSuggestion(issue.id)),
     ])
+    if (pErr) return pErr
+    if (sErr) return sErr
     if (!project) return jsonError("not_found", "project not found", 404)
 
     const prompt = composeIssueFixPrompt({

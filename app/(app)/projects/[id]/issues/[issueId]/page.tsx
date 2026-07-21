@@ -4,7 +4,7 @@ import { notFound, useParams } from "next/navigation"
 import Link from "next/link"
 import { useApi } from "@/lib/hooks/use-api"
 import { useAuth } from "@/lib/auth/auth-context"
-import { isAnalyserReady } from "@/modules/analysis/domain/analyser-readiness"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
 import { IssueDetail } from "@/components/issues/issue-detail"
 import { IssueSuggestions } from "@/components/issues/issue-suggestions"
 import { IssueComments } from "@/components/issues/issue-comments"
@@ -61,7 +61,7 @@ export default function IssueDetailPage() {
     const labelIcons = data?.labelIcons ?? []
     const statusColors = data?.statusColors ?? []
     const suggestion = data?.suggestion ?? null
-    const ready = isAnalyserReady(analyser)
+    const ready = ProjectAnalyserModel.from(analyser).isReady()
 
     return (
         <div className="flex flex-col gap-4 px-4">

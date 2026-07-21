@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { backfillIssueComments } from "@/modules/pull-requests"
+import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type {
     Issue,
     IssueComment,
@@ -78,7 +78,12 @@ export async function GET(
             .order("gh_created_at", { ascending: true, nullsFirst: true })
             .returns<IssueComment[]>()
         comments = commentsR.data ?? []
-        if (comments.length === 0) after(() => backfillIssueComments(id, ghNumber))
+        if (comments.length === 0) {
+            after(async () => {
+                const prs = await getPullRequestServiceForProject(id)
+                await prs?.backfillIssueComments(id, ghNumber)
+            })
+        }
     }
 
     return Response.json({

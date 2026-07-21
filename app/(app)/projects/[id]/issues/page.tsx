@@ -11,7 +11,6 @@ import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues/issues-view-toggle"
 import { SegBar } from "@/components/ui/field-card"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
-import { isAnalyserReady } from "@/modules/analysis/domain/analyser-readiness"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
 import { Issue as IssueEntity } from "@/modules/issues/domain/issue"
 
@@ -65,8 +64,7 @@ export default function IssuesPage() {
     // completes, "issues" without graph context aren't useful — the
     // suggestion / ask flows can't cite anything. Block creation;
     // direct the user to the Knowledge tab.
-    const ready =
-        isAnalyserReady(analyser)
+    const ready = ProjectAnalyserModel.from(analyser).isReady()
 
     if (loading) {
         return (

@@ -1,0 +1,144 @@
+// VCS module — the vendor-neutral DTOs shared by every provider port
+// (VCSAppInstance, VCSUserInstance, WebhookVerifier). Kept in one place so the
+// app-authority and user-authority ports speak the same nouns, and so a provider
+// adapter has a single target to map its API onto.
+//
+// ports/ may name neutral DTOs but imports no SDK/client and no framework.
+
+/** A VCS issue's binary lifecycle. Our richer tracker statuses map to this at the
+ *  boundary (see the Issue aggregate's githubState()); a provider only has two. */
+export type VcsIssueState = "open" | "closed"
+
+/** The provider identifiers minted when an issue is created — the numeric id used
+ *  by REST calls and the opaque node/global id some operations (e.g. GitHub's
+ *  GraphQL delete) require. */
+export interface VcsIssueRef {
+    number: number
+    nodeId: string
+}
+
+/** A user/bot reference as it appears on issues, PRs, comments and reviews. */
+export interface VcsActor {
+    login: string
+    avatarUrl: string
+}
+
+/** The subset of a remote issue we read during backfill/import. */
+export interface VcsIssue {
+    number: number
+    nodeId: string
+    title: string
+    body: string | null
+    state: VcsIssueState
+}
+
+/** A conversation comment on an issue or PR (a PR is an issue for comments). */
+export interface VcsComment {
+    id: number
+    body: string | null
+    url: string
+    author: VcsActor | null
+    createdAt: string
+    updatedAt: string
+}
+
+/** The subset of a remote pull request we mirror. `additions`/`deletions`/
+ *  `changedFiles` are optional because the list endpoint omits them (only the
+ *  single-PR read and webhook payloads carry them). */
+export interface VcsPullRequest {
+    number: number
+    nodeId: string
+    title: string
+    body: string | null
+    state: string
+    draft: boolean
+    mergedAt: string | null
+    url: string
+    author: VcsActor | null
+    head: { ref: string; sha: string }
+    base: { ref: string; sha: string }
+    additions?: number
+    deletions?: number
+    changedFiles?: number
+    comments?: number
+    createdAt: string
+    updatedAt: string
+    closedAt: string | null
+}
+
+/** A single changed file on a PR (with its unified patch, when available). */
+export interface VcsPullRequestFile {
+    filename: string
+    previousFilename?: string
+    status: string
+    patch?: string
+    additions: number
+    deletions: number
+}
+
+/** A PR review summary. Only reviews with a non-empty body read as comments. */
+export interface VcsReview {
+    id: number
+    body: string | null
+    url: string
+    author: VcsActor | null
+    state: string
+    submittedAt: string | null
+}
+
+/** Which merge strategies the repo permits (a provider 405s a disabled one). */
+export interface VcsMergeMethods {
+    mergeCommit: boolean
+    squash: boolean
+    rebase: boolean
+}
+
+/** The provider's live mergeability signal for one PR. `mergeable` is null while
+ *  the provider is still computing it — treat null as "unknown", not "no". */
+export interface VcsMergeability {
+    mergeable: boolean | null
+    mergeableState: string | null
+    headSha: string | null
+    draft: boolean
+    state: string
+    merged: boolean
+}
+
+/** How to merge a PR. `sha`, when set, makes the provider reject the merge if the
+ *  head has moved since the caller last saw it. */
+export interface VcsMergeInput {
+    method: "merge" | "squash" | "rebase"
+    sha?: string
+    commitTitle?: string
+    commitMessage?: string
+}
+
+export interface VcsMergeResult {
+    merged: boolean
+    sha: string | null
+    message: string
+}
+
+/** A merge the provider refused, carrying the provider's HTTP status so callers
+ *  can map the well-known ones (405 not-mergeable, 409 head-moved, 403 no-write)
+ *  to specific messages. Provider-neutral so the merge route never imports a
+ *  GitHub-specific error type. */
+export class VcsMergeError extends Error {
+    constructor(
+        readonly status: number,
+        message: string,
+    ) {
+        super(message)
+        this.name = "VcsMergeError"
+    }
+}
+
+/** The caller's VCS credential is missing / insufficient / rejected. Routes turn
+ *  this into a `*_reauth_required` 401 so the UI can prompt a reconnect. Neutral
+ *  so the comment routes don't import a GitHub-specific error. */
+export class VcsReauthError extends Error {
+    constructor(message = "vcs reauth required") {
+        super(message)
+        this.name = "VcsReauthError"
+    }
+}

@@ -10,9 +10,9 @@
 
 import type { ProjectAnalyser } from "@/lib/supabase/types"
 
-/** The readiness-gate projection: the columns isAnalyserReady() needs. Kept as a
- *  narrow select so hot gate paths don't pull the full row (incl. the health
- *  report JSONB). */
+/** The readiness-gate projection: the columns ProjectAnalyser.isReady() reads.
+ *  Kept as a narrow select so hot gate paths don't pull the full row (incl. the
+ *  health report JSONB). */
 export type AnalyserReadinessRow = Pick<ProjectAnalyser, "enabled" | "status" | "graph_id">
 
 export interface ProjectAnalyserRepository {
@@ -22,8 +22,8 @@ export interface ProjectAnalyserRepository {
      *  caller folds that back to null with `tryOrNull` (see @/lib/kernel). */
     findByProjectId(projectId: string): Promise<ProjectAnalyser | null>
 
-    /** Just the readiness-gate columns (enabled/status/graph_id) — pair with
-     *  isAnalyserReady(). Null for an absent row; throws on query failure. */
+    /** Just the readiness-gate columns (enabled/status/graph_id) — feed to
+     *  ProjectAnalyser.from().isReady(). Null for an absent row; throws on query failure. */
     findReadiness(projectId: string): Promise<AnalyserReadinessRow | null>
 
     /** The project's indexed graph id (the analyser repo_id), or null when it has

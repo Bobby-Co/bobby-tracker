@@ -1,8 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { resolveCommentContext } from "@/modules/github"
-import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/modules/github"
-import { deletePRComment, upsertPRComment } from "@/modules/pull-requests"
-import { createServiceClient } from "@/lib/supabase/server"
+import { resolveCommentContext, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 // Edit / delete a PR comment the user authored from here. `commentId` is the
@@ -58,20 +55,19 @@ export async function PATCH(
 
     let updated
     try {
-        updated = await updateUserIssueComment(ctx.token, ctx.owner, ctx.repo, ghId, body)
+        updated = await ctx.vcs.updateComment(ghId, body)
     } catch (e) {
-        if (e instanceof GithubReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
+        if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    const svc = createServiceClient()
-    await upsertPRComment(svc, id, {
+    await createServicePullRequestStore().upsertComment(id, {
         pr_number: owned.row.pr_number,
         source: "issue_comment",
         github_comment_id: ghId,
-        body: updated.body,
-        html_url: updated.html_url,
-        gh_updated_at: updated.updated_at,
+        body: updated.body ?? "",
+        html_url: updated.url,
+        gh_updated_at: updated.updatedAt,
     })
     return Response.json({ ok: true })
 }
@@ -94,13 +90,12 @@ export async function DELETE(
     if ("error" in ctx) return ctx.error
 
     try {
-        await deleteUserIssueComment(ctx.token, ctx.owner, ctx.repo, ghId)
+        await ctx.vcs.deleteComment(ghId)
     } catch (e) {
-        if (e instanceof GithubReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
+        if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    const svc = createServiceClient()
-    await deletePRComment(svc, id, "issue_comment", ghId)
+    await createServicePullRequestStore().deleteComment(id, "issue_comment", ghId)
     return Response.json({ ok: true })
 }

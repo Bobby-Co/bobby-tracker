@@ -1,12 +1,12 @@
 import { after } from "next/server"
-import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, getAnalyser, cancelAnalysis, ensureAnalysis } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
-import { verifyWebhookSignature } from "@/modules/github"
-import { allowsInbound, cancelAnalysis, ensureAnalysis, stateToStatus, syncHash } from "@/modules/github"
-import { cancelPRAnalysisForPR, startPRAnalysis } from "@/modules/pull-requests"
-import { embedIssueAsync } from "@/modules/issues"
+import { getWebhookVerifier, syncHash } from "@/modules/vcs"
+import { cancelPRAnalysisForPR, startPRAnalysis } from "@/modules/analysis"
+import { embedIssueAsync, Issue as IssueAggregate } from "@/modules/issues"
 import { deleteIssueComment, upsertIssueComment } from "@/modules/issues"
-import { deletePRComment, upsertPRComment, upsertPullRequest } from "@/modules/pull-requests"
+import { Project as ProjectAggregate } from "@/modules/projects"
+import { createServicePullRequestStore } from "@/modules/vcs"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { Issue, Project } from "@/lib/supabase/types"
 
@@ -32,9 +32,10 @@ export async function POST(request: Request) {
     // this would consume the stream and break signature verification.
     const raw = await request.text()
 
-    // (2) Verify HMAC-SHA256 over the raw body against x-hub-signature-256.
+    // (2) Verify the provider signature over the raw body via the WebhookVerifier
+    // port (GitHub: HMAC-SHA256 against x-hub-signature-256).
     const signature = request.headers.get("x-hub-signature-256")
-    if (!(await verifyWebhookSignature(raw, signature))) {
+    if (!(await getWebhookVerifier().verify(raw, signature))) {
         return new Response("bad signature", { status: 401 })
     }
 
@@ -201,7 +202,7 @@ async function handleIssue(
 
     // Direction gate: GitHub-side changes only apply when the project pulls from
     // GitHub. An outbound-only project ignores inbound issue events.
-    if (!allowsInbound(project)) return ack()
+    if (!ProjectAggregate.of(project).allowsInbound()) return ack()
 
     // Deletion: drop the linked tracker issue only when delete-propagation is
     // on; otherwise leave it (an orphaned row is safer than a surprise delete).
@@ -233,7 +234,7 @@ async function handleIssue(
     const syncFields = {
         title,
         body,
-        status: stateToStatus(state),
+        status: IssueAggregate.statusFromGithubState(state),
         github_issue_number: number,
         github_node_id: gh?.node_id ?? null,
         sync_source: "github" as const,
@@ -368,7 +369,7 @@ async function handlePullRequest(
 
     // Mirror the PR first (awaited inline — one bounded write — so the row is
     // durable before we ack, exactly like the issues path).
-    await upsertPullRequest(svc, project.id, {
+    await createServicePullRequestStore().upsertPullRequest(project.id, {
         pr_number: number,
         github_node_id: pr?.node_id ?? null,
         title: pr?.title ?? "",
@@ -537,10 +538,10 @@ async function handlePrComment(
         if (!comment?.id) return ack()
 
         if (action === "deleted") {
-            await deletePRComment(svc, project.id, "issue_comment", comment.id)
+            await createServicePullRequestStore().deleteComment(project.id, "issue_comment", comment.id)
             return ack()
         }
-        await upsertPRComment(svc, project.id, {
+        await createServicePullRequestStore().upsertComment(project.id, {
             pr_number: issue.number,
             source: "issue_comment",
             github_comment_id: comment.id,
@@ -568,7 +569,7 @@ async function handlePrComment(
         | undefined
     if (!prr?.number || !review?.id || action === "dismissed") return ack()
     if (!review.body?.trim()) return ack()
-    await upsertPRComment(svc, project.id, {
+    await createServicePullRequestStore().upsertComment(project.id, {
         pr_number: prr.number,
         source: "review",
         github_comment_id: review.id,

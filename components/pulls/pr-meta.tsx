@@ -1,6 +1,6 @@
 import { cn } from "@/components/ui/cn"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
-import { PullRequest as PullRequestEntity } from "@/modules/pull-requests/domain/pull-request"
+import { PullRequest as PullRequestEntity } from "@/modules/vcs/domain/pull-request"
 
 // Single source of truth for how a PR's state + Bobby's review status read
 // across the Pull-requests surfaces (list rows, detail header) — mirrors the

@@ -1,5 +1,5 @@
-import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import type { Issue } from "@/lib/supabase/types"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.
 // Accepts any subset of { starts_at, ends_at, lane_y, color }. Pass
@@ -14,7 +14,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const patch: Record<string, unknown> = {}
+    const patch: IssuePatch = {}
 
     if ("starts_at" in body) {
         const v = body.starts_at
@@ -43,12 +43,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (Object.keys(patch).length === 0) return jsonError("bad_request", "no valid fields", 400)
 
-    const { data, error: dbErr } = await supabase
-        .from("issues")
-        .update(patch)
-        .eq("id", id)
-        .select("*")
-        .single<Issue>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const issues = createSupabaseIssuesRepository(supabase)
+    const { data, error: dbErr } = await repoRead(() => issues.update(id, patch))
+    if (dbErr) return dbErr
     return Response.json({ issue: data })
 }

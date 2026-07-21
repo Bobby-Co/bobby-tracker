@@ -35,3 +35,25 @@ describe("ProjectAnalyser status helpers", () => {
         }
     })
 })
+
+// The analyse-effort value set lives on the aggregate (it's an analyser attribute).
+// isValidEffort guards three write routes (POST /api/issues, /issues/[id]/suggest,
+// /projects/[id]/issue-preferences) against untrusted request bodies.
+describe("ProjectAnalyser.EFFORTS + isValidEffort", () => {
+    test("EFFORTS is exactly the four levels, fast → veryhigh, in order", () => {
+        expect(ProjectAnalyser.EFFORTS).toEqual(["fast", "medium", "high", "veryhigh"])
+    })
+    test("every listed level passes the guard (list ⊆ guard)", () => {
+        for (const e of ProjectAnalyser.EFFORTS) expect(ProjectAnalyser.isValidEffort(e)).toBe(true)
+    })
+    test("rejects near-misses and wrong casing", () => {
+        for (const v of ["", "FAST", "Fast", "very-high", "veryHigh", "low", "max", "medium "]) {
+            expect(ProjectAnalyser.isValidEffort(v)).toBe(false)
+        }
+    })
+    test("rejects non-strings — callers pass raw JSON", () => {
+        for (const v of [null, undefined, 0, 1, true, {}, [], NaN]) {
+            expect(ProjectAnalyser.isValidEffort(v)).toBe(false)
+        }
+    })
+})

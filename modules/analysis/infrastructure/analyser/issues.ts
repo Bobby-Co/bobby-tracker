@@ -1,16 +1,15 @@
 // /issues/analyse (structured issue analysis, sync + detached) and
 // /issues/preferences (per-project analyse defaults).
 
-import type { AnalyseEffort } from "../../domain/effort"
+import type { AnalyseEffort } from "../../domain/project-analyser"
 import { AnalyserError, assertConfigured, authHeader } from "./client"
 
-// Thoroughness level for issue analysis. The lowercase wire values the analyser
+// Thoroughness level for issue analysis — the lowercase wire values the analyser
 // expects on /issues/analyse and /issues/preferences. NB: distinct from the
-// indexing `effort` ("low"|"medium"|"high") on KickoffJobInput. The list +
-// guard live in ../../domain/effort (client-safe); re-exported here for callers
-// that pair them with the analyse functions.
+// indexing `effort` ("low"|"medium"|"high") on KickoffJobInput. The type + the
+// value set (ProjectAnalyser.EFFORTS / .isValidEffort) live on the ProjectAnalyser
+// aggregate (client-safe); re-exported here for callers paired with these DTOs.
 export type { AnalyseEffort }
-export { ANALYSE_EFFORTS, isAnalyseEffort } from "../../domain/effort"
 
 export interface IssueFinding {
     file:        string

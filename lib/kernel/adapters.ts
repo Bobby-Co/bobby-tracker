@@ -10,22 +10,31 @@
 import { after } from "next/server"
 import type { BackgroundTasks, Clock, IdGenerator } from "./ports"
 
-export const systemClock: Clock = {
-    now: () => new Date(),
-    isoNow: () => new Date().toISOString(),
+class SystemClock implements Clock {
+    now(): Date {
+        return new Date()
+    }
+    isoNow(): string {
+        return new Date().toISOString()
+    }
 }
+export const systemClock: Clock = new SystemClock()
 
 /** Workers/Next adapter: keeps post-response work alive past the response via
  *  `after()` (see the workers-detached-promises constraint — a bare `void`
  *  promise is cancelled). A Node adapter would enqueue instead; same port. */
-export const workersBackgroundTasks: BackgroundTasks = {
-    run: (task) => {
+class WorkersBackgroundTasks implements BackgroundTasks {
+    run(task: () => void | Promise<void>): void {
         after(task)
-    },
+    }
 }
+export const workersBackgroundTasks: BackgroundTasks = new WorkersBackgroundTasks()
 
 /** Web Crypto is a global on Workers and Node ≥ 19, so this adapter is already
  *  runtime-portable as written. */
-export const cryptoIdGenerator: IdGenerator = {
-    uuid: () => crypto.randomUUID(),
+class CryptoIdGenerator implements IdGenerator {
+    uuid(): string {
+        return crypto.randomUUID()
+    }
 }
+export const cryptoIdGenerator: IdGenerator = new CryptoIdGenerator()

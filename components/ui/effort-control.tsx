@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/components/ui/cn"
-import { ANALYSE_EFFORTS, type AnalyseEffort } from "@/modules/analysis/domain/effort"
+import { ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis/domain/project-analyser"
 
 // Short labels under the slider.
 const EFFORT_LABEL: Record<AnalyseEffort, string> = {
@@ -51,8 +51,8 @@ export function EffortControl({
     hideHint?: boolean
     className?: string
 }) {
-    const max = ANALYSE_EFFORTS.length - 1
-    const index = Math.max(0, ANALYSE_EFFORTS.indexOf(value))
+    const max = ProjectAnalyser.EFFORTS.length - 1
+    const index = Math.max(0, ProjectAnalyser.EFFORTS.indexOf(value))
     const pct = (i: number) => `${(i / max) * 100}%`
 
     return (
@@ -69,7 +69,7 @@ export function EffortControl({
                     style={{ width: pct(index) }}
                 />
                 {/* per-stop tick lines */}
-                {ANALYSE_EFFORTS.map((level, i) => (
+                {ProjectAnalyser.EFFORTS.map((level, i) => (
                     <span
                         key={level}
                         aria-hidden
@@ -90,7 +90,7 @@ export function EffortControl({
                     step={1}
                     value={index}
                     disabled={disabled}
-                    onChange={(e) => onChange(ANALYSE_EFFORTS[Number(e.target.value)] ?? "medium")}
+                    onChange={(e) => onChange(ProjectAnalyser.EFFORTS[Number(e.target.value)] ?? "medium")}
                     aria-label={ariaLabel}
                     aria-valuetext={EFFORT_LABEL[value]}
                     className="peer absolute inset-0 z-20 m-0 h-full w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent [&::-moz-range-thumb]:opacity-0 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:opacity-0"
@@ -105,7 +105,7 @@ export function EffortControl({
 
             {/* labels — positioned by the SAME pct() so each sits under its tick */}
             <div className="relative mx-2 mt-2.5 h-4">
-                {ANALYSE_EFFORTS.map((level, i) => {
+                {ProjectAnalyser.EFFORTS.map((level, i) => {
                     const active = value === level
                     // End labels align to their edge (so they don't overflow the
                     // box); interior labels centre on their tick.

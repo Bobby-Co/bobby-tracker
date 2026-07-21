@@ -1,6 +1,6 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
+import { jsonError, repoRead, requireUser } from "@/lib/platform/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import type { Project } from "@/lib/supabase/types"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 // POST /api/issues/ai-compose
 //
@@ -34,12 +34,12 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "Provide a paragraph or at least one image.", 400)
     }
 
-    const { data: project } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", project_id)
-        .maybeSingle<Pick<Project, "id">>()
-    if (!project) return jsonError("not_found", "project not found", 404)
+    // Existence + visibility check (RLS-scoped): findName returns null when the
+    // project is absent or not visible to the caller.
+    const projects = createSupabaseProjectsRepository(supabase)
+    const { data: projectName, error: pErr } = await repoRead(() => projects.findName(project_id))
+    if (pErr) return pErr
+    if (!projectName) return jsonError("not_found", "project not found", 404)
 
     try {
         const proposal = await getAnalyser().compose({ paragraph, images })

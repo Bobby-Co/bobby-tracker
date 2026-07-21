@@ -36,44 +36,50 @@ type DB = SupabaseClient
 // dispatcher narrows this to each event's default channels.
 const ALL_CHANNELS: readonly ChannelId[] = ["in_app", "email"]
 
-export function createSupabaseRecipientResolver(db: SupabaseClient): RecipientResolver {
-    return {
-        async resolve(event: NotificationEvent): Promise<Recipient[]> {
-            // 1. The project's owning team. No team ⇒ nobody to notify.
-            // Read through the Projects contract — notifications doesn't own the
-            // projects table.
-            const teamId = await createSupabaseProjectsRepository(db).findTeamId(event.projectId)
-            if (!teamId) return []
+/** The Supabase adapter for RecipientResolver. Construct via the factory below. */
+export class SupabaseRecipientResolver implements RecipientResolver {
+    constructor(private readonly db: SupabaseClient) {}
 
-            // 2. Every member of that team, with their role — through the Teams
-            //    contract (notifications doesn't own the membership tables).
-            const members = await createSupabaseTeamMembershipRepository(db).listTeamMembers(teamId)
+    async resolve(event: NotificationEvent): Promise<Recipient[]> {
+        const db = this.db
+        // 1. The project's owning team. No team ⇒ nobody to notify. Read through
+        //    the Projects contract — notifications doesn't own the projects table.
+        const teamId = await createSupabaseProjectsRepository(db).findTeamId(event.projectId)
+        if (!teamId) return []
 
-            // 3. The set of userIds to notify. Owners/admins always; a plain
-            //    member only if the project is granted to a group they're in.
-            const userIds = new Set<string>()
-            const plainMembers = members.filter((m) => m.role !== "owner" && m.role !== "admin")
-            for (const m of members) {
-                if (m.role === "owner" || m.role === "admin") userIds.add(m.user_id)
+        // 2. Every member of that team, with their role — through the Teams
+        //    contract (notifications doesn't own the membership tables).
+        const members = await createSupabaseTeamMembershipRepository(db).listTeamMembers(teamId)
+
+        // 3. The set of userIds to notify. Owners/admins always; a plain member
+        //    only if the project is granted to a group they're in.
+        const userIds = new Set<string>()
+        const plainMembers = members.filter((m) => m.role !== "owner" && m.role !== "admin")
+        for (const m of members) {
+            if (m.role === "owner" || m.role === "admin") userIds.add(m.user_id)
+        }
+
+        if (plainMembers.length > 0) {
+            const allowed = await resolveGroupMemberUserIds(db, teamId, event.projectId)
+            for (const m of plainMembers) {
+                if (allowed.has(m.user_id)) userIds.add(m.user_id)
             }
+        }
 
-            if (plainMembers.length > 0) {
-                const allowed = await resolveGroupMemberUserIds(db, teamId, event.projectId)
-                for (const m of plainMembers) {
-                    if (allowed.has(m.user_id)) userIds.add(m.user_id)
-                }
-            }
-
-            // 4. Resolve each recipient's email (may be null — keep them anyway,
-            //    the in-app channel still applies).
-            const recipients: Recipient[] = []
-            for (const userId of userIds) {
-                const email = await resolveUserEmail(db, userId)
-                recipients.push({ userId, email, channels: ALL_CHANNELS })
-            }
-            return recipients
-        },
+        // 4. Resolve each recipient's email (may be null — keep them anyway, the
+        //    in-app channel still applies).
+        const recipients: Recipient[] = []
+        for (const userId of userIds) {
+            const email = await resolveUserEmail(db, userId)
+            recipients.push({ userId, email, channels: ALL_CHANNELS })
+        }
+        return recipients
     }
+}
+
+/** Composition seam: bind a RecipientResolver to a Supabase client. */
+export function createSupabaseRecipientResolver(db: SupabaseClient): RecipientResolver {
+    return new SupabaseRecipientResolver(db)
 }
 
 // resolveGroupMemberUserIds returns the userIds of every team member who belongs

@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { MindPanel } from "@/components/mind/mind-panel"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
-import { isAnalyserReady } from "@/modules/analysis/domain/analyser-readiness"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
 
 type KnowledgeData = {
     project: Pick<Project, "id" | "repo_url" | "repo_full_name"> | null
@@ -44,8 +44,7 @@ function MindPageInner() {
 
     const project = data?.project ?? null
     const analyser = data?.analyser ?? null
-    const ready =
-        isAnalyserReady(analyser)
+    const ready = ProjectAnalyserModel.from(analyser).isReady()
 
     // No skeleton during the morph — the chat shell is static and doesn't need
     // the knowledge payload to render. Show it immediately and let repo/indexedSha

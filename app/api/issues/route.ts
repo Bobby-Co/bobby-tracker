@@ -1,16 +1,22 @@
 import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { createSupabaseProjectAnalyserRepository, isAnalyseEffort } from "@/modules/analysis"
-import { tryOrNull } from "@/lib/kernel"
+import { ProjectAnalyser, createSupabaseProjectAnalyserRepository, ensureAnalysis } from "@/modules/analysis"
+import { tryOrNull, RepositoryError } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { Issue, IssuePriority, IssueStatus } from "@/lib/supabase/types"
-import { embedIssueAsync } from "@/modules/issues"
-import { pushIssueToGithub, ensureAnalysis } from "@/modules/github"
+import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import { createSupabaseIssuesRepository, embedIssueAsync } from "@/modules/issues"
+import { getVcsAppService } from "@/modules/vcs"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 export async function POST(request: Request) {
     const { supabase, user, error } = await requireUser()
     if (error) return error
+
+    // Bind the request's RLS-scoped client to each repository once, up front,
+    // and reuse the instances throughout the handler.
+    const analyserRepo = createSupabaseProjectAnalyserRepository(supabase)
+    const issues = createSupabaseIssuesRepository(supabase)
+    const projects = createSupabaseProjectsRepository(supabase)
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -25,8 +31,8 @@ export async function POST(request: Request) {
     // bootstrapped at least once. The UI mirrors this with a banner +
     // disabled "New issue" button on the issues page; this is the
     // server-side enforcement so direct API calls can't bypass it.
-    const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(supabase).findReadiness(project_id))
-    if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
+    const analyser = await tryOrNull(() => analyserRepo.findReadiness(project_id))
+    if (!ProjectAnalyser.from(analyser).isReady()) {
         return jsonError(
             "needs_indexing",
             "Enable the analyser and run the first index on the Knowledge tab before creating issues.",
@@ -53,11 +59,14 @@ export async function POST(request: Request) {
     // Per-issue analyser effort from the create modal's advanced settings.
     // Null unless a real level was chosen, so untouched issues inherit the
     // project default (and then the analyser's own default) at analyse time.
-    const analyse_effort = isAnalyseEffort(body?.analyse_effort) ? body.analyse_effort : null
+    const analyse_effort = ProjectAnalyser.isValidEffort(body?.analyse_effort) ? body.analyse_effort : null
 
-    const { data: issue, error: dbErr } = await supabase
-        .from("issues")
-        .insert({
+    // Persist through the issues module's repository — the controller never
+    // touches the DB client directly (see modules/README.md: the interface layer
+    // parses/validates/authorizes, then delegates to the owning context).
+    let issue
+    try {
+        issue = await issues.create({
             project_id,
             user_id: user.id,
             title,
@@ -69,9 +78,10 @@ export async function POST(request: Request) {
             duplicate_of_issue_id,
             analyse_effort,
         })
-        .select("*")
-        .single<Issue>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    } catch (e) {
+        const message = e instanceof RepositoryError ? e.message : "failed to create issue"
+        return jsonError("db_error", message, 500)
+    }
 
     // Best-effort embedding — runs after the response so issue
     // creation isn't blocked on the analyser round-trip. Use after()
@@ -86,13 +96,13 @@ export async function POST(request: Request) {
     // after() (same reason as the embed above — a bare `void` gets cancelled
     // when the response returns on Workers). Independent of the needs_indexing
     // gate above; a no-op when the project isn't sync-wired.
-    const project = await createSupabaseProjectsRepository(supabase).findGithubSyncContext(project_id)
+    const project = await projects.findGithubSyncContext(project_id)
     if (project?.github_sync_enabled && project.github_installation_id && project.github_repo_id) {
         const origin = new URL(request.url).origin
         after(async () => {
             // Push first so the issue has its github_issue_number, then start
             // the placeholder-comment + detached analysis run.
-            await pushIssueToGithub(issue, project)
+            await getVcsAppService(project)?.syncIssueCreated(issue, project)
             await ensureAnalysis(issue.id, origin)
         })
     }

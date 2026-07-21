@@ -1,6 +1,7 @@
 import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import { ensureAnalysis } from "@/modules/github"
-import type { IssueSuggestion } from "@/lib/supabase/types"
+import { tryOrNull } from "@/lib/kernel"
+import { ensureAnalysis } from "@/modules/analysis"
+import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 export const dynamic = "force-dynamic"
 
@@ -15,13 +16,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { supabase, error } = await requireIssueAccess(id)
     if (error) return error
 
-    // Ownership (RLS): the cookie client only sees the caller's issues.
-    const { data: owned } = await supabase
-        .from("issues")
-        .select("id")
-        .eq("id", id)
-        .maybeSingle<{ id: string }>()
-    if (!owned) return jsonError("not_found", "issue not found", 404)
+    const issues = createSupabaseIssuesRepository(supabase)
+
+    // Ownership (RLS): the cookie client only sees the caller's issues. A read
+    // error folds to null → 404 (fail closed), matching the old inline check.
+    const ownedProjectId = await tryOrNull(() => issues.findProjectId(id))
+    if (!ownedProjectId) return jsonError("not_found", "issue not found", 404)
 
     const status = await ensureAnalysis(id, new URL(request.url).origin)
     if (status === "not_ready") {
@@ -34,12 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (status === "no_issue") return jsonError("not_found", "issue not found", 404)
 
     // Return the cached suggestion if the run already completed (status 'done').
-    const { data: suggestion } = await supabase
-        .from("issue_suggestions")
-        .select("*")
-        .eq("issue_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<IssueSuggestion>()
+    // Fail-safe: a read error folds to null, matching the old maybeSingle.
+    const suggestion = await tryOrNull(() => issues.findLatestSuggestion(id))
     return Response.json({ status, suggestion: suggestion ?? null })
 }

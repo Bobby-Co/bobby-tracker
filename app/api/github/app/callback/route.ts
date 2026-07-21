@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { githubAppFetch } from "@/modules/github"
-import { repoFullName } from "@/modules/github"
+import { githubAppClient } from "@/modules/vcs"
+import { repoFullName } from "@/modules/vcs"
 import type { Project } from "@/lib/supabase/types"
 
 // GET /api/github/app/callback — GitHub sends the user here after they install
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
 
         // Capture the account the app was installed on (best-effort).
         let account: { login?: string; type?: string; id?: number } = {}
-        const instRes = await githubAppFetch(installationId, "/installation")
+        const instRes = await githubAppClient.fetch(installationId, "/installation")
         if (instRes.ok) {
             const inst = (await instRes.json().catch(() => null)) as {
                 account?: { login?: string; type?: string; id?: number }
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
         const wantFullName = repoFullName(project)?.toLowerCase() ?? null
         const wantUrl = project.repo_url.replace(/\.git$/, "").replace(/\/+$/, "").toLowerCase()
 
-        const reposRes = await githubAppFetch(installationId, "/installation/repositories")
+        const reposRes = await githubAppClient.fetch(installationId, "/installation/repositories")
         if (!reposRes.ok) return back("error")
         const reposBody = (await reposRes.json().catch(() => null)) as {
             repositories?: Array<{ id: number; full_name: string; html_url: string }>

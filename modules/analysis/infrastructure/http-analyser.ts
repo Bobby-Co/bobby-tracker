@@ -29,22 +29,27 @@ import type { AnalyserPort } from "../ports/analyser-port"
 
 /** Construct the HTTP-backed AnalyserPort. Stateless (the underlying client reads
  *  its config from env at import), so it's cheap to build per call. */
+/** The HTTP AnalyserPort adapter — binds the port's operations to the analyser
+ *  client functions above. Construct via the factory below (or getAnalyser()). */
+export class HttpAnalyser implements AnalyserPort {
+    query = ask
+    streamChat = chatStream
+    analyseIssue = analyseIssue
+    startIssueAnalysis = runIssueAnalysis
+    cancelIssueAnalysis = cancelIssueAnalysis
+    startPRAnalysis = runPRAnalysis
+    cancelPRAnalysis = cancelPRAnalysis
+    deepDivePRInsight = deepDivePRInsight
+    getIssuePreferences = getIssuePreferences
+    setIssuePreferences = setIssuePreferences
+    compose = composeIssue
+    embed = embedText
+    verify = verifyGraph
+    startIndex = kickoffJob
+    deleteGraph = deleteGraph
+}
+
+/** Composition seam: hands back the AnalyserPort. */
 export function createHttpAnalyser(): AnalyserPort {
-    return {
-        query:               ask,
-        streamChat:          chatStream,
-        analyseIssue:        analyseIssue,
-        startIssueAnalysis:  runIssueAnalysis,
-        cancelIssueAnalysis: cancelIssueAnalysis,
-        startPRAnalysis:     runPRAnalysis,
-        cancelPRAnalysis:    cancelPRAnalysis,
-        deepDivePRInsight:   deepDivePRInsight,
-        getIssuePreferences: getIssuePreferences,
-        setIssuePreferences: setIssuePreferences,
-        compose:             composeIssue,
-        embed:               embedText,
-        verify:              verifyGraph,
-        startIndex:          kickoffJob,
-        deleteGraph:         deleteGraph,
-    }
+    return new HttpAnalyser()
 }

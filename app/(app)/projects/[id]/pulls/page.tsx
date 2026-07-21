@@ -6,7 +6,7 @@ import { useApi } from "@/lib/hooks/use-api"
 import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import { PrList, type PullRequestRow } from "@/components/pulls/pr-list"
 import { SegBar } from "@/components/ui/field-card"
-import { PullRequest as PullRequestEntity } from "@/modules/pull-requests/domain/pull-request"
+import { PullRequest as PullRequestEntity } from "@/modules/vcs/domain/pull-request"
 
 interface PullsView {
     pulls: PullRequestRow[]

@@ -1,6 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { resolveCommentContext } from "@/modules/github"
-import { deleteUserIssueComment, GithubReauthError, updateUserIssueComment } from "@/modules/github"
+import { resolveCommentContext, VcsReauthError } from "@/modules/vcs"
 import { deleteIssueComment, upsertIssueComment } from "@/modules/issues"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -58,9 +57,9 @@ export async function PATCH(
 
     let updated
     try {
-        updated = await updateUserIssueComment(ctx.token, ctx.owner, ctx.repo, ghId, body)
+        updated = await ctx.vcs.updateComment(ghId, body)
     } catch (e) {
-        if (e instanceof GithubReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
+        if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
     }
 
@@ -68,9 +67,9 @@ export async function PATCH(
     await upsertIssueComment(svc, id, {
         issue_number: owned.row.issue_number,
         github_comment_id: ghId,
-        body: updated.body,
-        html_url: updated.html_url,
-        gh_updated_at: updated.updated_at,
+        body: updated.body ?? "",
+        html_url: updated.url,
+        gh_updated_at: updated.updatedAt,
     })
     return Response.json({ ok: true })
 }
@@ -93,9 +92,9 @@ export async function DELETE(
     if ("error" in ctx) return ctx.error
 
     try {
-        await deleteUserIssueComment(ctx.token, ctx.owner, ctx.repo, ghId)
+        await ctx.vcs.deleteComment(ghId)
     } catch (e) {
-        if (e instanceof GithubReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
+        if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
     }
 

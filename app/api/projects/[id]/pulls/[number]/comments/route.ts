@@ -1,8 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { resolveCommentContext } from "@/modules/github"
-import { createUserIssueComment, GithubReauthError } from "@/modules/github"
-import { upsertPRComment } from "@/modules/pull-requests"
-import { createServiceClient } from "@/lib/supabase/server"
+import { resolveCommentContext, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/[number]/comments
 //
@@ -31,27 +28,26 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     let created
     try {
-        created = await createUserIssueComment(ctx.token, ctx.owner, ctx.repo, prNumber, body)
+        created = await ctx.vcs.createComment(prNumber, body)
     } catch (e) {
-        if (e instanceof GithubReauthError) {
+        if (e instanceof VcsReauthError) {
             return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         }
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    const svc = createServiceClient()
-    await upsertPRComment(svc, id, {
+    await createServicePullRequestStore().upsertComment(id, {
         pr_number: prNumber,
         source: "issue_comment",
         github_comment_id: created.id,
         provenance: "tracker",
         author_user_id: user.id,
-        author_login: created.user?.login ?? ctx.login ?? null,
-        author_avatar_url: created.user?.avatar_url ?? null,
-        body: created.body,
-        html_url: created.html_url,
-        gh_created_at: created.created_at,
-        gh_updated_at: created.updated_at,
+        author_login: created.author?.login ?? ctx.login ?? null,
+        author_avatar_url: created.author?.avatarUrl ?? null,
+        body: created.body ?? "",
+        html_url: created.url,
+        gh_created_at: created.createdAt,
+        gh_updated_at: created.updatedAt,
     })
 
     return Response.json({ ok: true, github_comment_id: created.id })

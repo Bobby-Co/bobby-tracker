@@ -19,55 +19,59 @@ const ANALYSIS_COLS =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = SupabaseClient<any, any, any>
 
-/** Build a ProjectsRepository bound to a specific Supabase client. Pass the
- *  request's RLS-scoped client so reads honour the caller's access; pass a
- *  service-role client only from a trusted context. */
-export function createSupabaseProjectsRepository(db: AnyDb): ProjectsRepository {
-    return {
-        async findGithubSyncContext(projectId) {
-            const { data } = await db
-                .from("projects")
-                .select(GITHUB_SYNC_COLS)
-                .eq("id", projectId)
-                .maybeSingle<GithubSyncContext>()
-            return data ?? null
-        },
+/** The Supabase adapter for ProjectsRepository, bound to a specific client.
+ *  Construct via the factory below. */
+export class SupabaseProjectsRepository implements ProjectsRepository {
+    constructor(private readonly db: AnyDb) {}
 
-        async findTeamId(projectId) {
-            const { data } = await db
-                .from("projects")
-                .select("team_id")
-                .eq("id", projectId)
-                .maybeSingle<{ team_id: string | null }>()
-            return data?.team_id ?? null
-        },
-
-        async findName(projectId) {
-            const { data } = await db
-                .from("projects")
-                .select("name")
-                .eq("id", projectId)
-                .maybeSingle<{ name: string | null }>()
-            return data?.name ?? null
-        },
-
-        async findAnalysisContext(projectId) {
-            const { data } = await db
-                .from("projects")
-                .select(ANALYSIS_COLS)
-                .eq("id", projectId)
-                .maybeSingle<AnalysisProjectContext>()
-            return data ?? null
-        },
-
-        async findRepoRef(projectId) {
-            const { data, error } = await db
-                .from("projects")
-                .select("id,repo_url,repo_full_name")
-                .eq("id", projectId)
-                .maybeSingle<{ id: string; repo_url: string; repo_full_name: string | null }>()
-            if (error) throw new RepositoryError(error.message, { cause: error })
-            return data ?? null
-        },
+    async findGithubSyncContext(projectId: string): Promise<GithubSyncContext | null> {
+        const { data } = await this.db
+            .from("projects")
+            .select(GITHUB_SYNC_COLS)
+            .eq("id", projectId)
+            .maybeSingle<GithubSyncContext>()
+        return data ?? null
     }
+
+    async findTeamId(projectId: string): Promise<string | null> {
+        const { data } = await this.db
+            .from("projects")
+            .select("team_id")
+            .eq("id", projectId)
+            .maybeSingle<{ team_id: string | null }>()
+        return data?.team_id ?? null
+    }
+
+    async findName(projectId: string): Promise<string | null> {
+        const { data } = await this.db
+            .from("projects")
+            .select("name")
+            .eq("id", projectId)
+            .maybeSingle<{ name: string | null }>()
+        return data?.name ?? null
+    }
+
+    async findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null> {
+        const { data } = await this.db
+            .from("projects")
+            .select(ANALYSIS_COLS)
+            .eq("id", projectId)
+            .maybeSingle<AnalysisProjectContext>()
+        return data ?? null
+    }
+
+    async findRepoRef(projectId: string): Promise<{ id: string; repo_url: string; repo_full_name: string | null } | null> {
+        const { data, error } = await this.db
+            .from("projects")
+            .select("id,repo_url,repo_full_name")
+            .eq("id", projectId)
+            .maybeSingle<{ id: string; repo_url: string; repo_full_name: string | null }>()
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return data ?? null
+    }
+}
+
+/** Composition seam: bind a ProjectsRepository to a specific Supabase client. */
+export function createSupabaseProjectsRepository(db: AnyDb): ProjectsRepository {
+    return new SupabaseProjectsRepository(db)
 }
