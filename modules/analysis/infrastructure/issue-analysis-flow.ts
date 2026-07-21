@@ -11,14 +11,7 @@
 
 import { tryOrNull } from "@/lib/kernel"
 import { createServiceClient } from "@/lib/supabase/server"
-import {
-    composeIssueFixPrompt,
-    countIssueSuggestions,
-    findIssueAnalysisRow,
-    insertIssueSuggestion,
-    updateIssueSyncFields,
-    type IssueSyncPatch,
-} from "@/modules/issues"
+import { composeIssueFixPrompt, createServiceIssueSyncStore, type IssueSyncPatch } from "@/modules/issues"
 import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { getVcsAppService } from "@/modules/vcs"
 import type { IssueAnalysisData, IssuePriority } from "@/lib/supabase/types"
@@ -49,13 +42,14 @@ export async function ensureAnalysis(
     origin: string,
 ): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue"> {
     const svc = createServiceClient()
+    const issues = createServiceIssueSyncStore()
 
-    const issue = await findIssueAnalysisRow(svc, issueId)
+    const issue = await issues.findAnalysisRow(issueId)
     if (!issue) return "no_issue"
 
     // Idempotent / one-shot: don't start a second run.
     if (issue.analysis_status === "analysing") return "in_flight"
-    if ((await countIssueSuggestions(svc, issueId)) > 0) return "done"
+    if ((await issues.countSuggestions(issueId)) > 0) return "done"
 
     // Fail-safe: a query error folds to null → treated as not-ready.
     const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(svc).findByProjectId(issue.project_id))
@@ -82,7 +76,7 @@ export async function ensureAnalysis(
         }
     }
 
-    await updateIssueSyncFields(svc, issueId, update)
+    await issues.updateSyncFields(issueId, update)
 
     // Kick the single detached run; its callback caches to issue_suggestions
     // (the web box picks it up via realtime) and edits the bot comment.
@@ -112,8 +106,9 @@ export async function applyAnalysisResult(
     origin: string,
 ): Promise<void> {
     const svc = createServiceClient()
+    const issues = createServiceIssueSyncStore()
 
-    const issue = await findIssueAnalysisRow(svc, taskId)
+    const issue = await issues.findAnalysisRow(taskId)
     if (!issue) return
 
     const project = await createSupabaseProjectsRepository(svc).findAnalysisContext(issue.project_id)
@@ -137,7 +132,7 @@ export async function applyAnalysisResult(
         }
     }
 
-    await updateIssueSyncFields(svc, taskId, { analysis_status: status })
+    await issues.updateSyncFields(taskId, { analysis_status: status })
 
     // Cache the successful analysis so the tracker UI mirrors the comment.
     if (status === "done" && result && project) {
@@ -172,7 +167,7 @@ export async function applyAnalysisResult(
                     },
                 }),
             }
-            await insertIssueSuggestion(svc, {
+            await issues.insertSuggestion({
                 issue_id: issue.id,
                 data: dataWithPrompt,
                 markdown: result.markdown ?? result.summary ?? "",

@@ -23,10 +23,6 @@ export type {
 } from "./ports/issues-repository"
 export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues-repository"
 
-// ─── issue-comment mirror store (tracker's copy of GitHub issue comments) ────
-export type { IssueCommentUpsert } from "./infrastructure/issue-store"
-export { upsertIssueComment, deleteIssueComment } from "./infrastructure/issue-store"
-
 // ─── issue embedding (semantic index maintenance) ────────────────────────────
 export { embedIssueAsync, countUnembeddedIssues, ensureIssueEmbeddings } from "./infrastructure/issue-embedding"
 
@@ -34,17 +30,15 @@ export { embedIssueAsync, countUnembeddedIssues, ensureIssueEmbeddings } from ".
 export type { IssuePromptInput } from "./infrastructure/issue-prompt"
 export { composeIssueFixPrompt } from "./infrastructure/issue-prompt"
 
-// ─── service-role issue ops for the GitHub-sync / analysis flow ──────────────
-// The IssueSyncStore PORT + its service-backed factory are the shape cross-module
-// orchestrators (vcs, analysis) depend on so their application layer stays
-// SDK-free; the free functions remain for the existing infrastructure callers.
-export type { IssueAnalysisRow, IssueSyncPatch, ImportedIssueInsert, IssueSuggestionInsert, IssueSyncStore } from "./infrastructure/issue-sync-store"
-export {
-    findIssueAnalysisRow,
-    listLinkedGithubNumbers,
-    updateIssueSyncFields,
-    insertImportedIssue,
-    countIssueSuggestions,
-    insertIssueSuggestion,
-    createServiceIssueSyncStore,
+// ─── service-role issues store (GitHub-sync / analysis, incl. the issue-comment
+//     mirror) — the IssueSyncStore PORT + its service-backed factory. Cross-module
+//     orchestrators depend on the port so their application layer stays SDK-free.
+export type {
+    IssueAnalysisRow,
+    IssueSyncPatch,
+    ImportedIssueInsert,
+    IssueSuggestionInsert,
+    IssueCommentUpsert,
+    IssueSyncStore,
 } from "./infrastructure/issue-sync-store"
+export { createServiceIssueSyncStore } from "./infrastructure/issue-sync-store"

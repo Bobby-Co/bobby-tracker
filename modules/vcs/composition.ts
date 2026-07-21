@@ -5,7 +5,7 @@
 // that branches on it. VCSAppService / VCSUserService and their callers depend on
 // the PORTS and obtain implementations here — they never `new` an adapter.
 
-import { createServiceIssueSyncStore, upsertIssueComment } from "@/modules/issues"
+import { createServiceIssueSyncStore } from "@/modules/issues"
 import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import { repoFullName } from "./domain/repo-ref"
@@ -95,9 +95,9 @@ export function getVcsUserService(repo: VcsRepoCoords, token: string): VCSUserSe
 export function getPullRequestService(project: VcsProviderBinding): PullRequestService | null {
     const instance = resolveVcsAppInstance(project)
     if (!instance) return null
-    const svc = createServiceClient()
+    const issues = createServiceIssueSyncStore()
     return new PullRequestService(instance, createServicePullRequestStore(), (projectId, comment) =>
-        upsertIssueComment(svc, projectId, comment),
+        issues.upsertComment(projectId, comment),
     )
 }
 

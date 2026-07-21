@@ -3,8 +3,7 @@ import { createSupabaseProjectAnalyserRepository, getAnalyser, cancelAnalysis, e
 import { tryOrNull } from "@/lib/kernel"
 import { getWebhookVerifier, syncHash } from "@/modules/vcs"
 import { cancelPRAnalysisForPR, startPRAnalysis } from "@/modules/analysis"
-import { embedIssueAsync, Issue as IssueAggregate } from "@/modules/issues"
-import { deleteIssueComment, upsertIssueComment } from "@/modules/issues"
+import { embedIssueAsync, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
 import { createServicePullRequestStore } from "@/modules/vcs"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -606,10 +605,10 @@ async function handleIssueComment(
     if (!issue?.number || !comment?.id) return ack()
 
     if (action === "deleted") {
-        await deleteIssueComment(svc, projectId, comment.id)
+        await createServiceIssueSyncStore().deleteComment(projectId, comment.id)
         return ack()
     }
-    await upsertIssueComment(svc, projectId, {
+    await createServiceIssueSyncStore().upsertComment(projectId, {
         issue_number: issue.number,
         github_comment_id: comment.id,
         author_login: comment.user?.login ?? null,

@@ -4,7 +4,7 @@
 // ready-to-send Response on any failed gate.
 
 import { jsonError } from "@/lib/platform/http/api"
-import { getUserGithubToken } from "./user-token"
+import { createGithubTokenRepository } from "./user-token"
 import { repoFullName } from "../domain/repo-ref"
 import { getVcsUserService } from "../composition"
 import type { VCSUserService } from "../application/vcs-user-service"
@@ -40,7 +40,7 @@ export async function resolveCommentContext(
         return { error: jsonError("not_github", "this project isn't linked to a GitHub repo", 400) }
     }
 
-    const gh = await getUserGithubToken(supabase, userId)
+    const gh = await createGithubTokenRepository(supabase).find(userId)
     if (!gh) return { error: jsonError("github_reauth_required", "Connect GitHub to comment.", 401) }
 
     // repoFullName resolved above → the user service is non-null.

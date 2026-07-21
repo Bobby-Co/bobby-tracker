@@ -76,10 +76,11 @@ export { syncHash } from "./domain/sync-hash"
 // VCSAppInstance adapter + the WebhookVerifier port, not this client.
 export { githubAppClient } from "./infrastructure/github-app-instance"
 
-// The signed-in user's GitHub token read. The comment CRUD is encapsulated behind
-// the VCSUserInstance/VCSUserService (user authority); only the token read stays
-// public (the /github/connection route + the comment gate use it).
-export { getUserGithubToken } from "./infrastructure/user-token"
+// The signed-in user's GitHub token read (a repository). The comment CRUD is
+// encapsulated behind the VCSUserInstance/VCSUserService; only the token read
+// stays public (the /github/connection route + the comment gate use it).
+export type { GithubTokenRepository, UserGithub } from "./infrastructure/user-token"
+export { createGithubTokenRepository } from "./infrastructure/user-token"
 
 // Comment-authoring gate for the PR/issue comment routes
 export { resolveCommentContext } from "./infrastructure/comment-actions"

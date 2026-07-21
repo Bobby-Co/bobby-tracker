@@ -1,7 +1,6 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import { resolveCommentContext, VcsReauthError } from "@/modules/vcs"
-import { deleteIssueComment, upsertIssueComment } from "@/modules/issues"
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceIssueSyncStore } from "@/modules/issues"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 // Edit / delete an issue comment the user authored from here. `commentId` is the
@@ -63,8 +62,7 @@ export async function PATCH(
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    const svc = createServiceClient()
-    await upsertIssueComment(svc, id, {
+    await createServiceIssueSyncStore().upsertComment(id, {
         issue_number: owned.row.issue_number,
         github_comment_id: ghId,
         body: updated.body ?? "",
@@ -98,7 +96,6 @@ export async function DELETE(
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    const svc = createServiceClient()
-    await deleteIssueComment(svc, id, ghId)
+    await createServiceIssueSyncStore().deleteComment(id, ghId)
     return Response.json({ ok: true })
 }

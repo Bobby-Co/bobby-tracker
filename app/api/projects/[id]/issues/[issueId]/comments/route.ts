@@ -1,7 +1,6 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
 import { resolveCommentContext, VcsReauthError } from "@/modules/vcs"
-import { upsertIssueComment } from "@/modules/issues"
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceIssueSyncStore } from "@/modules/issues"
 
 // POST /api/projects/[id]/issues/[issueId]/comments
 //
@@ -46,8 +45,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    const svc = createServiceClient()
-    await upsertIssueComment(svc, id, {
+    await createServiceIssueSyncStore().upsertComment(id, {
         issue_number: issue.github_issue_number,
         github_comment_id: created.id,
         provenance: "tracker",

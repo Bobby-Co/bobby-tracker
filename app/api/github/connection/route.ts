@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { getUserGithubToken } from "@/modules/vcs"
+import { createGithubTokenRepository } from "@/modules/vcs"
 
 // GET /api/github/connection
 //
@@ -12,7 +12,7 @@ export async function GET() {
     if (error) return error
 
     try {
-        const gh = await getUserGithubToken(supabase, user.id)
+        const gh = await createGithubTokenRepository(supabase).find(user.id)
         return Response.json({ connected: !!gh, login: gh?.login ?? null })
     } catch (e) {
         return jsonError("db_error", (e as Error).message, 500)
