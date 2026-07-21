@@ -8,3 +8,7 @@ export { createSupabaseProjectsRepository } from "./infrastructure/supabase-proj
 // ─── project-status policy (which footer a project tile shows) ───────────────
 export type { ProjectStatus, ProjectInsightView } from "./domain/pick-status"
 export { pickStatus, URGENT_WINDOW_MS, PR_WINDOW_MS } from "./domain/pick-status"
+
+// ─── Project aggregate — the GitHub-sync invariants (sync-ready, direction) ──
+export type { ProjectSyncState, SyncDirection } from "./domain/project"
+export { Project } from "./domain/project"

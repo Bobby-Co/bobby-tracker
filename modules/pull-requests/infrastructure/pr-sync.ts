@@ -9,15 +9,15 @@ import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, 
 import { tryOrNull } from "@/lib/kernel"
 import { createIssueComment, listPullRequestFiles, updateIssueComment } from "@/modules/github"
 import { repoFullName } from "@/modules/github"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import { cancelledComment, failedComment, loadingComment, resultComment } from "./pr-comment"
-import type { PRAnalysis, Project } from "@/lib/supabase/types"
+import type { PRAnalysis, Project as ProjectRow } from "@/lib/supabase/types"
 
 // The subset of a tracker.projects row PR analysis reads. A superset of this is
 // fetched through the Projects contract (findGithubSyncContext) — pull-requests
 // doesn't own the projects table.
-type PRProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
+type PRProject = Pick<ProjectRow, "id" | "repo_url" | "repo_full_name"> & {
     github_installation_id: number | null
     github_repo_id: number | null
     github_sync_enabled: boolean
@@ -32,8 +32,9 @@ export type PRInput = {
     headSha: string | null
 }
 
+// Same rule as github-sync's syncReady — now the Project aggregate owns it.
 function prReady(p: PRProject): boolean {
-    return p.github_sync_enabled && p.github_installation_id != null && p.github_repo_id != null
+    return Project.of(p).isSyncReady()
 }
 
 // startPRAnalysis gates on the App being linked + the graph indexed, fetches the

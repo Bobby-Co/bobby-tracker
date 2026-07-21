@@ -31,7 +31,7 @@ import {
     updateIssueSyncFields,
     type IssueSyncPatch,
 } from "@/modules/issues"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, isAnalyserReady, type IssueAnalysis } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
@@ -40,7 +40,7 @@ import type {
     IssueAnalysisData,
     IssuePriority,
     IssueStatus,
-    Project,
+    Project as ProjectRow,
 } from "@/lib/supabase/types"
 
 // The subset of a tracker.issues row the sync functions read. Kept structural
@@ -57,7 +57,7 @@ type SyncIssue = {
 }
 
 // The subset of a tracker.projects row the sync functions read.
-type SyncProject = Pick<Project, "repo_url" | "repo_full_name"> & {
+type SyncProject = Pick<ProjectRow, "repo_url" | "repo_full_name"> & {
     github_installation_id: number | null
     github_repo_id: number | null
     github_sync_enabled: boolean
@@ -67,11 +67,13 @@ type SyncProject = Pick<Project, "repo_url" | "repo_full_name"> & {
 
 
 // Direction gates. 'inbound' = GitHub → ucelot, 'outbound' = ucelot → GitHub.
+// The sync-direction + readiness rules live on the Project aggregate
+// (@/modules/projects). These thin wrappers keep the existing call shape.
 export function allowsInbound(p: { github_sync_direction: GithubSyncDirection }): boolean {
-    return p.github_sync_direction === "inbound" || p.github_sync_direction === "both"
+    return Project.of(p).allowsInbound()
 }
 export function allowsOutbound(p: { github_sync_direction: GithubSyncDirection }): boolean {
-    return p.github_sync_direction === "outbound" || p.github_sync_direction === "both"
+    return Project.of(p).allowsOutbound()
 }
 
 // ─── Content hash (echo suppression) ────────────────────────────────────────
@@ -193,11 +195,7 @@ function syncReady(project: {
     github_installation_id: number | null
     github_repo_id: number | null
 }): boolean {
-    return (
-        project.github_sync_enabled &&
-        project.github_installation_id != null &&
-        project.github_repo_id != null
-    )
+    return Project.of(project).isSyncReady()
 }
 
 // ─── Outbound: delete ───────────────────────────────────────────────────────
@@ -208,7 +206,7 @@ function syncReady(project: {
 // node id); if the org/app can't hard-delete, we fall back to closing it. No-op
 // unless sync is wired, direction allows outbound, and deletes are enabled.
 export async function deleteGithubIssueFromTracker(issue: SyncIssue, project: SyncProject): Promise<void> {
-    if (!syncReady(project) || !allowsOutbound(project) || !project.github_sync_deletes) return
+    if (!syncReady(project) || !allowsOutbound(project) || !Project.of(project).propagatesDeletes()) return
     const installationId = project.github_installation_id!
 
     // Prefer a true delete via GraphQL using the stored node id.

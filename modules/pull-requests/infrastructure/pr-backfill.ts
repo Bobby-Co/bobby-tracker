@@ -15,7 +15,7 @@ import {
 } from "@/modules/github"
 import { repoFullName } from "@/modules/github"
 import { upsertIssueComment } from "@/modules/issues"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { upsertPRComment, upsertPullRequest, type PRUpsert } from "./pr-store"
 import { createServiceClient } from "@/lib/supabase/server"
 
@@ -34,13 +34,12 @@ type Creds = { installationId: number; owner: string; repo: string }
 async function resolveCreds(svc: Svc, projectId: string): Promise<Creds | null> {
     const project = await createSupabaseProjectsRepository(svc).findGithubSyncContext(projectId)
     if (!project) return null
-    if (!project.github_sync_enabled || project.github_installation_id == null || project.github_repo_id == null) {
-        return null
-    }
+    if (!Project.of(project).isSyncReady()) return null
     const full = repoFullName(project)
     if (!full) return null
     const [owner, repo] = full.split("/")
-    return { installationId: project.github_installation_id, owner, repo }
+    // isSyncReady() above guarantees the installation id is present.
+    return { installationId: project.github_installation_id!, owner, repo }
 }
 
 function prRowFromRest(pr: GithubPullRequest): PRUpsert {
