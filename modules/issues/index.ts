@@ -6,6 +6,10 @@
 
 export { issueEmbeddingText, routingEmbeddingText } from "./domain/embedding-text"
 
+// ─── Issue aggregate — status lifecycle + GitHub-state mapping ───────────────
+export type { IssueStatusValue, IssueState } from "./domain/issue"
+export { Issue } from "./domain/issue"
+
 // ─── issues repository (Phase 1: inline .from("issues") → repository) ────────
 export type { IssuesRepository } from "./ports/issues-repository"
 export { createSupabaseIssuesRepository } from "./infrastructure/supabase-issues-repository"

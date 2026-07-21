@@ -23,6 +23,8 @@ import {
 import { repoFullName } from "../domain/repo-ref"
 import {
     composeIssueFixPrompt,
+    Issue,
+    type IssueStatusValue,
     countIssueSuggestions,
     findIssueAnalysisRow,
     insertImportedIssue,
@@ -100,23 +102,15 @@ export async function syncHash(
 
 // ─── status ↔ state mappers ─────────────────────────────────────────────────
 
-// statusToState collapses the tracker's status vocabulary onto GitHub's binary
-// open/closed. open/in_progress/blocked → open ; done/archived → closed.
+// The tracker-status ⇄ GitHub open/closed mapping lives on the Issue aggregate
+// (@/modules/issues); these keep the existing call shape. Unmapped statuses stay
+// open, exactly as the old switch defaulted.
 export function statusToState(status: string): "open" | "closed" {
-    switch (status) {
-        case "done":
-        case "archived":
-            return "closed"
-        default:
-            // open / in_progress / blocked (and anything unmapped) stay open.
-            return "open"
-    }
+    return Issue.of({ status: status as IssueStatusValue }).githubState()
 }
 
-// stateToStatus maps a GitHub state back to a tracker status. GitHub only has
-// two states, so closed maps to the canonical terminal status 'done'.
 export function stateToStatus(state: "open" | "closed"): string {
-    return state === "closed" ? "done" : "open"
+    return Issue.statusFromGithubState(state)
 }
 
 // ─── Outbound: create ───────────────────────────────────────────────────────

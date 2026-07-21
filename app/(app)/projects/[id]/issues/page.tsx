@@ -11,6 +11,7 @@ import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues/issues-view-toggle"
 import { SegBar } from "@/components/ui/field-card"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
+import { Issue as IssueEntity } from "@/modules/issues/domain/issue"
 
 export default function IssuesPage() {
     const { id } = useParams<{ id: string }>()
@@ -53,7 +54,7 @@ export default function IssuesPage() {
     // bucket the parent ends up in. "Duplicated" parents shouldn't
     // exist (chain-prevention in the API), so we don't need to
     // bucket them as a separate state.
-    const isClosed = (s: Issue["status"]) => s === "done" || s === "archived" || s === "duplicated"
+    const isClosed = (s: Issue["status"]) => IssueEntity.of({ status: s }).isClosed()
     const open = parentsAll.filter(({ parent }) => !isClosed(parent.status))
     const closed = parentsAll.filter(({ parent }) => isClosed(parent.status))
 

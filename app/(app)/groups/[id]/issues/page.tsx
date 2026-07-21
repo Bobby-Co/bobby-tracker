@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { Issue } from "@/lib/supabase/types"
+import { Issue as IssueEntity } from "@/modules/issues/domain/issue"
 import { IssueList, type ParentRow } from "@/components/issues/issue-list"
 import { IssueTile } from "@/components/issues/issue-tile"
 import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
@@ -67,8 +68,7 @@ export default function GroupIssuesPage() {
         tileClosed: Issue[]
         totalCount: number
     }
-    const isClosed = (s: Issue["status"]) =>
-        s === "done" || s === "archived" || s === "duplicated"
+    const isClosed = (s: Issue["status"]) => IssueEntity.of({ status: s }).isClosed()
     const sections: ProjectSection[] = members.map((m) => {
         const list = issuesByProject.get(m.id) ?? []
         const childrenByParent = new Map<string, Issue[]>()
