@@ -1,31 +1,39 @@
 // Analysis presentation — rendering an analyser run as the markdown body of the
-// bot comment on the linked issue. Moved here from the vcs module: HOW an
-// analysis result reads as a comment is an analysis concern; the vcs module only
-// provides the generic "post/edit a comment" tool (VcsAppService). Pure string
-// building, no I/O. The blob deep-links use the vcs domain's repo helper.
+// bot comment on the linked issue. HOW an analysis result reads as a comment is
+// an analysis concern; the vcs module only provides the generic "post/edit a
+// comment" tool (VcsAppService). Pure string building, no I/O — a cohesive
+// renderer owned by this concept file (only the four body renderers + CommentCtx
+// are the surface; the marker/footer/escaping helpers are internals).
+//
+// blobUrl comes from the vcs domain's pure repo helper via the deep path (not the
+// vcs barrel) so this renderer carries no adapter/SDK dependency.
 
-import type { IssueAnalysis } from "./analyser/issues"
 import { badge, confidenceTone } from "@/lib/rendering/badge"
-import { blobUrl } from "@/modules/vcs"
-import type { Project } from "@/lib/supabase/types"
+import { blobUrl, type RepoRef } from "@/modules/vcs/domain/RepoRef"
+import type { IssueAnalysis } from "../ports/AnalyserTypes"
 
 // Hidden marker so a later pass can find/dedupe Ucelot's own comment.
-export const BOBBY_MARKER = "<!-- bobby:analysis -->"
+const BOBBY_MARKER = "<!-- bobby:analysis -->"
 
-// Context for the footer link back into ucelot.
+/** Context for the footer link back into ucelot. */
 export type CommentCtx = { origin: string; projectId: string; issueId: string }
 
-export function issueLink(ctx: CommentCtx): string {
+function issueLink(ctx: CommentCtx): string {
     return `<a href="${ctx.origin}/projects/${ctx.projectId}/issues/${ctx.issueId}">Open in ucelot ↗</a>`
 }
 
-export function footer(ctx: CommentCtx, extra?: string): string {
+function footer(ctx: CommentCtx, extra?: string): string {
     return `<sub>${issueLink(ctx)}${extra ? ` · ${extra}` : ""}</sub>`
 }
 
 // Small self-hosted brand loader (public/brand_loader.webp), inline.
-export function brandMark(origin: string): string {
+function brandMark(origin: string): string {
     return `<img src="${origin}/brand_loader.webp" width="18" align="middle" alt="Ucelot" />`
+}
+
+// escapeCell keeps a findings-table cell single-line and pipe-safe.
+function escapeCell(s: string): string {
+    return s.replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim()
 }
 
 export function loadingCommentBody(ctx: CommentCtx): string {
@@ -67,20 +75,11 @@ export function failedCommentBody(ctx: CommentCtx): string {
     ].join("\n")
 }
 
-// escapeCell keeps a findings-table cell single-line and pipe-safe.
-export function escapeCell(s: string): string {
-    return s.replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim()
-}
-
 // resultCommentBody renders the result as a compact report: a badge row
 // (confidence + candidate count), a one-line summary blockquote, and a ranked
-// findings table with blob deep-links. Falls back to the analyser's own
-// markdown when it returned no structured suggestions.
-export function resultCommentBody(
-    result: IssueAnalysis,
-    project: Pick<Project, "repo_url" | "repo_full_name">,
-    ctx: CommentCtx,
-): string {
+// findings table with blob deep-links. Falls back to the analyser's own markdown
+// when it returned no structured suggestions.
+export function resultCommentBody(result: IssueAnalysis, project: RepoRef, ctx: CommentCtx): string {
     const out: string[] = [BOBBY_MARKER, "### Ucelot · code analysis", ""]
 
     const badges: string[] = []

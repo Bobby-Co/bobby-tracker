@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import { MindPanel } from "@/components/mind/mind-panel"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
-import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 
 type KnowledgeData = {
     project: Pick<Project, "id" | "repo_url" | "repo_full_name"> | null

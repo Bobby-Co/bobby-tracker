@@ -1,74 +1,55 @@
-// Characterization tests for the auto-analysis flow — the durable analyser
-// lifecycle moved here from the vcs module. Pins the branching that lives only in
-// these functions: one-shot idempotency, the readiness gate, and the comment
-// gating. We mock the leaf boundaries (issue store, repos, getAnalyser, and the
-// vcs comment service) and keep the PURE entities (Project, ProjectAnalyser) real
-// so the real gate rules are exercised.
+// Characterization tests for the auto-analysis service — the durable analyser
+// lifecycle. Pins the branching that lives only in this service: one-shot
+// idempotency, the readiness gate, and the comment gating. The service takes its
+// collaborators by CONSTRUCTOR (DI), so we inject plain mocks for the leaf
+// boundaries (issue store, repos, analyser, and the vcs comment resolver) and keep
+// the PURE entities (Project, ProjectAnalyser) real so the real gate rules run.
 
 import { test, expect, describe, mock, beforeAll, beforeEach } from "bun:test"
 import { Issue as RealIssue } from "@/modules/issues/domain/Issue"
-import { Project as RealProject } from "@/modules/projects/domain/project"
+import { Project as RealProject } from "@/modules/projects/domain/Project"
 
-// ── leaf mocks (stable refs) ──────────────────────────────────────────────────
+// ── injected collaborator mocks (stable refs) ─────────────────────────────────
 const store = {
-    findIssueAnalysisRow: mock(),
-    countIssueSuggestions: mock(),
-    updateIssueSyncFields: mock(),
-    insertIssueSuggestion: mock(),
-    // Not used by this flow, but bun's mock.module is process-global, so this
-    // @/modules/issues mock must carry the full surface other test files rely on.
-    insertImportedIssue: mock(),
-    listLinkedGithubNumbers: mock(),
+    findAnalysisRow: mock(),
+    countSuggestions: mock(),
+    updateSyncFields: mock(),
+    insertSuggestion: mock(),
 }
-const SVC = {}
 const projectsRepo = { findAnalysisContext: mock() }
 const analyserRepo = { findByProjectId: mock(), findGraphId: mock() }
 const analyser = { startIssueAnalysis: mock(), cancelIssueAnalysis: mock() }
-// The vcs comment service the flow now posts through (VcsAppService).
+// The vcs comment service the flow posts through (VcsAppService), via the resolver.
 const vcsSvc = { postComment: mock(), updateComment: mock() }
+const vcsFor = () => vcsSvc
 
-mock.module("@/lib/supabase/server", () => ({ createServiceClient: () => ({}) }))
+// The service imports composeIssueFixPrompt + Project at module load. bun's
+// mock.module is process-global, so these mocks are supersets covering what other
+// test files in the run rely on (composeIssueFixPrompt, the Issue aggregate, the
+// sync-store factory).
 mock.module("@/modules/issues", () => ({
     Issue: RealIssue,
     composeIssueFixPrompt: () => "FIX_PROMPT",
-    upsertIssueComment: mock(),
-    ...store,
-    createServiceIssueSyncStore: () => ({
-        findAnalysisRow: (id: string) => store.findIssueAnalysisRow(SVC, id),
-        listLinkedGithubNumbers: (pid: string) => store.listLinkedGithubNumbers(SVC, pid),
-        updateSyncFields: (id: string, patch: unknown) => store.updateIssueSyncFields(SVC, id, patch),
-        insertImportedIssue: (row: unknown) => store.insertImportedIssue(SVC, row),
-        countSuggestions: (id: string) => store.countIssueSuggestions(SVC, id),
-        insertSuggestion: (row: unknown) => store.insertIssueSuggestion(SVC, row),
-    }),
+    createServiceIssueSyncStore: () => store,
 }))
 mock.module("@/modules/projects", () => ({
     Project: RealProject,
     createSupabaseProjectsRepository: () => projectsRepo,
 }))
-// The comment renderer (issue-analysis-comment) also imports blobUrl from this
-// barrel, so the mock must carry it (mock.module replaces the whole module).
-mock.module("@/modules/vcs", () => ({
-    getVcsAppService: () => vcsSvc,
-    blobUrl: () => null,
-    repoFullName: () => null,
-}))
-// The flow's own-module deps are imported relatively — mock those paths.
-mock.module("../composition", () => ({ getAnalyser: () => analyser }))
-mock.module("./supabase-project-analyser-repository", () => ({
-    createSupabaseProjectAnalyserRepository: () => analyserRepo,
-}))
 
-let flow: typeof import("./issue-analysis-flow")
+let IssueAnalysisService: typeof import("./IssueAnalysisService").IssueAnalysisService
 beforeAll(async () => {
-    flow = await import("./issue-analysis-flow")
+    ;({ IssueAnalysisService } = await import("./IssueAnalysisService"))
 })
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const svc = () => new IssueAnalysisService(analyser as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any)
+
 beforeEach(() => {
-    store.findIssueAnalysisRow.mockReset().mockResolvedValue(null)
-    store.countIssueSuggestions.mockReset().mockResolvedValue(0)
-    store.updateIssueSyncFields.mockReset().mockResolvedValue(undefined)
-    store.insertIssueSuggestion.mockReset().mockResolvedValue(undefined)
+    store.findAnalysisRow.mockReset().mockResolvedValue(null)
+    store.countSuggestions.mockReset().mockResolvedValue(0)
+    store.updateSyncFields.mockReset().mockResolvedValue(undefined)
+    store.insertSuggestion.mockReset().mockResolvedValue(undefined)
     projectsRepo.findAnalysisContext.mockReset().mockResolvedValue(null)
     analyserRepo.findByProjectId.mockReset().mockResolvedValue(null)
     analyserRepo.findGraphId.mockReset().mockResolvedValue("G1")
@@ -104,83 +85,83 @@ const analysisProject = {
 }
 
 // ── auto-analysis kickoff (idempotency + comment gating) ────────────────────────
-describe("ensureAnalysis — one-shot idempotency + gates", () => {
+describe("ensure — one-shot idempotency + gates", () => {
     test("no issue row → 'no_issue' and no run", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(null)
-        expect(await flow.ensureAnalysis("iss-1", "https://app")).toBe("no_issue")
+        store.findAnalysisRow.mockResolvedValue(null)
+        expect(await svc().ensure("iss-1", "https://app")).toBe("no_issue")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
     test("already analysing → 'in_flight', never starts a second run", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue({ ...analysisRow, analysis_status: "analysing" })
-        expect(await flow.ensureAnalysis("iss-1", "https://app")).toBe("in_flight")
+        store.findAnalysisRow.mockResolvedValue({ ...analysisRow, analysis_status: "analysing" })
+        expect(await svc().ensure("iss-1", "https://app")).toBe("in_flight")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
     test("a suggestion already cached → 'done', never re-runs", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(analysisRow)
-        store.countIssueSuggestions.mockResolvedValue(1)
-        expect(await flow.ensureAnalysis("iss-1", "https://app")).toBe("done")
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        store.countSuggestions.mockResolvedValue(1)
+        expect(await svc().ensure("iss-1", "https://app")).toBe("done")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
     test("analyser not indexed → 'not_ready', no run", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(analysisRow)
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
         analyserRepo.findByProjectId.mockResolvedValue({ enabled: true, status: "indexing", graph_id: null })
-        expect(await flow.ensureAnalysis("iss-1", "https://app")).toBe("not_ready")
+        expect(await svc().ensure("iss-1", "https://app")).toBe("not_ready")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
     test("ready + linked → posts placeholder comment via vcs, marks analysing, starts run", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(analysisRow)
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
         analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
         projectsRepo.findAnalysisContext.mockResolvedValue(analysisProject)
 
-        expect(await flow.ensureAnalysis("iss-1", "https://app")).toBe("started")
+        expect(await svc().ensure("iss-1", "https://app")).toBe("started")
         expect(vcsSvc.postComment).toHaveBeenCalledTimes(1)
         // marks in-flight AND records the placeholder comment id it just created
-        const [, , update] = store.updateIssueSyncFields.mock.calls[0]
+        const [, update] = store.updateSyncFields.mock.calls[0]
         expect(update).toMatchObject({ analysis_status: "analysing", github_analysis_comment_id: 5001 })
         expect(analyser.startIssueAnalysis.mock.calls[0][0]).toMatchObject({ repoId: "G1" })
     })
     test("web-only project (no repo link) → still starts, but posts NO comment", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(analysisRow)
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
         analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
         projectsRepo.findAnalysisContext.mockResolvedValue(null)
 
-        expect(await flow.ensureAnalysis("iss-1", "https://app")).toBe("started")
+        expect(await svc().ensure("iss-1", "https://app")).toBe("started")
         expect(vcsSvc.postComment).not.toHaveBeenCalled()
         expect(analyser.startIssueAnalysis).toHaveBeenCalledTimes(1)
     })
 })
 
 // ── analyser callback ───────────────────────────────────────────────────────────
-describe("applyAnalysisResult", () => {
+describe("applyResult", () => {
     const row = { ...analysisRow, github_analysis_comment_id: 5001, analysis_status: "analysing" }
     const result = { markdown: "done", summary: "s", suggestions: [], graph_cites: [], confidence: 0.9, cost_usd: 1, duration_ms: 10 }
 
     test("unknown task id → no-op", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(null)
-        await flow.applyAnalysisResult("nope", "done", result as never, "https://app")
-        expect(store.updateIssueSyncFields).not.toHaveBeenCalled()
+        store.findAnalysisRow.mockResolvedValue(null)
+        await svc().applyResult("nope", "done", result as never, "https://app")
+        expect(store.updateSyncFields).not.toHaveBeenCalled()
     })
     test("done → edits placeholder comment via vcs, records status, caches the suggestion", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(row)
+        store.findAnalysisRow.mockResolvedValue(row)
         projectsRepo.findAnalysisContext.mockResolvedValue(analysisProject)
-        await flow.applyAnalysisResult("iss-1", "done", result as never, "https://app")
+        await svc().applyResult("iss-1", "done", result as never, "https://app")
         expect(vcsSvc.updateComment).toHaveBeenCalledTimes(1)
-        expect(store.updateIssueSyncFields).toHaveBeenCalledWith(expect.anything(), "iss-1", { analysis_status: "done" })
-        expect(store.insertIssueSuggestion).toHaveBeenCalledTimes(1)
+        expect(store.updateSyncFields).toHaveBeenCalledWith("iss-1", { analysis_status: "done" })
+        expect(store.insertSuggestion).toHaveBeenCalledTimes(1)
     })
     test("failed → records status but caches NO suggestion", async () => {
-        store.findIssueAnalysisRow.mockResolvedValue(row)
+        store.findAnalysisRow.mockResolvedValue(row)
         projectsRepo.findAnalysisContext.mockResolvedValue(analysisProject)
-        await flow.applyAnalysisResult("iss-1", "failed", null, "https://app")
-        expect(store.updateIssueSyncFields).toHaveBeenCalledWith(expect.anything(), "iss-1", { analysis_status: "failed" })
-        expect(store.insertIssueSuggestion).not.toHaveBeenCalled()
+        await svc().applyResult("iss-1", "failed", null, "https://app")
+        expect(store.updateSyncFields).toHaveBeenCalledWith("iss-1", { analysis_status: "failed" })
+        expect(store.insertSuggestion).not.toHaveBeenCalled()
     })
 })
 
 // ── cancel ────────────────────────────────────────────────────────────────────
-describe("cancelAnalysis", () => {
+describe("cancel", () => {
     test("delegates to the analyser's cancel", async () => {
-        await flow.cancelAnalysis("iss-1")
+        await svc().cancel("iss-1")
         expect(analyser.cancelIssueAnalysis).toHaveBeenCalledWith("iss-1")
     })
 })

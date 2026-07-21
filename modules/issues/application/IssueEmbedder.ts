@@ -7,7 +7,7 @@
 // Pure application: depends only on the Analyser port + the EmbeddingIndex port;
 // the composition seam below injects the concrete, service-role-backed adapters.
 
-import type { AnalyserPort } from "@/modules/analysis"
+import type { Analyser } from "@/modules/analysis"
 import { getAnalyser } from "@/modules/analysis"
 import type { EmbeddingIndex } from "../ports/EmbeddingIndex"
 import { createServiceEmbeddingIndex } from "../infrastructure/SupabaseEmbeddingIndex"
@@ -24,7 +24,7 @@ export interface EmbeddableIssue {
 
 export class IssueEmbedder {
     constructor(
-        private readonly analyser: AnalyserPort,
+        private readonly analyser: Analyser,
         private readonly index: EmbeddingIndex,
     ) {}
 

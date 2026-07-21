@@ -11,7 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/kernel"
 import type { ProjectAnalyser } from "@/lib/supabase/types"
-import type { AnalyserReadinessRow, ProjectAnalyserRepository } from "../ports/project-analyser-repository"
+import type { AnalyserReadinessRow, ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 
 const READINESS_COLS = "enabled,status,graph_id"
 

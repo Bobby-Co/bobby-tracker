@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { ProjectAnalyser, createSupabaseProjectAnalyserRepository, ensureAnalysis } from "@/modules/analysis"
+import { ProjectAnalyser, createSupabaseProjectAnalyserRepository, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull, RepositoryError } from "@/lib/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
 import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
             // Push first so the issue has its github_issue_number, then start
             // the placeholder-comment + detached analysis run.
             await getVcsAppService(project)?.syncIssueCreated(issue, project)
-            await ensureAnalysis(issue.id, origin)
+            await createIssueAnalysisService().ensure(issue.id, origin)
         })
     }
 

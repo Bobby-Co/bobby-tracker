@@ -1,37 +1,39 @@
-// Analysis module — PUBLIC CONTRACT (see modules/README.md). Grows as analyser
-// gating/orchestration logic migrates in from lib/github-sync.ts and lib/pr-sync.ts.
+// Analysis module — PUBLIC CONTRACT (see modules/README.md). The provider-agnostic
+// bridge to the bobby-analyser service (the Analyser port + HttpAnalyser adapter),
+// the ProjectAnalyser aggregate + repository, and the two analysis-orchestration
+// services (issue auto-analysis + PR review).
 
 // ─── ProjectAnalyser aggregate — analyser readiness + status ─────────────────
 // Readiness is `ProjectAnalyser.from(state).isReady()` — call it directly at the
 // site (it's null-safe); there is no free-function wrapper.
-export type { ProjectAnalyserState, AnalyserStatusValue, AnalyseEffort } from "./domain/project-analyser"
-export { ProjectAnalyser } from "./domain/project-analyser"
+export type { ProjectAnalyserState, AnalyserStatusValue, AnalyseEffort } from "./domain/ProjectAnalyser"
+export { ProjectAnalyser } from "./domain/ProjectAnalyser"
 
-// ─── project_analyser repository (Phase 1: inline .from() → repository) ──────
-export type { AnalyserReadinessRow, ProjectAnalyserRepository } from "./ports/project-analyser-repository"
-export { createSupabaseProjectAnalyserRepository } from "./infrastructure/supabase-project-analyser-repository"
+// ─── project_analyser repository ─────────────────────────────────────────────
+export type { AnalyserReadinessRow, ProjectAnalyserRepository } from "./ports/ProjectAnalyserRepository"
+export { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
 
-// ─── Auto-analysis orchestration (durable, cancellable bot-comment lifecycle) ─
-// Moved in from the vcs module: the analyser-run lifecycle is an analysis
-// concern; the GitHub side is just a comment posted via vcs' VcsAppService.
-export { ensureAnalysis, applyAnalysisResult, cancelAnalysis } from "./infrastructure/issue-analysis-flow"
-export { startPRAnalysis, applyPRResult, cancelPRAnalysisForPR } from "./infrastructure/pr-analysis-flow"
-export type { PRInput } from "./infrastructure/pr-analysis-flow"
+// ─── analysis-orchestration services (durable, cancellable bot-comment lifecycle)
+// The analyser-run lifecycle is an analysis concern; the GitHub side is just a
+// comment posted via the vcs module's VcsAppService. Callers obtain a service via
+// its composition factory and call ensure/applyResult/cancel (issues) or
+// start/applyResult/cancel (PRs).
+export { IssueAnalysisService } from "./infrastructure/IssueAnalysisService"
+export { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysisService"
+export type { PRInput, PRProject } from "./infrastructure/PullRequestAnalysisService"
+export { createIssueAnalysisService, createPullRequestAnalysisService } from "./Composition"
 
-// ─── The analyser port + its composition seam ───────────────────────────────
-// Callers depend on the AnalyserPort interface and obtain an implementation via
-// getAnalyser(); they must NOT import the analyser adapter's functions directly.
-export type { AnalyserPort, AnalyserRunCallback, DeepDiveResult } from "./ports/analyser-port"
-export { getAnalyser } from "./composition"
+// ─── the analyser port + its composition seam ───────────────────────────────
+// Callers depend on the Analyser interface and obtain an implementation via
+// getAnalyser(); they must NOT import the HTTP adapter directly.
+export type { Analyser } from "./ports/Analyser"
+export { getAnalyser } from "./Composition"
 
-// ─── Re-exported analyser surface ───────────────────────────────────────────
-// So a call site gets its whole analyser dependency from this module contract
-// rather than reaching into the analyser adapter (infrastructure/analyser): the
-// error class and the wire DTOs. (Effort validity + value set live on the
-// ProjectAnalyser aggregate above; transport-only WS types — JobSpec/JobResult —
-// are intentionally excluded: they belong to the CLI-only runJob path.)
-export { AnalyserError } from "./infrastructure/analyser"
+// ─── the analyser wire contract (DTOs + error + callback shapes) ─────────────
+export { AnalyserError } from "./ports/AnalyserTypes"
 export type {
+    AnalyserRunCallback,
+    DeepDiveResult,
     QueryResult,
     ChatResult,
     ChatCitation,
@@ -58,4 +60,4 @@ export type {
     IssuePreferences,
     KickoffJobInput,
     KickoffResult,
-} from "./infrastructure/analyser"
+} from "./ports/AnalyserTypes"

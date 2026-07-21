@@ -8,7 +8,7 @@ import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-ef
 import { VerifyPanel } from "@/components/projects/verify-panel"
 import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
-import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 
 // Knowledge tab — single home for everything that drives the project's
 // analyser-backed knowledge graph: indexing controls (AnalyserPanel) +

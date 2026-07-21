@@ -1,6 +1,6 @@
 import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
 import { tryOrNull } from "@/lib/kernel"
-import { ensureAnalysis } from "@/modules/analysis"
+import { createIssueAnalysisService } from "@/modules/analysis"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 export const dynamic = "force-dynamic"
@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const ownedProjectId = await tryOrNull(() => issues.findProjectId(id))
     if (!ownedProjectId) return jsonError("not_found", "issue not found", 404)
 
-    const status = await ensureAnalysis(id, new URL(request.url).origin)
+    const status = await createIssueAnalysisService().ensure(id, new URL(request.url).origin)
     if (status === "not_ready") {
         return jsonError(
             "needs_indexing",

@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { ProjectAnalyser } from "./project-analyser"
+import { ProjectAnalyser } from "./ProjectAnalyser"
 
 const ready = { enabled: true, status: "ready", graph_id: "g1" }
 

@@ -1,8 +1,8 @@
 import { after } from "next/server"
-import { createSupabaseProjectAnalyserRepository, getAnalyser, cancelAnalysis, ensureAnalysis } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, getAnalyser, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
 import { getWebhookVerifier, syncHash } from "@/modules/vcs"
-import { cancelPRAnalysisForPR, startPRAnalysis } from "@/modules/analysis"
+import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
 import { createServicePullRequestStore } from "@/modules/vcs"
@@ -262,7 +262,7 @@ async function handleIssue(
         // Closing the issue cancels any in-flight analysis — the analyser then
         // reports 'cancelled' via the callback and the placeholder is updated.
         if (action === "closed") {
-            after(() => cancelAnalysis(existing.id))
+            after(() => createIssueAnalysisService().cancel(existing.id))
         }
     } else {
         // First time we see this GitHub issue — insert under the project
@@ -283,7 +283,7 @@ async function handleIssue(
         // "analysing…" placeholder + start the detached analyser run (no-ops
         // silently when the graph isn't indexed). Off the 202 ack path.
         if (action === "opened" && inserted) {
-            after(() => ensureAnalysis(inserted.id, origin))
+            after(() => createIssueAnalysisService().ensure(inserted.id, origin))
         }
 
         // (8b) …and gets embedded, so it joins the similarity corpus like an
@@ -395,14 +395,14 @@ async function handlePullRequest(
 
     // Closing a PR cancels any in-flight review (state already mirrored above).
     if (action === "closed") {
-        after(() => cancelPRAnalysisForPR(project.id, number))
+        after(() => createPullRequestAnalysisService().cancel(project.id, number))
         return ack()
     }
 
     // opened | reopened | synchronize → review. Skip drafts (still mirrored).
     if (pr?.draft) return ack()
     after(() =>
-        startPRAnalysis(
+        createPullRequestAnalysisService().start(
             project,
             {
                 number,

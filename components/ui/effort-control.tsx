@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "@/components/ui/cn"
-import { ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis/domain/project-analyser"
+import { ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis/domain/ProjectAnalyser"
 
 // Short labels under the slider.
 const EFFORT_LABEL: Record<AnalyseEffort, string> = {

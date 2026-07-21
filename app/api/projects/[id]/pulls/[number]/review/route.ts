@@ -1,6 +1,6 @@
 import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { startPRAnalysis } from "@/modules/analysis"
+import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { PullRequest as PullRequestEntity } from "@/modules/vcs"
 import { repoFullName } from "@/modules/vcs"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
@@ -102,7 +102,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Await it: the analyser run is detached, so what we're waiting on is the
         // diff fetch + loading-comment post + the tracking-row upsert. When this
         // resolves the row is 'analysing' (or the kickoff genuinely failed).
-        await startPRAnalysis(
+        await createPullRequestAnalysisService().start(
             project,
             {
                 number: prNumber,

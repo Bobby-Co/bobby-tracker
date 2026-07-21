@@ -4,7 +4,7 @@
 // (both directions). Type-only: no runtime output.
 
 import type { AnalyserStatus } from "@/lib/supabase/types"
-import type { AnalyserStatusValue } from "../domain/project-analyser"
+import type { AnalyserStatusValue } from "../domain/ProjectAnalyser"
 
 /** Errors unless `Sub` is assignable to `Sup`. */
 type Assignable<Sub extends Sup, Sup> = Sub

@@ -1,15 +1,9 @@
-// Analysis module — the ANALYSER PORT. This is the interface the app depends on
-// to talk to the external bobby-analyser microservice; the concrete HTTP/WS
-// client lives in ../infrastructure and is wired at ./composition. Callers
-// obtain an implementation through getAnalyser() (see modules/analysis) and never
-// import the concrete client directly — that seam is what lets a future host
-// inject a different transport (in-proc → HTTP/RPC) when Analysis is extracted as
-// its own service (see modules/README.md).
-//
-// This file is in ports/ (not domain/ or application/), so — like
-// modules/projects/ports/projects-repository.ts referencing the DB row type — it
-// may TYPE-import the analyser wire DTOs from the analyser adapter (infrastructure/analyser). No client or SDK is
-// imported here; the concrete transport stays in infrastructure.
+// Analysis module — the ANALYSER PORT (role name; was AnalyserPort). The interface
+// the app depends on to talk to the external bobby-analyser microservice; the
+// concrete HTTP transport lives in ../infrastructure/HttpAnalyser and is wired at
+// ../Composition. Callers obtain an implementation through getAnalyser() and never
+// construct the adapter directly — that seam is what lets a future host inject a
+// different transport (in-proc → HTTP/RPC) when Analysis is extracted.
 
 import type {
     QueryResult,
@@ -26,31 +20,14 @@ import type {
     VerifyReport,
     KickoffJobInput,
     KickoffResult,
-} from "../infrastructure/analyser"
+    AnalyserRunCallback,
+    DeepDiveResult,
+} from "./AnalyserTypes"
 
-/** Where a detached run POSTs its terminal result. `token` (when set) is sent as
- *  `Authorization: Bearer <token>` on the callback. */
-export interface AnalyserRunCallback {
-    url: string
-    token?: string
-}
-
-/** What deepDivePRInsight materialises: a fresh chat conversation seeded with the
- *  stored PR insight's context (analyser ADR-0055). */
-export interface DeepDiveResult {
-    conversation_id: string
-    repo_id?: string
-    project_id?: string
-    pr_number?: number
-    pr_title?: string
-}
-
-/** The tracker's outbound contract to the bobby-analyser service. One behavioural
- *  note per method mirrors the adapter's semantics: methods reject with
- *  AnalyserError on transport/protocol failure; the cancel/*  methods are
- *  best-effort and resolve even on an unknown task. The WebSocket `runJob` path
- *  (CLI-only, unused by the app) is deliberately NOT part of this port. */
-export interface AnalyserPort {
+/** The tracker's outbound contract to the bobby-analyser service. Methods reject
+ *  with AnalyserError on transport/protocol failure; the cancel/* methods are
+ *  best-effort and resolve even on an unknown task. */
+export interface Analyser {
     // ─── /query — one-shot Q&A against an indexed graph ──────────────────────
     query(repoId: string, question: string, maxBudgetUsd?: number): Promise<QueryResult>
 
