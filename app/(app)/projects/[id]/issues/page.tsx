@@ -11,6 +11,8 @@ import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
 import { IssuesViewToggle, type IssuesView } from "@/components/issues/issues-view-toggle"
 import { SegBar } from "@/components/ui/field-card"
 import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
+import { isAnalyserReady } from "@/modules/analysis/domain/analyser-readiness"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
 import { Issue as IssueEntity } from "@/modules/issues/domain/issue"
 
 export default function IssuesPage() {
@@ -64,7 +66,7 @@ export default function IssuesPage() {
     // suggestion / ask flows can't cite anything. Block creation;
     // direct the user to the Knowledge tab.
     const ready =
-        !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
+        isAnalyserReady(analyser)
 
     if (loading) {
         return (
@@ -174,9 +176,9 @@ function KnowledgeRequiredBanner({
 }) {
     const status = state?.status ?? "disabled"
     let message = "Enable the analyser and run the first index before creating issues."
-    if (status === "indexing") {
+    if (ProjectAnalyserModel.of({ status }).isIndexing()) {
         message = "Indexing is in progress — issues will unlock when the first graph is ready."
-    } else if (status === "failed") {
+    } else if (ProjectAnalyserModel.of({ status }).hasFailed()) {
         message = "The last indexing run failed. Re-index from the Knowledge tab to unlock issues."
     } else if (state?.enabled && !state?.graph_id) {
         message = "Run the first index on the Knowledge tab before creating issues."

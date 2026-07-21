@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
 import { useApi } from "@/lib/hooks/use-api"
 import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/project-analyser"
 import { ProjectTabs } from "@/components/projects/project-tabs"
 import { ProjectActivityChips } from "@/components/projects/project-activity-chips"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
@@ -81,7 +82,7 @@ function useSetupGate(id: string, exempt: boolean) {
     useEffect(() => {
         if (exempt || loading || !data) return
         const status = data.analyser?.status
-        const started = status === "indexing" || status === "ready" || status === "failed"
+        const started = ProjectAnalyserModel.of({ status }).hasStarted()
         if (!started) router.replace(`/projects/${id}/setup`)
     }, [exempt, loading, data, id, router])
 }

@@ -6,11 +6,13 @@
 //
 // Pure domain: no I/O, no framework, no SDK.
 
+import { ProjectAnalyser } from "./project-analyser"
+
 /** Readiness shape common to the callers' analyser rows. */
 type AnalyserReadiness = {
-    enabled: boolean | null
-    status: string | null
-    graph_id: string | null
+    enabled?: boolean | null
+    status?: string | null
+    graph_id?: string | null
 }
 
 /** True when the analyser is enabled, indexed ("ready"), and has a graph to run
@@ -23,5 +25,7 @@ type AnalyserReadiness = {
 export function isAnalyserReady<T extends AnalyserReadiness>(
     a: T | null | undefined,
 ): a is T & { graph_id: string } {
-    return !!a?.enabled && a.status === "ready" && !!a.graph_id
+    // Delegates to the ProjectAnalyser aggregate (single source of the rule); the
+    // type-guard NARROWING is preserved by this signature.
+    return ProjectAnalyser.from(a).isReady()
 }

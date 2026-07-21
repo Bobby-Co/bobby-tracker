@@ -3,6 +3,10 @@
 
 export { isAnalyserReady } from "./domain/analyser-readiness"
 
+// ─── ProjectAnalyser aggregate — analyser readiness + status ─────────────────
+export type { ProjectAnalyserState, AnalyserStatusValue } from "./domain/project-analyser"
+export { ProjectAnalyser } from "./domain/project-analyser"
+
 // ─── project_analyser repository (Phase 1: inline .from() → repository) ──────
 export type { AnalyserReadinessRow, ProjectAnalyserRepository } from "./ports/project-analyser-repository"
 export { createSupabaseProjectAnalyserRepository } from "./infrastructure/supabase-project-analyser-repository"

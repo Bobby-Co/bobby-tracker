@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { AnalyserError, getAnalyser, isAnalyserReady } from "@/modules/analysis"
 import { routingEmbeddingText } from "@/modules/issues"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const a = (analyser && typeof analyser === "object")
             ? analyser as { status?: string; enabled?: boolean; graph_id?: string | null }
             : null
-        const ready = !!a && a.enabled === true && a.status === "ready" && !!a.graph_id
+        const ready = isAnalyserReady(a)
         members.push({ id: p.id, name: p.name, analyser_ready: ready })
     }
     const projectIds = members.map((m) => m.id)

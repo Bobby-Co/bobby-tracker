@@ -1,5 +1,6 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import type { Issue, ProjectAnalyser, ProjectGroup } from "@/lib/supabase/types"
+import { isAnalyserReady } from "@/modules/analysis"
 
 // GET — cross-project issue feed for a group's Issues tab. Returns the
 // group's identity, its member projects (with analyser readiness +
@@ -49,7 +50,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         members.push({
             id: p.id,
             name: p.name,
-            analyser_ready: !!a && a.enabled === true && a.status === "ready" && !!a.graph_id,
+            analyser_ready: isAnalyserReady(a),
             has_summary: !!a && a.summary_overview_embedding != null,
         })
     }
