@@ -7,6 +7,10 @@
 export type { PublicListedIssue, PublicParentRow, PublicReporterGroup } from "./domain/public-reporter"
 export { reporterDisplay, groupByParent, groupParentsByReporter } from "./domain/public-reporter"
 
+// PublicSession aggregate — open-window + access rules
+export type { PublicSessionState } from "./domain/session"
+export { PublicSession } from "./domain/session"
+
 // Session / invite resolution + access gates
 export type { ResolvedPublicSession, InviteCheck } from "./infrastructure/public-session"
 export {

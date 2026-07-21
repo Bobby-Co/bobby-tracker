@@ -9,6 +9,7 @@ import { jsonError } from "@/lib/platform/http/api"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseTeamMembershipRepository } from "@/modules/teams"
 import { tryOrNull } from "@/lib/kernel"
+import { PublicSession as PublicSessionEntity } from "../domain/session"
 import { createServiceClient, getCurrentUser } from "@/lib/supabase/server"
 import type {
     Issue,
@@ -57,11 +58,12 @@ export async function resolvePublicSession(
     if (!data) return { session: null, error: jsonError("not_found", "this submission link is invalid", 404) }
     if (!data.enabled) return { session: null, error: jsonError("not_found", "this submission link is inactive", 404) }
     if (opts.requireOpen) {
+        const session = PublicSessionEntity.of(data)
         const now = Date.now()
-        if (data.start_at && Date.parse(data.start_at) > now) {
+        if (session.isBeforeStart(now)) {
             return { session: null, error: jsonError("window_closed", "submissions haven't opened yet", 403) }
         }
-        if (data.end_at && Date.parse(data.end_at) <= now) {
+        if (session.isAfterEnd(now)) {
             return { session: null, error: jsonError("window_closed", "submissions are closed", 403) }
         }
     }
@@ -163,7 +165,7 @@ export async function requireOwnVisibility(
     session: Pick<ResolvedPublicSession, "submissions_visibility">,
     issueId: string,
 ): Promise<Response | null> {
-    if (session.submissions_visibility !== "own") return null
+    if (!PublicSessionEntity.of(session).showsOwnSubmissionsOnly()) return null
     const visitor = await getCurrentPublicUser()
     if (!visitor) return null
     const rep = await getIssueReporter(svc, issueId)
@@ -180,7 +182,7 @@ export async function requireOwnVisibility(
 export async function checkInviteAccess(
     session: Pick<ResolvedPublicSession, "id" | "access_mode">,
 ): Promise<InviteCheck> {
-    if (session.access_mode === "link") return { ok: true, email: null }
+    if (PublicSessionEntity.of(session).isLinkAccess()) return { ok: true, email: null }
 
     const user = await getCurrentPublicUser()
     if (!user) return { ok: false, reason: "unauthenticated" }
