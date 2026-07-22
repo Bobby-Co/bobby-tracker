@@ -1,6 +1,5 @@
 import { after } from "next/server"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { createIssueEmbedder } from "@/modules/issues"
 
 // How many issues one sweep embeds. Small on purpose: this runs in the request's
@@ -36,24 +35,18 @@ export interface ProjectActivity {
 // returns first — schedules no sweep on their behalf.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     // Confirm the caller actually owns this project BEFORE scheduling any work
     // for it. RLS would hide the rows anyway, but the sweep runs service-role
     // (it has to — it writes embeddings), so it would happily embed a stranger's
     // backlog if we let an unowned id reach it. Cheap gate, real teeth.
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", id)
-        .maybeSingle<{ id: string }>()
-    if (pErr) return jsonError("db_error", pErr.message, 500)
-    if (!project) return jsonError("not_found", "project not found", 404)
+    const { data: pid, error: pErr } = await repoRead(() => ctx.projects.findId(id))
+    if (pErr) return pErr
+    if (!pid) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await repoRead(() =>
-        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id),
-    )
+    const { data: analyser, error: aErr } = await repoRead(() => ctx.analyser.findByProjectId(id))
     if (aErr) return aErr
 
     const embedder = createIssueEmbedder()

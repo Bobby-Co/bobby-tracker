@@ -4,6 +4,7 @@
 // on. The same token + `repo`-scope gate that /api/github/repos uses
 // (tracker.github_tokens, migration 0031).
 
+import { RepositoryError } from "@/lib/shared/kernel"
 import type { SupabaseRlsClient } from "@/lib/server/supabase"
 import type { GithubToken } from "@/lib/shared/types"
 
@@ -17,6 +18,11 @@ export interface GithubTokenRepository {
     /** The user's personal token + login, or null when they haven't connected
      *  GitHub with the `repo` scope (same policy as the repos route). */
     find(userId: string): Promise<UserGithub | null>
+
+    /** The raw access_token + scopes (no scope gate applied), or null when there's
+     *  no row — the repos route distinguishes "not connected" from "scope
+     *  downgraded" itself. THROWS RepositoryError on a query failure. */
+    findAccess(userId: string): Promise<Pick<GithubToken, "access_token" | "scopes"> | null>
 }
 
 /** The Supabase adapter, bound to a request's client. Construct via the factory. */
@@ -32,6 +38,16 @@ export class SupabaseGithubTokenRepository implements GithubTokenRepository {
         if (!data?.access_token) return null
         if (data.scopes && !data.scopes.split(/[,\s]+/).includes("repo")) return null
         return { token: data.access_token, login: data.provider_login ?? null }
+    }
+
+    async findAccess(userId: string): Promise<Pick<GithubToken, "access_token" | "scopes"> | null> {
+        const { data, error } = await this.db
+            .from("github_tokens")
+            .select("access_token,scopes")
+            .eq("user_id", userId)
+            .maybeSingle<Pick<GithubToken, "access_token" | "scopes">>()
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return data ?? null
     }
 }
 

@@ -1,11 +1,11 @@
-import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
+import { getAnalyser } from "@/modules/analysis"
+import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
-import { getAccessService, Role } from "@/modules/access"
+import { Role } from "@/modules/access"
+import type { ProjectPatch } from "@/modules/projects"
 import { findIcon } from "@/lib/shared/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
 import { Supabase } from "@/lib/server/supabase"
-import type { Project } from "@/lib/shared/types"
 
 // Same gate as the label-icons route: only slugs the renderer can actually draw
 // (the 361-icon catalog, or a legacy path-based icon) are allowed to be stored.
@@ -19,32 +19,28 @@ function isKnownIconName(name: string): boolean {
 // (returns 404, not 403, so we don't reveal the project exists).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const access = await getAccessService(supabase).canAccessProject(user.id, id)
+    const access = await ctx.access.canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
-    const { data, error: dbErr } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle<Project>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.projects.findFull(id))
+    if (dbErr) return dbErr
     return Response.json({ project: data })
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
     // Renaming/reconfiguring a project is an admin action within its team.
-    const access = await getAccessService(supabase).canAccessProject(user.id, id)
+    const access = await ctx.access.canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
     if (!Role.of(access.role).atLeast("admin")) return forbidden("only team admins can edit a project")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const allowed: Record<string, unknown> = {}
+    const allowed: ProjectPatch = {}
     if (typeof body.name === "string") allowed.name = body.name.trim()
     if (typeof body.description === "string") allowed.description = body.description
     if (typeof body.repo_url === "string") allowed.repo_url = body.repo_url.trim()
@@ -59,13 +55,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (Object.keys(allowed).length === 0) return jsonError("bad_request", "no fields to update", 400)
 
-    const { data, error: dbErr } = await supabase
-        .from("projects")
-        .update(allowed)
-        .eq("id", id)
-        .select("*")
-        .single<Project>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.projects.update(id, allowed))
+    if (dbErr) return dbErr
     return Response.json({ project: data })
 }
 
@@ -85,21 +76,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 //      the user shouldn't be blocked by an unreachable analyser.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
     // Deleting a project (and its knowledge graph) is an admin action.
-    const access = await getAccessService(supabase).canAccessProject(user.id, id)
+    const access = await ctx.access.canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
     if (!Role.of(access.role).atLeast("admin")) return forbidden("only team admins can delete a project")
 
     // Fail-safe: a query error folds to null → skip the (best-effort) graph
     // teardown, exactly as the old inline read (which ignored the error) did.
-    const graphId = await tryOrNull(() =>
-        createSupabaseProjectAnalyserRepository(supabase).findGraphId(id),
-    )
+    const graphId = await tryOrNull(() => ctx.analyser.findGraphId(id))
 
-    const { error: dbErr } = await supabase.from("projects").delete().eq("id", id)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.projects.delete(id))
+    if (dbErr) return dbErr
 
     if (graphId) {
         try {

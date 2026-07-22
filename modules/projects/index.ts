@@ -2,7 +2,17 @@
 // here, never the module internals (ports/ or infrastructure/ directly). As the
 // module grows this barrel exposes its commands, queries, and events.
 
-export type { GithubSyncContext, ProjectSimilarity, ProjectsRepository } from "./ports/ProjectsRepository"
+export type {
+    GithubSyncContext,
+    GithubSyncSettings,
+    GithubSyncPatch,
+    GithubLink,
+    NewProject,
+    ProjectPatch,
+    ProjectCreateResult,
+    ProjectSimilarity,
+    ProjectsRepository,
+} from "./ports/ProjectsRepository"
 export { createSupabaseProjectsRepository } from "./infrastructure/SupabaseProjectsRepository"
 
 // Per-project display settings (label icons + status colours)

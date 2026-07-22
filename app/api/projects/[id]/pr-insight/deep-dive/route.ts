@@ -1,6 +1,6 @@
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import type { Project } from "@/lib/shared/types"
+import { tryOrNull } from "@/lib/shared/kernel"
 
 // POST /api/projects/[id]/pr-insight/deep-dive
 //
@@ -12,7 +12,7 @@ import type { Project } from "@/lib/shared/types"
 // Body: { insight_id: string }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}
@@ -23,12 +23,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!insightId) return jsonError("bad_request", "insight_id is required", 400)
 
     // Ownership: the caller must be able to see this project (RLS scopes the row).
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", id)
-        .single<Pick<Project, "id">>()
-    if (pErr || !project) return jsonError("not_found", "project not found", 404)
+    const pid = await tryOrNull(() => ctx.projects.findId(id))
+    if (!pid) return jsonError("not_found", "project not found", 404)
 
     try {
         const { conversation_id, pr_number, pr_title } = await getAnalyser().deepDivePRInsight(insightId)

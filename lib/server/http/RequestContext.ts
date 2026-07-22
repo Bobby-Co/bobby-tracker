@@ -88,10 +88,10 @@ export class RequestContext {
         return createSupabaseNotificationFeedRepository(this.db)
     }
 
-    /** TRANSITIONAL escape hatch — the raw RLS client for routes not yet migrated
-     *  to the repositories above. Every use is a data-access leak at the route
-     *  layer; this getter is removed once none remain, after which the DB client
-     *  never leaves this file or the module adapters. */
+    /** The raw RLS client — the last remaining escape hatch, used ONLY where a
+     *  collaborator still takes a DB handle rather than a repository: the vcs
+     *  CommentActions gate (comment-authoring routes). No route does raw `.from()`
+     *  on it. Decoupling CommentActions retires this. */
     get client(): SupabaseRlsClient {
         return this.db
     }

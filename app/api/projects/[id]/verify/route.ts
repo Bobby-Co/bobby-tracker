@@ -1,7 +1,6 @@
-import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { RepositoryError } from "@/lib/shared/kernel"
-import type { Project } from "@/lib/shared/types"
+import { RepositoryError, tryOrNull } from "@/lib/shared/kernel"
 
 // POST /api/projects/[id]/verify
 //
@@ -14,23 +13,17 @@ import type { Project } from "@/lib/shared/types"
 // isn't ready.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch {}
     const gitToken = typeof body?.git_token === "string" && body.git_token ? body.git_token : undefined
 
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .single<Project>()
-    if (pErr || !project) return jsonError("not_found", "project not found", 404)
+    const project = await tryOrNull(() => ctx.projects.findFull(id))
+    if (!project) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await repoRead(() =>
-        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id),
-    )
+    const { data: analyser, error: aErr } = await repoRead(() => ctx.analyser.findByProjectId(id))
     if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
@@ -59,11 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Best-effort: a Supabase failure here doesn't fail the response
         // (the report is still returned to the client this round-trip).
         try {
-            await createSupabaseProjectAnalyserRepository(supabase).saveHealthReport(
-                id,
-                report,
-                new Date().toISOString(),
-            )
+            await ctx.analyser.saveHealthReport(id, report, new Date().toISOString())
         } catch (e) {
             if (!(e instanceof RepositoryError)) throw e
             console.warn("verify: persist failed:", e.message)

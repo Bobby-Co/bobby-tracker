@@ -1,8 +1,8 @@
 import { after } from "next/server"
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { importExistingIssues } from "@/modules/vcs"
 import { GITHUB_SYNC_DIRECTIONS } from "@/lib/shared/types"
-import type { Project } from "@/lib/shared/types"
+import type { GithubSyncPatch } from "@/modules/projects"
 
 // POST /api/projects/[id]/github-sync — update the GitHub sync settings. Any of
 // { enabled, direction, deletes } may be supplied; at least one is required.
@@ -11,7 +11,7 @@ import type { Project } from "@/lib/shared/types"
 // project_analyser.enabled — sync and indexing are orthogonal.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const body = (await request.json().catch(() => null)) as {
@@ -20,7 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         deletes?: unknown
     } | null
 
-    const patch: Record<string, unknown> = {}
+    const patch: GithubSyncPatch = {}
     if (typeof body?.enabled === "boolean") patch.github_sync_enabled = body.enabled
     if (
         typeof body?.direction === "string" &&
@@ -37,25 +37,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
 
-    const { data, error: dbErr } = await supabase
-        .from("projects")
-        .update(patch)
-        .eq("id", id)
-        .select(
-            "id,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes",
-        )
-        .single<
-            Pick<
-                Project,
-                | "id"
-                | "github_installation_id"
-                | "github_repo_id"
-                | "github_sync_enabled"
-                | "github_sync_direction"
-                | "github_sync_deletes"
-            >
-        >()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.projects.updateSyncSettings(id, patch))
+    if (dbErr) return dbErr
 
     // When the user turns sync on (or points the direction inbound), pull the
     // repo's existing issues in automatically — the backfill they'd otherwise

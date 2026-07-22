@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
 import { ApiContext } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { Supabase } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
-import type { Project } from "@/lib/shared/types"
 
 // GET /api/github/app/callback — GitHub sends the user here after they install
 // (or reconfigure) the "Bobby" App, appending:
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     }
 
     try {
-        const { supabase, user, error } = await new ApiContext().requireUser()
+        const { ctx, user, error } = await new ApiContext().requireUser()
         // No session (e.g. the cookie wasn't sent on the return): send the user
         // through login and back here (mirrors the /login?next= convention).
         if (error || !user) {
@@ -83,11 +83,7 @@ export async function GET(request: Request) {
         if (!projectId) return back("connected")
 
         // Load the project (RLS-scoped: caller must own it).
-        const { data: project } = await supabase
-            .from("projects")
-            .select("id,repo_url,repo_full_name")
-            .eq("id", projectId)
-            .single<Pick<Project, "id" | "repo_url" | "repo_full_name">>()
+        const project = await tryOrNull(() => ctx.projects.findRepoRef(projectId))
         if (!project) return back("error")
 
         // Match the project's repo against the installation's repositories.
@@ -108,14 +104,7 @@ export async function GET(request: Request) {
         if (!match) return back("error")
 
         // Link the project and turn sync on. Cookie client → RLS confirms ownership.
-        await supabase
-            .from("projects")
-            .update({
-                github_installation_id: installationId,
-                github_repo_id: match.id,
-                github_sync_enabled: true,
-            })
-            .eq("id", projectId)
+        await ctx.projects.linkGithub(projectId, installationId, match.id)
 
         return back("connected")
     } catch {

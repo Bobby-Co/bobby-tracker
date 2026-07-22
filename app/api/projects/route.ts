@@ -1,11 +1,10 @@
 import { after } from "next/server"
-import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { getAccessService } from "@/modules/access"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/shared/icons/suggest"
 import { canonicalRepoUrl, validateRepoUrl } from "@/lib/shared/repo-url"
 import { Supabase } from "@/lib/server/supabase"
-import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/shared/types"
 
 // GET — list the ACTIVE TEAM's projects, newest first. Backs the app sidebar and
 // the /projects grid. Coarse RLS already scopes rows to teams the caller belongs
@@ -17,46 +16,30 @@ import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/shared/t
 // tile footers from the same round-trip. The sidebar calls the plain form and
 // pays nothing for stats it never shows.
 export async function GET(request: Request) {
-    const { supabase, user, teamId, role, error } = await new ApiContext(request).requireTeam()
+    const { ctx, user, teamId, role, error } = await new ApiContext(request).requireTeam()
     if (error) return error
 
     const withStats = new URL(request.url).searchParams.get("stats") === "1"
 
-    const accessible = await getAccessService(supabase).accessibleProjectIds(teamId, user.id, role)
+    const accessible = await ctx.access.accessibleProjectIds(teamId, user.id, role)
     // A member with no group grants sees nothing — short-circuit the query.
     if (Array.isArray(accessible) && accessible.length === 0) {
         return Response.json({ projects: [] })
     }
 
-    let query = supabase
-        .from("projects")
-        .select(withStats ? "*, project_insight(*)" : "*")
-        .eq("team_id", teamId)
-        .order("updated_at", { ascending: false })
-    if (accessible !== "all") query = query.in("id", accessible)
-
-    const { data, error: dbErr } = await query
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-
     if (!withStats) {
-        return Response.json({ projects: (data ?? []) as unknown as Project[] })
+        const { data: projects, error: dbErr } = await repoRead(() => ctx.projects.listForTeam(teamId, accessible))
+        if (dbErr) return dbErr
+        return Response.json({ projects })
     }
 
-    // PostgREST returns a one-to-one embed as an object (project_insight.project_id
-    // is both PK and FK), but falls back to an array when it can't prove
-    // uniqueness — normalise both, same defensive unwrap as app/api/groups/route.ts.
-    const projects: ProjectWithInsight[] = (data ?? []).map((row) => {
-        const { project_insight, ...project } = row as unknown as Project & {
-            project_insight: ProjectInsight | ProjectInsight[] | null
-        }
-        const insight = Array.isArray(project_insight) ? project_insight[0] ?? null : project_insight ?? null
-        return { ...project, insight }
-    })
+    const { data: projects, error: dbErr } = await repoRead(() => ctx.projects.listForTeamWithInsight(teamId, accessible))
+    if (dbErr) return dbErr
     return Response.json({ projects })
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, teamId, role, error } = await new ApiContext(request).requireTeam()
+    const { ctx, user, teamId, role, error } = await new ApiContext(request).requireTeam()
     if (error) return error
     // Adding a project to a team is an admin action. In a personal team the sole
     // member is the owner, so this is transparent for solo use.
@@ -93,8 +76,8 @@ export async function POST(request: Request) {
     // constraint (0052) only catches an EXACT string match, so we also compare by
     // canonical URL and by repo_full_name case-insensitively (a repo's real
     // identity). Scope the select to the active team.
-    const { data: mine } = await supabase.from("projects").select("repo_url,repo_full_name").eq("team_id", teamId)
-    const already = (mine ?? []).some((p) => {
+    const mine = (await tryOrNull(() => ctx.projects.listRepoRefsForTeam(teamId))) ?? []
+    const already = mine.some((p) => {
         if (canonicalRepoUrl(p.repo_url).toLowerCase() === canonical_url.toLowerCase()) return true
         if (repo_full_name && p.repo_full_name && p.repo_full_name.toLowerCase() === repo_full_name.toLowerCase()) return true
         return false
@@ -103,16 +86,13 @@ export async function POST(request: Request) {
         return jsonError("conflict", "This team already has a project for this repository.", 409)
     }
 
-    const { data: project, error: dbErr } = await supabase
-        .from("projects")
-        .insert({ team_id: teamId, user_id: user.id, name, repo_url: canonical_url, repo_full_name, description })
-        .select("*")
-        .single<Project>()
-    if (dbErr) {
-        // Backstop for the pre-check race — the unique(team_id, repo_url) index.
-        if (dbErr.code === "23505") return jsonError("conflict", "This team already has a project for this repository.", 409)
-        return jsonError("db_error", dbErr.message, 500)
-    }
+    const { data: result, error: dbErr } = await repoRead(() =>
+        ctx.projects.create({ team_id: teamId, user_id: user.id, name, repo_url: canonical_url, repo_full_name, description }),
+    )
+    if (dbErr) return dbErr
+    // Backstop for the pre-check race — the unique(team_id, repo_url) index.
+    if (!result.ok) return jsonError("conflict", "This team already has a project for this repository.", 409)
+    const project = result.project
 
     // Auto-assign the top suggested icon so a fresh project isn't a faceless
     // hash glyph. Post-response (after()) since it may embed — creation must not

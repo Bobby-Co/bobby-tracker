@@ -1,6 +1,6 @@
-import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, type ChatHistoryMessage } from "@/modules/analysis"
+import { AnalyserError, getAnalyser, type ChatHistoryMessage } from "@/modules/analysis"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import type { Project } from "@/lib/shared/types"
+import { tryOrNull } from "@/lib/shared/kernel"
 
 // POST /api/projects/[id]/mind
 //
@@ -16,7 +16,7 @@ import type { Project } from "@/lib/shared/types"
 // route so the UI can prompt the user identically).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}
@@ -48,16 +48,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             ? body.conversation_id
             : undefined
 
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", id)
-        .single<Pick<Project, "id">>()
-    if (pErr || !project) return jsonError("not_found", "project not found", 404)
+    const pid = await tryOrNull(() => ctx.projects.findId(id))
+    if (!pid) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await repoRead(() =>
-        createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id),
-    )
+    const { data: analyser, error: aErr } = await repoRead(() => ctx.analyser.findByProjectId(id))
     if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(

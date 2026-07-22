@@ -1,8 +1,8 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { Supabase } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
-import type { Project } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/github-sync/link — link an ALREADY-installed GitHub
 // App to this project without the install redirect. Resolves the installation
@@ -15,16 +15,12 @@ import type { Project } from "@/lib/shared/types"
 // installation is derived from the project's own repo, not a user-supplied id.
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     try {
     // RLS-scoped: caller must own the project.
-    const { data: project } = await supabase
-        .from("projects")
-        .select("id,repo_url,repo_full_name")
-        .eq("id", id)
-        .single<Pick<Project, "id" | "repo_url" | "repo_full_name">>()
+    const project = await tryOrNull(() => ctx.projects.findRepoRef(id))
     if (!project) return jsonError("not_found", "project not found", 404)
 
     const full = RepoRef.of(project).fullName()
@@ -71,17 +67,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!repoObj?.id) return jsonError("github_error", "repo id missing", 502)
 
     // Link + enable sync (cookie client → RLS confirms ownership).
-    const { data: updated, error: upErr } = await supabase
-        .from("projects")
-        .update({
-            github_installation_id: installationId,
-            github_repo_id: repoObj.id,
-            github_sync_enabled: true,
-        })
-        .eq("id", id)
-        .select("id,github_installation_id,github_repo_id,github_sync_enabled")
-        .single<Pick<Project, "id" | "github_installation_id" | "github_repo_id" | "github_sync_enabled">>()
-    if (upErr) return jsonError("db_error", upErr.message, 500)
+    const updated = await ctx.projects.linkGithub(id, installationId, repoObj.id)
 
     return Response.json({ installed: true, linked: true, project: updated })
     } catch (err) {

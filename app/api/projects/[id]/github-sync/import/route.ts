@@ -1,4 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { importExistingIssues } from "@/modules/vcs"
 
 export const dynamic = "force-dynamic"
@@ -9,15 +10,11 @@ export const dynamic = "force-dynamic"
 // runs service-role. Returns { imported, total, skipped }.
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     // Ownership check — the cookie client only sees the caller's projects.
-    const { data: owned } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", id)
-        .maybeSingle<{ id: string }>()
+    const owned = await tryOrNull(() => ctx.projects.findId(id))
     if (!owned) return jsonError("not_found", "project not found", 404)
 
     try {
