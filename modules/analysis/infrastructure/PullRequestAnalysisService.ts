@@ -1,13 +1,7 @@
-// PR-analysis orchestration — the detached PR-review lifecycle, as a service that
-// OWNS the flow (was floating functions). On a pull_request event we fetch the
-// diff, post an "analysing…" comment, kick a detached analyser run, and edit that
-// comment in place on the callback. Closing the PR cancels the run.
-//
-// The GitHub side is "read the diff / post a comment" via the injected
-// VcsAppService provider — no token, owner/repo, or REST client here. The
-// pull_request_analyses table is reached through the PullRequestAnalysisStore port
-// (previously hit inline — the golden-standard fix). A boundary orchestrator in
-// infrastructure; the composition root injects every collaborator.
+// The detached PR-review lifecycle: fetch the diff, post an "analysing…" comment,
+// kick a detached analyser run, then edit the comment on the callback; cancel on
+// close. Every collaborator is injected by the composition root; the
+// pull_request_analyses table is reached through PullRequestAnalysisStore.
 
 import { tryOrNull } from "@/lib/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
@@ -18,7 +12,7 @@ import type { Analyser } from "../ports/Analyser"
 import type { PRAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
-import { cancelledComment, failedComment, loadingComment, resultComment } from "./PullRequestAnalysisComment"
+import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 
 /** The project fields PR analysis reads: id + the sync-readiness/provider wiring. */
 export type PRProject = {
@@ -30,7 +24,7 @@ export type PRProject = {
     github_sync_enabled: boolean
 }
 
-/** PRInput is the PR metadata from the webhook payload. */
+/** The PR metadata from the webhook payload. */
 export type PRInput = {
     number: number
     title: string
@@ -48,26 +42,23 @@ export class PullRequestAnalysisService {
         private readonly analysers: ProjectAnalyserRepository,
         private readonly store: PullRequestAnalysisStore,
         private readonly vcsFor: VcsAppServiceResolver,
+        private readonly comment: PullRequestAnalysisComment,
     ) {}
 
-    // start gates on the App being linked + the graph indexed, fetches the PR diff,
-    // posts (or re-uses) the "analysing…" comment, upserts the tracking row (its id
-    // is the analyser task_id), and kicks the detached run. Idempotent: a run
-    // already in flight for this PR is left alone.
+    /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
+     *  tracking row (its id is the analyser task_id), kick the run. Idempotent —
+     *  a run already in flight for this PR is left alone. */
     async start(project: PRProject, pr: PRInput, origin: string): Promise<void> {
         if (!Project.of(project).isSyncReady()) return
         const vcs = this.vcsFor(project)
         if (!vcs) return
 
-        // Gate: the graph must be indexed for the review to have codebase context.
         const analyser = await tryOrNull(() => this.analysers.findReadiness(project.id))
         if (!ProjectAnalyser.from(analyser).isReady()) return
 
-        // Idempotency: don't start a second run while one is in flight for this PR.
         const existing = await this.store.findTracking(project.id, pr.number)
         if (existing?.status === "analysing") return
 
-        // Fetch the diff (per-file patches) through the vcs service.
         let files: PRAnalyseFile[]
         try {
             const gh = await vcs.listPullRequestFiles(pr.number)
@@ -89,21 +80,20 @@ export class PullRequestAnalysisService {
         let commentId = existing?.githubCommentId ?? null
         if (commentId != null) {
             try {
-                await vcs.updateComment(commentId, loadingComment(origin, pr.title, loadingUrl))
+                await vcs.updateComment(commentId, this.comment.loading(origin, pr.title, loadingUrl))
             } catch {
                 commentId = null
             }
         }
         if (commentId == null) {
             try {
-                const created = await vcs.postComment(pr.number, loadingComment(origin, pr.title, loadingUrl))
+                const created = await vcs.postComment(pr.number, this.comment.loading(origin, pr.title, loadingUrl))
                 commentId = created.id
             } catch {
                 return
             }
         }
 
-        // Upsert the tracking row — id doubles as the analyser task_id.
         const row = await this.store.upsertTracking({
             projectId: project.id,
             prNumber: pr.number,
@@ -115,8 +105,7 @@ export class PullRequestAnalysisService {
 
         await this.analyser.startPRAnalysis(
             {
-                // isReady() above guarantees a non-null analyser with a graph_id.
-                repoId: analyser!.graph_id!,
+                repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
                 number: pr.number,
                 title: pr.title,
                 body: pr.body || "",
@@ -130,8 +119,8 @@ export class PullRequestAnalysisService {
         )
     }
 
-    // applyResult is invoked by /api/internal/pr-analysis-result when the analyser
-    // reports a terminal state. It edits the PR comment in place and records status.
+    /** Terminal-state callback (from /api/internal/pr-analysis-result): edit the PR
+     *  comment in place and persist the status + review. */
     async applyResult(
         taskId: string,
         status: "done" | "failed" | "cancelled",
@@ -149,10 +138,10 @@ export class PullRequestAnalysisService {
                     const uiUrl = `${origin}/projects/${row.projectId}/pulls/${row.prNumber}`
                     const body =
                         status === "done" && result
-                            ? resultComment(result, origin, uiUrl, row.prNumber)
+                            ? this.comment.result(result, origin, uiUrl, row.prNumber)
                             : status === "cancelled"
-                              ? cancelledComment(origin, row.prNumber)
-                              : failedComment(origin, row.prNumber)
+                              ? this.comment.cancelled(origin, row.prNumber)
+                              : this.comment.failed(origin, row.prNumber)
                     try {
                         await vcs.updateComment(row.githubCommentId, body)
                     } catch {
@@ -165,8 +154,7 @@ export class PullRequestAnalysisService {
         await this.store.saveResult(taskId, status, result)
     }
 
-    // cancel stops an in-flight run when a PR is closed. The analyser reports
-    // 'cancelled' via the callback, which updates the comment.
+    /** Cancel an in-flight run (PR closed); the analyser reports 'cancelled' back. */
     async cancel(projectId: string, prNumber: number): Promise<void> {
         const row = await this.store.findTracking(projectId, prNumber)
         if (!row || row.status !== "analysing") return

@@ -8,6 +8,7 @@
 import { test, expect, describe, mock, beforeAll, beforeEach } from "bun:test"
 import { Issue as RealIssue } from "@/modules/issues/domain/Issue"
 import { Project as RealProject } from "@/modules/projects/domain/Project"
+import { IssueAnalysisComment } from "./IssueAnalysisComment"
 
 // ── injected collaborator mocks (stable refs) ─────────────────────────────────
 const store = {
@@ -43,7 +44,7 @@ beforeAll(async () => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new IssueAnalysisService(analyser as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any)
+const svc = () => new IssueAnalysisService(analyser as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment())
 
 beforeEach(() => {
     store.findAnalysisRow.mockReset().mockResolvedValue(null)

@@ -1,13 +1,7 @@
-// Analysis orchestration — the durable, cancellable auto-analysis lifecycle for
-// an issue, as a service that OWNS the flow (was a set of floating functions).
-// Kicking off / finishing an analyser run is an ANALYSIS concern; the GitHub side
-// is just "post/edit a comment", reached through the injected VcsAppService
-// provider — this service never touches a token, owner/repo, or the REST client.
-//
-// A boundary orchestrator (lives in infrastructure, like vcs' CommentActions): it
-// handles stored DB-shaped data (IssueAnalysisData) and wires ports the
-// composition root injects — the Analyser, the issue-sync store, the projects +
-// project-analyser repositories, and a (project → VcsAppService | null) resolver.
+// The issue auto-analysis lifecycle: post an "analysing…" comment, kick a
+// detached analyser run, then edit the comment + cache the suggestion on the
+// callback; cancel on close. Every collaborator is injected by the composition
+// root, so this never touches a token, owner/repo, DB client, or renderer detail.
 
 import { tryOrNull } from "@/lib/kernel"
 import { composeIssueFixPrompt, type IssueSyncStore, type IssueSyncPatch } from "@/modules/issues"
@@ -18,17 +12,10 @@ import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { Analyser } from "../ports/Analyser"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
-import {
-    cancelledCommentBody,
-    type CommentCtx,
-    failedCommentBody,
-    loadingCommentBody,
-    resultCommentBody,
-} from "./IssueAnalysisComment"
+import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
 
 /** Resolves the app/bot VcsAppService for a project, or null when it isn't linked
- *  to any VCS (a web-only project has no remote). Injected so the service stays
- *  provider-agnostic. */
+ *  to a VCS. Injected so the service stays provider-agnostic. */
 type VcsAppServiceResolver = (project: VcsProviderBinding) => VcsAppService | null
 
 export class IssueAnalysisService {
@@ -38,6 +25,7 @@ export class IssueAnalysisService {
         private readonly projects: ProjectsRepository,
         private readonly analysers: ProjectAnalyserRepository,
         private readonly vcsFor: VcsAppServiceResolver,
+        private readonly comment: IssueAnalysisComment,
     ) {}
 
     // ensure kicks off the SINGLE analysis run for an issue and is the one entry
@@ -73,7 +61,7 @@ export class IssueAnalysisService {
                 try {
                     const { id: commentId } = await vcs.postComment(
                         issue.github_issue_number,
-                        loadingCommentBody({ origin, projectId: issue.project_id, issueId: issue.id }),
+                        this.comment.loading({ origin, projectId: issue.project_id, issueId: issue.id }),
                     )
                     update.github_analysis_comment_id = commentId
                 } catch {
@@ -123,10 +111,10 @@ export class IssueAnalysisService {
                 const ctx: CommentCtx = { origin, projectId: issue.project_id, issueId: issue.id }
                 const body =
                     status === "done" && result
-                        ? resultCommentBody(result, project, ctx)
+                        ? this.comment.result(result, project, ctx)
                         : status === "cancelled"
-                          ? cancelledCommentBody(ctx)
-                          : failedCommentBody(ctx)
+                          ? this.comment.cancelled(ctx)
+                          : this.comment.failed(ctx)
                 try {
                     await vcs.updateComment(issue.github_analysis_comment_id, body)
                 } catch {

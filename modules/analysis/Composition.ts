@@ -13,6 +13,8 @@ import type { Analyser } from "./ports/Analyser"
 import { HttpAnalyser } from "./infrastructure/HttpAnalyser"
 import { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
 import { createServicePullRequestAnalysisStore } from "./infrastructure/SupabasePullRequestAnalysisStore"
+import { IssueAnalysisComment } from "./infrastructure/IssueAnalysisComment"
+import { PullRequestAnalysisComment } from "./infrastructure/PullRequestAnalysisComment"
 import { IssueAnalysisService } from "./infrastructure/IssueAnalysisService"
 import { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysisService"
 
@@ -30,6 +32,7 @@ export function createIssueAnalysisService(): IssueAnalysisService {
         createSupabaseProjectsRepository(svc),
         createSupabaseProjectAnalyserRepository(svc),
         getVcsAppService,
+        new IssueAnalysisComment(),
     )
 }
 
@@ -42,5 +45,6 @@ export function createPullRequestAnalysisService(): PullRequestAnalysisService {
         createSupabaseProjectAnalyserRepository(svc),
         createServicePullRequestAnalysisStore(),
         getVcsAppService,
+        new PullRequestAnalysisComment(),
     )
 }
