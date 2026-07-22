@@ -1,6 +1,6 @@
 import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
-import type { PRAnalysis, PRFinding } from "@/lib/shared/types"
+import type { PrAnalysis, PrFinding } from "@/lib/shared/types"
 
 // Finding groups → collapsible sections, traffic-light order; issues open, positives collapsed.
 const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone: BadgeTone; ic: string; open: boolean }[] = [
@@ -37,7 +37,7 @@ export class PullRequestAnalysisComment {
         return [this.marker, `## PR Review${name ? ` (${name})` : ""}`, "", badge(origin, "review unavailable", "rose", { size: "header" }), "", "Ucelot couldn't complete the review this time."].join("\n")
     }
 
-    result(r: PRAnalysis, origin: string, uiUrl?: string, prNumber?: number): string {
+    result(r: PrAnalysis, origin: string, uiUrl?: string, prNumber?: number): string {
         const name = (r.title ?? "").replace(/[\r\n]+/g, " ").trim() || (prNumber != null ? `#${prNumber}` : "")
         const out: string[] = [this.marker, `## PR Review${name ? ` (${name})` : ""}`, ""]
         if (r.verdict) out.push(badge(origin, mergeVerdictLabel(r.verdict), mergeVerdictTone(r.verdict), { icon: mergeVerdictIcon(r.verdict), size: "header" }), "")
@@ -107,7 +107,7 @@ export class PullRequestAnalysisComment {
         return `<picture><img align="absmiddle" src="${url}" alt="${text.replace(/"/g, "")}" /></picture>`
     }
 
-    private findingTitle(f: PRFinding): string {
+    private findingTitle(f: PrFinding): string {
         const base = this.esc(f.title || f.detail)
         const cat = (f.category || "").trim()
         if (!cat || cat === "good") return base

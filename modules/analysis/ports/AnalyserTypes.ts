@@ -74,7 +74,7 @@ export interface ChatResult {
     local?: boolean
 }
 
-export interface ChatHistoryMsg {
+export interface ChatHistoryMessage {
     role: "user" | "assistant"
     content: string
 }
@@ -165,7 +165,7 @@ export interface EmbedResult {
 }
 
 // ─── /pr/analyse + deep-dive ──────────────────────────────────────────────────
-export interface PRAnalyseFile {
+export interface PrAnalyseFile {
     path: string
     previous_path?: string
     status?: string
@@ -174,14 +174,14 @@ export interface PRAnalyseFile {
     deletions?: number
 }
 
-export interface PRAnalyseInput {
+export interface PrAnalyseInput {
     repoId:  string
     number:  number
     title:   string
     body?:   string
     baseSha?: string
     headSha?: string
-    files:   PRAnalyseFile[]
+    files:   PrAnalyseFile[]
     maxBudgetUsd?: number
     /** Tracker project uuid — persisted with the insight + scopes the deep-dive. */
     projectId?: string

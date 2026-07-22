@@ -17,8 +17,8 @@ interface BaseEvent {
     /** ISO-8601, stamped by the emitter via the Clock port. */
     readonly occurredAt: string
 }
-export interface KbReadyEvent extends BaseEvent { readonly kind: "kb_ready"; readonly projectName: string }
-export interface KbUpdatedEvent extends BaseEvent { readonly kind: "kb_updated"; readonly projectName: string }
+export interface KnowledgeBaseReadyEvent extends BaseEvent { readonly kind: "kb_ready"; readonly projectName: string }
+export interface KnowledgeBaseUpdatedEvent extends BaseEvent { readonly kind: "kb_updated"; readonly projectName: string }
 export interface PrOpenedEvent extends BaseEvent {
     readonly kind: "pr_opened"
     readonly projectName: string
@@ -35,7 +35,7 @@ export interface PrAnalysisReadyEvent extends BaseEvent {
 
 /** Discriminated union — payloads carry the FACTS; presentation is derived by the
  *  NotificationPresenter, so copy for a kind lives in exactly one place. */
-export type NotificationEvent = KbReadyEvent | KbUpdatedEvent | PrOpenedEvent | PrAnalysisReadyEvent
+export type NotificationEvent = KnowledgeBaseReadyEvent | KnowledgeBaseUpdatedEvent | PrOpenedEvent | PrAnalysisReadyEvent
 
 /** The feed row is a point-in-time snapshot (matching migration 0049's model). */
 export interface RenderedNotification {

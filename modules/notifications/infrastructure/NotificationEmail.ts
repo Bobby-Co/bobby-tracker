@@ -10,7 +10,7 @@ import { findingState, createServicePullRequestStore } from "@/modules/vcs"
 import { EmailTransport } from "@/lib/server/email/EmailTransport"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { Supabase } from "@/lib/server/supabase"
-import type { NotificationKind, PRAnalysis } from "@/lib/shared/types"
+import type { NotificationKind, PrAnalysis } from "@/lib/shared/types"
 
 type Svc = ReturnType<typeof Supabase.service>
 
@@ -89,7 +89,7 @@ export class NotificationEmail {
         svc: Svc,
         projectId: string | null,
         href: string | null,
-    ): Promise<{ prNumber: number; result: PRAnalysis } | null> {
+    ): Promise<{ prNumber: number; result: PrAnalysis } | null> {
         if (!projectId || !href) return null
         const m = href.match(/\/pulls\/(\d+)/)
         if (!m) return null
@@ -108,7 +108,7 @@ export class NotificationEmail {
     }
 
     // ─── templates ───────────────────────────────────────────────────────────
-    private prReviewedTemplate(projectName: string, prNumber: number, url: string, r: PRAnalysis): EmailContent {
+    private prReviewedTemplate(projectName: string, prNumber: number, url: string, r: PrAnalysis): EmailContent {
         const hasScore = typeof r.score === "number" && typeof r.score_max === "number" && r.score_max > 0
         const scoreStr = hasScore ? `${r.score}/${r.score_max}` : ""
         const verdictLabel = r.verdict ? mergeVerdictLabel(r.verdict) : ""

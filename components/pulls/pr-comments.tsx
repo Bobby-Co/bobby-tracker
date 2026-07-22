@@ -1,9 +1,9 @@
 "use client"
 
-import type { PRComment } from "@/lib/shared/types"
+import type { PrComment } from "@/lib/shared/types"
 import { CommentThread, type ThreadComment } from "@/components/comments/comment-thread"
 
-// PR comment thread — maps PRComment rows onto the shared CommentThread. Review
+// PR comment thread — maps PrComment rows onto the shared CommentThread. Review
 // summaries render as read-only "review" entries; conversation comments can be
 // authored/edited by their owner and post to GitHub as the signed-in user.
 export function PrComments({
@@ -13,7 +13,7 @@ export function PrComments({
     currentUserId,
     onChanged,
 }: {
-    comments: PRComment[]
+    comments: PrComment[]
     projectId: string
     prNumber: number
     currentUserId: string | null

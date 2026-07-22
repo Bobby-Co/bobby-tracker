@@ -9,7 +9,7 @@ import { cn } from "@/components/ui/cn"
 import { severityLabel } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
-import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis } from "@/lib/shared/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
 // `.prose-tracker .hljs-*` theme in globals.css). Used for summary/impact/detail
@@ -187,7 +187,7 @@ const GROUPS: { key: "critical" | "review" | "good"; title: string; tone: string
     { key: "good", title: "Looks good", tone: "bg-emerald-100 text-emerald-700", open: false },
 ]
 
-function Review({ r, projectId }: { r: PRAnalysis; projectId: string | null }) {
+function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
     const findings = r.findings ?? []
     const grouped = GROUPS.map((g) => ({ ...g, items: findings.filter((f) => findingState(f.severity) === g.key) }))
     const counts = Object.fromEntries(grouped.map((g) => [g.key, g.items.length]))
@@ -409,7 +409,7 @@ function meterTone(level: string): { fill: string; text: string } {
           ? { fill: "bg-amber-500", text: "text-amber-600" }
           : { fill: "bg-rose-500", text: "text-rose-600" }
 }
-function Meter({ label, dim }: { label: string; dim: PRConfidenceDimension }) {
+function Meter({ label, dim }: { label: string; dim: PrConfidenceDimension }) {
     const idx = dim.level === "high" ? 3 : dim.level === "medium" ? 2 : 1
     const t = meterTone(dim.level)
     return (
@@ -424,7 +424,7 @@ function Meter({ label, dim }: { label: string; dim: PRConfidenceDimension }) {
         </div>
     )
 }
-function ConfidenceMeters({ c }: { c: PRConfidences }) {
+function ConfidenceMeters({ c }: { c: PrConfidences }) {
     return (
         <div className="flex flex-col gap-1.5">
             <Meter label="correctness" dim={c.correctness} />
@@ -437,7 +437,7 @@ function ConfidenceMeters({ c }: { c: PRConfidences }) {
 // The KB-verification tally (ADR-0057) — the diligence behind the review,
 // rendered as a terse "Checked N callers · M precedents · …" line. Zero counts
 // are omitted; nothing to show → nothing rendered.
-function ChecksFooter({ checks }: { checks: PRChecks }) {
+function ChecksFooter({ checks }: { checks: PrChecks }) {
     const parts: string[] = []
     if (checks.callers) parts.push(`${checks.callers} caller${checks.callers === 1 ? "" : "s"}`)
     if (checks.precedents) parts.push(`${checks.precedents} precedent${checks.precedents === 1 ? "" : "s"}`)
@@ -456,7 +456,7 @@ function ChecksFooter({ checks }: { checks: PRChecks }) {
 // A rich finding card: severity + category + title + location on top, then the
 // detail, a collapsible syntax-highlighted diff of the changed code, the cited
 // evidence, and what the reviewer verified.
-function Finding({ f }: { f: PRFinding }) {
+function Finding({ f }: { f: PrFinding }) {
     const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
     const title = (f.title && f.title.trim()) || f.detail
     const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())

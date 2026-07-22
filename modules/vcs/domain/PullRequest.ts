@@ -8,14 +8,14 @@
 // to the PR. Pure domain: no I/O, framework, or SDK — CLIENT-SAFE, so the PR
 // surfaces import it from this path directly (not the server-tainted barrel).
 
-export type PRState = "open" | "closed"
+export type PrState = "open" | "closed"
 
 export type PullRequestLifecycle = "merged" | "closed" | "draft" | "open"
 
 /** The PR state the lifecycle rules read. */
 export interface PullRequestState {
     merged: boolean
-    state: PRState
+    state: PrState
     draft: boolean
 }
 

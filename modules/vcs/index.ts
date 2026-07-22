@@ -22,7 +22,7 @@ export type { MergeMethod, MergeMethods, MergeGate, MergeBlock, MergeBlockCode }
 export { MergePolicy, MERGE_METHOD_LABEL } from "./domain/MergeGate"
 // PR mirror — repository port + service (backfill runs through VcsAppInstance).
 // The PR-analysis flow now lives in modules/analysis.
-export type { PullRequestStore, PRUpsert, PRCommentUpsert, PRCommentSource } from "./ports/PullRequestStore"
+export type { PullRequestStore, PrUpsert, PrCommentUpsert, PrCommentSource } from "./ports/PullRequestStore"
 export { createServicePullRequestStore } from "./infrastructure/SupabasePullRequestStore"
 export { PullRequestService } from "./application/PullRequestService"
 

@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Supabase } from "@/lib/server/supabase"
-import type { PRAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis } from "@/lib/shared/types"
 import type {
     PullRequestAnalysisResultRow,
     PullRequestAnalysisStore,
@@ -58,7 +58,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
         return { id: data.id, projectId: data.project_id, prNumber: data.pr_number, githubCommentId: data.github_comment_id }
     }
 
-    async saveResult(taskId: string, status: string, result: PRAnalysis | null): Promise<void> {
+    async saveResult(taskId: string, status: string, result: PrAnalysis | null): Promise<void> {
         // This UPDATE also fires the 'pr_analysis_ready' feed notification (trigger
         // in migration 0049) → review email via notifications.
         await this.db.from("pull_request_analyses").update({ status, result: result ?? null }).eq("id", taskId)

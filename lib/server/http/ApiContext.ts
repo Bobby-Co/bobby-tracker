@@ -41,10 +41,10 @@ export function personalTeamName(user: User): string {
 }
 
 // ─── result unions (unchanged shapes — routes destructure these) ─────────────
-export type AuthOK = { supabase: SupabaseServer; user: User; error: null }
-export type AuthFail = { supabase: SupabaseServer; user: null; error: Response }
+export type AuthSuccess = { supabase: SupabaseServer; user: User; error: null }
+export type AuthFailure = { supabase: SupabaseServer; user: null; error: Response }
 
-export type TeamOK = {
+export type TeamSuccess = {
     supabase: SupabaseServer
     user: User
     team: TeamWithRole
@@ -52,7 +52,7 @@ export type TeamOK = {
     role: TeamRole
     error: null
 }
-export type TeamFail = {
+export type TeamFailure = {
     supabase: SupabaseServer
     user: User | null
     team: null
@@ -61,14 +61,14 @@ export type TeamFail = {
     error: Response
 }
 
-export type ProjectOK = { supabase: SupabaseServer; user: User; teamId: string; role: TeamRole; error: null }
-export type ProjectFail = { supabase: SupabaseServer; user: null; teamId: null; role: null; error: Response }
+export type ProjectSuccess = { supabase: SupabaseServer; user: User; teamId: string; role: TeamRole; error: null }
+export type ProjectFailure = { supabase: SupabaseServer; user: null; teamId: null; role: null; error: Response }
 
-export type IssueOK = { supabase: SupabaseServer; user: User; projectId: string; teamId: string; role: TeamRole; error: null }
-export type IssueFail = { supabase: SupabaseServer; user: null; projectId: null; teamId: null; role: null; error: Response }
+export type IssueSuccess = { supabase: SupabaseServer; user: User; projectId: string; teamId: string; role: TeamRole; error: null }
+export type IssueFailure = { supabase: SupabaseServer; user: null; projectId: null; teamId: null; role: null; error: Response }
 
-export type TeamRowOK = { supabase: SupabaseServer; user: User; teamId: string; role: TeamRole; isCreator: boolean; error: null }
-export type TeamRowFail = { supabase: SupabaseServer; user: null; teamId: null; role: null; isCreator: false; error: Response }
+export type TeamRowSuccess = { supabase: SupabaseServer; user: User; teamId: string; role: TeamRole; isCreator: boolean; error: null }
+export type TeamRowFailure = { supabase: SupabaseServer; user: null; teamId: null; role: null; isCreator: false; error: Response }
 
 export class ApiContext {
     /** Pass the Request so team-aware guards honour the x-team-id header (the
@@ -76,7 +76,7 @@ export class ApiContext {
      *  header can be built with `new ApiContext()`. */
     constructor(private readonly request?: Request) {}
 
-    async requireUser(): Promise<AuthOK | AuthFail> {
+    async requireUser(): Promise<AuthSuccess | AuthFailure> {
         // Run the (cached) auth check and the cookie-bound client setup
         // in parallel — they don't depend on each other.
         const [user, supabase] = await Promise.all([Supabase.currentUser(), Supabase.rls()])
@@ -89,7 +89,7 @@ export class ApiContext {
     /** requireUser + resolve the active team (with the caller's role in it).
      *  Bootstraps the personal team on first use. Honours the x-team-id header from
      *  the Request this context was built with; the `team_id` cookie is the fallback. */
-    async requireTeam(): Promise<TeamOK | TeamFail> {
+    async requireTeam(): Promise<TeamSuccess | TeamFailure> {
         const base = await this.requireUser()
         if (base.error) {
             return { supabase: base.supabase, user: null, team: null, teamId: null, role: null, error: base.error }
@@ -128,7 +128,7 @@ export class ApiContext {
      *  plain member is subject to (they must have the project granted to one of their
      *  groups; admins/owners always pass). Returns a 404 when the caller can't access
      *  the project — matching the project detail route, so we don't reveal existence. */
-    async requireProjectAccess(projectId: string): Promise<ProjectOK | ProjectFail> {
+    async requireProjectAccess(projectId: string): Promise<ProjectSuccess | ProjectFailure> {
         const base = await this.requireUser()
         if (base.error) return { supabase: base.supabase, user: null, teamId: null, role: null, error: base.error }
         const { supabase, user } = base
@@ -144,7 +144,7 @@ export class ApiContext {
      *  /api/issues/[id]/** routes operate on an issue by id; without this they fell
      *  back to the coarse team RLS backstop, letting a member OUTSIDE the project's
      *  group read/mutate/delete it. 404 on no access (don't reveal existence). */
-    async requireIssueAccess(issueId: string): Promise<IssueOK | IssueFail> {
+    async requireIssueAccess(issueId: string): Promise<IssueSuccess | IssueFailure> {
         const base = await this.requireUser()
         if (base.error) return { supabase: base.supabase, user: null, projectId: null, teamId: null, role: null, error: base.error }
         const { supabase, user } = base
@@ -154,7 +154,7 @@ export class ApiContext {
         // invisible/absent, which we render as 404 (same as no-access). Fail-safe:
         // a query error also folds to null → 404 (fail closed), as before.
         const projectId = await tryOrNull(() => createSupabaseIssuesRepository(supabase).findProjectId(issueId))
-        const notFound: IssueFail = { supabase, user: null, projectId: null, teamId: null, role: null, error: jsonError("not_found", "issue not found", 404) }
+        const notFound: IssueFailure = { supabase, user: null, projectId: null, teamId: null, role: null, error: jsonError("not_found", "issue not found", 404) }
         if (!projectId) return notFound
 
         const access = await getAccessService(supabase).canAccessProject(user.id, projectId)
@@ -163,12 +163,12 @@ export class ApiContext {
     }
 
     /** Team-owned Collection (project_groups) guard. `{ write: true }` for mutations. */
-    requireCollectionAccess(id: string, opts?: { write?: boolean }): Promise<TeamRowOK | TeamRowFail> {
+    requireCollectionAccess(id: string, opts?: { write?: boolean }): Promise<TeamRowSuccess | TeamRowFailure> {
         return this.requireTeamRowAccess("project_groups", id, opts)
     }
 
     /** Team-owned public submission session (public_sessions) guard. `{ write: true }` for mutations. */
-    requireSessionAccess(id: string, opts?: { write?: boolean }): Promise<TeamRowOK | TeamRowFail> {
+    requireSessionAccess(id: string, opts?: { write?: boolean }): Promise<TeamRowSuccess | TeamRowFailure> {
         return this.requireTeamRowAccess("public_sessions", id, opts)
     }
 
@@ -187,11 +187,11 @@ export class ApiContext {
         table: "project_groups" | "public_sessions",
         id: string,
         opts?: { write?: boolean },
-    ): Promise<TeamRowOK | TeamRowFail> {
+    ): Promise<TeamRowSuccess | TeamRowFailure> {
         const base = await this.requireUser()
         if (base.error) return { supabase: base.supabase, user: null, teamId: null, role: null, isCreator: false, error: base.error }
         const { supabase, user } = base
-        const notFound: TeamRowFail = { supabase, user: null, teamId: null, role: null, isCreator: false, error: jsonError("not_found", "not found", 404) }
+        const notFound: TeamRowFailure = { supabase, user: null, teamId: null, role: null, isCreator: false, error: jsonError("not_found", "not found", 404) }
 
         const row =
             table === "project_groups"

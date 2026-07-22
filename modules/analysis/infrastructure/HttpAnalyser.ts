@@ -13,7 +13,7 @@ import { AnalyserError } from "../ports/AnalyserTypes"
 import type {
     AnalyserRunCallback,
     AnalyseEffort,
-    ChatHistoryMsg,
+    ChatHistoryMessage,
     DeepDiveResult,
     EmbedResult,
     IssueAnalyseInput,
@@ -23,7 +23,7 @@ import type {
     IssuePreferences,
     KickoffJobInput,
     KickoffResult,
-    PRAnalyseInput,
+    PrAnalyseInput,
     QueryResult,
     VerifyInput,
     VerifyReport,
@@ -67,7 +67,7 @@ export class HttpAnalyser implements Analyser {
     async streamChat(
         repoId: string,
         question: string,
-        history?: ChatHistoryMsg[],
+        history?: ChatHistoryMessage[],
         maxBudgetUsd?: number,
         projectId?: string,
         conversationId?: string,
@@ -149,7 +149,7 @@ export class HttpAnalyser implements Analyser {
     }
 
     // ─── /pr/analyse/run (detached, cancellable) ──────────────────────────────
-    async startPRAnalysis(input: PRAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
+    async startPRAnalysis(input: PrAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
         const res = await fetch(`${this.base()}/pr/analyse/run`, {
             method: "POST",
             headers: {

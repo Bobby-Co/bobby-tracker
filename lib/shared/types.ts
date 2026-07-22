@@ -137,7 +137,7 @@ export interface PullRequestAnalysis {
     github_comment_id: number | null
     head_sha: string | null
     status: "analysing" | "done" | "failed" | "cancelled" | null
-    result: PRAnalysis | null
+    result: PrAnalysis | null
     created_at: string
     updated_at: string
 }
@@ -180,7 +180,7 @@ export interface PullRequest {
  *  (inline diff — reserved). `provenance` (migration 0044) marks whether it's a
  *  read-only GitHub mirror or a tracker-authored comment we own and push to
  *  GitHub as `author_user_id`. */
-export interface PRComment {
+export interface PrComment {
     id: string
     project_id: string
     pr_number: number
@@ -199,7 +199,7 @@ export interface PRComment {
 }
 
 /** A comment on an issue thread (migration 0044) — the issue-side mirror of
- *  PRComment (conversation comments only; no review types). */
+ *  PrComment (conversation comments only; no review types). */
 export interface IssueComment {
     id: string
     project_id: string
@@ -218,12 +218,12 @@ export interface IssueComment {
 }
 
 /** Bobby's structured PR review — the analyser /pr/analyse result. */
-export interface PRFixVerdict {
+export interface PrFixVerdict {
     claim: string
     verdict: "likely" | "partial" | "unlikely" | "unclear" | string
     reason: string
 }
-export interface PRImpactRef {
+export interface PrImpactRef {
     file: string
     reason: string
 }
@@ -232,7 +232,7 @@ export interface PRImpactRef {
  *  concrete file (optionally a line), with `kind` describing what was inspected
  *  ("precedent" | "caller" | "test" | "git" | "failure" | …) and `note` a short
  *  human gloss. All fields but `file` are optional — older/looser anchors omit them. */
-export interface PREvidence {
+export interface PrEvidence {
     file: string
     line?: number
     kind?: string
@@ -240,7 +240,7 @@ export interface PREvidence {
 }
 
 /** A grounded, cited review item on the changed code (analyser ADR-0054). */
-export interface PRFinding {
+export interface PrFinding {
     file: string
     line?: number
     /** STATE chosen by impact (ADR-0056): "critical" | "review" | "good". Older
@@ -256,7 +256,7 @@ export interface PRFinding {
     detail: string
     /** Cited KB anchors the reviewer inspected to ground this finding
      *  (analyser ADR-0057). Empty/absent on legacy rows. */
-    evidence?: PREvidence[]
+    evidence?: PrEvidence[]
     /** What the reviewer verified for this finding (analyser ADR-0057) —
      *  e.g. "callers of Foo still compile". Absent on legacy rows. */
     checked?: string[]
@@ -268,24 +268,24 @@ export interface PRFinding {
 
 /** Per-dimension calibrated confidence (analyser ADR-0057). `level` is the
  *  coarse bucket; `basis` is the one-line justification for that level. */
-export interface PRConfidenceDimension {
+export interface PrConfidenceDimension {
     level: "high" | "medium" | "low" | string
     basis: string
 }
 
 /** The three review dimensions the analyser calibrates confidence over
  *  (analyser ADR-0057). Supersedes the flat `confidence` rollup when present. */
-export interface PRConfidences {
-    correctness: PRConfidenceDimension
-    load_perf: PRConfidenceDimension
-    security: PRConfidenceDimension
+export interface PrConfidences {
+    correctness: PrConfidenceDimension
+    load_perf: PrConfidenceDimension
+    security: PrConfidenceDimension
 }
 
 /** The KB-verification tally the reviewer accrued (analyser ADR-0057) — the
  *  concrete diligence counts surfaced as a "checked N callers · …" footer.
  *  `dropped` is findings that couldn't be grounded and were cut;
  *  `removed_symbols` is symbols the diff deleted that the reviewer traced. */
-export interface PRChecks {
+export interface PrChecks {
     precedents: number
     callers: number
     tests: number
@@ -294,17 +294,17 @@ export interface PRChecks {
     dropped?: number
     removed_symbols?: number
 }
-export interface PRAnalysis {
+export interface PrAnalysis {
     /** The PR title, echoed by the analyser (ADR-0057) → the comment header
      *  "PR Review (title)". Absent on older results; the comment falls back to #N. */
     title?: string
     summary: string
     impact: string
-    impact_files?: PRImpactRef[]
+    impact_files?: PrImpactRef[]
     /** Grounded code-review findings — the core of the review (ADR-0054). */
-    findings?: PRFinding[]
+    findings?: PrFinding[]
     /** Only present when the PR description makes an explicit claim (ADR-0054). */
-    fix_claims?: PRFixVerdict[]
+    fix_claims?: PrFixVerdict[]
     /** Retired analyser-side (folded into findings); kept for old rows. */
     concerns?: string[]
     /** Flat rollup confidence (analyser ADR-0054). Superseded by `confidences`
@@ -313,10 +313,10 @@ export interface PRAnalysis {
     confidence?: string
     /** Per-dimension calibrated confidence (analyser ADR-0057). Nullable — legacy
      *  results carry only the flat `confidence`. */
-    confidences?: PRConfidences | null
+    confidences?: PrConfidences | null
     /** KB-verification tally (analyser ADR-0057) — powers the diligence footer.
      *  Nullable — absent on legacy results. */
-    checks?: PRChecks | null
+    checks?: PrChecks | null
     /** Merge recommendation + one-line reason (analyser ADR-0056). */
     verdict?: "approve" | "request_changes" | "comment" | string
     verdict_reason?: string

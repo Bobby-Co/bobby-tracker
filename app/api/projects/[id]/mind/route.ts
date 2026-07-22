@@ -1,4 +1,4 @@
-import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, type ChatHistoryMsg } from "@/modules/analysis"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, type ChatHistoryMessage } from "@/modules/analysis"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import type { Project } from "@/lib/shared/types"
 
@@ -28,12 +28,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // TEMPORAL context: the last 3 turns of raw chat (6 messages). Durable
     // structured memory lives in the analyser's managed-context store instead
     // (ADR-0049), keyed by conversation_id below.
-    const history: ChatHistoryMsg[] | undefined = Array.isArray(body?.history)
+    const history: ChatHistoryMessage[] | undefined = Array.isArray(body?.history)
         ? (body.history as unknown[])
-              .filter((m): m is ChatHistoryMsg =>
+              .filter((m): m is ChatHistoryMessage =>
                   !!m && typeof m === "object" &&
-                  (((m as ChatHistoryMsg).role === "user") || ((m as ChatHistoryMsg).role === "assistant")) &&
-                  typeof (m as ChatHistoryMsg).content === "string")
+                  (((m as ChatHistoryMessage).role === "user") || ((m as ChatHistoryMessage).role === "assistant")) &&
+                  typeof (m as ChatHistoryMessage).content === "string")
               .slice(-6)
         : undefined
 

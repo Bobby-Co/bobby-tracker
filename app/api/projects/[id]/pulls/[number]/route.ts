@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
-import type { PRComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
+import type { PrComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/pulls/[number]
 //
@@ -43,7 +43,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             .eq("project_id", id)
             .eq("pr_number", prNumber)
             .order("gh_created_at", { ascending: true, nullsFirst: true })
-            .returns<PRComment[]>(),
+            .returns<PrComment[]>(),
     ])
 
     const dbErr = pullR.error || projectR.error || analysisR.error || commentsR.error

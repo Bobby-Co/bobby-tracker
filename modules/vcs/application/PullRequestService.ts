@@ -12,7 +12,7 @@
 
 import type { IssueCommentUpsert } from "@/modules/issues"
 import type { VcsAppInstance } from "../ports/VcsAppInstance"
-import type { PRUpsert, PullRequestStore } from "../ports/PullRequestStore"
+import type { PrUpsert, PullRequestStore } from "../ports/PullRequestStore"
 import type { VcsComment, VcsPullRequest, VcsReview } from "../ports/VcsTypes"
 
 // Comment/review threads are the expensive part (2 API calls per PR), so a full
@@ -23,7 +23,7 @@ const COMMENT_BACKFILL_MAX = 40
 /** Writes one mirrored issue comment (the issues context owns that table). */
 export type IssueCommentSink = (projectId: string, comment: IssueCommentUpsert) => Promise<void>
 
-function prRow(pr: VcsPullRequest): PRUpsert {
+function prRow(pr: VcsPullRequest): PrUpsert {
     return {
         pr_number: pr.number,
         github_node_id: pr.nodeId ?? null,

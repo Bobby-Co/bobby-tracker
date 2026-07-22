@@ -7,10 +7,10 @@
 
 import type {
     QueryResult,
-    ChatHistoryMsg,
+    ChatHistoryMessage,
     IssueAnalyseInput,
     IssueAnalysis,
-    PRAnalyseInput,
+    PrAnalyseInput,
     IssuePreferences,
     AnalyseEffort,
     IssueComposeInput,
@@ -35,7 +35,7 @@ export interface Analyser {
     streamChat(
         repoId: string,
         question: string,
-        history?: ChatHistoryMsg[],
+        history?: ChatHistoryMessage[],
         maxBudgetUsd?: number,
         projectId?: string,
         conversationId?: string,
@@ -49,7 +49,7 @@ export interface Analyser {
     cancelIssueAnalysis(taskId: string): Promise<void>
 
     // ─── /pr/analyse — detached agentic PR review ────────────────────────────
-    startPRAnalysis(input: PRAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void>
+    startPRAnalysis(input: PrAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void>
     cancelPRAnalysis(taskId: string): Promise<void>
     /** /pr/insight/{id}/deep-dive — materialise a stored insight into a chat. */
     deepDivePRInsight(insightId: string): Promise<DeepDiveResult>

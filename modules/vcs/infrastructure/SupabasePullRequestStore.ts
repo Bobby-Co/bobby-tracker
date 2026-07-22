@@ -4,11 +4,11 @@
 // PostgREST merge-duplicates only updates the columns it receives).
 
 import { Supabase } from "@/lib/server/supabase"
-import type { PRAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis } from "@/lib/shared/types"
 import type {
-    PRCommentSource,
-    PRCommentUpsert,
-    PRUpsert,
+    PrCommentSource,
+    PrCommentUpsert,
+    PrUpsert,
     PullRequestStore,
 } from "../ports/PullRequestStore"
 
@@ -18,17 +18,17 @@ import type {
 export class SupabasePullRequestStore implements PullRequestStore {
     private readonly svc = Supabase.service()
 
-    async upsertPullRequest(projectId: string, pr: PRUpsert): Promise<void> {
+    async upsertPullRequest(projectId: string, pr: PrUpsert): Promise<void> {
         await this.svc.from("pull_requests").upsert({ project_id: projectId, ...pr }, { onConflict: "project_id,pr_number" })
     }
 
-    async upsertComment(projectId: string, comment: PRCommentUpsert): Promise<void> {
+    async upsertComment(projectId: string, comment: PrCommentUpsert): Promise<void> {
         await this.svc
             .from("pr_comments")
             .upsert({ project_id: projectId, ...comment }, { onConflict: "project_id,source,github_comment_id" })
     }
 
-    async deleteComment(projectId: string, source: PRCommentSource, commentId: number): Promise<void> {
+    async deleteComment(projectId: string, source: PrCommentSource, commentId: number): Promise<void> {
         await this.svc
             .from("pr_comments")
             .delete()
@@ -46,13 +46,13 @@ export class SupabasePullRequestStore implements PullRequestStore {
         )
     }
 
-    async findAnalysisResult(projectId: string, prNumber: number): Promise<PRAnalysis | null> {
+    async findAnalysisResult(projectId: string, prNumber: number): Promise<PrAnalysis | null> {
         const { data } = await this.svc
             .from("pull_request_analyses")
             .select("result")
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
-            .maybeSingle<{ result: PRAnalysis | null }>()
+            .maybeSingle<{ result: PrAnalysis | null }>()
         return data?.result ?? null
     }
 }

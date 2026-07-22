@@ -20,7 +20,7 @@ export { createSupabaseProjectAnalyserRepository } from "./infrastructure/Supaba
 // start/applyResult/cancel (PRs).
 export { IssueAnalysisService } from "./infrastructure/IssueAnalysisService"
 export { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysisService"
-export type { PRInput, PRProject } from "./infrastructure/PullRequestAnalysisService"
+export type { PrInput, PrProject } from "./infrastructure/PullRequestAnalysisService"
 export { createIssueAnalysisService, createPullRequestAnalysisService } from "./Composition"
 
 // ─── the analyser port + its composition seam ───────────────────────────────
@@ -38,7 +38,7 @@ export type {
     ChatResult,
     ChatCitation,
     ChatIssue,
-    ChatHistoryMsg,
+    ChatHistoryMessage,
     IssueFinding,
     IssueAnalysis,
     IssueAnalyseInput,
@@ -55,8 +55,8 @@ export type {
     VerifyContentStaleNote,
     VerifyReport,
     VerifyInput,
-    PRAnalyseFile,
-    PRAnalyseInput,
+    PrAnalyseFile,
+    PrAnalyseInput,
     IssuePreferences,
     KickoffJobInput,
     KickoffResult,

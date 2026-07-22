@@ -6,16 +6,16 @@
 import { tryOrNull } from "@/lib/shared/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
-import type { PRAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis } from "@/lib/shared/types"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { Analyser } from "../ports/Analyser"
-import type { PRAnalyseFile } from "../ports/AnalyserTypes"
+import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 
 /** The project fields PR analysis reads: id + the sync-readiness/provider wiring. */
-export type PRProject = {
+export type PrProject = {
     id: string
     repo_url: string | null
     repo_full_name: string | null
@@ -25,7 +25,7 @@ export type PRProject = {
 }
 
 /** The PR metadata from the webhook payload. */
-export type PRInput = {
+export type PrInput = {
     number: number
     title: string
     body: string | null
@@ -48,7 +48,7 @@ export class PullRequestAnalysisService {
     /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
      *  tracking row (its id is the analyser task_id), kick the run. Idempotent —
      *  a run already in flight for this PR is left alone. */
-    async start(project: PRProject, pr: PRInput, origin: string): Promise<void> {
+    async start(project: PrProject, pr: PrInput, origin: string): Promise<void> {
         if (!Project.of(project).isSyncReady()) return
         const vcs = this.vcsFor(project)
         if (!vcs) return
@@ -59,7 +59,7 @@ export class PullRequestAnalysisService {
         const existing = await this.store.findTracking(project.id, pr.number)
         if (existing?.status === "analysing") return
 
-        let files: PRAnalyseFile[]
+        let files: PrAnalyseFile[]
         try {
             const gh = await vcs.listPullRequestFiles(pr.number)
             files = gh.map((f) => ({
@@ -124,7 +124,7 @@ export class PullRequestAnalysisService {
     async applyResult(
         taskId: string,
         status: "done" | "failed" | "cancelled",
-        result: PRAnalysis | null,
+        result: PrAnalysis | null,
         origin: string,
     ): Promise<void> {
         const row = await this.store.findResultRow(taskId)

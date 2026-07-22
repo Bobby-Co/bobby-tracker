@@ -4,7 +4,7 @@
 // stored structured review. The PullRequestAnalysisService depends on this role
 // instead of hitting the table inline (the golden-standard fix).
 
-import type { PRAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis } from "@/lib/shared/types"
 
 /** The idempotency/comment view of a PR's tracking row. */
 export interface PullRequestAnalysisTracking {
@@ -39,5 +39,5 @@ export interface PullRequestAnalysisStore {
     findResultRow(taskId: string): Promise<PullRequestAnalysisResultRow | null>
     /** Persist the terminal status + structured review (fires the pr_analysis_ready
      *  feed trigger). */
-    saveResult(taskId: string, status: string, result: PRAnalysis | null): Promise<void>
+    saveResult(taskId: string, status: string, result: PrAnalysis | null): Promise<void>
 }

@@ -10,5 +10,5 @@
 export { jsonError, forbidden, repoRead } from "./responses"
 export { ApiContext, TEAM_HEADER, TEAM_COOKIE, personalTeamName } from "./ApiContext"
 export type {
-    AuthOK, AuthFail, TeamOK, TeamFail, ProjectOK, ProjectFail, IssueOK, IssueFail, TeamRowOK, TeamRowFail,
+    AuthSuccess, AuthFailure, TeamSuccess, TeamFailure, ProjectSuccess, ProjectFailure, IssueSuccess, IssueFailure, TeamRowSuccess, TeamRowFailure,
 } from "./ApiContext"

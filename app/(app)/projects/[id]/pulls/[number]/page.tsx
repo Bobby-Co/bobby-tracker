@@ -8,13 +8,13 @@ import { PrDetail } from "@/components/pulls/pr-detail"
 import { PrMergeBar } from "@/components/pulls/pr-merge-bar"
 import { PrReview } from "@/components/pulls/pr-review"
 import { PrComments } from "@/components/pulls/pr-comments"
-import type { PRComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
+import type { PrComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 interface PullView {
     pull: PullRequest | null
     project: Pick<Project, "id" | "name" | "repo_url" | "repo_full_name"> | null
     analysis: PullRequestAnalysis | null
-    comments: PRComment[]
+    comments: PrComment[]
 }
 
 export default function PullDetailPage() {

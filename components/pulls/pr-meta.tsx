@@ -7,13 +7,13 @@ import { PullRequest as PullRequestEntity } from "@/modules/vcs/domain/PullReque
 // role of components/issues/issue-meta.tsx.
 
 // The four display states, collapsed from (state, merged, draft):
-export type PRState = "open" | "draft" | "merged" | "closed"
+export type PrState = "open" | "draft" | "merged" | "closed"
 
-export function prState(pr: Pick<PullRequest, "state" | "merged" | "draft">): PRState {
+export function prState(pr: Pick<PullRequest, "state" | "merged" | "draft">): PrState {
     return PullRequestEntity.of(pr).lifecycle()
 }
 
-export const PR_STATE_META: Record<PRState, { dot: string; chip: string; label: string }> = {
+export const PR_STATE_META: Record<PrState, { dot: string; chip: string; label: string }> = {
     open:   { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700", label: "Open" },
     draft:  { dot: "bg-zinc-400",    chip: "bg-zinc-100 text-zinc-600",      label: "Draft" },
     merged: { dot: "bg-violet-500",  chip: "bg-violet-50 text-violet-700",   label: "Merged" },

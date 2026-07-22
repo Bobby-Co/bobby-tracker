@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/server/http/api"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
-import type { PRAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis } from "@/lib/shared/types"
 
 export const dynamic = "force-dynamic"
 
@@ -18,12 +18,12 @@ export async function POST(request: Request) {
 
     let taskId: string | undefined
     let status: "done" | "failed" | "cancelled" | undefined
-    let result: PRAnalysis | null = null
+    let result: PrAnalysis | null = null
     try {
         const body = (await request.json()) as {
             task_id?: string
             status?: string
-            result?: PRAnalysis | null
+            result?: PrAnalysis | null
         }
         taskId = body.task_id
         if (body.status === "done" || body.status === "failed" || body.status === "cancelled") {
