@@ -1,16 +1,16 @@
-// Compile-time drift guard for the pick-status value-object (see the pull-requests
-// vo-drift-guard for the rationale — critique #7). If the ProjectInsight row stops
-// being assignable to the hand-written ProjectInsightView, this fails to typecheck.
-// Type-only: no runtime output.
+// Compile-time drift guards for the projects context's value-objects (see the
+// vcs PrVoDriftGuard for the rationale — critique #7). If the stored ProjectInsight
+// row stops being assignable to the ProjectInsight aggregate's local
+// ProjectInsightState, this fails to typecheck. Type-only: no runtime output.
 
-import type { GithubSyncDirection, ProjectInsight } from "@/lib/supabase/types"
-import type { ProjectInsightView } from "../domain/PickStatus"
+import type { GithubSyncDirection, ProjectInsight as ProjectInsightRow } from "@/lib/supabase/types"
+import type { ProjectInsightState } from "../domain/ProjectInsight"
 import type { SyncDirection } from "../domain/Project"
 
 /** Errors unless `Sub` is assignable to `Sup`. */
 type Assignable<Sub extends Sup, Sup> = Sub
 
-export type _ProjectInsightGuard = Assignable<ProjectInsight, ProjectInsightView>
+export type _ProjectInsightGuard = Assignable<ProjectInsightRow, ProjectInsightState>
 
 // The Project aggregate's local SyncDirection must stay identical to the stored
 // enum (checked both directions).

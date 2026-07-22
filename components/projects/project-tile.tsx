@@ -2,7 +2,7 @@ import Link from "next/link"
 import { cn } from "@/components/ui/cn"
 import { FieldTable, FieldRow, SegBar } from "@/components/ui/field-card"
 import { shortDate, timeAgo } from "@/components/issues/issue-meta"
-import { pickStatus, type ProjectStatus } from "@/modules/projects"
+import { ProjectInsight as ProjectInsightModel, type ProjectStatus } from "@/modules/projects/domain/ProjectInsight"
 import type { Project, ProjectInsight } from "@/lib/supabase/types"
 import { IconlyCode } from "@/icons/Iconly-code-icon"
 import { IconlyFoldercode } from "@/icons/Iconly-folder-code-icon"
@@ -25,12 +25,12 @@ import { IconlyIcon } from "@/components/icons/iconly-icon"
 //
 // The org colour is pulled from the org chip palette and hashed off the org
 // key, so every project under the same org shares one chip. The footer status
-// is real (from the project's insight row, via pickStatus). The glyph icon +
+// is real (from the project's insight row, via ProjectInsight.status()). The glyph icon +
 // the people count are still STUBBED — there is no per-project icon or members
 // table to read them from yet.
 
 // The `status` override prop's type — re-exported so callers don't have to
-// reach into lib/projects to type it. Derivation lives in pickStatus.
+// reach into lib/projects to type it. Derivation lives on ProjectInsight.
 export type { ProjectStatus }
 
 // FNV-1a 32-bit — stable per-string hash (matches lib/timeline/labels).
@@ -162,7 +162,7 @@ export function ProjectTile({
     minimal?: boolean
 }) {
     const { orgName, chip, Icon, people } = stubMeta(project)
-    const status = statusOverride ?? pickStatus(insight)
+    const status = statusOverride ?? ProjectInsightModel.of(insight).status()
     // Real activity, not the project row's touch time — updated_at only moves
     // when the project itself is edited, never when an issue or PR changes.
     const activityAt = insight?.last_activity_at ?? project.updated_at

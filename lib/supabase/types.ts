@@ -72,7 +72,7 @@ export interface ProjectInsight {
     last_issue_created_at: string | null
     /** Open timestamps of the 10 most recent non-draft PRs, newest first.
      *  Stored raw, not as a window count: nothing fires when a PR stops being
-     *  recent, so the window is applied client-side at render (pickStatus). */
+     *  recent, so the window is applied client-side at render (ProjectInsight.status). */
     recent_pr_opens: string[]
     /** Newest issue/PR activity — what the tile footer should show.
      *  projects.updated_at is the project row's touch time and does not move
