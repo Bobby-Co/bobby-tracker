@@ -10,7 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { NotificationEvent } from "../domain/Events"
-import { renderNotification } from "../domain/Events"
+import { NotificationPresenter } from "../domain/Events"
 import type { NotificationChannel } from "../ports/NotificationChannel"
 import type { Recipient } from "../ports/RecipientResolver"
 
@@ -19,6 +19,7 @@ import type { Recipient } from "../ports/RecipientResolver"
  *  factory below. */
 export class InAppFeedChannel implements NotificationChannel {
     readonly id = "in_app" as const
+    private readonly presenter = new NotificationPresenter()
 
     constructor(private readonly db: SupabaseClient) {}
 
@@ -27,7 +28,7 @@ export class InAppFeedChannel implements NotificationChannel {
     }
 
     async deliver(event: NotificationEvent, recipient: Recipient) {
-        const { title, meta, href } = renderNotification(event)
+        const { title, meta, href } = this.presenter.render(event)
 
         // Idempotency will come from an outbox idempotency key / unique constraint
         // at cutover; a plain insert is fine while dormant.

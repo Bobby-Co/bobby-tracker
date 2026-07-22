@@ -10,13 +10,14 @@
 import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
 
 import type { NotificationEvent } from "../domain/Events"
-import { renderNotification } from "../domain/Events"
+import { NotificationPresenter } from "../domain/Events"
 import type { NotificationChannel } from "../ports/NotificationChannel"
 import type { Recipient } from "../ports/RecipientResolver"
 
 /** The email NotificationChannel. Stateless; construct via the factory below. */
 export class EmailChannel implements NotificationChannel {
     readonly id = "email" as const
+    private readonly presenter = new NotificationPresenter()
 
     supports(): boolean {
         return true
@@ -28,7 +29,7 @@ export class EmailChannel implements NotificationChannel {
         if (!isEmailConfigured()) return { delivered: false, reason: "email not configured" }
         if (!recipient.email) return { delivered: false, reason: "no address" }
 
-        const { title, meta, href } = renderNotification(event)
+        const { title, meta, href } = this.presenter.render(event)
         const subject = meta && !title.includes(meta) ? `${title} · ${meta}` : title
         const base = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/+$/, "")
         const url = href.startsWith("/") ? `${base}${href}` : href

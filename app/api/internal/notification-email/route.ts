@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/platform/http/api"
-import { sendNotificationEmail } from "@/modules/notifications"
+import { NotificationEmail } from "@/modules/notifications"
 
 export const dynamic = "force-dynamic"
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     if (!id) return jsonError("bad_request", "id is required", 400)
 
     try {
-        await sendNotificationEmail(id)
+        await new NotificationEmail().send(id)
     } catch (err) {
         const e = err as { message?: string }
         return jsonError("send_failed", e?.message ?? "send failed", 500)

@@ -16,7 +16,7 @@ export type {
     ChannelId,
     RenderedNotification,
 } from "./domain/Events"
-export { renderNotification, defaultChannelsFor } from "./domain/Events"
+export { NotificationPresenter } from "./domain/Events"
 
 export type { NotificationChannel, DeliveryResult } from "./ports/NotificationChannel"
 export type { Recipient, RecipientResolver } from "./ports/RecipientResolver"
@@ -35,4 +35,4 @@ export { createNotificationService } from "./Composition"
 
 // Legacy trigger-path email renderer (still serves /api/internal/notification-email
 // until the outbox cutover retires it).
-export { sendNotificationEmail } from "./infrastructure/NotificationEmail"
+export { NotificationEmail } from "./infrastructure/NotificationEmail"

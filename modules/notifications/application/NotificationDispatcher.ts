@@ -7,12 +7,13 @@
 // Pure application: depends only on the domain + ports (no SDK/framework).
 
 import type { NotificationEvent } from "../domain/Events"
-import { defaultChannelsFor } from "../domain/Events"
+import { NotificationPresenter } from "../domain/Events"
 import type { NotificationChannel } from "../ports/NotificationChannel"
 import type { RecipientResolver } from "../ports/RecipientResolver"
 
 export class NotificationDispatcher {
     private readonly channels = new Map<string, NotificationChannel>()
+    private readonly presenter = new NotificationPresenter()
 
     constructor(private readonly recipients: RecipientResolver) {}
 
@@ -29,7 +30,7 @@ export class NotificationDispatcher {
     async dispatch(event: NotificationEvent): Promise<void> {
         const recipients = await this.recipients.resolve(event)
         if (recipients.length === 0) return
-        const targeted = new Set<string>(defaultChannelsFor(event.kind))
+        const targeted = new Set<string>(this.presenter.defaultChannels(event.kind))
 
         await Promise.all(
             recipients.flatMap((recipient) =>
