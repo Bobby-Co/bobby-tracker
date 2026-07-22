@@ -25,6 +25,12 @@ export class SupabaseTeamsRepository implements TeamsRepository {
         return data ?? null
     }
 
+    async findName(id: string): Promise<string | null> {
+        // Best-effort (null on error), matching the invite route's inline read.
+        const { data } = await this.db.from("teams").select("name").eq("id", id).maybeSingle<{ name: string }>()
+        return data?.name ?? null
+    }
+
     async isPersonal(id: string): Promise<boolean> {
         // Fail-safe: the original guard ignored the query error and treated an
         // absent/failed read as "not personal" (falls through to the update).

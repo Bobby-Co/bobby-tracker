@@ -15,6 +15,10 @@ export interface TeamsRepository {
      *  a genuine query failure (so a caller can surface a 500 vs a 404). */
     findById(id: string): Promise<Team | null>
 
+    /** A team's display name, or null when absent. FAIL-SAFE (null on error) —
+     *  used best-effort when composing an invite email. */
+    findName(id: string): Promise<string | null>
+
     /** Whether the team is a personal team. FAIL-SAFE: false when absent / on a
      *  query error (matches the guard's original best-effort read). */
     isPersonal(id: string): Promise<boolean>

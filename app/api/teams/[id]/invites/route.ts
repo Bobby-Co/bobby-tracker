@@ -1,27 +1,22 @@
 import { after } from "next/server"
-import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
-import { getAccessService, Role } from "@/modules/access"
+import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/api"
+import { Role } from "@/modules/access"
 import { Email, Invite, createInviteNotifier } from "@/modules/teams"
-import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/shared/types"
+import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/invites — pending (unaccepted) invites (admins). RLS on
 // team_invites is admin-only, so a non-admin never sees the tokens.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const role = await getAccessService(supabase).teamRole(id, user.id)
+    const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can view invites")
 
-    const { data, error: dbErr } = await supabase
-        .from("team_invites")
-        .select("*")
-        .eq("team_id", id)
-        .is("accepted_at", null)
-        .order("created_at", { ascending: false })
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ invites: (data ?? []) as TeamInvite[] })
+    const { data: invites, error: dbErr } = await repoRead(() => ctx.teamInvites.listPending(id))
+    if (dbErr) return dbErr
+    return Response.json({ invites })
 }
 
 // POST /api/teams/[id]/invites — invite an email to the team (admins). Creates a
@@ -29,9 +24,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // signed in with a matching email (see /api/invites/[token]).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const role = await getAccessService(supabase).teamRole(id, user.id)
+    const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can invite")
 
@@ -45,33 +40,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const inviteVo = new Invite()
     const token = inviteVo.newToken()
-    const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const { data: invite, error: dbErr } = await supabase
-        .from("team_invites")
-        .insert({ team_id: id, email, role: inviteRole, token, invited_by: user.id, expires_at })
-        .select("*")
-        .single<TeamInvite>()
-    if (dbErr) {
-        // 23505 = the partial-unique "one live invite per email per team"
-        if (dbErr.code === "23505") return jsonError("conflict", "there's already a pending invite for that email", 409)
-        return jsonError("db_error", dbErr.message, 500)
-    }
+    const { data: result, error: dbErr } = await repoRead(() =>
+        ctx.teamInvites.create({ teamId: id, email, role: inviteRole, token, invitedBy: user.id, expiresAt }),
+    )
+    if (dbErr) return dbErr
+    if (!result.ok) return jsonError("conflict", "there's already a pending invite for that email", 409)
 
     // Resolve the team name + inviter for the email; send post-response so a slow
     // SMTP host can't stall the request. Best-effort: a send failure leaves the
     // invite live to resend.
-    const { data: team } = await supabase.from("teams").select("name").eq("id", id).maybeSingle<{ name: string }>()
+    const teamName = await ctx.teams.findName(id)
     const inviterName =
         (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || null
     const acceptUrl = inviteVo.acceptUrl(request, token)
     after(async () => {
         try {
-            await createInviteNotifier().sendInvite({ to: email, teamName: team?.name ?? "a team", inviterName, acceptUrl, role: inviteRole })
+            await createInviteNotifier().sendInvite({ to: email, teamName: teamName ?? "a team", inviterName, acceptUrl, role: inviteRole })
         } catch (e) {
             console.error("[team invite] email send failed", id, email, e)
         }
     })
 
-    return Response.json({ invite })
+    return Response.json({ invite: result.invite })
 }

@@ -14,7 +14,11 @@ import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { createGithubTokenRepository } from "@/modules/vcs"
-import { createSupabaseTeamMembershipRepository, createSupabaseTeamsRepository } from "@/modules/teams"
+import {
+    createSupabaseTeamMembershipRepository,
+    createSupabaseTeamsRepository,
+    createSupabaseTeamInvitesRepository,
+} from "@/modules/teams"
 import { createSupabasePublicSessionRepository } from "@/modules/public"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
 import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
@@ -43,6 +47,9 @@ export class RequestContext {
     }
     get teams() {
         return createSupabaseTeamsRepository(this.db)
+    }
+    get teamInvites() {
+        return createSupabaseTeamInvitesRepository(this.db)
     }
     get publicSessions() {
         return createSupabasePublicSessionRepository(this.db)

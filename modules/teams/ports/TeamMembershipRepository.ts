@@ -14,6 +14,18 @@ export interface TeamMember {
     role: "owner" | "admin" | "member"
 }
 
+/** A member row for the management roster (enriched with profiles downstream). */
+export interface TeamMemberDetail {
+    user_id: string
+    role: TeamRole
+    created_at: string
+}
+
+/** Outcome of a member-mutating write: "ok", or "last_owner" when the DB
+ *  last-owner trigger (check_violation 23514) blocked demoting/removing the final
+ *  owner — the route maps that to a 409 rather than a 500. */
+export type MemberWriteResult = "ok" | "last_owner"
+
 export interface TeamMembershipRepository {
     /** Every member of a team with their role. THROWS RepositoryError on a query
      *  failure (callers treat a broken store as fatal, not as "no members"). */
@@ -64,4 +76,18 @@ export interface TeamMembershipRepository {
      *  Collections module is a future carve). FAIL-SAFE: null when absent or on a
      *  query error, matching the guard's original best-effort inline read. */
     findCollectionOwnership(collectionId: string): Promise<{ team_id: string; user_id: string } | null>
+
+    // ─── member administration (the management roster) ───────────────────────
+
+    /** Every member of a team with role + join time, for the management roster.
+     *  THROWS RepositoryError on failure. */
+    listDetailed(teamId: string): Promise<TeamMemberDetail[]>
+
+    /** Change a member's role. "last_owner" when the last-owner trigger blocked it
+     *  (23514); throws RepositoryError on any other failure. */
+    updateMemberRole(teamId: string, userId: string, role: TeamRole): Promise<MemberWriteResult>
+
+    /** Remove a member (or a self-leave). "last_owner" when the trigger blocked
+     *  removing the final owner (23514); throws on any other failure. */
+    removeMember(teamId: string, userId: string): Promise<MemberWriteResult>
 }

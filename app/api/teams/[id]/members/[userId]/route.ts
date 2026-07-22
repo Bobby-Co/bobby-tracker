@@ -1,14 +1,14 @@
-import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
-import { getAccessService, Role } from "@/modules/access"
+import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/api"
+import { Role } from "@/modules/access"
 import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 
 // PATCH /api/teams/[id]/members/[userId] — change a member's role (admins). The
 // DB last-owner trigger blocks demoting the final owner.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; userId: string }> }) {
     const { id, userId } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const role = await getAccessService(supabase).teamRole(id, user.id)
+    const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can change roles")
 
@@ -19,16 +19,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // Only an owner may promote another member to owner.
     if (next === "owner" && role !== "owner") return forbidden("only an owner can promote to owner")
 
-    const { error: dbErr } = await supabase
-        .from("team_members")
-        .update({ role: next })
-        .eq("team_id", id)
-        .eq("user_id", userId)
-    if (dbErr) {
-        // 23514 = last-owner trigger raised check_violation
-        if (dbErr.code === "23514") return jsonError("conflict", dbErr.message, 409)
-        return jsonError("db_error", dbErr.message, 500)
-    }
+    const { data: result, error: dbErr } = await repoRead(() => ctx.teamMembership.updateMemberRole(id, userId, next))
+    if (dbErr) return dbErr
+    // 23514 = last-owner trigger; can't change the final owner's role.
+    if (result === "last_owner") return jsonError("conflict", "the last owner's role can't be changed", 409)
     return new Response(null, { status: 204 })
 }
 
@@ -36,21 +30,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // removing themselves (leave). The last-owner trigger protects the final owner.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; userId: string }> }) {
     const { id, userId } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const role = await getAccessService(supabase).teamRole(id, user.id)
+    const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     const isSelf = userId === user.id
     if (!isSelf && !Role.of(role).atLeast("admin")) return forbidden("only team admins can remove members")
 
-    const { error: dbErr } = await supabase
-        .from("team_members")
-        .delete()
-        .eq("team_id", id)
-        .eq("user_id", userId)
-    if (dbErr) {
-        if (dbErr.code === "23514") return jsonError("conflict", "the last owner can't leave — transfer ownership first", 409)
-        return jsonError("db_error", dbErr.message, 500)
-    }
+    const { data: result, error: dbErr } = await repoRead(() => ctx.teamMembership.removeMember(id, userId))
+    if (dbErr) return dbErr
+    if (result === "last_owner") return jsonError("conflict", "the last owner can't leave — transfer ownership first", 409)
     return new Response(null, { status: 204 })
 }

@@ -5,7 +5,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
 import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
-import type { TeamMember, TeamMembershipRepository } from "../ports/TeamMembershipRepository"
+import type {
+    MemberWriteResult,
+    TeamMember,
+    TeamMemberDetail,
+    TeamMembershipRepository,
+} from "../ports/TeamMembershipRepository"
 
 // The RLS client and the service-role client carry different schema generics
 // ("public" vs "tracker"); accept any schema so both are assignable.
@@ -117,6 +122,41 @@ export class SupabaseTeamMembershipRepository implements TeamMembershipRepositor
             .eq("id", collectionId)
             .maybeSingle<{ team_id: string; user_id: string }>()
         return data ?? null
+    }
+
+    async listDetailed(teamId: string): Promise<TeamMemberDetail[]> {
+        const { data, error } = await this.db
+            .from("team_members")
+            .select("user_id, role, created_at")
+            .eq("team_id", teamId)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return (data ?? []) as TeamMemberDetail[]
+    }
+
+    async updateMemberRole(teamId: string, userId: string, role: TeamRole): Promise<MemberWriteResult> {
+        const { error } = await this.db
+            .from("team_members")
+            .update({ role })
+            .eq("team_id", teamId)
+            .eq("user_id", userId)
+        if (error) {
+            if (error.code === "23514") return "last_owner" // last-owner trigger
+            throw new RepositoryError(error.message, { cause: error })
+        }
+        return "ok"
+    }
+
+    async removeMember(teamId: string, userId: string): Promise<MemberWriteResult> {
+        const { error } = await this.db
+            .from("team_members")
+            .delete()
+            .eq("team_id", teamId)
+            .eq("user_id", userId)
+        if (error) {
+            if (error.code === "23514") return "last_owner"
+            throw new RepositoryError(error.message, { cause: error })
+        }
+        return "ok"
     }
 }
 
