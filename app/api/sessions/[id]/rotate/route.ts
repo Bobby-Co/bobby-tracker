@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireSessionAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { PublicSession } from "@/lib/shared/types"
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireSessionAccess(id, { write: true })
+    const { supabase, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
     const token = randomBytes(24).toString("base64url")
     const { data, error: dbErr } = await supabase

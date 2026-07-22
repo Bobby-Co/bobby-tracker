@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { Issue } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/issues — all issues for a project, newest first.
@@ -7,7 +7,7 @@ import type { Issue } from "@/lib/shared/types"
 // client-side). Shape: { issues: Issue[] }.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const { data, error: dbErr } = await supabase

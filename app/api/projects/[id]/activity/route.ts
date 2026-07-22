@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { createIssueEmbedder } from "@/modules/issues"
 
@@ -36,7 +36,7 @@ export interface ProjectActivity {
 // returns first — schedules no sweep on their behalf.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     // Confirm the caller actually owns this project BEFORE scheduling any work

@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { createServiceClient } from "@/lib/server/supabase"
 
@@ -21,7 +21,7 @@ import { createServiceClient } from "@/lib/server/supabase"
 // Auth: requireUser. The catalog is global but the embedding call
 // is metered, so we don't expose it to anonymous traffic.
 export async function POST(request: Request) {
-    const { error } = await requireUser()
+    const { error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>

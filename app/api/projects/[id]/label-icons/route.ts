@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { findIcon } from "@/lib/shared/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
 import type { ProjectLabelIcon } from "@/lib/shared/types"
@@ -10,7 +10,7 @@ function isKnownIconName(name: string): boolean {
 // GET /api/projects/[id]/label-icons — full map for this project.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("project_label_icons")
@@ -27,7 +27,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // the renderer can't draw.
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
@@ -57,7 +57,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 // DELETE /api/projects/[id]/label-icons?label=foo — drop one mapping.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
     const url = new URL(request.url)
     const label = url.searchParams.get("label")?.trim()

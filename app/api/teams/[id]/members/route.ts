@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getAccessService } from "@/modules/access"
 import { toMemberViews } from "@/lib/server/auth/user-profiles"
 import type { TeamRole } from "@/lib/shared/types"
@@ -8,7 +8,7 @@ import type { TeamRole } from "@/lib/shared/types"
 // auth.users isn't readable by `authenticated`.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

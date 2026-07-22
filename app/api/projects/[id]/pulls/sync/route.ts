@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/sync
@@ -10,7 +10,7 @@ import { getPullRequestServiceForProject } from "@/modules/vcs"
 // service-role backfill (detached, off the response path).
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const { data: project, error: projErr } = await supabase

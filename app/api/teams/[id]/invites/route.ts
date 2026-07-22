@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
 import { Email, Invite, createInviteNotifier } from "@/modules/teams"
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/shared/types"
@@ -8,7 +8,7 @@ import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/shared/types"
 // team_invites is admin-only, so a non-admin never sees the tokens.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
@@ -29,7 +29,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // signed in with a matching email (see /api/invites/[token]).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

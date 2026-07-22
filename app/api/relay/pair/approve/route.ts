@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
 import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
@@ -13,7 +13,7 @@ import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 // expiry, single-use). The per-IP rate limit below is the online brute-force
 // cap; treat the displayed code as sensitive (don't log/screen-share it).
 export async function POST(request: Request) {
-    const { user, error } = await requireUser()
+    const { user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // Attempt cap: limit guesses of user_code per client IP.

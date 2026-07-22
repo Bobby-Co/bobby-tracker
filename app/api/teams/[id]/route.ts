@@ -1,11 +1,11 @@
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
 import type { Team, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id] — a team the caller belongs to, with their role.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
@@ -18,7 +18,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // PATCH /api/teams/[id] — rename the team (admins). Personal teams can't be renamed.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
@@ -42,7 +42,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // the UI should confirm.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

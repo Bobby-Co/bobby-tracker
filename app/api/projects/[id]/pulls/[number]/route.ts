@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type { PRComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
@@ -16,7 +16,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [pullR, projectR, analysisR, commentsR] = await Promise.all([

@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { ISSUE_STATUSES } from "@/lib/shared/types"
 import type { ProjectStatusColor } from "@/lib/shared/types"
 
@@ -6,7 +6,7 @@ import type { ProjectStatusColor } from "@/lib/shared/types"
 // live in lib/timeline/colors.ts and are merged client-side.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("project_status_colors")
@@ -21,7 +21,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // Body: { status, color }.
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

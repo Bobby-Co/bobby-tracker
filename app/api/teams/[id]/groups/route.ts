@@ -1,4 +1,4 @@
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
 import { resolveUserProfiles } from "@/lib/server/auth/user-profiles"
 import type { AccessGroup, AccessGroupWithDetail } from "@/lib/shared/types"
@@ -8,7 +8,7 @@ import type { AccessGroup, AccessGroupWithDetail } from "@/lib/shared/types"
 // tracker.access_groups (NOT project_groups / "Collections").
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
@@ -47,7 +47,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // POST /api/teams/[id]/groups — create a people-group (admins).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { PublicSession } from "@/lib/shared/types"
 
 // GET — everything the owner's /sessions list needs in one round-trip:
@@ -13,7 +13,7 @@ import type { PublicSession } from "@/lib/shared/types"
 // Queries mirror the previous server component exactly so the rendered
 // data is identical after the client conversion.
 export async function GET() {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { data: sessions, error: sessErr } = await supabase

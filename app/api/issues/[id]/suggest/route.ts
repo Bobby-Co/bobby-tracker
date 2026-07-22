@@ -1,5 +1,5 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { IssuePrompt, createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import type { IssueAnalysisData } from "@/lib/shared/types"
@@ -18,7 +18,7 @@ import type { IssueAnalysisData } from "@/lib/shared/types"
 // so the drawer can copy it synchronously on click.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireIssueAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     // Per-issue effort, resolved in priority order:

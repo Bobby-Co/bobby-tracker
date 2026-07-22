@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
 
 // POST /api/issues/[id]/duplicate-of
@@ -12,7 +12,7 @@ import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issue
 // touch issues in projects they own.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

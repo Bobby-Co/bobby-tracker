@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { getVcsAppService } from "@/modules/vcs"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
@@ -12,7 +12,7 @@ import { createSupabaseIssuesRepository } from "@/modules/issues"
 // issue detail page's read). Shape: { issue: Issue | null }.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     const issues = createSupabaseIssuesRepository(supabase)
@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     const issues = createSupabaseIssuesRepository(supabase)
@@ -65,7 +65,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     // Capture the row (esp. its GitHub linkage) BEFORE deleting so we can

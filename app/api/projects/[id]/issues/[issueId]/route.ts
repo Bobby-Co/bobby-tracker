@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type {
@@ -16,7 +16,7 @@ import type {
 // Consolidated page-data endpoint for the issue-detail page. It replaces
 // the 7 separate client fetches the page used to fire (issue, project,
 // analyser, latest suggestion, "peek" issues, label icons, status
-// colors) with ONE Worker invocation + ONE requireUser() check, running
+// colors) with ONE Worker invocation + ONE new ApiContext().requireUser() check, running
 // all reads in a single Promise.all.
 //
 // Why this matters on Cloudflare: each Worker invocation pays the
@@ -32,7 +32,7 @@ export async function GET(
     { params }: { params: Promise<{ id: string; issueId: string }> },
 ) {
     const { id, issueId } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [issueR, projectR, analyserR, suggestionR, peekR, iconsR, colorsR] =

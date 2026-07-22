@@ -1,4 +1,4 @@
-import { jsonError, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { createIssueAnalysisService } from "@/modules/analysis"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic"
 // INSERT the box is subscribed to.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     const issues = createSupabaseIssuesRepository(supabase)

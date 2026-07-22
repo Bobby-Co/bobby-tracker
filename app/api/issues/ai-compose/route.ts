@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
@@ -16,7 +16,7 @@ import { createSupabaseProjectsRepository } from "@/modules/projects"
 // The tracker just enforces project ownership and forwards the
 // already-compressed images.
 export async function POST(request: Request) {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>

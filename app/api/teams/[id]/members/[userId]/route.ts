@@ -1,4 +1,4 @@
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
 import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 
@@ -6,7 +6,7 @@ import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 // DB last-owner trigger blocks demoting the final owner.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; userId: string }> }) {
     const { id, userId } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // removing themselves (leave). The last-owner trigger protects the final owner.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; userId: string }> }) {
     const { id, userId } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

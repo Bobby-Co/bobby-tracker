@@ -1,11 +1,11 @@
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
 
 // DELETE /api/teams/[id]/groups/[gid]/projects/[projectId] — revoke a project
 // grant from a people-group (admins).
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; gid: string; projectId: string }> }) {
     const { id, gid, projectId } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

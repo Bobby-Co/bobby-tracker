@@ -1,4 +1,4 @@
-import { jsonError, requireUser, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getVcsAppService, VcsMergeError, createServicePullRequestStore } from "@/modules/vcs"
 import { MergePolicy, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
@@ -28,7 +28,7 @@ function connected(p: MergeProject): boolean {
 // Shared loader: ownership + the PR + its review, all through the caller's
 // RLS-scoped client so a project/PR they don't own simply isn't found.
 async function load(
-    supabase: Awaited<ReturnType<typeof requireUser>>["supabase"],
+    supabase: Awaited<ReturnType<ApiContext["requireUser"]>>["supabase"],
     id: string,
     prNumber: number,
 ) {
@@ -59,7 +59,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const { projectR, pullR, analysisR } = await load(supabase, id, prNumber)
@@ -119,7 +119,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("bad_request", "invalid merge method", 400)
     }
 
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const { projectR, pullR, analysisR } = await load(supabase, id, prNumber)

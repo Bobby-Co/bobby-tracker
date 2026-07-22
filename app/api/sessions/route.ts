@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireTeam } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { PublicSession } from "@/lib/shared/types"
 
 // GET    — list sessions owned by the current user (newest first)
@@ -19,7 +19,7 @@ function parseWindow(v: unknown): string | null | undefined {
 }
 
 export async function GET(request: Request) {
-    const { supabase, teamId, error } = await requireTeam(request)
+    const { supabase, teamId, error } = await new ApiContext(request).requireTeam()
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("public_sessions")
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, teamId, error } = await requireTeam(request)
+    const { supabase, user, teamId, error } = await new ApiContext(request).requireTeam()
     if (error) return error
 
     let body: Record<string, unknown> = {}

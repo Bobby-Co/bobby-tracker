@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext } from "@/lib/server/http/api"
 import type {
     Issue,
     Project,
@@ -12,7 +12,7 @@ import type {
 // `project` is null when the id doesn't resolve so the client can 404.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [{ data: project }, { data: issues }, { data: labelIcons }, { data: statusColors }] = await Promise.all([

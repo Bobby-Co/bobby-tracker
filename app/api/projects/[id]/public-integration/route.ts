@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { ProjectPublicIntegration } from "@/lib/shared/types"
 
 // Per-project toggle for the public-submissions integration.
@@ -8,7 +8,7 @@ import type { ProjectPublicIntegration } from "@/lib/shared/types"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
     const { data } = await supabase
         .from("project_public_integration")
@@ -22,7 +22,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

@@ -1,4 +1,4 @@
-import { jsonError, requireSessionAccess, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { PublicSessionInvite } from "@/lib/shared/types"
 
 // GET — list whitelisted emails for a session.
@@ -22,7 +22,7 @@ function normalizeEmail(raw: unknown): string | null {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { data, error: dbErr } = await supabase
@@ -37,7 +37,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireSessionAccess(id, { write: true })
+    const { supabase, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>

@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { createNotificationService } from "@/modules/notifications"
 import type { Notification } from "@/lib/shared/types"
@@ -17,7 +17,7 @@ const LIMIT = 50
 // correct even though the list is capped, and it costs a head-count, not a
 // second round-trip.
 export async function GET() {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // Belt-and-braces drain: if the pg_net wake-up (migration 0054) was missed,
@@ -48,7 +48,7 @@ export async function GET() {
 // Backs "Mark all read". Filtering on read_at is null keeps it from rewriting
 // timestamps on rows already read, so the value stays "when it was first read".
 export async function PATCH() {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // The UPDATE grant is column-scoped to read_at (0049) — touching any other

@@ -1,11 +1,11 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getAnalyserWorkerDirectory, type RelayModel, type RelayWorker } from "@/modules/relay"
 
 // AUTH. List the signed-in user's active (non-revoked) workers, enriched
 // with live connection state from the analyser. The analyser lookup is
 // best-effort — on any failure every worker just shows offline.
 export async function GET() {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { data: rows, error: dbErr } = await supabase

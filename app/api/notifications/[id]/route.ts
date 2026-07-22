@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 
 // PATCH /api/notifications/[id] — mark one notification read.
 //
@@ -7,7 +7,7 @@ import { jsonError, requireUser } from "@/lib/server/http/api"
 // alone rather than sliding it forward.
 export async function PATCH(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { error: dbErr } = await supabase
@@ -28,7 +28,7 @@ export async function PATCH(_: Request, { params }: { params: Promise<{ id: stri
 // if the user double-clicks or two tabs race.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { error: dbErr } = await supabase.from("notifications").delete().eq("id", id)

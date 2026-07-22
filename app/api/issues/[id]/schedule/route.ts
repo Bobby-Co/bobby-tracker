@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.
@@ -8,7 +8,7 @@ import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issue
 // ends_at >= starts_at and 0 <= lane_y <= 1.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

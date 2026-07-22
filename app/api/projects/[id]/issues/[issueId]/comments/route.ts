@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError } from "@/modules/vcs"
 import { createServiceIssueSyncStore } from "@/modules/issues"
 
@@ -10,7 +10,7 @@ import { createServiceIssueSyncStore } from "@/modules/issues"
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; issueId: string }> }) {
     const { id, issueId } = await params
 
-    const { supabase, user, error } = await requireProjectAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: string

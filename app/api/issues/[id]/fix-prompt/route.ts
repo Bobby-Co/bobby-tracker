@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { IssuePrompt, createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
@@ -14,7 +14,7 @@ import { createSupabaseProjectsRepository } from "@/modules/projects"
 // rediscovers that from the repo faster than it can read it.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     const issues = createSupabaseIssuesRepository(supabase)

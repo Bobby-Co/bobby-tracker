@@ -1,4 +1,4 @@
-import { requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext } from "@/lib/server/http/api"
 import type { ProjectPublicIntegration, PublicSession } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/sessions — backs the Integrations tab: the
@@ -9,7 +9,7 @@ import type { ProjectPublicIntegration, PublicSession } from "@/lib/shared/types
 // of erroring outright.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [{ data: integration, error: intErr }, { data: links, error: linkErr }] = await Promise.all([

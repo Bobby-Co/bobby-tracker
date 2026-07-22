@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
 import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
@@ -6,7 +6,7 @@ import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 // AUTH. The signed-in user rejects a pending pairing by user_code. The
 // relay's next poll then sees status "denied" and stops.
 export async function POST(request: Request) {
-    const { error } = await requireUser()
+    const { error } = await new ApiContext().requireUser()
     if (error) return error
 
     // Attempt cap: same per-IP limit as approve to bound user_code guessing.

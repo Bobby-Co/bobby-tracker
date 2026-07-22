@@ -1,5 +1,5 @@
 import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { getAccessService, Role } from "@/modules/access"
 import { findIcon } from "@/lib/shared/icons/iconly"
@@ -19,7 +19,7 @@ function isKnownIconName(name: string): boolean {
 // (returns 404, not 403, so we don't reveal the project exists).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const access = await getAccessService(supabase).canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
@@ -34,7 +34,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     // Renaming/reconfiguring a project is an admin action within its team.
     const access = await getAccessService(supabase).canAccessProject(user.id, id)
@@ -85,7 +85,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 //      the user shouldn't be blocked by an unreachable analyser.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     // Deleting a project (and its knowledge graph) is an admin action.
     const access = await getAccessService(supabase).canAccessProject(user.id, id)

@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireRole, requireTeam } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getAccessService } from "@/modules/access"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/shared/icons/suggest"
@@ -11,13 +11,13 @@ import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/shared/t
 // the /projects grid. Coarse RLS already scopes rows to teams the caller belongs
 // to; here we (a) pin to the active team and (b) apply the group-level gate that
 // RLS deliberately doesn't — a plain member sees only projects granted to a group
-// they're in (owner/admin see all team projects). See lib/auth/team-access.ts.
+// they're in (owner/admin see all team projects). See modules/access.
 //
 // ?stats=1 embeds each project's insight row (0047) so the grid can render its
 // tile footers from the same round-trip. The sidebar calls the plain form and
 // pays nothing for stats it never shows.
 export async function GET(request: Request) {
-    const { supabase, user, teamId, role, error } = await requireTeam(request)
+    const { supabase, user, teamId, role, error } = await new ApiContext(request).requireTeam()
     if (error) return error
 
     const withStats = new URL(request.url).searchParams.get("stats") === "1"
@@ -56,11 +56,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, teamId, role, error } = await requireTeam(request)
+    const { supabase, user, teamId, role, error } = await new ApiContext(request).requireTeam()
     if (error) return error
     // Adding a project to a team is an admin action. In a personal team the sole
     // member is the owner, so this is transparent for solo use.
-    const roleErr = requireRole(role, "admin")
+    const roleErr = new ApiContext().requireRole(role, "admin")
     if (roleErr) return roleErr
 
     let body: Record<string, unknown>

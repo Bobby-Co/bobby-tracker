@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/server/http/api"
+import { ApiContext } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
     }
 
     try {
-        const { supabase, user, error } = await requireUser()
+        const { supabase, user, error } = await new ApiContext().requireUser()
         // No session (e.g. the cookie wasn't sent on the return): send the user
         // through login and back here (mirrors the /login?next= convention).
         if (error || !user) {

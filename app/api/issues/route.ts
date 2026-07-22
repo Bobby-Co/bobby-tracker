@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { ProjectAnalyser, createSupabaseProjectAnalyserRepository, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull, RepositoryError } from "@/lib/shared/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
@@ -9,7 +9,7 @@ import { getVcsAppService } from "@/modules/vcs"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 export async function POST(request: Request) {
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // Bind the request's RLS-scoped client to each repository once, up front,

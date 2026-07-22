@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/[number]/comments
@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, user, error } = await requireProjectAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: string

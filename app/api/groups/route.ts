@@ -1,4 +1,4 @@
-import { jsonError, requireTeam } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { ProjectGroup } from "@/lib/shared/types"
 
 // "Collections" (project_groups): a group of PROJECTS for AI routing. Now scoped
@@ -7,7 +7,7 @@ import type { ProjectGroup } from "@/lib/shared/types"
 // POST  — create a collection, optionally with an initial project list
 
 export async function GET(request: Request) {
-    const { supabase, teamId, error } = await requireTeam(request)
+    const { supabase, teamId, error } = await new ApiContext(request).requireTeam()
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("project_groups")
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, teamId, error } = await requireTeam(request)
+    const { supabase, user, teamId, error } = await new ApiContext(request).requireTeam()
     if (error) return error
 
     let body: Record<string, unknown> = {}

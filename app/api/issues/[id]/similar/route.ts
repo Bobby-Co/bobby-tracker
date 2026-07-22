@@ -1,4 +1,4 @@
-import { repoRead, requireIssueAccess } from "@/lib/server/http/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 // GET /api/issues/[id]/similar
@@ -37,7 +37,7 @@ const MIN_SIMILARITY = 0.40
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireIssueAccess(id)
+    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     const issues = createSupabaseIssuesRepository(supabase)

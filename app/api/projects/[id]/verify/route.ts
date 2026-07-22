@@ -1,5 +1,5 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { RepositoryError } from "@/lib/shared/kernel"
 import type { Project } from "@/lib/shared/types"
 
@@ -14,7 +14,7 @@ import type { Project } from "@/lib/shared/types"
 // isn't ready.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireProjectAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}

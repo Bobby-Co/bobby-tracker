@@ -1,10 +1,10 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 
 // AUTH. Rename a worker. RLS scopes the update to the owner, so a bad id
 // or another user's worker simply matches no rows.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>

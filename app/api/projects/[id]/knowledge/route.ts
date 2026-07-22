@@ -1,4 +1,4 @@
-import { repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import type { Project } from "@/lib/shared/types"
 
@@ -8,7 +8,7 @@ import type { Project } from "@/lib/shared/types"
 // links and the analyser state to decide whether the graph is ready.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [{ data: project }, { data: analyser, error: analyserErr }] = await Promise.all([

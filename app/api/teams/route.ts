@@ -1,11 +1,11 @@
-import { jsonError, personalTeamName, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError, personalTeamName } from "@/lib/server/http/api"
 import { getAccessService } from "@/modules/access"
 import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams — the caller's teams (each with their role), personal team
 // first. Bootstraps the personal team on first call. Backs the top-bar selector.
 export async function GET() {
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     try {
         const teams = await getAccessService(supabase).listTeams(user.id, personalTeamName(user))
@@ -19,7 +19,7 @@ export async function GET() {
 // owner. Uses the create_team RPC so the team row + owner-membership are inserted
 // atomically (RLS won't let you insert your own first membership otherwise).
 export async function POST(request: Request) {
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>

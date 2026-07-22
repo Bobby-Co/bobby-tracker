@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { GithubRepoSummary, GithubToken } from "@/lib/shared/types"
 
 // GET /api/github/repos
@@ -32,7 +32,7 @@ interface RawGithubRepo {
 }
 
 export async function GET() {
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { data: tokenRow, error: tokErr } = await supabase

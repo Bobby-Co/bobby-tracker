@@ -1,11 +1,11 @@
-import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
 
 // POST /api/teams/[id]/groups/[gid]/projects — grant a team project to a
 // people-group (admins). The composite FK rejects a project from another team.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; gid: string }> }) {
     const { id, gid } = await params
-    const { supabase, user, error } = await requireUser()
+    const { supabase, user, error } = await new ApiContext().requireUser()
     if (error) return error
     const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)

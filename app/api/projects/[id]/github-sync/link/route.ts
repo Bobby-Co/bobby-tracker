@@ -1,4 +1,4 @@
-import { requireProjectAccess, jsonError } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
@@ -15,7 +15,7 @@ import type { Project } from "@/lib/shared/types"
 // installation is derived from the project's own repo, not a user-supplied id.
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireProjectAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     try {

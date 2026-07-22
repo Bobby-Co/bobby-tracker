@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { Issue, ProjectAnalyser, ProjectGroup } from "@/lib/shared/types"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis"
 
@@ -11,7 +11,7 @@ import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis"
 // Shape: { group: { id, name }, members: MemberInfo[], issues: Issue[] }
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { data: group, error: gErr } = await supabase

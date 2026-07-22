@@ -1,11 +1,11 @@
-import { jsonError, requireSessionAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 
 export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string; projectId: string }> },
 ) {
     const { id, projectId } = await params
-    const { supabase, error } = await requireSessionAccess(id, { write: true })
+    const { supabase, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
     const { error: dbErr } = await supabase
         .from("public_session_projects")

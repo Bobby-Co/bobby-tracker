@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { Email } from "@/modules/teams"
 import type { TeamInvite } from "@/lib/shared/types"
@@ -42,7 +42,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
 // via service-role, since the invitee can't write team_members under RLS).
 export async function POST(_: Request, { params }: { params: Promise<{ token: string }> }) {
     const { token } = await params
-    const { user, error } = await requireUser()
+    const { user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     const { svc, invite } = await loadInvite(token)

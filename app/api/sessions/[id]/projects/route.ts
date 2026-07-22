@@ -1,11 +1,11 @@
-import { jsonError, requireSessionAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 
 // POST — add a project to a session. RLS on public_session_projects
 // enforces that the project belongs to the same owner, so we don't
 // re-check ownership here.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireSessionAccess(id, { write: true })
+    const { supabase, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>

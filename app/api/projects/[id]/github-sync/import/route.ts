@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { importExistingIssues } from "@/modules/vcs"
 
 export const dynamic = "force-dynamic"
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 // runs service-role. Returns { imported, total, skipped }.
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     // Ownership check — the cookie client only sees the caller's projects.

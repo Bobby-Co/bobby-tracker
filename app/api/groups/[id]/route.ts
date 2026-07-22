@@ -1,9 +1,9 @@
-import { jsonError, requireCollectionAccess, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import type { ProjectGroup } from "@/lib/shared/types"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
     const { data, error: dbErr } = await supabase
         .from("project_groups")
@@ -51,7 +51,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireCollectionAccess(id, { write: true })
+    const { supabase, error } = await new ApiContext().requireCollectionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>
@@ -78,7 +78,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireCollectionAccess(id, { write: true })
+    const { supabase, error } = await new ApiContext().requireCollectionAccess(id, { write: true })
     if (error) return error
     const { error: dbErr } = await supabase.from("project_groups").delete().eq("id", id)
     if (dbErr) return jsonError("db_error", dbErr.message, 500)

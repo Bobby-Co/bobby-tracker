@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
@@ -12,7 +12,7 @@ import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 // can show a "syncing…" state; the next load is populated.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [pullsR, analysesR] = await Promise.all([

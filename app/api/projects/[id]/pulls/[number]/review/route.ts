@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { PullRequest as PullRequestEntity } from "@/modules/vcs"
@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, error } = await requireProjectAccess(id)
+    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     // Ownership + everything the kickoff needs, through the RLS-scoped client so

@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
 import { EmbeddingText } from "@/modules/issues"
 import type { ProjectGroup } from "@/lib/shared/types"
@@ -24,7 +24,7 @@ import type { ProjectGroup } from "@/lib/shared/types"
 // for the issue's layer or feature. Returns proposal + ranking[].
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { supabase, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>

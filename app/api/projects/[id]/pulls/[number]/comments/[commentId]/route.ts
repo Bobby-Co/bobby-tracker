@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -35,7 +35,7 @@ export async function PATCH(
     const ghId = Number(commentId)
     if (!Number.isInteger(ghId)) return jsonError("bad_request", "invalid comment id", 400)
 
-    const { supabase, user, error } = await requireProjectAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: string
@@ -80,7 +80,7 @@ export async function DELETE(
     const ghId = Number(commentId)
     if (!Number.isInteger(ghId)) return jsonError("bad_request", "invalid comment id", 400)
 
-    const { supabase, user, error } = await requireProjectAccess(id)
+    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const owned = await loadOwned(supabase, id, ghId, user.id)
