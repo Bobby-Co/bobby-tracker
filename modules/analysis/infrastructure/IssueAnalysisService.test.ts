@@ -24,15 +24,14 @@ const analyser = { startIssueAnalysis: mock(), cancelIssueAnalysis: mock() }
 const vcsSvc = { postComment: mock(), updateComment: mock() }
 const vcsFor = () => vcsSvc
 
-// The service imports composeIssueFixPrompt + Project at module load. bun's
-// mock.module is process-global, so these mocks are supersets covering what other
-// test files in the run rely on (composeIssueFixPrompt, the Issue aggregate, the
-// sync-store factory).
+// The service imports Project at module load, and the comment builder + prompt
+// come in via the constructor (stubbed below). bun's mock.module is process-
+// global, so these are supersets covering what sibling test files rely on.
 mock.module("@/modules/issues", () => ({
     Issue: RealIssue,
-    composeIssueFixPrompt: () => "FIX_PROMPT",
     createServiceIssueSyncStore: () => store,
 }))
+const prompt = { compose: () => "FIX_PROMPT" }
 mock.module("@/modules/projects", () => ({
     Project: RealProject,
     createSupabaseProjectsRepository: () => projectsRepo,
@@ -44,7 +43,7 @@ beforeAll(async () => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new IssueAnalysisService(analyser as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment())
+const svc = () => new IssueAnalysisService(analyser as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any)
 
 beforeEach(() => {
     store.findAnalysisRow.mockReset().mockResolvedValue(null)

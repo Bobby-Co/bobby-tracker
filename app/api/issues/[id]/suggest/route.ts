@@ -1,6 +1,6 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
 import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
-import { composeIssueFixPrompt, createSupabaseIssuesRepository } from "@/modules/issues"
+import { IssuePrompt, createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import type { IssueAnalysisData } from "@/lib/supabase/types"
 
@@ -72,7 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // user-gesture loss on Safari/Firefox).
         const dataWithPrompt: IssueAnalysisData = {
             ...result,
-            fix_prompt: composeIssueFixPrompt({
+            fix_prompt: new IssuePrompt().compose({
                 project,
                 issue,
                 suggestion: {

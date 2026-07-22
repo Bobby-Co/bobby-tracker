@@ -45,7 +45,6 @@ mock.module("@/lib/supabase/server", () => ({ createServiceClient: () => ({}) })
 const SVC = {}
 mock.module("@/modules/issues", () => ({
     Issue: RealIssue,
-    composeIssueFixPrompt: () => "FIX_PROMPT",
     upsertIssueComment: mock(),
     ...store,
     createServiceIssueSyncStore: () => ({

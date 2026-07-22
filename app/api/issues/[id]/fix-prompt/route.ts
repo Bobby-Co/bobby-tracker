@@ -1,5 +1,5 @@
 import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
-import { composeIssueFixPrompt, createSupabaseIssuesRepository } from "@/modules/issues"
+import { IssuePrompt, createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 // GET /api/issues/[id]/fix-prompt
@@ -31,7 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (sErr) return sErr
     if (!project) return jsonError("not_found", "project not found", 404)
 
-    const prompt = composeIssueFixPrompt({
+    const prompt = new IssuePrompt().compose({
         project,
         issue,
         suggestion: suggestion ?? null,

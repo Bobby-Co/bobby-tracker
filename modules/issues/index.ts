@@ -32,9 +32,9 @@ export { createServiceEmbeddingIndex } from "./infrastructure/SupabaseEmbeddingI
 export type { EmbeddableIssue } from "./application/IssueEmbedder"
 export { IssueEmbedder, createIssueEmbedder } from "./application/IssueEmbedder"
 
-// ─── issue fix-prompt composer (renders a coding-agent prompt from an issue) ──
+// ─── issue fix-prompt builder (renders a coding-agent prompt from an issue) ───
 export type { IssuePromptInput } from "./infrastructure/IssuePrompt"
-export { composeIssueFixPrompt } from "./infrastructure/IssuePrompt"
+export { IssuePrompt } from "./infrastructure/IssuePrompt"
 
 // ─── service-role issues store (GitHub-sync / analysis, incl. the issue-comment
 //     mirror) — the IssueSyncStore PORT + its service-backed factory. Cross-module

@@ -4,7 +4,7 @@
 // root, so this never touches a token, owner/repo, DB client, or renderer detail.
 
 import { tryOrNull } from "@/lib/kernel"
-import { composeIssueFixPrompt, type IssueSyncStore, type IssueSyncPatch } from "@/modules/issues"
+import { type IssuePrompt, type IssueSyncStore, type IssueSyncPatch } from "@/modules/issues"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { IssueAnalysisData, IssuePriority } from "@/lib/supabase/types"
@@ -26,6 +26,7 @@ export class IssueAnalysisService {
         private readonly analysers: ProjectAnalyserRepository,
         private readonly vcsFor: VcsAppServiceResolver,
         private readonly comment: IssueAnalysisComment,
+        private readonly prompt: IssuePrompt,
     ) {}
 
     // ensure kicks off the SINGLE analysis run for an issue and is the one entry
@@ -131,7 +132,7 @@ export class IssueAnalysisService {
                 const graphId = await tryOrNull(() => this.analysers.findGraphId(issue.project_id))
                 const dataWithPrompt: IssueAnalysisData = {
                     ...result,
-                    fix_prompt: composeIssueFixPrompt({
+                    fix_prompt: this.prompt.compose({
                         project,
                         issue: {
                             issue_number: issue.issue_number,

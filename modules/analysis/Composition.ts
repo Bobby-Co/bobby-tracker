@@ -6,7 +6,7 @@
 // the service factories, never on the transport or the concrete collaborators.
 
 import { createServiceClient } from "@/lib/supabase/server"
-import { createServiceIssueSyncStore } from "@/modules/issues"
+import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getVcsAppService } from "@/modules/vcs"
 import type { Analyser } from "./ports/Analyser"
@@ -33,6 +33,7 @@ export function createIssueAnalysisService(): IssueAnalysisService {
         createSupabaseProjectAnalyserRepository(svc),
         getVcsAppService,
         new IssueAnalysisComment(),
+        new IssuePrompt(),
     )
 }
 
