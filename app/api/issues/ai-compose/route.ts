@@ -1,6 +1,5 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 // POST /api/issues/ai-compose
 //
@@ -16,7 +15,7 @@ import { createSupabaseProjectsRepository } from "@/modules/projects"
 // The tracker just enforces project ownership and forwards the
 // already-compressed images.
 export async function POST(request: Request) {
-    const { supabase, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -36,7 +35,7 @@ export async function POST(request: Request) {
 
     // Existence + visibility check (RLS-scoped): findName returns null when the
     // project is absent or not visible to the caller.
-    const projects = createSupabaseProjectsRepository(supabase)
+    const projects = ctx.projects
     const { data: projectName, error: pErr } = await repoRead(() => projects.findName(project_id))
     if (pErr) return pErr
     if (!projectName) return jsonError("not_found", "project not found", 404)

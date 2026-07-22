@@ -4,18 +4,16 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { getVcsAppService } from "@/modules/vcs"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePatch } from "@/modules/issues"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
-import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 // GET /api/issues/[id]?project_id=... — single issue. The optional
 // project_id query param scopes the lookup to a project (matching the
 // issue detail page's read). Shape: { issue: Issue | null }.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
-    const issues = createSupabaseIssuesRepository(supabase)
+    const issues = ctx.issues
     const projectId = new URL(request.url).searchParams.get("project_id")
     const { data, error: dbErr } = await repoRead(() => issues.findByIdInProject(id, projectId))
     if (dbErr) return dbErr
@@ -24,11 +22,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
-    const issues = createSupabaseIssuesRepository(supabase)
-    const projects = createSupabaseProjectsRepository(supabase)
+    const issues = ctx.issues
+    const projects = ctx.projects
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -65,14 +63,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     // Capture the row (esp. its GitHub linkage) BEFORE deleting so we can
     // propagate the deletion afterwards. Fail-safe: a read error → null → we
     // skip GitHub propagation, exactly as the old inline read did.
-    const issues = createSupabaseIssuesRepository(supabase)
-    const projects = createSupabaseProjectsRepository(supabase)
+    const issues = ctx.issues
+    const projects = ctx.projects
     const issue = await tryOrNull(() => issues.findById(id))
 
     const { error: dbErr } = await repoRead(() => issues.deleteById(id))

@@ -1,7 +1,6 @@
-import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
+import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { IssuePrompt, createSupabaseIssuesRepository } from "@/modules/issues"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { IssuePrompt } from "@/modules/issues"
 import type { IssueAnalysisData } from "@/lib/shared/types"
 
 // POST /api/issues/[id]/suggest
@@ -18,7 +17,7 @@ import type { IssueAnalysisData } from "@/lib/shared/types"
 // so the drawer can copy it synchronously on click.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     // Per-issue effort, resolved in priority order:
@@ -31,9 +30,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try { body = await request.json() } catch {}
     const overrideEffort = ProjectAnalyser.isValidEffort(body?.effort) ? body.effort : undefined
 
-    const issues = createSupabaseIssuesRepository(supabase)
-    const projects = createSupabaseProjectsRepository(supabase)
-    const analyserRepo = createSupabaseProjectAnalyserRepository(supabase)
+    const issues = ctx.issues
+    const projects = ctx.projects
+    const analyserRepo = ctx.analyser
     const { data: issue, error: iErr } = await repoRead(() => issues.findSuggestContext(id))
     if (iErr) return iErr
     if (!issue) return jsonError("not_found", "issue not found", 404)

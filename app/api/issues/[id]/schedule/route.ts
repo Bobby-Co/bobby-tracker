@@ -1,5 +1,5 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
+import { type IssuePatch } from "@/modules/issues"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.
 // Accepts any subset of { starts_at, ends_at, lane_y, color }. Pass
@@ -8,7 +8,7 @@ import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issue
 // ends_at >= starts_at and 0 <= lane_y <= 1.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
@@ -43,7 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (Object.keys(patch).length === 0) return jsonError("bad_request", "no valid fields", 400)
 
-    const issues = createSupabaseIssuesRepository(supabase)
+    const issues = ctx.issues
     const { data, error: dbErr } = await repoRead(() => issues.update(id, patch))
     if (dbErr) return dbErr
     return Response.json({ issue: data })

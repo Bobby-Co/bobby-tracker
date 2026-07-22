@@ -1,5 +1,4 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { createGithubTokenRepository } from "@/modules/vcs"
 
 // GET /api/github/connection
 //
@@ -8,11 +7,11 @@ import { createGithubTokenRepository } from "@/modules/vcs"
 // scope (same policy as /api/github/repos). Returns their GitHub login for the
 // "connected as @octocat" affordance.
 export async function GET() {
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     try {
-        const gh = await createGithubTokenRepository(supabase).find(user.id)
+        const gh = await ctx.githubTokens.find(user.id)
         return Response.json({ connected: !!gh, login: gh?.login ?? null })
     } catch (e) {
         return jsonError("db_error", (e as Error).message, 500)

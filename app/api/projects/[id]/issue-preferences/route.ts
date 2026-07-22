@@ -1,10 +1,4 @@
-import {
-    AnalyserError,
-    createSupabaseProjectAnalyserRepository,
-    getAnalyser,
-    ProjectAnalyser,
-    type AnalyseEffort,
-} from "@/modules/analysis"
+import { AnalyserError, getAnalyser, ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // GET/PUT /api/projects/[id]/issue-preferences
@@ -18,10 +12,10 @@ import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 // analyser knows about: GET reports an empty default, PUT returns 409.
 
 async function resolveGraphId(projectId: string) {
-    const { supabase, error } = await new ApiContext().requireProjectAccess(projectId)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(projectId)
     if (error) return { error } as const
     const { data, error: dbErr } = await repoRead(() =>
-        createSupabaseProjectAnalyserRepository(supabase).findGraphId(projectId),
+        ctx.analyser.findGraphId(projectId),
     )
     if (dbErr) return { error: dbErr } as const
     return { graphId: data } as const

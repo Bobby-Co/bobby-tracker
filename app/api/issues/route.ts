@@ -1,22 +1,21 @@
 import { after } from "next/server"
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { ProjectAnalyser, createSupabaseProjectAnalyserRepository, createIssueAnalysisService } from "@/modules/analysis"
+import { ProjectAnalyser, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull, RepositoryError } from "@/lib/shared/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
-import { createSupabaseIssuesRepository, createIssueEmbedder } from "@/modules/issues"
+import { createIssueEmbedder } from "@/modules/issues"
 import { getVcsAppService } from "@/modules/vcs"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 export async function POST(request: Request) {
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // Bind the request's RLS-scoped client to each repository once, up front,
     // and reuse the instances throughout the handler.
-    const analyserRepo = createSupabaseProjectAnalyserRepository(supabase)
-    const issues = createSupabaseIssuesRepository(supabase)
-    const projects = createSupabaseProjectsRepository(supabase)
+    const analyserRepo = ctx.analyser
+    const issues = ctx.issues
+    const projects = ctx.projects
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -109,4 +108,3 @@ export async function POST(request: Request) {
 
     return Response.json({ issue })
 }
-

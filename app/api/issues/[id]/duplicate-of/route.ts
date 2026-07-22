@@ -1,5 +1,5 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
+import { type IssuePatch } from "@/modules/issues"
 
 // POST /api/issues/[id]/duplicate-of
 //
@@ -12,7 +12,7 @@ import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issue
 // touch issues in projects they own.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("bad_request", "An issue can't be a duplicate of itself.", 400)
     }
 
-    const issues = createSupabaseIssuesRepository(supabase)
+    const issues = ctx.issues
 
     if (targetId) {
         // Same-project check + reject chains: a duplicate-of-a-
