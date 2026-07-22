@@ -173,7 +173,7 @@ be ceremony. The test is ownership, not "is it a class."
   convention** — PascalCase files and the Java identifier rules throughout. `vcs`
   is the reference; the others mirror it. New modules start here.
 
-## The shared kernel — `lib/kernel/`
+## The shared kernel — `lib/shared/kernel/`
 
 Deliberately thin. Fat kernels re-couple the modules you just separated.
 
@@ -184,8 +184,8 @@ Deliberately thin. Fat kernels re-couple the modules you just separated.
 | `Clock`, `BackgroundTasks`, `IdGenerator` (ports) | runtime services the core depends on abstractly |
 | `adapters.ts` | the concrete Workers implementations (`systemClock`, `workersBackgroundTasks`, `cryptoIdGenerator`) — imported only at a composition root |
 
-`@/lib/kernel` re-exports the **pure** surface only; import adapters explicitly
-from `@/lib/kernel/adapters`.
+`@/lib/shared/kernel` re-exports the **pure** surface only; import adapters
+explicitly from `@/lib/shared/kernel/adapters`.
 
 ## What lives in `lib/` vs `modules/`
 
@@ -198,33 +198,30 @@ exactly one rule and it decides where any file goes:
 > It belongs in `lib/` only if it is context-free plumbing that every capability
 > could reuse.**
 
-`lib/` therefore contains just these categories:
+`lib/` is split into **three runtime buckets** so a refactor can be scoped to one
+side without reading the others. A file's bucket is decided by *who imports it*:
 
-| Folder | What it is | Example |
+| Bucket | Who imports it | Holds |
 | --- | --- | --- |
-| `lib/kernel/` | the pure runtime-agnostic core (above) | `Result`, `EventBus` |
-| `lib/platform/` | shared **infrastructure** adapters — the concrete runtime any module talks to | `platform/http/api.ts` (route envelope + `requireAccess`), `platform/http/api-client.ts`, `platform/email/jmap.ts` (JMAP transport), `platform/rate-limit.ts`, `supabase/` (DB client + generated types) |
-| `lib/rendering/` | shared **presentation** helpers consumed by more than one context and by the client | `badge.ts` (finding/score/verdict visual vocabulary) |
-| `lib/util/` | pure, product-agnostic helpers | `image-compress`, `realtime-channels`, `repo-url` |
+| `lib/server/` | server-only (routes, module infrastructure, composition) | `auth/` (team-access + access + user-profiles), `http/api.ts` (route envelope + `requireAccess`), `email/jmap.ts` (JMAP transport), `rate-limit.ts`, `supabase.ts` (service/RLS DB client) + `supabase-auth-jwt.ts` |
+| `lib/client/` | client-only (`"use client"` components/hooks) | `auth/` (React context providers), `hooks/use-api.ts`, `http/api-client.ts`, `supabase.ts` (browser client), `timeline/*`, `image-compress.ts` |
+| `lib/shared/` | **both** sides (runtime-agnostic) | `kernel/*` (the pure core above), `types.ts` (generated DB row types), `rendering/*` (`badge`, `finding-state`), `realtime-channels.ts`, `repo-url.ts`, `icons/*` |
 
 Everything else — anything that names an issue, a PR, a comment, an analysis, a
 notification — lives in `modules/`. When a pure domain policy needs a DB row's
 shape, it declares a **local value-object** for the fields it reads (e.g.
-`MergePull`/`MergeReview` in pull-requests, `ProjectInsightView` in projects)
-rather than importing `@/lib/supabase/types`, so it stays lint-clean under the
-DIP boundary and carries no SDK dependency.
+`MergePull`/`MergeReview` in vcs, `ProjectInsightState` in projects) rather than
+importing `@/lib/shared/types`, so it stays lint-clean under the DIP boundary
+(which bans `@/lib/server/*` + `@/lib/shared/types` in domain/application) and
+carries no SDK dependency. `kernel` sits in `shared/` — not `server/` — precisely
+so domain/application can depend on it while the DIP rule bans the rest of server.
 
-**Migration status (2026-07): `lib/` root is fully drained** — no loose files,
-only the category folders above. Contexts now consolidated in `modules/`: **`vcs`**
-(the former `github` + `pull-requests`, merged — a PR can't exist without a VCS;
-this is the **golden-standard** module above), `analysis` (owns the issue/PR
-analysis flows), `issues`, `projects`, `notifications`, `teams`, `public`,
-`relay`. **Deliberately kept in `lib/`**: `lib/auth/` (team-access +
-access are cross-cutting authz used by every route — a supporting subdomain, not
-one context; its `*-context.tsx` React providers are frontend and could move to
-`components/`). `lib/icons/`, `lib/hooks/`, and the presentation half of
-`lib/timeline/` are frontend, not backend contexts, and are out of scope for the
-modules split.
+**Status (2026-07):** `lib/` root is fully drained into the three buckets; no
+loose files. Contexts live in `modules/`: **`vcs`** (the former `github` +
+`pull-requests`, merged — the **golden-standard** module above), `analysis`,
+`issues`, `projects`, `notifications`, `teams`, `public`, `relay`. The former
+`lib/auth` cross-cutting authz is now `lib/server/auth` (server) + `lib/client/auth`
+(the React providers).
 
 ## Composition root
 
