@@ -13,7 +13,7 @@ import { getAccessService } from "@/modules/access"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { createGithubTokenRepository } from "@/modules/vcs"
+import { createGithubTokenRepository, createSupabasePullRequestReadRepository } from "@/modules/vcs"
 import {
     createSupabaseTeamMembershipRepository,
     createSupabaseTeamsRepository,
@@ -47,6 +47,9 @@ export class RequestContext {
     }
     get githubTokens() {
         return createGithubTokenRepository(this.db)
+    }
+    get pullRequests() {
+        return createSupabasePullRequestReadRepository(this.db)
     }
     get teamMembership() {
         return createSupabaseTeamMembershipRepository(this.db)

@@ -54,6 +54,10 @@ export interface ProjectsRepository {
     /** The project's display name, or null when absent / not visible. */
     findName(projectId: string): Promise<string | null>
 
+    /** id + name + repo ref for the PR-detail page. THROWS RepositoryError on a
+     *  query failure (the route surfaces a 500 vs a 404). */
+    findPullContext(projectId: string): Promise<Pick<Project, "id" | "name" | "repo_url" | "repo_full_name"> | null>
+
     /** Analysis-flow project context (name/description + GitHub-link gate), or
      *  null when absent / not visible. */
     findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null>

@@ -1,25 +1,19 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import type { RequestContext } from "@/lib/server/http/api"
+import type { CommentOwnership } from "@/modules/vcs"
 
 // Edit / delete a PR comment the user authored from here. `commentId` is the
 // GitHub comment id. Only tracker-provenance comments owned by the caller are
 // writable; GitHub-origin comments are read-only mirrors (edit on GitHub).
 
-type OwnedRow = { provenance: string; author_user_id: string | null; pr_number: number }
-
 async function loadOwned(
-    supabase: SupabaseClient,
+    ctx: RequestContext,
     projectId: string,
     commentId: number,
     userId: string,
-): Promise<{ row: OwnedRow } | { error: Response }> {
-    const { data } = await supabase
-        .from("pr_comments")
-        .select("provenance,author_user_id,pr_number")
-        .eq("project_id", projectId)
-        .eq("github_comment_id", commentId)
-        .maybeSingle<OwnedRow>()
+): Promise<{ row: CommentOwnership } | { error: Response }> {
+    const data = await ctx.pullRequests.findCommentOwnership(projectId, commentId)
     if (!data) return { error: jsonError("not_found", "comment not found", 404) }
     if (data.provenance !== "tracker" || data.author_user_id !== userId) {
         return { error: jsonError("forbidden", "you can only edit comments you posted from here", 403) }
@@ -35,7 +29,7 @@ export async function PATCH(
     const ghId = Number(commentId)
     if (!Number.isInteger(ghId)) return jsonError("bad_request", "invalid comment id", 400)
 
-    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: string
@@ -47,15 +41,15 @@ export async function PATCH(
     }
     if (!body) return jsonError("bad_request", "comment body is required", 400)
 
-    const owned = await loadOwned(supabase, id, ghId, user.id)
+    const owned = await loadOwned(ctx, id, ghId, user.id)
     if ("error" in owned) return owned.error
 
-    const ctx = await new CommentActions().resolve(supabase, user.id, id)
-    if ("error" in ctx) return ctx.error
+    const actions = await new CommentActions().resolve(ctx.client, user.id, id)
+    if ("error" in actions) return actions.error
 
     let updated
     try {
-        updated = await ctx.vcs.updateComment(ghId, body)
+        updated = await actions.vcs.updateComment(ghId, body)
     } catch (e) {
         if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
@@ -80,17 +74,17 @@ export async function DELETE(
     const ghId = Number(commentId)
     if (!Number.isInteger(ghId)) return jsonError("bad_request", "invalid comment id", 400)
 
-    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
-    const owned = await loadOwned(supabase, id, ghId, user.id)
+    const owned = await loadOwned(ctx, id, ghId, user.id)
     if ("error" in owned) return owned.error
 
-    const ctx = await new CommentActions().resolve(supabase, user.id, id)
-    if ("error" in ctx) return ctx.error
+    const actions = await new CommentActions().resolve(ctx.client, user.id, id)
+    if ("error" in actions) return actions.error
 
     try {
-        await ctx.vcs.deleteComment(ghId)
+        await actions.vcs.deleteComment(ghId)
     } catch (e) {
         if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)

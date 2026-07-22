@@ -1,7 +1,8 @@
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import type { RequestContext } from "@/lib/server/http/api"
 import { getVcsAppService, VcsMergeError, createServicePullRequestStore } from "@/modules/vcs"
 import { MergePolicy, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
-import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
+import type { GithubSyncContext } from "@/modules/projects"
 
 // GET  /api/projects/[id]/pulls/[number]/merge — everything the merge bar needs:
 //        our policy gate (from mirrored data), the repo's allowed merge methods,
@@ -10,42 +11,21 @@ import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/typ
 // POST /api/projects/[id]/pulls/[number]/merge — perform the merge, re-checking
 //        the gate server-side first.
 //
-// Only projects the caller OWNS reach GitHub: the ownership select runs on the
+// Only projects the caller OWNS reach GitHub: the ownership read runs on the
 // RLS-scoped client, and the GitHub calls (service-role installation token) are
 // gated behind it. Neither verb touches GitHub for a project the user can't see.
 
-type MergeProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
-    github_installation_id: number | null
-    github_repo_id: number | null
-    github_sync_enabled: boolean
-}
-const PROJECT_COLS = "id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled"
-
-function connected(p: MergeProject): boolean {
+function connected(p: GithubSyncContext): boolean {
     return p.github_sync_enabled && p.github_installation_id != null && p.github_repo_id != null
 }
 
 // Shared loader: ownership + the PR + its review, all through the caller's
-// RLS-scoped client so a project/PR they don't own simply isn't found.
-async function load(
-    supabase: Awaited<ReturnType<ApiContext["requireUser"]>>["supabase"],
-    id: string,
-    prNumber: number,
-) {
+// RLS-scoped context so a project/PR they don't own simply isn't found.
+async function load(ctx: RequestContext, id: string, prNumber: number) {
     const [projectR, pullR, analysisR] = await Promise.all([
-        supabase.from("projects").select(PROJECT_COLS).eq("id", id).maybeSingle<MergeProject>(),
-        supabase
-            .from("pull_requests")
-            .select("*")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .maybeSingle<PullRequest>(),
-        supabase
-            .from("pull_request_analyses")
-            .select("*")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .maybeSingle<PullRequestAnalysis>(),
+        repoRead(() => ctx.projects.findGithubSyncContext(id)),
+        repoRead(() => ctx.pullRequests.findByNumber(id, prNumber)),
+        repoRead(() => ctx.pullRequests.findAnalysis(id, prNumber)),
     ])
     return { projectR, pullR, analysisR }
 }
@@ -59,12 +39,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
-    const { projectR, pullR, analysisR } = await load(supabase, id, prNumber)
+    const { projectR, pullR, analysisR } = await load(ctx, id, prNumber)
     const dbErr = projectR.error || pullR.error || analysisR.error
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    if (dbErr) return dbErr
     const project = projectR.data
     const pull = pullR.data
     if (!project || !pull) return jsonError("not_found", "pull request not found", 404)
@@ -119,12 +99,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("bad_request", "invalid merge method", 400)
     }
 
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
-    const { projectR, pullR, analysisR } = await load(supabase, id, prNumber)
+    const { projectR, pullR, analysisR } = await load(ctx, id, prNumber)
     const dbErr = projectR.error || pullR.error || analysisR.error
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    if (dbErr) return dbErr
     const project = projectR.data
     const pull = pullR.data
     if (!project || !pull) return jsonError("not_found", "pull request not found", 404)

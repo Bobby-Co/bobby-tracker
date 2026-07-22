@@ -11,7 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: string
@@ -23,12 +23,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     if (!body) return jsonError("bad_request", "comment body is required", 400)
 
-    const ctx = await new CommentActions().resolve(supabase, user.id, id)
-    if ("error" in ctx) return ctx.error
+    // CommentActions is a vcs gate that resolves the user's VcsUserInstance; it
+    // takes the request's DB handle (a deeper vcs-internal refactor keeps it here).
+    const actions = await new CommentActions().resolve(ctx.client, user.id, id)
+    if ("error" in actions) return actions.error
 
     let created
     try {
-        created = await ctx.vcs.createComment(prNumber, body)
+        created = await actions.vcs.createComment(prNumber, body)
     } catch (e) {
         if (e instanceof VcsReauthError) {
             return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
@@ -42,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         github_comment_id: created.id,
         provenance: "tracker",
         author_user_id: user.id,
-        author_login: created.author?.login ?? ctx.login ?? null,
+        author_login: created.author?.login ?? actions.login ?? null,
         author_avatar_url: created.author?.avatarUrl ?? null,
         body: created.body ?? "",
         html_url: created.url,

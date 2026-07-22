@@ -1,9 +1,8 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { PullRequest as PullRequestEntity } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
-import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/pulls/[number]/review — manually kick a PR review.
 //
@@ -22,42 +21,24 @@ import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/typ
 // the row back to confirm it actually entered 'analysing' rather than silently
 // no-opping on, say, an empty diff.
 
-type ReviewProject = Pick<Project, "id" | "repo_url" | "repo_full_name"> & {
-    github_installation_id: number | null
-    github_repo_id: number | null
-    github_sync_enabled: boolean
-}
-const PROJECT_COLS = "id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled"
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; number: string }> }) {
     const { id, number } = await params
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
-    // Ownership + everything the kickoff needs, through the RLS-scoped client so
+    // Ownership + everything the kickoff needs, through the RLS-scoped context so
     // a project/PR the caller doesn't own is simply not found.
-    const [projectR, pullR, analyserR, analysisR] = await Promise.all([
-        supabase.from("projects").select(PROJECT_COLS).eq("id", id).maybeSingle<ReviewProject>(),
-        supabase
-            .from("pull_requests")
-            .select("*")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .maybeSingle<PullRequest>(),
-        repoRead(() => createSupabaseProjectAnalyserRepository(supabase).findReadiness(id)),
-        supabase
-            .from("pull_request_analyses")
-            .select("status")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .maybeSingle<Pick<PullRequestAnalysis, "status">>(),
+    const [projectR, pullR, analyserR, statusR] = await Promise.all([
+        repoRead(() => ctx.projects.findGithubSyncContext(id)),
+        repoRead(() => ctx.pullRequests.findByNumber(id, prNumber)),
+        repoRead(() => ctx.analyser.findReadiness(id)),
+        repoRead(() => ctx.pullRequests.findAnalysisStatus(id, prNumber)),
     ])
-    if (analyserR.error) return analyserR.error
-    const dbErr = projectR.error || pullR.error || analysisR.error
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const dbErr = projectR.error || pullR.error || analyserR.error || statusR.error
+    if (dbErr) return dbErr
 
     const project = projectR.data
     const pull = pullR.data
@@ -66,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // A run already in flight — treat as success, not an error. Two clicks (or a
     // click racing the webhook) shouldn't read as a failure; the UI just wants to
     // land on "reviewing".
-    if (analysisR.data?.status === "analysing") {
+    if (statusR.data === "analysing") {
         return Response.json({ started: true, already: true })
     }
 
@@ -120,13 +101,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Confirm it actually started. startPRAnalysis no-ops silently on an empty
     // diff or a GitHub comment failure; reading the row back turns that silence
     // into an honest error instead of a spinner that never resolves.
-    const { data: after } = await supabase
-        .from("pull_request_analyses")
-        .select("status")
-        .eq("project_id", id)
-        .eq("pr_number", prNumber)
-        .maybeSingle<Pick<PullRequestAnalysis, "status">>()
-    if (after?.status !== "analysing") {
+    const afterStatus = await tryOrNull(() => ctx.pullRequests.findAnalysisStatus(id, prNumber))
+    if (afterStatus !== "analysing") {
         return jsonError(
             "review_failed",
             "Couldn't start the review — the PR may have no reviewable changes, or GitHub rejected the request.",

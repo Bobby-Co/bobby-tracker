@@ -56,6 +56,16 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
         return data?.name ?? null
     }
 
+    async findPullContext(projectId: string): Promise<{ id: string; name: string; repo_url: string; repo_full_name: string | null } | null> {
+        const { data, error } = await this.db
+            .from("projects")
+            .select("id,name,repo_url,repo_full_name")
+            .eq("id", projectId)
+            .maybeSingle<{ id: string; name: string; repo_url: string; repo_full_name: string | null }>()
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return data ?? null
+    }
+
     async findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null> {
         const { data } = await this.db
             .from("projects")

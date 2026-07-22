@@ -1,7 +1,6 @@
 import { after } from "next/server"
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
-import type { PrComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/pulls/[number]
 //
@@ -16,40 +15,20 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const prNumber = Number(number)
     if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
 
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [pullR, projectR, analysisR, commentsR] = await Promise.all([
-        supabase
-            .from("pull_requests")
-            .select("*")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .maybeSingle<PullRequest>(),
-        supabase
-            .from("projects")
-            .select("id,name,repo_url,repo_full_name")
-            .eq("id", id)
-            .maybeSingle<Pick<Project, "id" | "name" | "repo_url" | "repo_full_name">>(),
-        supabase
-            .from("pull_request_analyses")
-            .select("*")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .maybeSingle<PullRequestAnalysis>(),
-        supabase
-            .from("pr_comments")
-            .select("*")
-            .eq("project_id", id)
-            .eq("pr_number", prNumber)
-            .order("gh_created_at", { ascending: true, nullsFirst: true })
-            .returns<PrComment[]>(),
+        repoRead(() => ctx.pullRequests.findByNumber(id, prNumber)),
+        repoRead(() => ctx.projects.findPullContext(id)),
+        repoRead(() => ctx.pullRequests.findAnalysis(id, prNumber)),
+        repoRead(() => ctx.pullRequests.listComments(id, prNumber)),
     ])
 
-    const dbErr = pullR.error || projectR.error || analysisR.error || commentsR.error
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const readErr = pullR.error || projectR.error || analysisR.error || commentsR.error
+    if (readErr) return readErr
 
-    const comments = commentsR.data ?? []
+    const comments = commentsR.data
     // A mirrored PR with an empty thread: fill it lazily so the next load shows it.
     if (pullR.data && comments.length === 0) {
         after(async () => {

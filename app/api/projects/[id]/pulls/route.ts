@@ -1,7 +1,6 @@
 import { after } from "next/server"
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/pulls
 //
@@ -12,29 +11,17 @@ import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 // can show a "syncing…" state; the next load is populated.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     const [pullsR, analysesR] = await Promise.all([
-        supabase
-            .from("pull_requests")
-            .select("*")
-            .eq("project_id", id)
-            .order("gh_updated_at", { ascending: false, nullsFirst: false })
-            .limit(500)
-            .returns<PullRequest[]>(),
-        supabase
-            .from("pull_request_analyses")
-            .select("pr_number,status")
-            .eq("project_id", id)
-            .returns<Pick<PullRequestAnalysis, "pr_number" | "status">[]>(),
+        repoRead(() => ctx.pullRequests.listForProject(id)),
+        repoRead(() => ctx.pullRequests.listAnalysisStatuses(id)),
     ])
+    if (pullsR.error) return pullsR.error
+    if (analysesR.error) return analysesR.error
 
-    if (pullsR.error || analysesR.error) {
-        return jsonError("db_error", (pullsR.error || analysesR.error)!.message, 500)
-    }
-
-    const pulls = pullsR.data ?? []
+    const pulls = pullsR.data
     if (pulls.length === 0) {
         after(async () => {
             const prs = await getPullRequestServiceForProject(id)
@@ -43,7 +30,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         return Response.json({ pulls: [], syncing: true })
     }
 
-    const statusByPr = new Map(analysesR.data?.map((a) => [a.pr_number, a.status]) ?? [])
+    const statusByPr = new Map(analysesR.data.map((a) => [a.pr_number, a.status]))
     const withReview = pulls.map((pr) => ({
         ...pr,
         review_status: statusByPr.get(pr.pr_number) ?? null,

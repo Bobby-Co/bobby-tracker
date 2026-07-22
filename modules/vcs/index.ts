@@ -24,6 +24,10 @@ export { MergePolicy, MERGE_METHOD_LABEL } from "./domain/MergeGate"
 // The PR-analysis flow now lives in modules/analysis.
 export type { PullRequestStore, PrUpsert, PrCommentUpsert, PrCommentSource } from "./ports/PullRequestStore"
 export { createServicePullRequestStore } from "./infrastructure/SupabasePullRequestStore"
+
+// RLS-scoped read side of the PR mirror (the PR tab routes)
+export type { PullRequestReadRepository, CommentOwnership } from "./ports/PullRequestReadRepository"
+export { createSupabasePullRequestReadRepository } from "./infrastructure/SupabasePullRequestReadRepository"
 export { PullRequestService } from "./application/PullRequestService"
 
 // ─── VCS provider abstraction (provider-agnostic; GitHub is one adapter) ─────
