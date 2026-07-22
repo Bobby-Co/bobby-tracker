@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { genToken, normalizeUserCode } from "@/modules/relay"
+import { PairingCodes } from "@/modules/relay"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // AUTH. The signed-in user approves a pending pairing by user_code (read
@@ -23,7 +23,8 @@ export async function POST(request: Request) {
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const userCode = normalizeUserCode(String(body?.userCode ?? ""))
+    const codes = new PairingCodes()
+    const userCode = codes.normalize(String(body?.userCode ?? ""))
     if (!userCode) return jsonError("bad_request", "userCode required", 400)
 
     // The relay has no session, so the pairing row isn't owned by anyone
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
     const { data: worker, error: wErr } = await svc
         .from("relay_workers")
-        .insert({ user_id: user.id, name, token: genToken() })
+        .insert({ user_id: user.id, name, token: codes.token() })
         .select("id")
         .single()
     if (wErr) return jsonError("db_error", wErr.message, 500)

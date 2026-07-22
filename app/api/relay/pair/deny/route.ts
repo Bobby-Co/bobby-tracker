@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { normalizeUserCode } from "@/modules/relay"
+import { PairingCodes } from "@/modules/relay"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
 // AUTH. The signed-in user rejects a pending pairing by user_code. The
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const userCode = normalizeUserCode(String(body?.userCode ?? ""))
+    const userCode = new PairingCodes().normalize(String(body?.userCode ?? ""))
     if (!userCode) return jsonError("bad_request", "userCode required", 400)
 
     const svc = createServiceClient()
