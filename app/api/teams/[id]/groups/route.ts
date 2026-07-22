@@ -1,6 +1,6 @@
 import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
 import { getAccessService, Role } from "@/modules/access"
-import { resolveUserProfiles } from "@/lib/server/auth/user-profiles"
+import { createServiceAdminUserDirectory } from "@/modules/teams"
 import type { AccessGroup, AccessGroupWithDetail } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/groups — the team's people-groups with their members
@@ -30,7 +30,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const mem = (memRows ?? []) as { group_id: string; user_id: string }[]
     const proj = (projRows ?? []) as { group_id: string; project_id: string }[]
 
-    const profiles = await resolveUserProfiles(mem.map((m) => m.user_id))
+    const profiles = await createServiceAdminUserDirectory().resolveProfiles(mem.map((m) => m.user_id))
     const detailed: AccessGroupWithDetail[] = groupList.map((g) => ({
         ...g,
         members: mem

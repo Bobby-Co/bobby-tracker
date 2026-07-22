@@ -1,6 +1,6 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { getAccessService } from "@/modules/access"
-import { toMemberViews } from "@/lib/server/auth/user-profiles"
+import { createTeamMemberViews } from "@/modules/teams"
 import type { TeamRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/members — team members with resolved profiles (any member
@@ -20,7 +20,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
 
     const rows = (data ?? []) as { user_id: string; role: TeamRole; created_at: string }[]
-    const members = await toMemberViews(rows)
+    const members = await createTeamMemberViews().build(rows)
     // owners first, then admins, then members; stable within a rank by join time
     const rank: Record<TeamRole, number> = { owner: 0, admin: 1, member: 2 }
     members.sort((a, b) => rank[a.role] - rank[b.role] || a.created_at.localeCompare(b.created_at))

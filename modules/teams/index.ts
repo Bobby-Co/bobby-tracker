@@ -19,3 +19,9 @@ export { createSupabaseTeamMembershipRepository } from "./infrastructure/Supabas
 // that reason over teams — notably modules/access, whose pure layers may not
 // import @/lib/shared/types directly — speak them through the Teams contract.
 export type { TeamRole, TeamWithRole } from "@/lib/shared/types"
+
+// ─── identity: auth-profile resolution + member-view assembly ───────────────
+export type { UserDirectory, UserProfile, MemberRow } from "./ports/UserDirectory"
+export { createServiceAdminUserDirectory } from "./infrastructure/SupabaseAdminUserDirectory"
+export { TeamMemberViews } from "./application/TeamMemberViews"
+export { createTeamMemberViews } from "./Composition"

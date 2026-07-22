@@ -5,8 +5,15 @@
 
 import type { InviteNotifier } from "./ports/InviteNotifier"
 import { JmapInviteNotifier } from "./infrastructure/JmapInviteNotifier"
+import { TeamMemberViews } from "./application/TeamMemberViews"
+import { createServiceAdminUserDirectory } from "./infrastructure/SupabaseAdminUserDirectory"
 
 /** The app-wide InviteNotifier (the JMAP email adapter today). */
 export function createInviteNotifier(): InviteNotifier {
     return new JmapInviteNotifier()
+}
+
+/** The member-view builder, backed by the service-role admin UserDirectory. */
+export function createTeamMemberViews(): TeamMemberViews {
+    return new TeamMemberViews(createServiceAdminUserDirectory())
 }
