@@ -107,6 +107,17 @@ export class SupabaseTeamMembershipRepository implements TeamMembershipRepositor
         const { error } = await this.db.rpc("ensure_personal_team", { p_user: userId, p_name: name })
         if (error) throw new RepositoryError(`ensure_personal_team failed: ${error.message}`, { cause: error })
     }
+
+    async findCollectionOwnership(collectionId: string): Promise<{ team_id: string; user_id: string } | null> {
+        // Fail-safe: the original guard ignored the query error and treated a
+        // missing row as not-found, so we fold error → null here too.
+        const { data } = await this.db
+            .from("project_groups")
+            .select("team_id,user_id")
+            .eq("id", collectionId)
+            .maybeSingle<{ team_id: string; user_id: string }>()
+        return data ?? null
+    }
 }
 
 /** Composition seam: bind a TeamMembershipRepository to a specific Supabase client. */

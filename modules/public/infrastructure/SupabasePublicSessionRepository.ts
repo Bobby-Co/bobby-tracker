@@ -54,6 +54,15 @@ export class SupabasePublicSessionRepository implements PublicSessionRepository 
             .maybeSingle<{ email: string }>()
         return data != null
     }
+
+    async findOwnership(sessionId: string): Promise<{ team_id: string; user_id: string } | null> {
+        const { data } = await this.db
+            .from("public_sessions")
+            .select("team_id,user_id")
+            .eq("id", sessionId)
+            .maybeSingle<{ team_id: string; user_id: string }>()
+        return data ?? null
+    }
 }
 
 /** Composition seam: bind a PublicSessionRepository to a specific Supabase client. */

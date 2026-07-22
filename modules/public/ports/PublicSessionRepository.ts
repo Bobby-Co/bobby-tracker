@@ -26,4 +26,9 @@ export interface PublicSessionRepository {
     findIssueReporter(issueId: string): Promise<IssueReporter | null>
     /** Whether `email` is on this session's invite whitelist. */
     hasInvite(sessionId: string, email: string): Promise<boolean>
+
+    /** The (team, creator) of a session row — the ownership pair the app-layer
+     *  creator-or-admin gate reads (by session id, not token). Null when absent;
+     *  fail-safe on a query error, matching the guard's original inline read. */
+    findOwnership(sessionId: string): Promise<{ team_id: string; user_id: string } | null>
 }

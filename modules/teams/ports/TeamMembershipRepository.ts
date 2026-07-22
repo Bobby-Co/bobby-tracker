@@ -57,4 +57,11 @@ export interface TeamMembershipRepository {
      *  user has none and there is no auth.users trigger in this shared-auth setup.
      *  THROWS RepositoryError on failure. */
     ensurePersonalTeam(userId: string, name: string | null): Promise<void>
+
+    /** The (team, creator) of a Collection (project_groups) row — the ownership
+     *  pair the app-layer creator-or-admin gate reads. project_groups is part of
+     *  the 0052 teams/collab schema slice, so the read lives here (a dedicated
+     *  Collections module is a future carve). FAIL-SAFE: null when absent or on a
+     *  query error, matching the guard's original best-effort inline read. */
+    findCollectionOwnership(collectionId: string): Promise<{ team_id: string; user_id: string } | null>
 }
