@@ -13,3 +13,7 @@ export type { RelayModel, RelayWorker, AnalyserWorker, AnalyserWorkers, PairingS
 // HTTP adapter directly.
 export type { AnalyserWorkerDirectory } from "./ports/AnalyserWorkerDirectory"
 export { getAnalyserWorkerDirectory } from "./Composition"
+
+// ─── relay_workers persistence (port + Supabase adapter) ─────────────────────
+export type { RelayWorkerRepository, RelayWorkerRow } from "./ports/RelayWorkerRepository"
+export { createSupabaseRelayWorkerRepository } from "./infrastructure/SupabaseRelayWorkerRepository"

@@ -1,10 +1,10 @@
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // AUTH. Rename a worker. RLS scopes the update to the owner, so a bad id
 // or another user's worker simply matches no rows.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -13,11 +13,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const name = typeof body?.name === "string" ? body.name.trim() : ""
     if (!name) return jsonError("bad_request", "name is required", 400)
 
-    const { error: dbErr } = await supabase
-        .from("relay_workers")
-        .update({ name })
-        .eq("id", id)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.relayWorkers.rename(id, name))
+    if (dbErr) return dbErr
 
     return Response.json({ ok: true })
 }

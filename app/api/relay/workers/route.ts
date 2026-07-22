@@ -1,23 +1,19 @@
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 import { getAnalyserWorkerDirectory, type RelayModel, type RelayWorker } from "@/modules/relay"
 
 // AUTH. List the signed-in user's active (non-revoked) workers, enriched
 // with live connection state from the analyser. The analyser lookup is
 // best-effort — on any failure every worker just shows offline.
 export async function GET() {
-    const { supabase, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { data: rows, error: dbErr } = await supabase
-        .from("relay_workers")
-        .select("*")
-        .is("revoked_at", null)
-        .order("created_at", { ascending: false })
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data: rows, error: dbErr } = await repoRead(() => ctx.relayWorkers.listActive())
+    if (dbErr) return dbErr
 
     const live = await getAnalyserWorkerDirectory().listConnected()
 
-    const workers: RelayWorker[] = (rows ?? []).map((row) => {
+    const workers: RelayWorker[] = rows.map((row) => {
         // Prefer matching on workerId (the analyser sends it when it has
         // it); fall back to userId for older analyser builds.
         const conn = live.byWorkerId.get(row.id) ?? live.byUserId.get(row.user_id)
