@@ -9,6 +9,7 @@
 
 export { jsonError, forbidden, repoRead } from "./responses"
 export { ApiContext, TEAM_HEADER, TEAM_COOKIE, personalTeamName } from "./ApiContext"
+export type { RequestContext } from "./RequestContext"
 export type {
     AuthSuccess, AuthFailure, TeamSuccess, TeamFailure, ProjectSuccess, ProjectFailure, IssueSuccess, IssueFailure, TeamRowSuccess, TeamRowFailure,
 } from "./ApiContext"
