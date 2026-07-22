@@ -33,6 +33,16 @@ export type {
 } from "./ports/AccessGroupsRepository"
 export { createSupabaseAccessGroupsRepository } from "./infrastructure/SupabaseAccessGroupsRepository"
 
+// ─── Collections (project_groups: groups of projects for AI routing) ─────────
+export type {
+    CollectionsRepository,
+    CollectionMember,
+    CollectionMemberName,
+    CollectionPatch,
+    CollectionMemberResult,
+} from "./ports/CollectionsRepository"
+export { createSupabaseCollectionsRepository } from "./infrastructure/SupabaseCollectionsRepository"
+
 // The team vocabulary (role + team-with-role row shapes). Re-exported so modules
 // that reason over teams — notably modules/access, whose pure layers may not
 // import @/lib/shared/types directly — speak them through the Teams contract.

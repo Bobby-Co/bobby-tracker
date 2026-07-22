@@ -5,7 +5,12 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
-import type { AnalysisProjectContext, GithubSyncContext, ProjectsRepository } from "../ports/ProjectsRepository"
+import type {
+    AnalysisProjectContext,
+    GithubSyncContext,
+    ProjectSimilarity,
+    ProjectsRepository,
+} from "../ports/ProjectsRepository"
 
 const GITHUB_SYNC_COLS =
     "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes"
@@ -68,6 +73,22 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
             .maybeSingle<{ id: string; repo_url: string; repo_full_name: string | null }>()
         if (error) throw new RepositoryError(error.message, { cause: error })
         return data ?? null
+    }
+
+    async listAllNames(): Promise<{ id: string; name: string }[]> {
+        // Best-effort ([] on error), matching the collection route's inline read.
+        const { data } = await this.db.from("projects").select("id,name").order("name", { ascending: true })
+        return ((data ?? []) as { id: string; name: string }[]).map((p) => ({ id: p.id, name: p.name }))
+    }
+
+    async findSimilarProjects(queryEmbedding: number[], projectIds: string[], limit: number): Promise<ProjectSimilarity[]> {
+        const { data, error } = await this.db.rpc("find_similar_projects", {
+            p_query_embedding: queryEmbedding,
+            p_project_ids: projectIds,
+            p_limit: limit,
+        })
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return (data ?? []) as ProjectSimilarity[]
     }
 }
 

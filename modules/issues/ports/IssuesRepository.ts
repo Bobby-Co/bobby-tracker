@@ -127,4 +127,9 @@ export interface IssuesRepository {
     /** The /similar read: nearest-neighbour matches + embedding presence +
      *  created_at, in one call. Throws {@link RepositoryError} on failure. */
     findSimilarityState(issueId: string, limit: number): Promise<IssueSimilarityState>
+
+    /** Every issue across the given projects, newest first, capped at `limit` —
+     *  the collection Issues feed. FAIL-SAFE ([] on error / empty input),
+     *  matching the route's best-effort read. */
+    listAcrossProjects(projectIds: string[], limit: number): Promise<Issue[]>
 }

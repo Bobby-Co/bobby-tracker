@@ -31,6 +31,15 @@ export type AnalysisProjectContext = Pick<
     "name" | "repo_url" | "repo_full_name" | "description" | "github_installation_id" | "github_repo_id" | "github_sync_enabled"
 >
 
+/** One row of the find_similar_projects routing RPC (AI compose ranking). */
+export interface ProjectSimilarity {
+    project_id: string
+    similarity: number
+    main_sim: number | null
+    layer_sim: number | null
+    feature_sim: number | null
+}
+
 export interface ProjectsRepository {
     /** GitHub-sync fields for one project, or null when it isn't found / isn't
      *  visible to the caller (the injected client carries the caller's RLS
@@ -54,4 +63,12 @@ export interface ProjectsRepository {
      *  caller that must distinguish "store broken" (500) from "absent" (404) can.
      *  Returns null only for a genuinely absent row. */
     findRepoRef(projectId: string): Promise<Pick<Project, "repo_url" | "repo_full_name"> | null>
+
+    /** id+name of every project the caller can see, alphabetical — the collection
+     *  settings "add member" picker. FAIL-SAFE ([] on error). */
+    listAllNames(): Promise<{ id: string; name: string }[]>
+
+    /** Weighted project-similarity ranking (find_similar_projects RPC) for AI
+     *  routing over a fixed set of candidate projects. THROWS RepositoryError. */
+    findSimilarProjects(queryEmbedding: number[], projectIds: string[], limit: number): Promise<ProjectSimilarity[]>
 }

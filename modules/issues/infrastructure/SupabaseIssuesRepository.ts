@@ -134,6 +134,19 @@ export class SupabaseIssuesRepository implements IssuesRepository {
             createdAt: issue?.created_at ?? null,
         }
     }
+
+    async listAcrossProjects(projectIds: string[], limit: number): Promise<Issue[]> {
+        // Best-effort ([] on error), matching the collection feed's inline read.
+        if (projectIds.length === 0) return []
+        const { data } = await this.db
+            .from("issues")
+            .select("*")
+            .in("project_id", projectIds)
+            .order("updated_at", { ascending: false })
+            .limit(limit)
+            .returns<Issue[]>()
+        return data ?? []
+    }
 }
 
 /** Composition seam: bind an IssuesRepository to a specific Supabase client. Pass
