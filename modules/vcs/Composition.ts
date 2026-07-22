@@ -8,7 +8,7 @@
 import { createServiceIssueSyncStore } from "@/modules/issues"
 import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
 import { createServiceClient } from "@/lib/supabase/server"
-import { repoFullName } from "./domain/RepoRef"
+import { RepoRef } from "./domain/RepoRef"
 import { VcsAppService } from "./application/VcsAppService"
 import { VcsUserService } from "./application/VcsUserService"
 import { PullRequestService } from "./application/PullRequestService"
@@ -34,10 +34,10 @@ export interface VcsProviderBinding extends VcsRepoCoords {
 }
 
 /** owner/repo for a project's linked repo, or null when it can't be resolved.
- *  repoFullName resolves from repo_full_name first, else parses repo_url; a null
+ *  RepoRef.fullName() resolves from repo_full_name first, else parses repo_url; a null
  *  url just means "fall back to the name" (empty string → no match). */
 function ownerRepo(project: VcsRepoCoords): [string, string] | null {
-    const full = repoFullName({ repo_url: project.repo_url ?? "", repo_full_name: project.repo_full_name })
+    const full = RepoRef.of({ repo_url: project.repo_url ?? "", repo_full_name: project.repo_full_name }).fullName()
     if (!full) return null
     const [owner, repo] = full.split("/")
     if (!owner || !repo) return null

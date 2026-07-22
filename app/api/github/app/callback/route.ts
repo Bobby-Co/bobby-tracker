@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { githubAppClient } from "@/modules/vcs"
-import { repoFullName } from "@/modules/vcs"
+import { RepoRef } from "@/modules/vcs"
 import type { Project } from "@/lib/supabase/types"
 
 // GET /api/github/app/callback — GitHub sends the user here after they install
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
         if (!project) return back("error")
 
         // Match the project's repo against the installation's repositories.
-        const wantFullName = repoFullName(project)?.toLowerCase() ?? null
+        const wantFullName = RepoRef.of(project).fullName()?.toLowerCase() ?? null
         const wantUrl = project.repo_url.replace(/\.git$/, "").replace(/\/+$/, "").toLowerCase()
 
         const reposRes = await githubAppClient.fetch(installationId, "/installation/repositories")

@@ -1,7 +1,7 @@
 import { requireProjectAccess, jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { githubAppClient } from "@/modules/vcs"
-import { repoFullName } from "@/modules/vcs"
+import { RepoRef } from "@/modules/vcs"
 import type { Project } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/github-sync/link — link an ALREADY-installed GitHub
@@ -27,7 +27,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         .single<Pick<Project, "id" | "repo_url" | "repo_full_name">>()
     if (!project) return jsonError("not_found", "project not found", 404)
 
-    const full = repoFullName(project)
+    const full = RepoRef.of(project).fullName()
     if (!full) return jsonError("bad_request", "project has no GitHub repo", 400)
     const [owner, repo] = full.split("/")
 

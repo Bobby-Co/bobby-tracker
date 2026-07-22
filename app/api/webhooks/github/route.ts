@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/kernel"
-import { getWebhookVerifier, syncHash } from "@/modules/vcs"
+import { getWebhookVerifier, SyncHash } from "@/modules/vcs"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
@@ -226,7 +226,7 @@ async function handleIssue(
 
     // (6) Echo guard. If the incoming content hashes to what we last synced
     // for this row, this webhook is our own outbound write bouncing back.
-    const hash = await syncHash(title, body, state)
+    const hash = await new SyncHash().compute(title, body, state)
     if (existing && existing.last_synced_hash === hash) return ack()
 
     const nowIso = new Date().toISOString()

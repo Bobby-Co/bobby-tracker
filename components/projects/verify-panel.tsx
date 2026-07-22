@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/supabase/client"
-import { blobUrl, type RepoRef } from "@/modules/vcs/domain/RepoRef"
+import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
 import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/modules/analysis"
 
@@ -27,7 +27,7 @@ export function VerifyPanel({
     initialCheckedAt,
 }: {
     projectId: string
-    repo: RepoRef | null
+    repo: RepoRefFields | null
     indexedSha: string | null
     ready: boolean
     initialReport: unknown
@@ -301,13 +301,13 @@ function DriftBars({ buckets }: { buckets: Record<string, number> }) {
     )
 }
 
-function BrokenCites({ items, repo, sha }: { items: VerifyBrokenCite[]; repo: RepoRef | null; sha: string | null }) {
+function BrokenCites({ items, repo, sha }: { items: VerifyBrokenCite[]; repo: RepoRefFields | null; sha: string | null }) {
     return (
         <div>
             <SectionLabel>Broken citations ({items.length} shown)</SectionLabel>
             <ul className="mt-2 flex flex-col gap-1">
                 {items.map((c, i) => {
-                    const url = repo ? blobUrl(repo, c.file, c.line, sha) : null
+                    const url = repo ? RepoRef.of(repo).blobUrl(c.file, c.line, sha) : null
                     const label = c.line ? `${c.file}:${c.line}` : c.file
                     return (
                         <li key={`${c.note_path}:${c.file}:${c.line ?? 0}:${i}`} className="text-[12.5px]">
@@ -366,7 +366,7 @@ function ContentStaleList({
     sha,
 }: {
     items: VerifyContentStaleNote[]
-    repo: RepoRef | null
+    repo: RepoRefFields | null
     sha: string | null
 }) {
     return (
@@ -386,7 +386,7 @@ function ContentStaleList({
                         </div>
                         <ul className="mt-0.5 ml-4 flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px]">
                             {s.changed_cited_files.map((f) => {
-                                const url = repo ? blobUrl(repo, f, undefined, sha) : null
+                                const url = repo ? RepoRef.of(repo).blobUrl(f, undefined, sha) : null
                                 return (
                                     <li key={f}>
                                         {url ? (
@@ -415,7 +415,7 @@ function UncoveredFilesList({
 }: {
     items: string[]
     total: number
-    repo: RepoRef | null
+    repo: RepoRefFields | null
     sha: string | null
 }) {
     const remainder = total - items.length
@@ -427,7 +427,7 @@ function UncoveredFilesList({
             </p>
             <ul className="mt-2 flex flex-col gap-0.5">
                 {items.map((f) => {
-                    const url = repo ? blobUrl(repo, f, undefined, sha) : null
+                    const url = repo ? RepoRef.of(repo).blobUrl(f, undefined, sha) : null
                     return (
                         <li key={f} className="text-[12px]">
                             {url ? (

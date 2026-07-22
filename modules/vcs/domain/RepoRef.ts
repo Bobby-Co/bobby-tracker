@@ -1,32 +1,38 @@
-// Helpers for building GitHub deep-links from a tracker.projects row.
+// A reference to a linked repository — resolves owner/repo and builds GitHub
+// deep-links. A value object over a tracker.projects row's repo fields; construct
+// with RepoRef.of(row) at the point of use (the raw fields stay a plain DTO so
+// they can cross the server→client prop boundary).
 
-export interface RepoRef {
+/** The raw repo fields a RepoRef wraps (a tracker.projects row subset). */
+export interface RepoRefFields {
     repo_url: string
     repo_full_name: string | null
 }
 
-// Returns "owner/repo" from a tracker.projects row, falling back to parsing
-// the URL if repo_full_name was never populated.
-export function repoFullName(p: RepoRef): string | null {
-    if (p.repo_full_name) return p.repo_full_name
-    const m = p.repo_url.match(/^https?:\/\/(?:www\.)?github\.com\/([^\/]+\/[^\/?#]+?)(?:\.git)?\/?$/)
-    return m ? m[1] : null
-}
+export class RepoRef {
+    private constructor(private readonly fields: RepoRefFields) {}
 
-// blobUrl builds a GitHub blob link, optionally pinned to a specific SHA
-// (so links don't drift as the default branch moves). Returns null when the
-// project isn't on GitHub (e.g. self-hosted GitLab) — caller should fall
-// back to a plain `file:line` label.
-export function blobUrl(
-    p: RepoRef,
-    file: string,
-    line: number | undefined,
-    sha: string | null,
-): string | null {
-    const full = repoFullName(p)
-    if (!full) return null
-    const ref = sha || "HEAD"
-    const cleanFile = file.replace(/^\/+/, "")
-    const lineFrag = line && line > 0 ? `#L${line}` : ""
-    return `https://github.com/${full}/blob/${ref}/${cleanFile}${lineFrag}`
+    static of(fields: RepoRefFields): RepoRef {
+        return new RepoRef(fields)
+    }
+
+    /** "owner/repo" — repo_full_name, else parsed from repo_url; null when neither
+     *  resolves (e.g. a self-hosted host). */
+    fullName(): string | null {
+        const { repo_full_name, repo_url } = this.fields
+        if (repo_full_name) return repo_full_name
+        const m = repo_url.match(/^https?:\/\/(?:www\.)?github\.com\/([^\/]+\/[^\/?#]+?)(?:\.git)?\/?$/)
+        return m ? m[1] : null
+    }
+
+    /** A GitHub blob link for file[:line], optionally pinned to `sha`. Null when the
+     *  project isn't on GitHub — the caller falls back to a plain file:line label. */
+    blobUrl(file: string, line?: number | null, sha?: string | null): string | null {
+        const full = this.fullName()
+        if (!full) return null
+        const ref = sha || "HEAD"
+        const cleanFile = file.replace(/^\/+/, "")
+        const lineFrag = line && line > 0 ? `#L${line}` : ""
+        return `https://github.com/${full}/blob/${ref}/${cleanFile}${lineFrag}`
+    }
 }

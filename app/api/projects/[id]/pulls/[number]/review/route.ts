@@ -2,7 +2,7 @@ import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/a
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { PullRequest as PullRequestEntity } from "@/modules/vcs"
-import { repoFullName } from "@/modules/vcs"
+import { RepoRef } from "@/modules/vcs"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // POST /api/projects/[id]/pulls/[number]/review — manually kick a PR review.
@@ -86,7 +86,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!project.github_sync_enabled || project.github_installation_id == null || project.github_repo_id == null) {
         return jsonError("not_connected", "Connect the GitHub App and enable sync to run a review.", 409)
     }
-    if (!repoFullName(project)) {
+    if (!RepoRef.of(project).fullName()) {
         return jsonError("not_connected", "This project has no GitHub repository.", 409)
     }
     if (!analyserR.data?.enabled || analyserR.data.status !== "ready" || !analyserR.data.graph_id) {

@@ -1,5 +1,8 @@
 import { test, expect, describe } from "bun:test"
-import { syncHash } from "./SyncHash"
+import { SyncHash } from "./SyncHash"
+
+const hasher = new SyncHash()
+const syncHash = (title: string, body: string, state: "open" | "closed") => hasher.compute(title, body, state)
 
 // syncHash: the echo-suppression fingerprint. Correctness of the whole sync loop
 // rests on ONE property: both sides must compute the identical hash for equivalent

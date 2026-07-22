@@ -1,6 +1,11 @@
 import { test, expect, describe } from "bun:test"
-import { mergeGate, criticalFindingCount, defaultMergeMethod } from "./MergeGate"
-import type { MergePull, MergeReview } from "./MergeGate"
+import { MergePolicy } from "./MergeGate"
+import type { MergePull, MergeReview, MergeMethods } from "./MergeGate"
+
+const policy = new MergePolicy()
+const mergeGate = (pull: MergePull, analysis: MergeReview | null) => policy.evaluate(pull, analysis)
+const criticalFindingCount = (a: MergeReview | null) => policy.criticalFindingCount(a)
+const defaultMergeMethod = (m: MergeMethods) => policy.defaultMethod(m)
 
 // Characterization tests — lock in the CURRENT behaviour of the merge gate so a
 // later data/ownership refactor can't silently change what may be merged.

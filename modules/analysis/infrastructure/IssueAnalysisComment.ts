@@ -1,5 +1,5 @@
 import { badge, confidenceTone } from "@/lib/rendering/badge"
-import { blobUrl, type RepoRef } from "@/modules/vcs/domain/RepoRef"
+import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"
 
 export type CommentCtx = { origin: string; projectId: string; issueId: string }
@@ -47,7 +47,7 @@ export class IssueAnalysisComment {
         ].join("\n")
     }
 
-    result(result: IssueAnalysis, project: RepoRef, ctx: CommentCtx): string {
+    result(result: IssueAnalysis, project: RepoRefFields, ctx: CommentCtx): string {
         const out: string[] = [this.marker, "### Ucelot · code analysis", ""]
 
         const badges: string[] = []
@@ -60,7 +60,7 @@ export class IssueAnalysisComment {
         if (result.suggestions?.length) {
             out.push("**Most likely locations**", "", "| # | Location | Why |", "|--:|:--|:--|")
             result.suggestions.forEach((s, i) => {
-                const link = blobUrl(project, s.file, s.line, null)
+                const link = RepoRef.of(project).blobUrl(s.file, s.line, null)
                 const label = s.line ? `${s.file}:${s.line}` : s.file
                 const loc = link ? `[\`${label}\`](${link})` : `\`${label}\``
                 const sym = s.symbol ? ` \`${s.symbol}\`` : ""

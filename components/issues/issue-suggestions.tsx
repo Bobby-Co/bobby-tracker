@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { EffortControl, EFFORT_LABEL } from "@/components/ui/effort-control"
 import { createClient } from "@/lib/supabase/client"
-import { blobUrl, type RepoRef } from "@/modules/vcs/domain/RepoRef"
+import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
 import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import type { AnalyseEffort } from "@/modules/analysis"
 import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/supabase/types"
@@ -12,7 +12,7 @@ import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/sup
 interface Props {
     issueId: string
     projectId: string
-    repo: RepoRef
+    repo: RepoRefFields
     indexedSha: string | null
     initial: IssueSuggestion | null
     analyserReady: boolean
@@ -414,7 +414,7 @@ function SuggestionBody({
     indexedSha,
 }: {
     suggestion: IssueSuggestion
-    repo: RepoRef
+    repo: RepoRefFields
     indexedSha: string | null
 }) {
     // Always prefer the structured payload now. Legacy rows without
@@ -483,12 +483,12 @@ function FindingCard({
     index,
 }: {
     finding: IssueFinding
-    repo: RepoRef
+    repo: RepoRefFields
     sha: string | null
     index: number
 }) {
     const [open, setOpen] = useState(false)
-    const url = blobUrl(repo, finding.file, finding.line, sha)
+    const url = RepoRef.of(repo).blobUrl(finding.file, finding.line, sha)
     const filename = basename(finding.file)
     const headline = finding.line ? `${filename}:${finding.line}` : filename
 

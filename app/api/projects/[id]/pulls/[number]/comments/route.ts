@@ -1,5 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { resolveCommentContext, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
+import { CommentActions, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/[number]/comments
 //
@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     if (!body) return jsonError("bad_request", "comment body is required", 400)
 
-    const ctx = await resolveCommentContext(supabase, user.id, id)
+    const ctx = await new CommentActions().resolve(supabase, user.id, id)
     if ("error" in ctx) return ctx.error
 
     let created

@@ -1,6 +1,6 @@
 import { jsonError, requireUser, requireProjectAccess } from "@/lib/platform/http/api"
 import { getVcsAppService, VcsMergeError, createServicePullRequestStore } from "@/modules/vcs"
-import { defaultMergeMethod, mergeGate, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
+import { MergePolicy, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
 import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
 
 // GET  /api/projects/[id]/pulls/[number]/merge — everything the merge bar needs:
@@ -69,7 +69,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const pull = pullR.data
     if (!project || !pull) return jsonError("not_found", "pull request not found", 404)
 
-    const gate = mergeGate(pull, analysisR.data ?? null)
+    const gate = new MergePolicy().evaluate(pull, analysisR.data ?? null)
 
     // The repo's allowed methods + GitHub's live mergeability are only worth a
     // round-trip when our own gate would otherwise let the merge through — and
@@ -97,7 +97,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         gate,
         connected: connected(project),
         methods,
-        default_method: methods ? defaultMergeMethod(methods) : null,
+        default_method: methods ? new MergePolicy().defaultMethod(methods) : null,
         mergeable,
         mergeable_state: mergeableState,
     })
@@ -132,7 +132,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // ENFORCE the gate server-side. The client disables the button, but a
     // hand-crafted POST must not be able to merge a PR the review blocked — this
     // is the authoritative check, not the UI.
-    const gate = mergeGate(pull, analysisR.data ?? null)
+    const gate = new MergePolicy().evaluate(pull, analysisR.data ?? null)
     if (!gate.mergeable) {
         return jsonError("merge_blocked", gate.block?.label ?? "Merge is not allowed", 409)
     }

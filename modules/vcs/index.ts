@@ -7,8 +7,8 @@
 // renderers are module INTERNALS and are NOT part of this contract.
 
 // domain
-export type { RepoRef } from "./domain/RepoRef"
-export { repoFullName, blobUrl } from "./domain/RepoRef"
+export type { RepoRefFields } from "./domain/RepoRef"
+export { RepoRef } from "./domain/RepoRef"
 
 // ─── Pull Requests (moved in: a PR can't exist without a VCS) ────────────────
 // finding-state is a SHARED pure classifier re-exported for callers that reach
@@ -19,7 +19,7 @@ export { findingState } from "@/lib/rendering/finding-state"
 export type { PullRequestState, PullRequestLifecycle } from "./domain/PullRequest"
 export { PullRequest } from "./domain/PullRequest"
 export type { MergeMethod, MergeMethods, MergeGate, MergeBlock, MergeBlockCode } from "./domain/MergeGate"
-export { mergeGate, criticalFindingCount, defaultMergeMethod, MERGE_METHOD_LABEL } from "./domain/MergeGate"
+export { MergePolicy, MERGE_METHOD_LABEL } from "./domain/MergeGate"
 // PR mirror — repository port + service (backfill runs through VcsAppInstance).
 // The PR-analysis flow now lives in modules/analysis.
 export type { PullRequestStore, PRUpsert, PRCommentUpsert, PRCommentSource } from "./ports/PullRequestStore"
@@ -68,7 +68,7 @@ export type { SyncIssueInput, IssueChangeSet, ImportContext } from "./applicatio
 export { VcsUserService } from "./application/VcsUserService"
 
 // domain
-export { syncHash } from "./domain/SyncHash"
+export { SyncHash } from "./domain/SyncHash"
 
 // The GitHub App HTTP transport (a class), exposed as a shared singleton for the
 // install/link flow (callback + github-sync/link routes) — GitHub-App-installation
@@ -83,4 +83,4 @@ export type { GithubTokenRepository, UserGithub } from "./infrastructure/GithubT
 export { createGithubTokenRepository } from "./infrastructure/GithubTokenRepository"
 
 // Comment-authoring gate for the PR/issue comment routes
-export { resolveCommentContext } from "./infrastructure/CommentActions"
+export { CommentActions } from "./infrastructure/CommentActions"

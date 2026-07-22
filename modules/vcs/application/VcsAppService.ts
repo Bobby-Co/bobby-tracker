@@ -12,7 +12,7 @@
 
 import { Issue, type IssueStatusValue, type IssueSyncStore } from "@/modules/issues"
 import { Project, type ProjectSyncState } from "@/modules/projects"
-import { syncHash } from "../domain/SyncHash"
+import { SyncHash } from "../domain/SyncHash"
 import type { VcsAppInstance } from "../ports/VcsAppInstance"
 import type {
     VcsMergeInput,
@@ -48,6 +48,8 @@ export interface ImportContext {
 }
 
 export class VcsAppService {
+    private readonly syncHash = new SyncHash()
+
     constructor(
         private readonly vcs: VcsAppInstance,
         private readonly sync: IssueSyncStore,
@@ -65,7 +67,7 @@ export class VcsAppService {
         const created = await this.vcs.createIssue({ title: issue.title, body: issue.body ?? "" })
         // The remote opens issues in `open`; hash against that so the echoed
         // `opened` webhook is recognised as ours.
-        const hash = await syncHash(issue.title, issue.body ?? "", "open")
+        const hash = await this.syncHash.compute(issue.title, issue.body ?? "", "open")
         await this.sync.updateSyncFields(issue.id, {
             github_issue_number: created.number,
             github_node_id: created.nodeId,
@@ -93,7 +95,7 @@ export class VcsAppService {
         if (Object.keys(patch).length === 0) return
 
         await this.vcs.updateIssue(issue.github_issue_number, patch)
-        const hash = await syncHash(issue.title, issue.body ?? "", state)
+        const hash = await this.syncHash.compute(issue.title, issue.body ?? "", state)
         await this.sync.updateSyncFields(issue.id, {
             sync_source: "tracker",
             last_synced_hash: hash,
@@ -142,7 +144,7 @@ export class VcsAppService {
                 github_issue_number: it.number,
                 github_node_id: it.nodeId,
                 sync_source: "github",
-                last_synced_hash: await syncHash(it.title, it.body ?? "", closed ? "closed" : "open"),
+                last_synced_hash: await this.syncHash.compute(it.title, it.body ?? "", closed ? "closed" : "open"),
                 github_synced_at: new Date().toISOString(),
             })
             if (ok) imported++

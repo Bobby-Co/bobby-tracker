@@ -1,11 +1,11 @@
-// Shared gate for the comment-authoring routes (PR + issue). Verifies the caller
-// owns the project (RLS via the user-scoped read), resolves owner/repo, and
-// fetches the caller's personal GitHub token so we can post AS THEM. Returns a
-// ready-to-send Response on any failed gate.
+// Gate for the comment-authoring routes (PR + issue): verifies the caller owns
+// the project (RLS via the user-scoped read), resolves owner/repo, and fetches
+// the caller's personal GitHub token so we post AS THEM. Returns a ready-to-send
+// Response on any failed gate.
 
 import { jsonError } from "@/lib/platform/http/api"
 import { createGithubTokenRepository } from "./GithubTokenRepository"
-import { repoFullName } from "../domain/RepoRef"
+import { RepoRef } from "../domain/RepoRef"
 import { getVcsUserService } from "../Composition"
 import type { VcsUserService } from "../application/VcsUserService"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
@@ -15,35 +15,35 @@ import type { createClient } from "@/lib/supabase/server"
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
 // The comment-authoring actor: a VcsUserService already bound to the project's
-// repo + the caller's personal token (so it posts AS THEM), plus the login for
-// provenance display.
+// repo + the caller's personal token, plus the login for provenance display.
 export type CommentActor = { vcs: VcsUserService; login: string | null }
 
-export async function resolveCommentContext(
-    supabase: SupabaseServer,
-    userId: string,
-    projectId: string,
-): Promise<CommentActor | { error: Response }> {
-    // Read the project through the Projects contract — vcs doesn't own the
-    // projects table. findRepoRef throws on a genuine DB error so we keep the
-    // 500-vs-404 distinction the gate relied on.
-    const projects = createSupabaseProjectsRepository(supabase)
-    let project: Awaited<ReturnType<typeof projects.findRepoRef>>
-    try {
-        project = await projects.findRepoRef(projectId)
-    } catch (e) {
-        if (e instanceof RepositoryError) return { error: jsonError("db_error", e.message, 500) }
-        throw e
-    }
-    if (!project) return { error: jsonError("not_found", "project not found", 404) }
-    if (!repoFullName(project)) {
-        return { error: jsonError("not_github", "this project isn't linked to a GitHub repo", 400) }
-    }
+export class CommentActions {
+    async resolve(
+        supabase: SupabaseServer,
+        userId: string,
+        projectId: string,
+    ): Promise<CommentActor | { error: Response }> {
+        // Read the project through the Projects contract. findRepoRef throws on a
+        // genuine DB error so we keep the 500-vs-404 distinction.
+        const projects = createSupabaseProjectsRepository(supabase)
+        let project: Awaited<ReturnType<typeof projects.findRepoRef>>
+        try {
+            project = await projects.findRepoRef(projectId)
+        } catch (e) {
+            if (e instanceof RepositoryError) return { error: jsonError("db_error", e.message, 500) }
+            throw e
+        }
+        if (!project) return { error: jsonError("not_found", "project not found", 404) }
+        if (!RepoRef.of(project).fullName()) {
+            return { error: jsonError("not_github", "this project isn't linked to a GitHub repo", 400) }
+        }
 
-    const gh = await createGithubTokenRepository(supabase).find(userId)
-    if (!gh) return { error: jsonError("github_reauth_required", "Connect GitHub to comment.", 401) }
+        const gh = await createGithubTokenRepository(supabase).find(userId)
+        if (!gh) return { error: jsonError("github_reauth_required", "Connect GitHub to comment.", 401) }
 
-    // repoFullName resolved above → the user service is non-null.
-    const vcs = getVcsUserService(project, gh.token)!
-    return { vcs, login: gh.login }
+        // fullName resolved above → the user service is non-null.
+        const vcs = getVcsUserService(project, gh.token)!
+        return { vcs, login: gh.login }
+    }
 }

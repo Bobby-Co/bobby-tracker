@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
-import { blobUrl, type RepoRef } from "@/modules/vcs/domain/RepoRef"
+import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
 import { cn } from "@/components/ui/cn"
 import PixelScatter from "@/components/ui/pixel-scatter"
 import { ThinkingCard, type Progress } from "@/components/mind/mind-thinking"
@@ -67,7 +67,7 @@ export function MindPanel({
     initialConversationId,
 }: {
     projectId: string
-    repo: RepoRef | null
+    repo: RepoRefFields | null
     indexedSha: string | null
     /** When set (PR deep-dive, ADR-0055), reuse this conversation so the
      *  analyser's pre-seeded managed context loads on the first turn. */
@@ -678,7 +678,7 @@ function AssistantBubble({
 }: {
     msg: Extract<Message, { role: "assistant" }>
     projectId: string
-    repo: RepoRef | null
+    repo: RepoRefFields | null
     indexedSha: string | null
     onOpenIssue: (id: string) => void
     delay?: number
@@ -705,7 +705,7 @@ function AssistantBubble({
 
 // ── Answer ──────────────────────────────────────────────────────────────────────
 
-function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: ChatResult; projectId: string; repo: RepoRef | null; indexedSha: string | null; onOpenIssue: (id: string) => void }) {
+function Answer({ result, projectId, repo, indexedSha, onOpenIssue }: { result: ChatResult; projectId: string; repo: RepoRefFields | null; indexedSha: string | null; onOpenIssue: (id: string) => void }) {
     const cited = result.citations ?? []
     const issues = useMemo(() => result.issues ?? [], [result.issues])
     // Cited issues first (finaliser referenced them inline), then related matches.
@@ -893,9 +893,9 @@ function IssueChip({ issue, projectId, onOpen, inline = false, showTitle = false
 
 // FileChip renders a `path:line` citation as a chip that opens the file on
 // GitHub (blob URL) when the repo is known; otherwise a static label.
-function FileChip({ file, line, repo, sha, unverified = false, inline = false }: { file: string; line?: number; repo: RepoRef | null; sha: string | null; unverified?: boolean; inline?: boolean }) {
+function FileChip({ file, line, repo, sha, unverified = false, inline = false }: { file: string; line?: number; repo: RepoRefFields | null; sha: string | null; unverified?: boolean; inline?: boolean }) {
     const label = line && line > 0 ? `${file}:${line}` : file
-    const url = repo ? blobUrl(repo, file, line, sha) : null
+    const url = repo ? RepoRef.of(repo).blobUrl(file, line, sha) : null
     const className = cn(
         "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-[2px] font-mono text-[11px] align-baseline no-underline transition-colors",
         unverified

@@ -1,5 +1,5 @@
 import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { resolveCommentContext, VcsReauthError } from "@/modules/vcs"
+import { CommentActions, VcsReauthError } from "@/modules/vcs"
 import { createServiceIssueSyncStore } from "@/modules/issues"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -51,7 +51,7 @@ export async function PATCH(
     const owned = await loadOwned(supabase, id, ghId, user.id)
     if ("error" in owned) return owned.error
 
-    const ctx = await resolveCommentContext(supabase, user.id, id)
+    const ctx = await new CommentActions().resolve(supabase, user.id, id)
     if ("error" in ctx) return ctx.error
 
     let updated
@@ -86,7 +86,7 @@ export async function DELETE(
     const owned = await loadOwned(supabase, id, ghId, user.id)
     if ("error" in owned) return owned.error
 
-    const ctx = await resolveCommentContext(supabase, user.id, id)
+    const ctx = await new CommentActions().resolve(supabase, user.id, id)
     if ("error" in ctx) return ctx.error
 
     try {

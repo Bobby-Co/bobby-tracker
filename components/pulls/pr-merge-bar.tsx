@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
 import {
-    mergeGate,
+    MergePolicy,
     MERGE_METHOD_LABEL,
     type MergeBlockCode,
     type MergeGate,
@@ -43,7 +43,7 @@ export function PrMergeBar({
     analysis: PullRequestAnalysis | null
     onMerged: () => void
 }) {
-    const gate = mergeGate(pull, analysis)
+    const gate = new MergePolicy().evaluate(pull, analysis)
 
     // Already merged is its own terminal, celebratory state — not a "blocked"
     // one. Show it and stop.
