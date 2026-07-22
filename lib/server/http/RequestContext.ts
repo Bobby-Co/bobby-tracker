@@ -21,7 +21,11 @@ import {
     createSupabaseAccessGroupsRepository,
     createSupabaseCollectionsRepository,
 } from "@/modules/teams"
-import { createSupabasePublicSessionRepository } from "@/modules/public"
+import {
+    createSupabasePublicSessionRepository,
+    createSupabasePublicSessionAdminRepository,
+    createSupabaseProjectPublicIntegrationRepository,
+} from "@/modules/public"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
 import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
 
@@ -61,6 +65,12 @@ export class RequestContext {
     }
     get publicSessions() {
         return createSupabasePublicSessionRepository(this.db)
+    }
+    get sessionsAdmin() {
+        return createSupabasePublicSessionAdminRepository(this.db)
+    }
+    get publicIntegration() {
+        return createSupabaseProjectPublicIntegrationRepository(this.db)
     }
     get relayWorkers() {
         return createSupabaseRelayWorkerRepository(this.db)

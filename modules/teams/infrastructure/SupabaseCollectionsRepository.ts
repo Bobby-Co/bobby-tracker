@@ -37,6 +37,16 @@ export class SupabaseCollectionsRepository implements CollectionsRepository {
         return data ?? []
     }
 
+    async listNames(): Promise<{ id: string; name: string }[]> {
+        // Best-effort ([] on error), matching the session route's inline read.
+        const { data } = await this.db
+            .from("project_groups")
+            .select("id,name")
+            .order("name", { ascending: true })
+            .returns<{ id: string; name: string }[]>()
+        return (data ?? []).map((g) => ({ id: g.id, name: g.name }))
+    }
+
     async listMemberNames(groupIds: string[]): Promise<CollectionMemberName[]> {
         if (groupIds.length === 0) return []
         const { data } = await this.db

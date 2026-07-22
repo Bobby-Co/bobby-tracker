@@ -37,6 +37,10 @@ export interface CollectionsRepository {
     /** The team's collections, newest first. THROWS RepositoryError. */
     listForTeam(teamId: string): Promise<ProjectGroup[]>
 
+    /** id+name of every collection the caller can see, alphabetical — the session
+     *  "source group" picker. FAIL-SAFE ([] on error). */
+    listNames(): Promise<{ id: string; name: string }[]>
+
     /** Member project names for the given collections. FAIL-SAFE ([] on error). */
     listMemberNames(groupIds: string[]): Promise<CollectionMemberName[]>
 

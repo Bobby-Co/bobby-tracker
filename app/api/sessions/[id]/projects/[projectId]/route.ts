@@ -1,17 +1,13 @@
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 
 export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string; projectId: string }> },
 ) {
     const { id, projectId } = await params
-    const { supabase, error } = await new ApiContext().requireSessionAccess(id, { write: true })
+    const { ctx, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
-    const { error: dbErr } = await supabase
-        .from("public_session_projects")
-        .delete()
-        .eq("session_id", id)
-        .eq("project_id", projectId)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.sessionsAdmin.removeProject(id, projectId))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

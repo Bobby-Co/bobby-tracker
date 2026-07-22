@@ -15,6 +15,23 @@ export { PublicSession, PUBLIC_ISSUE_LABEL } from "./domain/PublicSession"
 export type { PublicSessionRepository, PublicSessionRow, IssueReporter } from "./ports/PublicSessionRepository"
 export { createSupabasePublicSessionRepository } from "./infrastructure/SupabasePublicSessionRepository"
 
+// Owner-side session administration (the /sessions management surface)
+export type {
+    PublicSessionAdminRepository,
+    NewPublicSession,
+    PublicSessionPatch,
+    SessionProjectResult,
+} from "./ports/PublicSessionAdminRepository"
+export { createSupabasePublicSessionAdminRepository } from "./infrastructure/SupabasePublicSessionAdminRepository"
+
+// Per-project public-submissions integration (project_public_integration)
+export type {
+    ProjectPublicIntegrationRepository,
+    IntegrationTab,
+    CoveringSession,
+} from "./ports/ProjectPublicIntegrationRepository"
+export { createSupabaseProjectPublicIntegrationRepository } from "./infrastructure/SupabaseProjectPublicIntegrationRepository"
+
 // The access gate (service) — resolve / fetchPublicIssue / require*; obtained via
 // getPublicSessionService(db). Plus the standalone current-visitor read.
 export type { ResolvedPublicSession, InviteCheck } from "./infrastructure/PublicSessionService"
