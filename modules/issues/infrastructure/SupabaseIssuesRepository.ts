@@ -147,6 +147,30 @@ export class SupabaseIssuesRepository implements IssuesRepository {
             .returns<Issue[]>()
         return data ?? []
     }
+
+    async listForProject(projectId: string, limit: number): Promise<Issue[]> {
+        const { data, error } = await this.db
+            .from("issues")
+            .select("*")
+            .eq("project_id", projectId)
+            .order("updated_at", { ascending: false })
+            .limit(limit)
+            .returns<Issue[]>()
+        if (error) throw new RepositoryError(`issues list failed: ${error.message}`, { cause: error })
+        return data ?? []
+    }
+
+    async listScheduled(projectId: string): Promise<Issue[]> {
+        const { data, error } = await this.db
+            .from("issues")
+            .select("*")
+            .eq("project_id", projectId)
+            .not("starts_at", "is", null)
+            .not("ends_at", "is", null)
+            .returns<Issue[]>()
+        if (error) throw new RepositoryError(`issues scheduled list failed: ${error.message}`, { cause: error })
+        return data ?? []
+    }
 }
 
 /** Composition seam: bind an IssuesRepository to a specific Supabase client. Pass

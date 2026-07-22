@@ -132,4 +132,11 @@ export interface IssuesRepository {
      *  the collection Issues feed. FAIL-SAFE ([] on error / empty input),
      *  matching the route's best-effort read. */
     listAcrossProjects(projectIds: string[], limit: number): Promise<Issue[]>
+
+    /** Every issue for a project, newest first, capped at `limit`. THROWS. */
+    listForProject(projectId: string, limit: number): Promise<Issue[]>
+
+    /** Scheduled issues (starts_at + ends_at both set) for a project — the
+     *  detail page's "peek others" set. THROWS RepositoryError. */
+    listScheduled(projectId: string): Promise<Issue[]>
 }

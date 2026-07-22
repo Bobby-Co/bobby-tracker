@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
+import type { Project } from "@/lib/shared/types"
 import type {
     AnalysisProjectContext,
     GithubSyncContext,
@@ -62,6 +63,12 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
             .select("id,name,repo_url,repo_full_name")
             .eq("id", projectId)
             .maybeSingle<{ id: string; name: string; repo_url: string; repo_full_name: string | null }>()
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return data ?? null
+    }
+
+    async findFull(projectId: string): Promise<Project | null> {
+        const { data, error } = await this.db.from("projects").select("*").eq("id", projectId).maybeSingle<Project>()
         if (error) throw new RepositoryError(error.message, { cause: error })
         return data ?? null
     }

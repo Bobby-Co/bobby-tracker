@@ -1,4 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { CommentActions, VcsReauthError } from "@/modules/vcs"
 import { createServiceIssueSyncStore } from "@/modules/issues"
 
@@ -10,7 +11,7 @@ import { createServiceIssueSyncStore } from "@/modules/issues"
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; issueId: string }> }) {
     const { id, issueId } = await params
 
-    const { supabase, user, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: string
@@ -22,35 +23,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     if (!body) return jsonError("bad_request", "comment body is required", 400)
 
-    // RLS restricts this read to the caller's own issue.
-    const { data: issue } = await supabase
-        .from("issues")
-        .select("github_issue_number")
-        .eq("id", issueId)
-        .eq("project_id", id)
-        .maybeSingle<{ github_issue_number: number | null }>()
+    // RLS restricts this read to the caller's own issue (fail-safe → 404).
+    const issue = await tryOrNull(() => ctx.issues.findByIdInProject(issueId, id))
     if (!issue) return jsonError("not_found", "issue not found", 404)
     if (!issue.github_issue_number) {
         return jsonError("not_on_github", "this issue isn't on GitHub yet — sync it first", 400)
     }
+    const ghNumber = issue.github_issue_number
 
-    const ctx = await new CommentActions().resolve(supabase, user.id, id)
-    if ("error" in ctx) return ctx.error
+    const actions = await new CommentActions().resolve(ctx.client, user.id, id)
+    if ("error" in actions) return actions.error
 
     let created
     try {
-        created = await ctx.vcs.createComment(issue.github_issue_number, body)
+        created = await actions.vcs.createComment(ghNumber, body)
     } catch (e) {
         if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
     }
 
     await createServiceIssueSyncStore().upsertComment(id, {
-        issue_number: issue.github_issue_number,
+        issue_number: ghNumber,
         github_comment_id: created.id,
         provenance: "tracker",
         author_user_id: user.id,
-        author_login: created.author?.login ?? ctx.login ?? null,
+        author_login: created.author?.login ?? actions.login ?? null,
         author_avatar_url: created.author?.avatarUrl ?? null,
         body: created.body ?? "",
         html_url: created.url,

@@ -10,8 +10,8 @@
 
 import type { SupabaseRlsClient } from "@/lib/server/supabase"
 import { getAccessService } from "@/modules/access"
-import { createSupabaseProjectsRepository } from "@/modules/projects"
-import { createSupabaseIssuesRepository } from "@/modules/issues"
+import { createSupabaseProjectsRepository, createSupabaseProjectDisplayRepository } from "@/modules/projects"
+import { createSupabaseIssuesRepository, createSupabaseIssueCommentsReadRepository } from "@/modules/issues"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { createGithubTokenRepository, createSupabasePullRequestReadRepository } from "@/modules/vcs"
 import {
@@ -41,6 +41,12 @@ export class RequestContext {
     }
     get issues() {
         return createSupabaseIssuesRepository(this.db)
+    }
+    get issueComments() {
+        return createSupabaseIssueCommentsReadRepository(this.db)
+    }
+    get projectDisplay() {
+        return createSupabaseProjectDisplayRepository(this.db)
     }
     get analyser() {
         return createSupabaseProjectAnalyserRepository(this.db)

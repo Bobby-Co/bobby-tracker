@@ -58,6 +58,9 @@ export interface ProjectsRepository {
      *  query failure (the route surfaces a 500 vs a 404). */
     findPullContext(projectId: string): Promise<Pick<Project, "id" | "name" | "repo_url" | "repo_full_name"> | null>
 
+    /** The full project row, or null when absent. THROWS on a query failure. */
+    findFull(projectId: string): Promise<Project | null>
+
     /** Analysis-flow project context (name/description + GitHub-link gate), or
      *  null when absent / not visible. */
     findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null>

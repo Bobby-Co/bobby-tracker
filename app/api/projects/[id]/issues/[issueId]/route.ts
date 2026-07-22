@@ -1,15 +1,8 @@
 import { after } from "next/server"
-import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
-import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
-import type {
-    Issue,
-    IssueComment,
-    IssueSuggestion,
-    Project,
-    ProjectLabelIcon,
-    ProjectStatusColor,
-} from "@/lib/shared/types"
+import type { IssueComment } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/issues/[issueId]
 //
@@ -32,37 +25,22 @@ export async function GET(
     { params }: { params: Promise<{ id: string; issueId: string }> },
 ) {
     const { id, issueId } = await params
-    const { supabase, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
-    const [issueR, projectR, analyserR, suggestionR, peekR, iconsR, colorsR] =
-        await Promise.all([
-            supabase.from("issues").select("*").eq("id", issueId).eq("project_id", id).maybeSingle<Issue>(),
-            supabase.from("projects").select("*").eq("id", id).maybeSingle<Project>(),
-            repoRead(() => createSupabaseProjectAnalyserRepository(supabase).findByProjectId(id)),
-            supabase
-                .from("issue_suggestions")
-                .select("*")
-                .eq("issue_id", issueId)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle<IssueSuggestion>(),
-            supabase
-                .from("issues")
-                .select("*")
-                .eq("project_id", id)
-                .not("starts_at", "is", null)
-                .not("ends_at", "is", null)
-                .returns<Issue[]>(),
-            supabase.from("project_label_icons").select("*").eq("project_id", id).returns<ProjectLabelIcon[]>(),
-            supabase.from("project_status_colors").select("*").eq("project_id", id).returns<ProjectStatusColor[]>(),
-        ])
-
-    if (analyserR.error) return analyserR.error
-    const dbErr =
-        issueR.error || projectR.error ||
+    const [issueR, projectR, analyserR, suggestionR, peekR, iconsR, colorsR] = await Promise.all([
+        repoRead(() => ctx.issues.findByIdInProject(issueId, id)),
+        repoRead(() => ctx.projects.findFull(id)),
+        repoRead(() => ctx.analyser.findByProjectId(id)),
+        repoRead(() => ctx.issues.findLatestSuggestion(issueId)),
+        repoRead(() => ctx.issues.listScheduled(id)),
+        repoRead(() => ctx.projectDisplay.listLabelIcons(id)),
+        repoRead(() => ctx.projectDisplay.listStatusColors(id)),
+    ])
+    const readErr =
+        issueR.error || projectR.error || analyserR.error ||
         suggestionR.error || peekR.error || iconsR.error || colorsR.error
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    if (readErr) return readErr
 
     // The GitHub comment thread is keyed by the issue's GitHub number, which we
     // only know once the issue row resolves — so it's a second read (only for
@@ -70,14 +48,7 @@ export async function GET(
     let comments: IssueComment[] = []
     const ghNumber = issueR.data?.github_issue_number ?? null
     if (ghNumber) {
-        const commentsR = await supabase
-            .from("issue_comments")
-            .select("*")
-            .eq("project_id", id)
-            .eq("issue_number", ghNumber)
-            .order("gh_created_at", { ascending: true, nullsFirst: true })
-            .returns<IssueComment[]>()
-        comments = commentsR.data ?? []
+        comments = (await tryOrNull(() => ctx.issueComments.listComments(id, ghNumber))) ?? []
         if (comments.length === 0) {
             after(async () => {
                 const prs = await getPullRequestServiceForProject(id)
@@ -91,9 +62,9 @@ export async function GET(
         project: projectR.data,
         analyser: analyserR.data,
         suggestion: suggestionR.data,
-        peekOthers: peekR.data ?? [],
-        labelIcons: iconsR.data ?? [],
-        statusColors: colorsR.data ?? [],
+        peekOthers: peekR.data,
+        labelIcons: iconsR.data,
+        statusColors: colorsR.data,
         comments,
     })
 }

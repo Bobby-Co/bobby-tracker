@@ -23,6 +23,10 @@ export type {
 } from "./ports/IssuesRepository"
 export { createSupabaseIssuesRepository } from "./infrastructure/SupabaseIssuesRepository"
 
+// ─── RLS-scoped read side of the issue-comment mirror (issue_comments) ───────
+export type { IssueCommentsReadRepository, IssueCommentOwnership } from "./ports/IssueCommentsReadRepository"
+export { createSupabaseIssueCommentsReadRepository } from "./infrastructure/SupabaseIssueCommentsReadRepository"
+
 // ─── issue embedding (semantic index maintenance) ────────────────────────────
 // The EmbeddingIndex PORT + its service-role adapter, and the IssueEmbedder
 // application service that owns embed-one / sweep / count. Callers obtain the
