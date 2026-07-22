@@ -1,12 +1,18 @@
 // Email transport via Stalwart's JMAP API (RFC 8620 core + RFC 8621 mail/
 // submission). It's plain HTTPS + JSON — no raw sockets — which is the right
-// shape for the Worker runtime: it mirrors lib/github-app.ts's fetch posture
-// (explicit User-Agent, module-level config, best-effort) and, unlike the old
+// shape for the Worker runtime: it mirrors the github fetch posture (explicit
+// User-Agent, module-level config, best-effort) and, unlike the old
 // SMTP-over-cloudflare:sockets path, it also runs as-is under `next dev`.
 //
 // Sending is: bootstrap the JMAP session once (apiUrl + mail accountId + Drafts
 // mailbox, cached per isolate), then one request that Email/set-creates a draft
 // and EmailSubmission/set-submits it, destroying the draft on success.
+//
+// The public surface is the EmailTransport class (isConfigured / send). The JMAP
+// plumbing + the per-isolate session cache stay module-level: they are the
+// adapter's private transport primitives, and keeping the cache at module scope
+// preserves the cross-request reuse regardless of how many EmailTransport
+// instances the consumers construct.
 
 export interface MailMessage {
     to: string
@@ -21,6 +27,89 @@ export class EmailError extends Error {
     constructor(message: string) {
         super(message)
         this.name = "EmailError"
+    }
+}
+
+/** The app's email transport (Stalwart JMAP today). Stateless — the session
+ *  cache it relies on lives at module scope. Consumers hold one as a field. */
+export class EmailTransport {
+    /** Cheap gate callers check before doing any work: whether JMAP is configured. */
+    isConfigured(): boolean {
+        return jmapConfig() !== null
+    }
+
+    /** Send one message. Throws EmailError when unconfigured or on a JMAP failure. */
+    async send(msg: MailMessage): Promise<void> {
+        const cfg = jmapConfig()
+        if (!cfg) throw new EmailError("Stalwart JMAP is not configured (set STALWART_JMAP_URL + auth + EMAIL_FROM)")
+
+        try {
+            const session = await getSession(cfg)
+            const rcpts = parseRecipients(msg.to)
+            if (!rcpts.length) throw new EmailError(`no valid recipient in "${msg.to}"`)
+
+            const data = await jmapCall(cfg, session.apiUrl, {
+                using: [
+                    "urn:ietf:params:jmap:core",
+                    "urn:ietf:params:jmap:mail",
+                    "urn:ietf:params:jmap:submission",
+                ],
+                methodCalls: [
+                    [
+                        "Email/set",
+                        {
+                            accountId: session.accountId,
+                            create: {
+                                draft: {
+                                    mailboxIds: { [session.draftsMailboxId]: true },
+                                    keywords: { $draft: true, $seen: true },
+                                    from: [cfg.from],
+                                    to: rcpts,
+                                    subject: msg.subject,
+                                    // The server MIME-encodes headers + bodies, so we pass
+                                    // structured values (no manual encoded-words / base64).
+                                    bodyStructure: {
+                                        type: "multipart/alternative",
+                                        subParts: [
+                                            { partId: "text", type: "text/plain" },
+                                            { partId: "html", type: "text/html" },
+                                        ],
+                                    },
+                                    bodyValues: {
+                                        text: { value: msg.text },
+                                        html: { value: msg.html },
+                                    },
+                                },
+                            },
+                        },
+                        "c1",
+                    ],
+                    [
+                        "EmailSubmission/set",
+                        {
+                            accountId: session.accountId,
+                            // Don't leave the draft behind once it's sent.
+                            onSuccessDestroyEmail: ["#sendIt"],
+                            create: {
+                                sendIt: {
+                                    emailId: "#draft", // back-ref to the Email/set create above
+                                    identityId: session.identityId,
+                                    envelope: {
+                                        mailFrom: { email: cfg.from.email },
+                                        rcptTo: rcpts.map((r) => ({ email: r.email })),
+                                    },
+                                },
+                            },
+                        },
+                        "c2",
+                    ],
+                ],
+            })
+            assertSendOk(data)
+        } catch (err) {
+            sessionCache = null // force re-bootstrap next time
+            throw err
+        }
     }
 }
 
@@ -61,11 +150,6 @@ function jmapConfig(): JmapConfig | null {
             : `${base.replace(/\/+$/, "")}/.well-known/jmap`
 
     return { sessionUrl, authHeader, from: parseAddress(fromRaw) }
-}
-
-// isEmailConfigured is the cheap gate callers check before doing any work.
-export function isEmailConfigured(): boolean {
-    return jmapConfig() !== null
 }
 
 // ─── session ────────────────────────────────────────────────────────────────
@@ -135,81 +219,6 @@ async function loadAccountRefs(
         identities.find((i) => i.email?.toLowerCase() === cfg.from.email.toLowerCase()) ?? identities[0]
 
     return { draftsMailboxId: drafts.id, identityId: identity.id }
-}
-
-// ─── send ───────────────────────────────────────────────────────────────────
-
-export async function sendMail(msg: MailMessage): Promise<void> {
-    const cfg = jmapConfig()
-    if (!cfg) throw new EmailError("Stalwart JMAP is not configured (set STALWART_JMAP_URL + auth + EMAIL_FROM)")
-
-    try {
-        const session = await getSession(cfg)
-        const rcpts = parseRecipients(msg.to)
-        if (!rcpts.length) throw new EmailError(`no valid recipient in "${msg.to}"`)
-
-        const data = await jmapCall(cfg, session.apiUrl, {
-            using: [
-                "urn:ietf:params:jmap:core",
-                "urn:ietf:params:jmap:mail",
-                "urn:ietf:params:jmap:submission",
-            ],
-            methodCalls: [
-                [
-                    "Email/set",
-                    {
-                        accountId: session.accountId,
-                        create: {
-                            draft: {
-                                mailboxIds: { [session.draftsMailboxId]: true },
-                                keywords: { $draft: true, $seen: true },
-                                from: [cfg.from],
-                                to: rcpts,
-                                subject: msg.subject,
-                                // The server MIME-encodes headers + bodies, so we pass
-                                // structured values (no manual encoded-words / base64).
-                                bodyStructure: {
-                                    type: "multipart/alternative",
-                                    subParts: [
-                                        { partId: "text", type: "text/plain" },
-                                        { partId: "html", type: "text/html" },
-                                    ],
-                                },
-                                bodyValues: {
-                                    text: { value: msg.text },
-                                    html: { value: msg.html },
-                                },
-                            },
-                        },
-                    },
-                    "c1",
-                ],
-                [
-                    "EmailSubmission/set",
-                    {
-                        accountId: session.accountId,
-                        // Don't leave the draft behind once it's sent.
-                        onSuccessDestroyEmail: ["#sendIt"],
-                        create: {
-                            sendIt: {
-                                emailId: "#draft", // back-ref to the Email/set create above
-                                identityId: session.identityId,
-                                envelope: {
-                                    mailFrom: { email: cfg.from.email },
-                                    rcptTo: rcpts.map((r) => ({ email: r.email })),
-                                },
-                            },
-                        },
-                    },
-                    "c2",
-                ],
-            ],
-        })
-        assertSendOk(data)
-    } catch (err) {
-        sessionCache = null // force re-bootstrap next time
-        throw err
-    }
 }
 
 // ─── jmap plumbing ──────────────────────────────────────────────────────────

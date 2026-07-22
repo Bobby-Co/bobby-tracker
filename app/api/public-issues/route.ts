@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/server/supabase"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/shared/types"
 import { PUBLIC_ISSUE_LABEL, CurrentVisitor, getPublicSessionService } from "@/modules/public"
 import { createIssueEmbedder } from "@/modules/issues"
-import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the
@@ -20,7 +20,8 @@ import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 export async function POST(request: Request) {
     // Anonymous write — rate limit per client IP before doing any work, to
     // cap issue-spam and the per-submission embedding pipeline.
-    const limited = await enforceRateLimit("PUBLIC_RL", clientKey(request, "public-submit"))
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "public-submit"))
     if (limited) return limited
 
     let body: Record<string, unknown>

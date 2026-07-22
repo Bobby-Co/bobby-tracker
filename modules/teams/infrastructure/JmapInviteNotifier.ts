@@ -3,15 +3,17 @@
 // escaping, and the transport call. Swapping the channel = swapping this file;
 // nothing that depends on the InviteNotifier port changes.
 
-import { isEmailConfigured, sendMail } from "@/lib/server/email/jmap"
+import { EmailTransport } from "@/lib/server/email/EmailTransport"
 import type { InviteMessage, InviteNotifier } from "../ports/InviteNotifier"
 
 /** Delivers invites over the app's JMAP transport. No-ops when email is
  *  unconfigured (same posture as the notification emails). Construct via the
  *  composition root. */
 export class JmapInviteNotifier implements InviteNotifier {
+    private readonly mail = new EmailTransport()
+
     async sendInvite(message: InviteMessage): Promise<void> {
-        if (!isEmailConfigured()) return
+        if (!this.mail.isConfigured()) return
         const who = message.inviterName ? `${message.inviterName} invited you` : "You've been invited"
         const subject = `${who} to join ${message.teamName} on Ucelot`
         const text = [
@@ -30,7 +32,7 @@ export class JmapInviteNotifier implements InviteNotifier {
             `<p style="color:#a1a1aa;font-size:12px">— Ucelot</p>`,
             `</div>`,
         ].join("")
-        await sendMail({ to: message.to, subject, html, text })
+        await this.mail.send({ to: message.to, subject, html, text })
     }
 }
 

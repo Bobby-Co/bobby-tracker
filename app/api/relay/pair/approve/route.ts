@@ -1,7 +1,7 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
-import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // AUTH. The signed-in user approves a pending pairing by user_code (read
 // off the relay window). We mint the worker (with its opaque token), then
@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     if (error) return error
 
     // Attempt cap: limit guesses of user_code per client IP.
-    const limited = await enforceRateLimit("RELAY_RL", clientKey(request, "relay-approve"))
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("RELAY_RL", rl.clientKey(request, "relay-approve"))
     if (limited) return limited
 
     let body: Record<string, unknown>

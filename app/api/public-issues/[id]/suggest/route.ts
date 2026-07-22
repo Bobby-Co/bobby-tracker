@@ -5,7 +5,7 @@ import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
 import { createServiceClient } from "@/lib/server/supabase"
 import type { IssueSuggestion } from "@/lib/shared/types"
 import { getPublicSessionService } from "@/modules/public"
-import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // POST /api/public-issues/[id]/suggest
 //
@@ -18,7 +18,8 @@ import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 // detail page renders that as a "still preparing" state.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     // Triggers analyser inference — rate limit per IP to cap LLM spend.
-    const limited = await enforceRateLimit("PUBLIC_RL", clientKey(request, "public-suggest"))
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "public-suggest"))
     if (limited) return limited
 
     const { id } = await params

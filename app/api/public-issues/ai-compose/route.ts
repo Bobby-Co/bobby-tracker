@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/server/supabase"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { EmbeddingText } from "@/modules/issues"
 import { getPublicSessionService } from "@/modules/public"
-import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // POST /api/public-issues/ai-compose
 //
@@ -28,7 +28,8 @@ import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 export async function POST(request: Request) {
     // Each call pays for upstream LLM inference — rate limit per IP to cap
     // "denial of wallet" abuse from anyone holding a public link.
-    const limited = await enforceRateLimit("PUBLIC_RL", clientKey(request, "public-compose"))
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "public-compose"))
     if (limited) return limited
 
     let body: Record<string, unknown>

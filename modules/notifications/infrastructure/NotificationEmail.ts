@@ -7,7 +7,7 @@
 
 import { mergeVerdictLabel } from "@/lib/shared/rendering/badge"
 import { findingState, createServicePullRequestStore } from "@/modules/vcs"
-import { isEmailConfigured, sendMail } from "@/lib/server/email/jmap"
+import { EmailTransport } from "@/lib/server/email/EmailTransport"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServiceClient } from "@/lib/server/supabase"
 import type { NotificationKind, PRAnalysis } from "@/lib/shared/types"
@@ -31,11 +31,13 @@ interface EmailContent {
 }
 
 export class NotificationEmail {
+    private readonly mail = new EmailTransport()
+
     /** Load the notification, resolve the recipient, send a per-kind email. No-op
      *  (never throws for config/lookup reasons) when email is unconfigured or the
      *  owner has no resolvable address. */
     async send(notificationId: string): Promise<void> {
-        if (!isEmailConfigured()) return
+        if (!this.mail.isConfigured()) return
 
         const svc = createServiceClient()
         const { data: n } = await svc
@@ -50,7 +52,7 @@ export class NotificationEmail {
 
         const projectName = n.project_id ? await this.loadProjectName(svc, n.project_id) : null
         const built = await this.buildEmail(svc, n, projectName, this.absoluteUrl(n.href))
-        await sendMail({ to: email, subject: built.subject, html: built.html, text: built.text })
+        await this.mail.send({ to: email, subject: built.subject, html: built.html, text: built.text })
     }
 
     // PR reviews get the rich template (enriched from the stored analysis result);

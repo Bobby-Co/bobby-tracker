@@ -1,7 +1,7 @@
 import { jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
-import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // PUBLIC. Called by the bobby-relay app (no Supabase session) to start a
 // device-pairing handshake. Mints a (device_code, user_code) pair and
@@ -9,7 +9,8 @@ import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 // approve it. The relay then polls /api/relay/pair/poll with device_code.
 export async function POST(request: Request) {
     // Unauthenticated — cap pairing-row creation per IP to stop spam.
-    const limited = await enforceRateLimit("RELAY_RL", clientKey(request, "relay-start"))
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("RELAY_RL", rl.clientKey(request, "relay-start"))
     if (limited) return limited
 
     let body: Record<string, unknown> = {}

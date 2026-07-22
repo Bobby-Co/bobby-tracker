@@ -1,7 +1,7 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
-import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // AUTH. The signed-in user rejects a pending pairing by user_code. The
 // relay's next poll then sees status "denied" and stops.
@@ -10,7 +10,8 @@ export async function POST(request: Request) {
     if (error) return error
 
     // Attempt cap: same per-IP limit as approve to bound user_code guessing.
-    const limited = await enforceRateLimit("RELAY_RL", clientKey(request, "relay-deny"))
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("RELAY_RL", rl.clientKey(request, "relay-deny"))
     if (limited) return limited
 
     let body: Record<string, unknown>
