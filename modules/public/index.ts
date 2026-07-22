@@ -5,7 +5,7 @@
 
 // Reporter read-model (domain)
 export type { PublicListedIssue, PublicParentRow, PublicReporterGroup } from "./domain/PublicReporter"
-export { reporterDisplay, groupByParent, groupParentsByReporter } from "./domain/PublicReporter"
+export { PublicReporter } from "./domain/PublicReporter"
 
 // PublicSession aggregate — open-window + access rules + the public-issue label
 export type { PublicSessionState } from "./domain/PublicSession"
@@ -21,4 +21,4 @@ export type { ResolvedPublicSession, InviteCheck } from "./infrastructure/Public
 export { PublicSessionService } from "./infrastructure/PublicSessionService"
 export { getPublicSessionService } from "./Composition"
 export type { PublicVisitor } from "./infrastructure/CurrentVisitor"
-export { getCurrentPublicUser } from "./infrastructure/CurrentVisitor"
+export { CurrentVisitor } from "./infrastructure/CurrentVisitor"

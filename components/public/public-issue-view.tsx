@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
 import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, IssueSuggestion } from "@/lib/supabase/types"
 import { Spinner } from "@/components/ui/spinner"
-import { reporterDisplay } from "@/modules/public/domain/PublicReporter"
+import { PublicReporter } from "@/modules/public/domain/PublicReporter"
 import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client"
 import { publicIssueSuggestionChannel } from "@/lib/util/realtime-channels"
 
@@ -144,7 +144,7 @@ export function PublicIssueView({
                     <span>
                         Filed by{" "}
                         <span className="font-semibold text-[color:var(--c-text)]">
-                            {reporterDisplay(reporter.id, reporter.name)}
+                            {new PublicReporter().display(reporter.id, reporter.name)}
                         </span>
                     </span>
                     <span aria-hidden>·</span>

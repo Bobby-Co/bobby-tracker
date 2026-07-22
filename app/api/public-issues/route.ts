@@ -2,7 +2,7 @@ import { after } from "next/server"
 import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
-import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, getPublicSessionService } from "@/modules/public"
+import { PUBLIC_ISSUE_LABEL, CurrentVisitor, getPublicSessionService } from "@/modules/public"
 import { createIssueEmbedder } from "@/modules/issues"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     // (always true in invite mode, opportunistic in link mode). That
     // gives the 'own'-visibility filter a stable identity to match
     // against on subsequent reads, even from a different browser.
-    const authUser = await getCurrentPublicUser()
+    const authUser = await new CurrentVisitor().current()
     if (reporterId || reporter || authUser) {
         await svc
             .from("public_issue_reporters")

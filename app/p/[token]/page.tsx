@@ -7,8 +7,8 @@ import { PublicProfileBadge } from "@/components/public/public-profile-badge"
 import { PublicSessionSubmissions } from "@/components/public/public-session-submissions"
 import { PublicSessionSkeleton } from "@/components/public/public-session-skeleton"
 import { PublicSessionGate } from "@/components/public/public-session-gate"
-import { getPublicSessionService, getCurrentPublicUser } from "@/modules/public"
-import { groupByParent, groupParentsByReporter, type PublicListedIssue } from "@/modules/public"
+import { getPublicSessionService, CurrentVisitor } from "@/modules/public"
+import { PublicReporter, type PublicListedIssue } from "@/modules/public"
 
 export const dynamic = "force-dynamic"
 
@@ -128,7 +128,7 @@ async function PublicSessionContent({
     //     the client component which filters by localStorage reporter
     //     id. Soft preference, not a security boundary.
     const restrictToOwn = session.submissions_visibility === "own"
-    const visitor = restrictToOwn ? await getCurrentPublicUser() : null
+    const visitor = restrictToOwn ? await new CurrentVisitor().current() : null
     const filteredIssueRows = restrictToOwn && visitor
         ? (issueRows ?? []).filter((r) => reporterByIssue.get(r.id)?.auth_user_id === visitor.id)
         : (issueRows ?? [])
@@ -147,8 +147,9 @@ async function PublicSessionContent({
             created_at: r.created_at,
         }
     })
-    const parentRows = groupByParent(listedIssues)
-    const reporterGroups = groupParentsByReporter(parentRows)
+    const reporter = new PublicReporter()
+    const parentRows = reporter.groupByParent(listedIssues)
+    const reporterGroups = reporter.groupParentsByReporter(parentRows)
 
     const win = session.enabled ? windowState(session) : "closed"
     const heading = session.title || session.name

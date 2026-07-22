@@ -7,7 +7,7 @@ import type {
     PublicParentRow,
     PublicReporterGroup,
 } from "@/modules/public"
-import { reporterDisplay } from "@/modules/public/domain/PublicReporter"
+import { PublicReporter } from "@/modules/public/domain/PublicReporter"
 import { StatusChip } from "@/components/ui/status-chip"
 
 // Public-side counterpart to the auth issues list.
@@ -301,7 +301,7 @@ function ChildRowCard({
     token: string
     myReporterId: string
 }) {
-    const childReporter = reporterDisplay(child.public_reporter_id, child.public_reporter_name)
+    const childReporter = new PublicReporter().display(child.public_reporter_id, child.public_reporter_name)
     const isMe = !!myReporterId && child.public_reporter_id === myReporterId
 
     return (

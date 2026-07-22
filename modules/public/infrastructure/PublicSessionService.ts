@@ -16,7 +16,7 @@ import type { IssuesRepository } from "@/modules/issues"
 import type { TeamMembershipRepository } from "@/modules/teams"
 import { PUBLIC_ISSUE_LABEL, PublicSession } from "../domain/PublicSession"
 import type { PublicSessionRepository, PublicSessionRow } from "../ports/PublicSessionRepository"
-import { getCurrentPublicUser } from "./CurrentVisitor"
+import { CurrentVisitor } from "./CurrentVisitor"
 
 /** A resolved session: the row plus the project ids it covers (derived from the
  *  group's public-enabled membership, or the manual junction). */
@@ -30,6 +30,8 @@ export type InviteCheck =
     | { ok: false; reason: "not_invited"; email: string }
 
 export class PublicSessionService {
+    private readonly visitor = new CurrentVisitor()
+
     constructor(
         private readonly sessions: PublicSessionRepository,
         private readonly issues: IssuesRepository,
@@ -94,7 +96,7 @@ export class PublicSessionService {
         issueId: string,
     ): Promise<Response | null> {
         if (!PublicSession.of(session).showsOwnSubmissionsOnly()) return null
-        const visitor = await getCurrentPublicUser()
+        const visitor = await this.visitor.current()
         if (!visitor) return null
         const rep = await this.sessions.findIssueReporter(issueId)
         if (rep?.auth_user_id && rep.auth_user_id === visitor.id) return null
@@ -108,7 +110,7 @@ export class PublicSessionService {
     async checkInviteAccess(session: Pick<ResolvedPublicSession, "id" | "access_mode">): Promise<InviteCheck> {
         if (PublicSession.of(session).isLinkAccess()) return { ok: true, email: null }
 
-        const user = await getCurrentPublicUser()
+        const user = await this.visitor.current()
         if (!user) return { ok: false, reason: "unauthenticated" }
 
         const email = user.email ?? ""
