@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
-import { routingEmbeddingText } from "@/modules/issues"
+import { EmbeddingText } from "@/modules/issues"
 import type { ProjectGroup } from "@/lib/supabase/types"
 
 // POST /api/groups/[id]/ai-compose
@@ -89,7 +89,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // contextualised tag pool entries. We surface the same string
     // in the response so the UI can show "this is what we matched
     // against" for debugging routing decisions.
-    const routingQuery = routingEmbeddingText(proposal)
+    const routingQuery = new EmbeddingText().forRouting(proposal)
     let queryVec: number[]
     try {
         const embed = await getAnalyser().embed(routingQuery)

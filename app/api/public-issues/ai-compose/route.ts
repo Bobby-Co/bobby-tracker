@@ -1,7 +1,7 @@
 import { jsonError } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { routingEmbeddingText } from "@/modules/issues"
+import { EmbeddingText } from "@/modules/issues"
 import { getPublicSessionService } from "@/modules/public"
 import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
 
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    const routingQuery = routingEmbeddingText(proposal)
+    const routingQuery = new EmbeddingText().forRouting(proposal)
     let queryVec: number[]
     try {
         const embed = await getAnalyser().embed(routingQuery)

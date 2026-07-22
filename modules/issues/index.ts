@@ -4,7 +4,7 @@
 // client. IssueComposeProposal is re-exported (type-only) from lib/analyser for
 // callers that pair it with routingEmbeddingText.
 
-export { issueEmbeddingText, routingEmbeddingText } from "./domain/EmbeddingText"
+export { EmbeddingText } from "./domain/EmbeddingText"
 
 // ─── Issue aggregate — status lifecycle + GitHub-state mapping ───────────────
 export type { IssueStatusValue, IssueState } from "./domain/Issue"

@@ -11,7 +11,7 @@ import type { Analyser } from "@/modules/analysis"
 import { getAnalyser } from "@/modules/analysis"
 import type { EmbeddingIndex } from "../ports/EmbeddingIndex"
 import { createServiceEmbeddingIndex } from "../infrastructure/SupabaseEmbeddingIndex"
-import { issueEmbeddingText } from "../domain/EmbeddingText"
+import { EmbeddingText } from "../domain/EmbeddingText"
 
 /** The minimal issue shape the embedder needs. Structural, so a freshly-inserted
  *  row can be passed straight in. */
@@ -23,6 +23,8 @@ export interface EmbeddableIssue {
 }
 
 export class IssueEmbedder {
+    private readonly text = new EmbeddingText()
+
     constructor(
         private readonly analyser: Analyser,
         private readonly index: EmbeddingIndex,
@@ -33,7 +35,7 @@ export class IssueEmbedder {
      *  (never throws, so it can't break the caller's insert). */
     async embedIssue(issue: EmbeddableIssue): Promise<void> {
         try {
-            const result = await this.analyser.embed(issueEmbeddingText(issue))
+            const result = await this.analyser.embed(this.text.forIssue(issue))
             await this.index.upsert({
                 issueId: issue.id,
                 projectId: issue.project_id,
