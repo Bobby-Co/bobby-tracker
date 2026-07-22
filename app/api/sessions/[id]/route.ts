@@ -1,5 +1,5 @@
-import { jsonError, requireSessionAccess, requireUser } from "@/lib/platform/http/api"
-import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
+import { jsonError, requireSessionAccess, requireUser } from "@/lib/server/http/api"
+import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/shared/types"
 
 function parseWindow(v: unknown): string | null | undefined {
     if (v === undefined) return undefined

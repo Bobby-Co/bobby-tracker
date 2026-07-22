@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useApi } from "@/lib/hooks/use-api"
-import type { Project, ProjectGroup } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { Project, ProjectGroup } from "@/lib/shared/types"
 import { NewGroupButton } from "@/components/groups/new-group-button"
 import { GroupsListSkeleton } from "@/components/groups/groups-list-skeleton"
 import { MiniCard, toneFromString } from "@/components/ui/field-card"

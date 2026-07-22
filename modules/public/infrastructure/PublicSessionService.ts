@@ -9,9 +9,9 @@
 // infrastructure, not application. The composition root (../Composition) binds it
 // to the three repositories.
 
-import { jsonError } from "@/lib/platform/http/api"
-import { tryOrNull } from "@/lib/kernel"
-import type { Issue } from "@/lib/supabase/types"
+import { jsonError } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { Issue } from "@/lib/shared/types"
 import type { IssuesRepository } from "@/modules/issues"
 import type { TeamMembershipRepository } from "@/modules/teams"
 import { PUBLIC_ISSUE_LABEL, PublicSession } from "../domain/PublicSession"

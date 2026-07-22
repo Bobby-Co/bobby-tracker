@@ -6,10 +6,10 @@
 // are OAuth-gated, so this unauthed route is the only way to eyeball the tile.
 
 import { AppShell } from "@/components/layout/app-shell"
-import { TeamProvider } from "@/lib/auth/team-context"
+import { TeamProvider } from "@/lib/client/auth/team-context"
 import { ProjectTile } from "@/components/projects/project-tile"
 import { ProjectOrgGrid } from "@/components/projects/project-org-grid"
-import type { Project, ProjectInsight } from "@/lib/supabase/types"
+import type { Project, ProjectInsight } from "@/lib/shared/types"
 
 const mk = (id: string, name: string, repo: string, description: string | null): Project => ({
     id, user_id: "u", team_id: "t", name, repo_url: `https://github.com/${repo}`, repo_full_name: repo,

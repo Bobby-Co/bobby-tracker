@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { ProjectPublicIntegration, PublicSession } from "@/lib/shared/types"
 import { PublicIntegrationPanel } from "@/components/public/public-integration-panel"
 import { GithubSyncPanel } from "@/components/projects/github-sync-panel"
 import IntegrationsLoading from "./loading"

@@ -4,8 +4,8 @@
 // on. The same token + `repo`-scope gate that /api/github/repos uses
 // (tracker.github_tokens, migration 0031).
 
-import type { createClient } from "@/lib/supabase/server"
-import type { GithubToken } from "@/lib/supabase/types"
+import type { createClient } from "@/lib/server/supabase"
+import type { GithubToken } from "@/lib/shared/types"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 

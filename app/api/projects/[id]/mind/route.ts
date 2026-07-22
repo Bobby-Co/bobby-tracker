@@ -1,6 +1,6 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, type ChatHistoryMsg } from "@/modules/analysis"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
-import type { Project } from "@/lib/supabase/types"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import type { Project } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/mind
 //

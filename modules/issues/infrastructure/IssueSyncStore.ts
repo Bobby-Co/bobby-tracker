@@ -11,8 +11,8 @@
 // analysis_status) are GitHub-integration / analysis state that currently lives
 // on the issues row; a later physical split would remove the shared-table coupling.
 
-import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueStatus } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { IssueStatus } from "@/lib/shared/types"
 
 // The subset of a tracker.issues row the analysis flow reads.
 export type IssueAnalysisRow = {

@@ -13,8 +13,8 @@ export { RepoRef } from "./domain/RepoRef"
 // ─── Pull Requests (moved in: a PR can't exist without a VCS) ────────────────
 // finding-state is a SHARED pure classifier re-exported for callers that reach
 // for it via the VCS contract.
-export type { FindingState } from "@/lib/rendering/finding-state"
-export { findingState } from "@/lib/rendering/finding-state"
+export type { FindingState } from "@/lib/shared/rendering/finding-state"
+export { findingState } from "@/lib/shared/rendering/finding-state"
 // PullRequest aggregate + merge policy (domain)
 export type { PullRequestState, PullRequestLifecycle } from "./domain/PullRequest"
 export { PullRequest } from "./domain/PullRequest"

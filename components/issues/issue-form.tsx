@@ -2,13 +2,13 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
+import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import { ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis/domain/ProjectAnalyser"
 import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))

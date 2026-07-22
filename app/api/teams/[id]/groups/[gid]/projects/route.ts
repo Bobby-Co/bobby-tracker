@@ -1,5 +1,5 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
 
 // POST /api/teams/[id]/groups/[gid]/projects — grant a team project to a
 // people-group (admins). The composite FK rejects a project from another team.

@@ -9,7 +9,7 @@ import {
     shortDate,
     timeAgo,
 } from "@/components/issues/issue-meta"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/shared/types"
 
 // Minimal field-table issue card (reference style): a status-tinted
 // circular glyph + title + #number, a calm three-row field table

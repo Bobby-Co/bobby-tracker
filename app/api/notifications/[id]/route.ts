@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
+import { jsonError, requireUser } from "@/lib/server/http/api"
 
 // PATCH /api/notifications/[id] — mark one notification read.
 //

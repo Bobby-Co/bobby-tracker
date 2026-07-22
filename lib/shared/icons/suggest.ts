@@ -1,4 +1,4 @@
-import { ICONLY_CATALOG, type IconlyCatalogEntry } from "@/lib/icons/iconly-catalog"
+import { ICONLY_CATALOG, type IconlyCatalogEntry } from "@/lib/shared/icons/iconly-catalog"
 
 // Local (offline) icon ranking — no network, no embeddings. Shared by the
 // client picker (components/icons/icon-picker.tsx) and the server-side

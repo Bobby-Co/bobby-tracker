@@ -3,14 +3,14 @@
 // the caller's personal GitHub token so we post AS THEM. Returns a ready-to-send
 // Response on any failed gate.
 
-import { jsonError } from "@/lib/platform/http/api"
+import { jsonError } from "@/lib/server/http/api"
 import { createGithubTokenRepository } from "./GithubTokenRepository"
 import { RepoRef } from "../domain/RepoRef"
 import { getVcsUserService } from "../Composition"
 import type { VcsUserService } from "../application/VcsUserService"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
-import { RepositoryError } from "@/lib/kernel"
-import type { createClient } from "@/lib/supabase/server"
+import { RepositoryError } from "@/lib/shared/kernel"
+import type { createClient } from "@/lib/server/supabase"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 

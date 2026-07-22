@@ -8,7 +8,7 @@
 // belong to the project, in one place, expressed as behaviour.
 //
 // Pure domain: no I/O, no framework, no SDK. `SyncDirection` is kept local (not
-// imported from @/lib/supabase/types) so the aggregate carries no persistence
+// imported from @/lib/shared/types) so the aggregate carries no persistence
 // dependency; a drift guard in ../infrastructure keeps it aligned with the DB.
 
 export type SyncDirection = "inbound" | "outbound" | "both"

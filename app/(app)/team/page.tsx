@@ -4,7 +4,7 @@ import { Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { cn } from "@/components/ui/cn"
-import { useTeam } from "@/lib/auth/team-context"
+import { useTeam } from "@/lib/client/auth/team-context"
 import { MembersTab } from "@/components/teams/members-tab"
 import { GroupsTab } from "@/components/teams/groups-tab"
 

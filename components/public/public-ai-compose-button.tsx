@@ -6,10 +6,10 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
-import { compressImage, type CompressedImage } from "@/lib/util/image-compress"
+import { compressImage, type CompressedImage } from "@/lib/client/image-compress"
 import { readName, readReporterId } from "@/components/public/public-profile"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
-import type { IssuePriority } from "@/lib/supabase/types"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import type { IssuePriority } from "@/lib/shared/types"
 
 interface RankedProject {
     project_id: string

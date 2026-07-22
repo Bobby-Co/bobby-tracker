@@ -1,4 +1,4 @@
-import { gaugeSvg } from "@/lib/rendering/badge"
+import { gaugeSvg } from "@/lib/shared/rendering/badge"
 
 // GET /api/gauge?kind=score&value=6&max=10  |  ?kind=confidence&levels=high,medium,low
 //

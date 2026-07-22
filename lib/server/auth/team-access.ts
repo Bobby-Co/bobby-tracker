@@ -15,7 +15,7 @@
 // requireTeam does that and hands the resolved value in).
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Team, TeamRole, TeamWithRole } from "@/lib/supabase/types"
+import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
 
 // Loosely-typed client: the tracker schema types are hand-written, so `.from`
 // results are cast to concrete row shapes at each call site (same convention as

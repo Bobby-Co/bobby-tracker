@@ -1,11 +1,11 @@
 import { after } from "next/server"
-import { jsonError, requireRole, requireTeam } from "@/lib/platform/http/api"
-import { getAccessibleProjectIds } from "@/lib/auth/team-access"
+import { jsonError, requireRole, requireTeam } from "@/lib/server/http/api"
+import { getAccessibleProjectIds } from "@/lib/server/auth/team-access"
 import { getAnalyser } from "@/modules/analysis"
-import { filterIconsLocal } from "@/lib/icons/suggest"
-import { canonicalRepoUrl, validateRepoUrl } from "@/lib/util/repo-url"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/supabase/types"
+import { filterIconsLocal } from "@/lib/shared/icons/suggest"
+import { canonicalRepoUrl, validateRepoUrl } from "@/lib/shared/repo-url"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/shared/types"
 
 // GET — list the ACTIVE TEAM's projects, newest first. Backs the app sidebar and
 // the /projects grid. Coarse RLS already scopes rows to teams the caller belongs

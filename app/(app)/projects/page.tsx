@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useApi } from "@/lib/hooks/use-api"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { NewProjectButton } from "@/components/projects/new-project-button"
 import { NewGroupButton } from "@/components/groups/new-group-button"
 import { ProjectOrgGrid } from "@/components/projects/project-org-grid"
-import type { ProjectGroup, ProjectWithInsight } from "@/lib/supabase/types"
+import type { ProjectGroup, ProjectWithInsight } from "@/lib/shared/types"
 
 type GroupWithCount = ProjectGroup & { member_count: number }
 

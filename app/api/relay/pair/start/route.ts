@@ -1,7 +1,7 @@
-import { jsonError } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
-import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
+import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 
 // PUBLIC. Called by the bobby-relay app (no Supabase session) to start a
 // device-pairing handshake. Mints a (device_code, user_code) pair and

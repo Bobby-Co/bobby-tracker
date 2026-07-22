@@ -1,6 +1,6 @@
-import { jsonError, personalTeamName, requireUser } from "@/lib/platform/http/api"
-import { getUserTeams } from "@/lib/auth/team-access"
-import type { Team, TeamRole, TeamWithRole } from "@/lib/supabase/types"
+import { jsonError, personalTeamName, requireUser } from "@/lib/server/http/api"
+import { getUserTeams } from "@/lib/server/auth/team-access"
+import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams — the caller's teams (each with their role), personal team
 // first. Bootstraps the personal team on first call. Backs the top-bar selector.

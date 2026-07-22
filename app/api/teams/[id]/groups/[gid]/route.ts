@@ -1,6 +1,6 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import type { AccessGroup } from "@/lib/supabase/types"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import type { AccessGroup } from "@/lib/shared/types"
 
 // PATCH /api/teams/[id]/groups/[gid] — rename / re-describe a people-group (admins).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; gid: string }> }) {

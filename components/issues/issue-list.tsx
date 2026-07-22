@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/shared/types"
 import { PriorityChip, StatusChip } from "@/components/ui/status-chip"
 import { STATUS_META } from "@/components/issues/issue-meta"
 import { cn } from "@/components/ui/cn"

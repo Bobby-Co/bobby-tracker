@@ -1,4 +1,4 @@
-import { jsonError } from "@/lib/platform/http/api"
+import { jsonError } from "@/lib/server/http/api"
 import { NotificationEmail } from "@/modules/notifications"
 
 export const dynamic = "force-dynamic"

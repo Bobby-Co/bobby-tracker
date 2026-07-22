@@ -1,5 +1,5 @@
-import { jsonError } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { createNotificationService } from "@/modules/notifications"
 
 export const dynamic = "force-dynamic"

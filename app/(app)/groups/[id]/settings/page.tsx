@@ -1,8 +1,8 @@
 "use client"
 
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { ProjectGroup } from "@/lib/shared/types"
 import { GroupManagePanel } from "@/components/groups/group-manage-panel"
 import { GroupSettingsSkeleton } from "@/components/groups/group-settings-skeleton"
 

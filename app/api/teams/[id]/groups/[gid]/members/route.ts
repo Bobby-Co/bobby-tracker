@@ -1,5 +1,5 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
 
 // POST /api/teams/[id]/groups/[gid]/members — add a team member to a people-group
 // (admins). The double composite FK rejects a user who isn't on the team.

@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
 import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
 
 // POST /api/issues/[id]/duplicate-of

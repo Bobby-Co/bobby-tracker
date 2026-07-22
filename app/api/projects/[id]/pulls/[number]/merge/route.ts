@@ -1,7 +1,7 @@
-import { jsonError, requireUser, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireUser, requireProjectAccess } from "@/lib/server/http/api"
 import { getVcsAppService, VcsMergeError, createServicePullRequestStore } from "@/modules/vcs"
 import { MergePolicy, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
-import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // GET  /api/projects/[id]/pulls/[number]/merge — everything the merge bar needs:
 //        our policy gate (from mirrored data), the repo's allowed merge methods,

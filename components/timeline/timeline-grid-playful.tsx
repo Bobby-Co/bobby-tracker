@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { motion, type PanInfo, useDragControls, useMotionValue } from "framer-motion"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
-import { useScheduleSync } from "@/lib/timeline/use-schedule-sync"
+import { useScheduleSync } from "@/lib/client/timeline/use-schedule-sync"
 import {
     CELL,
     MIN_DURATION_DAYS,
@@ -13,13 +13,13 @@ import {
     boardOrigin,
     cellToSchedule,
     issueToCell,
-} from "@/lib/timeline/grid"
+} from "@/lib/client/timeline/grid"
 import type {
     Issue,
     IssueStatus,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // The playful board stores lanes as ABSOLUTE integer rows straight in
 // `lane_y`, so it's infinite vertically (a tile can go above row 0 or far

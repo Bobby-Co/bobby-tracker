@@ -5,8 +5,8 @@ import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { useHoverTooltip } from "@/components/icons/icon-tooltip"
 import { Modal } from "@/components/ui/modal"
-import { type IconlyCatalogEntry } from "@/lib/icons/iconly-catalog"
-import { CATALOG_BY_NAME, filterIconsLocal } from "@/lib/icons/suggest"
+import { type IconlyCatalogEntry } from "@/lib/shared/icons/iconly-catalog"
+import { CATALOG_BY_NAME, filterIconsLocal } from "@/lib/shared/icons/suggest"
 
 // IconPicker — searchable gallery for assigning an icon to a label.
 //

@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { apiMutate } from "@/lib/platform/http/api-client"
+import { createClient } from "@/lib/client/supabase"
+import { apiMutate } from "@/lib/client/http/api-client"
 import { SetupWizard, type WizardDir, type WizardEffort } from "@/components/projects/setup-wizard"
-import type { GithubSyncDirection } from "@/lib/supabase/types"
+import type { GithubSyncDirection } from "@/lib/shared/types"
 
 // First-run setup wizard page. Thin: loads the project's current state, then
 // renders <SetupWizard> (all the UI + animation) wired to the real APIs. The

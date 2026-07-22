@@ -3,9 +3,9 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { MindPanel } from "@/components/mind/mind-panel"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import type { Project, ProjectAnalyser } from "@/lib/shared/types"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 
 type KnowledgeData = {

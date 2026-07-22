@@ -8,7 +8,7 @@
 // modules/projects/ports/projects-repository.ts — it may TYPE-reference the shared
 // DB row type. No SDK/client is imported here; persistence stays in infrastructure.
 
-import type { ProjectAnalyser } from "@/lib/supabase/types"
+import type { ProjectAnalyser } from "@/lib/shared/types"
 
 /** The readiness-gate projection: the columns ProjectAnalyser.isReady() reads.
  *  Kept as a narrow select so hot gate paths don't pull the full row (incl. the
@@ -19,7 +19,7 @@ export interface ProjectAnalyserRepository {
     /** The full analyser row for a project, or null when none exists / isn't
      *  visible to the caller (the injected client carries the caller's RLS scope).
      *  Throws {@link RepositoryError} on a genuine query failure — a fail-safe
-     *  caller folds that back to null with `tryOrNull` (see @/lib/kernel). */
+     *  caller folds that back to null with `tryOrNull` (see @/lib/shared/kernel). */
     findByProjectId(projectId: string): Promise<ProjectAnalyser | null>
 
     /** Just the readiness-gate columns (enabled/status/graph_id) — feed to

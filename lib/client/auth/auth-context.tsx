@@ -9,7 +9,7 @@ import {
     useState,
 } from "react"
 import type { Session, User } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/client/supabase"
 import {registerHyperellipse} from "hyperellipse";
 
 // Client-side auth context. This replaces the old server/middleware

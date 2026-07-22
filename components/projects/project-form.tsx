@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
-import type { GithubRepoSummary } from "@/lib/supabase/types"
+import { createClient } from "@/lib/client/supabase"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import type { GithubRepoSummary } from "@/lib/shared/types"
 
 // GitHub's per-app authorization page lets the user grant access to
 // organizations they skipped at sign-in time (or that an org admin has

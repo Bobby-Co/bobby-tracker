@@ -25,11 +25,11 @@ import {
     pxPerDay,
     snapToHour,
     xToTime,
-} from "@/lib/timeline/scale"
-import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
-import { ScheduleOutbox, type SchedulePatch } from "@/lib/timeline/outbox"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
-import type { Issue, IssuePriority, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
+} from "@/lib/client/timeline/scale"
+import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/client/timeline/colors"
+import { ScheduleOutbox, type SchedulePatch } from "@/lib/client/timeline/outbox"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import type { Issue, IssuePriority, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/shared/types"
 
 // IssueTimeline — Gantt-flavoured planning canvas. Tiles are
 // draggable + resizable via framer-motion: gestures use CSS

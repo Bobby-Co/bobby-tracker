@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/components/ui/cn"
-import { createClient } from "@/lib/supabase/client"
-import type { ProjectAnalyser } from "@/lib/supabase/types"
+import { createClient } from "@/lib/client/supabase"
+import type { ProjectAnalyser } from "@/lib/shared/types"
 
 const STATUS_LABEL: Record<ProjectAnalyser["status"], { text: string; className: string }> = {
     disabled: { text: "Disabled",  className: "pill" },

@@ -1,6 +1,6 @@
-import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/rendering/badge"
-import { findingState } from "@/lib/rendering/finding-state"
-import type { PRAnalysis, PRFinding } from "@/lib/supabase/types"
+import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/shared/rendering/badge"
+import { findingState } from "@/lib/shared/rendering/finding-state"
+import type { PRAnalysis, PRFinding } from "@/lib/shared/types"
 
 // Finding groups → collapsible sections, traffic-light order; issues open, positives collapsed.
 const FINDING_GROUPS: { key: "critical" | "review" | "good"; title: string; tone: BadgeTone; ic: string; open: boolean }[] = [

@@ -11,7 +11,7 @@ import { cn } from "@/components/ui/cn"
 import PixelScatter from "@/components/ui/pixel-scatter"
 import { ThinkingCard, type Progress } from "@/components/mind/mind-thinking"
 import { IssueDrawer } from "@/components/issues/issue-drawer"
-import type { Issue, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
+import type { Issue, ProjectLabelIcon, ProjectStatusColor } from "@/lib/shared/types"
 
 // ── Types mirroring the analyser /chat SSE events + final answer ──────────────
 

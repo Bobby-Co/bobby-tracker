@@ -6,7 +6,7 @@
 // shared DB row type — a pragmatic, TYPE-ONLY coupling. No SDK or client is
 // imported here; concrete persistence stays in infrastructure.
 
-import type { Project } from "@/lib/supabase/types"
+import type { Project } from "@/lib/shared/types"
 
 /** The project fields needed to mirror a change to GitHub. Previously a
  *  hand-copied 8-column `select(...)` + `Pick<Project, …>` repeated verbatim

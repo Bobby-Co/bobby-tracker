@@ -1,9 +1,9 @@
 "use client"
 
 import { createContext, useCallback, useContext, useMemo } from "react"
-import { useAuth } from "@/lib/auth/auth-context"
-import { useApi } from "@/lib/hooks/use-api"
-import type { TeamWithRole } from "@/lib/supabase/types"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { TeamWithRole } from "@/lib/shared/types"
 
 // Client-side "active team" context. The active team is persisted in the
 // `team_id` cookie, which rides along on every same-origin fetch so the server's

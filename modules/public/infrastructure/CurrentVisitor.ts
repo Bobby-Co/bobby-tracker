@@ -3,7 +3,7 @@
 // by the PublicSessionService gate and the public routes/pages at submission time
 // (attribution) and read time ('own'-visibility).
 
-import { getCurrentUser } from "@/lib/supabase/server"
+import { getCurrentUser } from "@/lib/server/supabase"
 
 export interface PublicVisitor {
     id: string

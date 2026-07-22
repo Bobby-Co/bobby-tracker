@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { ProjectTile, projectOrg } from "@/components/projects/project-tile"
-import type { ProjectWithInsight } from "@/lib/supabase/types"
+import type { ProjectWithInsight } from "@/lib/shared/types"
 
 // The projects grid, grouped by organisation (repo owner) with each org
 // collapsible.

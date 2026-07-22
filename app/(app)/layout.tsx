@@ -2,12 +2,12 @@
 
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth/auth-context"
-import { isAllowed } from "@/lib/auth/access"
-import { TeamProvider } from "@/lib/auth/team-context"
-import { useApi } from "@/lib/hooks/use-api"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { isAllowed } from "@/lib/server/auth/access"
+import { TeamProvider } from "@/lib/client/auth/team-context"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { AppShell, ShellSkeleton } from "@/components/layout/app-shell"
-import type { Project } from "@/lib/supabase/types"
+import type { Project } from "@/lib/shared/types"
 
 // Auth-gated app shell — now a client guard instead of a server
 // component. useAuth() owns the session; an unauthenticated visitor is

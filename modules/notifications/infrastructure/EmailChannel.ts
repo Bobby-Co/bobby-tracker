@@ -7,7 +7,7 @@
 // This is a MINIMAL template; migrating to the rich per-kind templates in
 // lib/email/notifications.ts is a cutover follow-up.
 
-import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
+import { isEmailConfigured, sendMail } from "@/lib/server/email/jmap"
 
 import type { NotificationEvent } from "../domain/Events"
 import { NotificationPresenter } from "../domain/Events"

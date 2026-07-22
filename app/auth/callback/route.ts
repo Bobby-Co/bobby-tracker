@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
-import { isAllowed } from "@/lib/auth/access"
+import { createClient } from "@/lib/server/supabase"
+import { isAllowed } from "@/lib/server/auth/access"
 
 // Supabase OAuth callback. Exchanges the `code` query param for a session,
 // captures the GitHub provider token (so the app can later list private

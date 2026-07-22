@@ -10,7 +10,7 @@
 // on the Gantt timeline and vice-versa. These helpers are the
 // bridge between that continuous storage and the snapped grid.
 
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/shared/types"
 import { DAY_MS } from "./scale"
 
 export const MIN_ROWS = 8           // fewest lanes even on a short screen

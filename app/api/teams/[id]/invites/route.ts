@@ -1,8 +1,8 @@
 import { after } from "next/server"
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
 import { Email, Invite, createInviteNotifier } from "@/modules/teams"
-import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/supabase/types"
+import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/invites — pending (unaccepted) invites (admins). RLS on
 // team_invites is admin-only, so a non-admin never sees the tokens.

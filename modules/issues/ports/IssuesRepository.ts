@@ -5,7 +5,7 @@
 // ports/ may TYPE-reference the shared DB row type (no SDK/client here); the
 // Supabase implementation lives in ../infrastructure.
 
-import type { Issue, IssueSuggestion } from "@/lib/supabase/types"
+import type { Issue, IssueSuggestion } from "@/lib/shared/types"
 
 /** The columns a caller supplies when filing a new issue. Everything else on the
  *  row (id, issue_number, the github_* mirror fields, timestamps) is assigned by

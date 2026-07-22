@@ -1,6 +1,6 @@
-import { repoRead, requireProjectAccess } from "@/lib/platform/http/api"
+import { repoRead, requireProjectAccess } from "@/lib/server/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import type { Project } from "@/lib/supabase/types"
+import type { Project } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/knowledge — the project's repo identity plus
 // its analyser row. Backs both the Knowledge and Ask tabs, which each

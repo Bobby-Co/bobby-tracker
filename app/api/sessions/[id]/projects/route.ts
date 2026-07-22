@@ -1,4 +1,4 @@
-import { jsonError, requireSessionAccess } from "@/lib/platform/http/api"
+import { jsonError, requireSessionAccess } from "@/lib/server/http/api"
 
 // POST — add a project to a session. RLS on public_session_projects
 // enforces that the project belongs to the same owner, so we don't

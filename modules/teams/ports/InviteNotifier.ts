@@ -4,7 +4,7 @@
 // root, never constructed directly. A future channel (in-app, SMS) is a new
 // adapter, not a rewrite of the invite route.
 
-import type { TeamRole } from "@/lib/supabase/types"
+import type { TeamRole } from "@/lib/shared/types"
 
 /** Everything a delivered invite needs to render itself. */
 export interface InviteMessage {

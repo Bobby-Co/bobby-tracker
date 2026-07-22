@@ -11,7 +11,7 @@ import {
     LABEL_COLOR_PALETTE,
     defaultLabelColor,
     softLabelChipStyle,
-} from "@/lib/timeline/labels"
+} from "@/lib/client/timeline/labels"
 
 // NewLabelModal — compact create-label dialog. Shows a live
 // preview of the label chip in the middle so the user can see

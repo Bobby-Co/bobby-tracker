@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { requireUser } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
-import type { Project } from "@/lib/supabase/types"
+import type { Project } from "@/lib/shared/types"
 
 // GET /api/github/app/callback — GitHub sends the user here after they install
 // (or reconfigure) the "Bobby" App, appending:

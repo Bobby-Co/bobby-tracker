@@ -1,6 +1,6 @@
 "use client"
 
-import type { PRComment } from "@/lib/supabase/types"
+import type { PRComment } from "@/lib/shared/types"
 import { CommentThread, type ThreadComment } from "@/components/comments/comment-thread"
 
 // PR comment thread — maps PRComment rows onto the shared CommentThread. Review

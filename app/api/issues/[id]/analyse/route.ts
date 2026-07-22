@@ -1,5 +1,5 @@
-import { jsonError, requireIssueAccess } from "@/lib/platform/http/api"
-import { tryOrNull } from "@/lib/kernel"
+import { jsonError, requireIssueAccess } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { createIssueAnalysisService } from "@/modules/analysis"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 

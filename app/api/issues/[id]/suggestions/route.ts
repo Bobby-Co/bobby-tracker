@@ -1,4 +1,4 @@
-import { repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { repoRead, requireIssueAccess } from "@/lib/server/http/api"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 
 // GET /api/issues/[id]/suggestions

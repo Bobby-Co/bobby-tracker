@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/client/supabase"
 import type { ProjectActivity } from "@/app/api/projects/[id]/activity/route"
 
 // Ambient "something is running in the background" chips for the project

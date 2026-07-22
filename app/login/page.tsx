@@ -2,7 +2,7 @@
 
 import {Suspense, useEffect, useState} from "react"
 import { useSearchParams } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/client/supabase"
 import { AuthShell } from "@/components/layout/auth-shell"
 import {registerHyperellipse} from "hyperellipse";
 

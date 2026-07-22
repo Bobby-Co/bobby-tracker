@@ -3,8 +3,8 @@
 // resolves to null; a genuine query failure is thrown as RepositoryError.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { RepositoryError } from "@/lib/kernel"
-import type { Issue, IssueSuggestion } from "@/lib/supabase/types"
+import { RepositoryError } from "@/lib/shared/kernel"
+import type { Issue, IssueSuggestion } from "@/lib/shared/types"
 import type {
     IssuesRepository,
     IssueSuggestContext,

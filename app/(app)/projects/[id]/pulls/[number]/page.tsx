@@ -2,13 +2,13 @@
 
 import Link from "next/link"
 import { notFound, useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import { useAuth } from "@/lib/auth/auth-context"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { useAuth } from "@/lib/client/auth/auth-context"
 import { PrDetail } from "@/components/pulls/pr-detail"
 import { PrMergeBar } from "@/components/pulls/pr-merge-bar"
 import { PrReview } from "@/components/pulls/pr-review"
 import { PrComments } from "@/components/pulls/pr-comments"
-import type { PRComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PRComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 interface PullView {
     pull: PullRequest | null

@@ -4,8 +4,8 @@
 // signed-in user). Swapping persistence means replacing this file.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { PRAnalysis } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { PRAnalysis } from "@/lib/shared/types"
 import type {
     PullRequestAnalysisResultRow,
     PullRequestAnalysisStore,

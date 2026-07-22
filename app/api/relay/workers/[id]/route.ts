@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
+import { jsonError, requireUser } from "@/lib/server/http/api"
 
 // AUTH. Rename a worker. RLS scopes the update to the owner, so a bad id
 // or another user's worker simply matches no rows.

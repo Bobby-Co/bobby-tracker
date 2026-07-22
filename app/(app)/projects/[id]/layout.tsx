@@ -2,8 +2,8 @@
 
 import { useEffect } from "react"
 import { useParams, usePathname, useRouter } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { Project, ProjectAnalyser } from "@/lib/shared/types"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 import { ProjectTabs } from "@/components/projects/project-tabs"
 import { ProjectActivityChips } from "@/components/projects/project-activity-chips"

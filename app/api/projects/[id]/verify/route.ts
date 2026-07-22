@@ -1,7 +1,7 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
-import { RepositoryError } from "@/lib/kernel"
-import type { Project } from "@/lib/supabase/types"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
+import { RepositoryError } from "@/lib/shared/kernel"
+import type { Project } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/verify
 //

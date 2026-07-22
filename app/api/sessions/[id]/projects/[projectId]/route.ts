@@ -1,4 +1,4 @@
-import { jsonError, requireSessionAccess } from "@/lib/platform/http/api"
+import { jsonError, requireSessionAccess } from "@/lib/server/http/api"
 
 export async function DELETE(
     _: Request,

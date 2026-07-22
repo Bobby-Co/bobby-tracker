@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/auth/auth-context"
+import { useAuth } from "@/lib/client/auth/auth-context"
 
 // Client sign-out: clears the session via the browser Supabase client
 // (which removes the auth cookie and notifies the auth context), then

@@ -4,8 +4,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { motion, type PanInfo, useDragControls, useMotionValue } from "framer-motion"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
-import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
-import { useScheduleSync } from "@/lib/timeline/use-schedule-sync"
+import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/client/timeline/colors"
+import { useScheduleSync } from "@/lib/client/timeline/use-schedule-sync"
 import {
     CELL,
     MIN_ROWS,
@@ -16,13 +16,13 @@ import {
     cellToSchedule,
     issueToCell,
     rowToLane,
-} from "@/lib/timeline/grid"
+} from "@/lib/client/timeline/grid"
 import type {
     Issue,
     IssueStatus,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // TimelineGrid — the LEGO / agile-board planning view. The canvas is
 // a square-tile baseplate: columns are days, rows are lanes. Tasks

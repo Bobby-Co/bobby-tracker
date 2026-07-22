@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireUser } from "@/lib/platform/http/api"
+import { jsonError, repoRead, requireUser } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 

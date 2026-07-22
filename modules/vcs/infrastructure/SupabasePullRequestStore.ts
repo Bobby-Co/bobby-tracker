@@ -3,8 +3,8 @@
 // Upserts intentionally omit `undefined` fields (supabase-js drops them and
 // PostgREST merge-duplicates only updates the columns it receives).
 
-import { createServiceClient } from "@/lib/supabase/server"
-import type { PRAnalysis } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { PRAnalysis } from "@/lib/shared/types"
 import type {
     PRCommentSource,
     PRCommentUpsert,

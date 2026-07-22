@@ -1,4 +1,4 @@
-import { badge, confidenceTone } from "@/lib/rendering/badge"
+import { badge, confidenceTone } from "@/lib/shared/rendering/badge"
 import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"
 

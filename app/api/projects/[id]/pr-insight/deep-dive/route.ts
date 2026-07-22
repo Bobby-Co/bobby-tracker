@@ -1,6 +1,6 @@
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import type { Project } from "@/lib/supabase/types"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import type { Project } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/pr-insight/deep-dive
 //

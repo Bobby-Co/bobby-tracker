@@ -1,8 +1,8 @@
-import { requireProjectAccess, jsonError } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { requireProjectAccess, jsonError } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
-import type { Project } from "@/lib/supabase/types"
+import type { Project } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/github-sync/link — link an ALREADY-installed GitHub
 // App to this project without the install redirect. Resolves the installation

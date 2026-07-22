@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireTeam } from "@/lib/platform/http/api"
-import type { PublicSession } from "@/lib/supabase/types"
+import { jsonError, requireTeam } from "@/lib/server/http/api"
+import type { PublicSession } from "@/lib/shared/types"
 
 // GET    — list sessions owned by the current user (newest first)
 // POST   — create a new session, optionally with an initial project list

@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
+import { jsonError, requireUser } from "@/lib/server/http/api"
 import { getAnalyserWorkerDirectory, type RelayModel, type RelayWorker } from "@/modules/relay"
 
 // AUTH. List the signed-in user's active (non-revoked) workers, enriched

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { Spinner } from "@/components/ui/spinner"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 export interface SimilarIssue {
     id: string

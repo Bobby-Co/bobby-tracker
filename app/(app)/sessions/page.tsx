@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useApi } from "@/lib/hooks/use-api"
-import type { PublicSession } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { PublicSession } from "@/lib/shared/types"
 import { NewSessionButton } from "@/components/sessions/new-session-button"
 import { SessionsSkeleton } from "@/components/sessions/sessions-skeleton"
 import { MiniCard } from "@/components/ui/field-card"

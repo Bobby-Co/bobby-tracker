@@ -1,5 +1,5 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import type { Issue } from "@/lib/supabase/types"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import type { Issue } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/issues — all issues for a project, newest first.
 // Mirrors the read previously done server-side by the issues page (and the

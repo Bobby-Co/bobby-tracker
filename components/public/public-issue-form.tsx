@@ -3,13 +3,13 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { ISSUE_PRIORITIES } from "@/lib/supabase/types"
-import type { IssuePriority } from "@/lib/supabase/types"
+import { ISSUE_PRIORITIES } from "@/lib/shared/types"
+import type { IssuePriority } from "@/lib/shared/types"
 import { Dropdown } from "@/components/ui/dropdown"
 import { Spinner } from "@/components/ui/spinner"
 import { PublicAiComposeButton } from "@/components/public/public-ai-compose-button"
 import { readName, readReporterId } from "@/components/public/public-profile"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 const MAX_TITLE = 200

@@ -4,8 +4,8 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { cn } from "@/components/ui/cn"
-import { useTeam } from "@/lib/auth/team-context"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { useTeam } from "@/lib/client/auth/team-context"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // Top-bar workspace switcher. Shows the active team and, on open, the full list
 // (switch), a link to manage the current team, and an inline create-team form.

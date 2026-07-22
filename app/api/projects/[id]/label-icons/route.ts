@@ -1,7 +1,7 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { findIcon } from "@/lib/icons/iconly"
-import { ICONLY_NAMES } from "@/lib/icons/iconly-catalog"
-import type { ProjectLabelIcon } from "@/lib/supabase/types"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { findIcon } from "@/lib/shared/icons/iconly"
+import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
+import type { ProjectLabelIcon } from "@/lib/shared/types"
 
 function isKnownIconName(name: string): boolean {
     return ICONLY_NAMES.has(name) || !!findIcon(name)

@@ -10,8 +10,8 @@
 // checks before an embed is scheduled.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { RepositoryError } from "@/lib/kernel"
-import { createServiceClient } from "@/lib/supabase/server"
+import { RepositoryError } from "@/lib/shared/kernel"
+import { createServiceClient } from "@/lib/server/supabase"
 import type { EmbeddingIndex, EmbeddingUpsert, UnembeddedIssue } from "../ports/EmbeddingIndex"
 
 // The RLS client and the service-role client carry different schema generics;

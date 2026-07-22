@@ -1,6 +1,6 @@
 "use client"
 
-import type { IssueComment } from "@/lib/supabase/types"
+import type { IssueComment } from "@/lib/shared/types"
 import { CommentThread, type ThreadComment } from "@/components/comments/comment-thread"
 
 // Issue comment thread — maps IssueComment rows onto the shared CommentThread.

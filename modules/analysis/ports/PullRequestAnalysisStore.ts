@@ -4,7 +4,7 @@
 // stored structured review. The PullRequestAnalysisService depends on this role
 // instead of hitting the table inline (the golden-standard fix).
 
-import type { PRAnalysis } from "@/lib/supabase/types"
+import type { PRAnalysis } from "@/lib/shared/types"
 
 /** The idempotency/comment view of a PR's tracking row. */
 export interface PullRequestAnalysisTracking {

@@ -1,8 +1,8 @@
 "use client"
 
 import { Suspense, lazy, type ComponentType } from "react"
-import { findIcon } from "@/lib/icons/iconly"
-import { ICONLY_LOADERS, type IconlyComponentProps } from "@/lib/icons/iconly-catalog"
+import { findIcon } from "@/lib/shared/icons/iconly"
+import { ICONLY_LOADERS, type IconlyComponentProps } from "@/lib/shared/icons/iconly-catalog"
 
 // IconlyIcon — renders a glyph by canonical name.
 //

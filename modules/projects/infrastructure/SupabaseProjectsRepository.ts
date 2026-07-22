@@ -4,7 +4,7 @@
 // and nothing that depends on the port changes.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { RepositoryError } from "@/lib/kernel"
+import { RepositoryError } from "@/lib/shared/kernel"
 import type { AnalysisProjectContext, GithubSyncContext, ProjectsRepository } from "../ports/ProjectsRepository"
 
 const GITHUB_SYNC_COLS =

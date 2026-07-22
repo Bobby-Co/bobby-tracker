@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { IconPicker } from "@/components/icons/icon-picker"
-import { createClient } from "@/lib/supabase/client"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { createClient } from "@/lib/client/supabase"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // ProjectIdentityPanel — rename a project, edit its description, and give it an
 // icon.

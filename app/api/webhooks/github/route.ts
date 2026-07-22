@@ -1,13 +1,13 @@
 import { after } from "next/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, createIssueAnalysisService } from "@/modules/analysis"
-import { tryOrNull } from "@/lib/kernel"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { getWebhookVerifier, SyncHash } from "@/modules/vcs"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
 import { createServicePullRequestStore } from "@/modules/vcs"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { Issue, Project } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { Issue, Project } from "@/lib/shared/types"
 
 // INBOUND WEBHOOK — public (NO requireUser). GitHub signs each delivery with
 // the app webhook secret; we prove authenticity by HMAC over the RAW body

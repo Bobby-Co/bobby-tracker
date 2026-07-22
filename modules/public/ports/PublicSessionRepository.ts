@@ -3,7 +3,7 @@
 // depends on. (Issue-by-id stays on the Issues contract; group coverage stays on
 // the Teams contract — both consumed by the service, not duplicated here.)
 
-import type { PublicSession } from "@/lib/supabase/types"
+import type { PublicSession } from "@/lib/shared/types"
 
 /** The narrow public_sessions row the gate reads by token. */
 export type PublicSessionRow = Pick<

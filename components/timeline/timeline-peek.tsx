@@ -3,9 +3,9 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
-import { DAY_MS } from "@/lib/timeline/scale"
-import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
-import type { Issue, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/supabase/types"
+import { DAY_MS } from "@/lib/client/timeline/scale"
+import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/client/timeline/colors"
+import type { Issue, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/shared/types"
 
 const RANGE_FMT = new Intl.DateTimeFormat("en-US", {
     month: "short",

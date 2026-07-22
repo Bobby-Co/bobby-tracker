@@ -3,7 +3,7 @@
 // union; these two lines fail to typecheck if the unions ever diverge (checked
 // both directions, since they must stay identical). Type-only: no runtime output.
 
-import type { IssueStatus, PublicSessionAccessMode, PublicSessionSubmissionsVisibility } from "@/lib/supabase/types"
+import type { IssueStatus, PublicSessionAccessMode, PublicSessionSubmissionsVisibility } from "@/lib/shared/types"
 import type { PublicIssueStatus } from "../domain/PublicReporter"
 import type { PublicSessionAccessModeValue, PublicSessionSubmissionsVisibilityValue } from "../domain/PublicSession"
 

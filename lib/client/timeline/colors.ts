@@ -1,4 +1,4 @@
-import type { IssueStatus } from "@/lib/supabase/types"
+import type { IssueStatus } from "@/lib/shared/types"
 
 // Default status palette for issues on the planning timeline.
 // Mirrors the canvas mock — purple (open) → amber (waiting / in

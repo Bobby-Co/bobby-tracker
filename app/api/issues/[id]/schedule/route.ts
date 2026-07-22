@@ -1,4 +1,4 @@
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
 import { createSupabaseIssuesRepository, type IssuePatch } from "@/modules/issues"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.

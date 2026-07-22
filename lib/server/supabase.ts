@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import { cache } from "react"
 import type { User } from "@supabase/supabase-js"
-import { decodeAuthFromCookies, isStillFresh } from "@/lib/supabase/auth-jwt"
+import { decodeAuthFromCookies, isStillFresh } from "@/lib/server/supabase-auth-jwt"
 
 // Server-side Supabase client used inside Server Components and Route
 // Handlers. Reads/writes the auth cookies (with the shared cookie

@@ -2,7 +2,7 @@
 
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 import { PrStateChip, ReviewChip } from "@/components/pulls/pr-meta"
 
 // PR-detail header: title + state, author, branches, diff stats, external link,

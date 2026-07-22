@@ -3,7 +3,7 @@
 // tables. Queries reproduce the previous inline reads verbatim.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { RepositoryError } from "@/lib/kernel"
+import { RepositoryError } from "@/lib/shared/kernel"
 import type { TeamMember, TeamMembershipRepository } from "../ports/TeamMembershipRepository"
 
 // The RLS client and the service-role client carry different schema generics

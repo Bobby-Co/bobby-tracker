@@ -4,8 +4,8 @@
 // MUST authorise first (e.g. confirm the requester is a member of the team whose
 // members they're listing) — this helper does no access control of its own.
 
-import { createServiceClient } from "@/lib/supabase/server"
-import type { TeamMemberView, TeamRole } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { TeamMemberView, TeamRole } from "@/lib/shared/types"
 
 export interface UserProfile {
     user_id: string

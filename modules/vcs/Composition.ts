@@ -7,7 +7,7 @@
 
 import { createServiceIssueSyncStore } from "@/modules/issues"
 import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/server/supabase"
 import { RepoRef } from "./domain/RepoRef"
 import { VcsAppService } from "./application/VcsAppService"
 import { VcsUserService } from "./application/VcsUserService"

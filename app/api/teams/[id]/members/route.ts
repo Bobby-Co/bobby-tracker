@@ -1,7 +1,7 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole } from "@/lib/auth/team-access"
-import { toMemberViews } from "@/lib/auth/user-profiles"
-import type { TeamRole } from "@/lib/supabase/types"
+import { jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole } from "@/lib/server/auth/team-access"
+import { toMemberViews } from "@/lib/server/auth/user-profiles"
+import type { TeamRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/members — team members with resolved profiles (any member
 // may view the roster). Profiles come from the service-role admin API since

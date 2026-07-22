@@ -1,11 +1,11 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { tryOrNull } from "@/lib/kernel"
-import { jsonError } from "@/lib/platform/http/api"
-import { publicIssueSuggestionChannel } from "@/lib/util/realtime-channels"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion } from "@/lib/supabase/types"
+import { tryOrNull } from "@/lib/shared/kernel"
+import { jsonError } from "@/lib/server/http/api"
+import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { IssueSuggestion } from "@/lib/shared/types"
 import { getPublicSessionService } from "@/modules/public"
-import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
+import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 
 // POST /api/public-issues/[id]/suggest
 //

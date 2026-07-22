@@ -1,5 +1,5 @@
-import { jsonError } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 
 // PUBLIC. The bobby-relay app polls this with its device_code until the
 // user approves (or denies) the pairing. On approval it returns the opaque

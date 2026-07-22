@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { createClient } from "@/lib/supabase/client"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { createClient } from "@/lib/client/supabase"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // AutoUpdatePanel — the setup toggle for auto-indexing on push. When on, a push
 // to the repo's default branch triggers an incremental graph update through the

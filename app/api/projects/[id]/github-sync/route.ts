@@ -1,8 +1,8 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
 import { importExistingIssues } from "@/modules/vcs"
-import { GITHUB_SYNC_DIRECTIONS } from "@/lib/supabase/types"
-import type { Project } from "@/lib/supabase/types"
+import { GITHUB_SYNC_DIRECTIONS } from "@/lib/shared/types"
+import type { Project } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/github-sync — update the GitHub sync settings. Any of
 // { enabled, direction, deletes } may be supplied; at least one is required.

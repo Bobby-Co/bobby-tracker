@@ -1,5 +1,5 @@
 import { cn } from "@/components/ui/cn"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 import { PullRequest as PullRequestEntity } from "@/modules/vcs/domain/PullRequest"
 
 // Single source of truth for how a PR's state + Bobby's review status read

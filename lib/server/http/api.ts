@@ -2,11 +2,11 @@
 
 import { cookies } from "next/headers"
 import type { User } from "@supabase/supabase-js"
-import { createClient, getCurrentUser } from "@/lib/supabase/server"
-import { assertProjectAccess, getTeamRole, resolveActiveTeam, roleAtLeast } from "@/lib/auth/team-access"
-import { RepositoryError, tryOrNull } from "@/lib/kernel"
+import { createClient, getCurrentUser } from "@/lib/server/supabase"
+import { assertProjectAccess, getTeamRole, resolveActiveTeam, roleAtLeast } from "@/lib/server/auth/team-access"
+import { RepositoryError, tryOrNull } from "@/lib/shared/kernel"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
-import type { TeamRole, TeamWithRole } from "@/lib/supabase/types"
+import type { TeamRole, TeamWithRole } from "@/lib/shared/types"
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 

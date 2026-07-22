@@ -1,4 +1,4 @@
-import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import type { Tone } from "@/components/ui/field-card"
 import { cn } from "@/components/ui/cn"
 

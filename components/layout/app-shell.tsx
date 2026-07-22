@@ -7,7 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { NotificationPopover } from "@/components/layout/notification-popover"
 import { isImmersiveMind } from "@/components/layout/immersive"
-import type { Project } from "@/lib/supabase/types"
+import type { Project } from "@/lib/shared/types"
 
 // Presentational app shell — the chrome shared by every signed-in route
 // (and the dev preview harness). Mirrors the reference: a tinted "desk"

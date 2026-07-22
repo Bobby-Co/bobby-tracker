@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import {
     MergePolicy,
     MERGE_METHOD_LABEL,
@@ -11,7 +11,7 @@ import {
     type MergeMethod,
     type MergeMethods,
 } from "@/modules/vcs/domain/MergeGate"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // The merge control on the PR-detail page. Sits between the header and the
 // review panel because it depends on both: the PR's lifecycle AND the review's

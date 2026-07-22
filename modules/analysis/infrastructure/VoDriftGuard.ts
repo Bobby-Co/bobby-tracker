@@ -3,7 +3,7 @@
 // stored AnalyserStatus union; these lines fail to typecheck if they diverge
 // (both directions). Type-only: no runtime output.
 
-import type { AnalyserStatus } from "@/lib/supabase/types"
+import type { AnalyserStatus } from "@/lib/shared/types"
 import type { AnalyserStatusValue } from "../domain/ProjectAnalyser"
 
 /** Errors unless `Sub` is assignable to `Sup`. */

@@ -7,9 +7,9 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
-import { defaultLabelColor, softLabelChipStyle } from "@/lib/timeline/labels"
-import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/timeline/colors"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import { defaultLabelColor, softLabelChipStyle } from "@/lib/client/timeline/labels"
+import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/client/timeline/colors"
 import type {
     Issue,
     IssueAnalysisData,
@@ -18,7 +18,7 @@ import type {
     IssueSuggestion,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // IssueDrawer — left-side slide-in panel shown when a tile is
 // clicked on the planning timeline. Mirrors the drawer in the

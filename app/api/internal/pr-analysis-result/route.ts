@@ -1,6 +1,6 @@
-import { jsonError } from "@/lib/platform/http/api"
+import { jsonError } from "@/lib/server/http/api"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
-import type { PRAnalysis } from "@/lib/supabase/types"
+import type { PRAnalysis } from "@/lib/shared/types"
 
 export const dynamic = "force-dynamic"
 

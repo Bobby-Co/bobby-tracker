@@ -1,10 +1,10 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
 import type {
     Issue,
     Project,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // GET /api/projects/[id]/timeline — everything the planning timeline
 // needs in one round-trip: the project's identity, its issues (newest

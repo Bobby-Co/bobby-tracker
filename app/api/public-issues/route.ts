@@ -1,10 +1,10 @@
 import { after } from "next/server"
-import { jsonError } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
-import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
+import { jsonError } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
+import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/shared/types"
 import { PUBLIC_ISSUE_LABEL, CurrentVisitor, getPublicSessionService } from "@/modules/public"
 import { createIssueEmbedder } from "@/modules/issues"
-import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
+import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the

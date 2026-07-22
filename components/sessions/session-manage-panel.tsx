@@ -7,7 +7,7 @@ import type {
     PublicSessionAccessMode,
     PublicSessionInvite,
     PublicSessionSubmissionsVisibility,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 import { Spinner } from "@/components/ui/spinner"
 import { Dropdown } from "@/components/ui/dropdown"
 import { MultiDropdown } from "@/components/ui/multi-dropdown"

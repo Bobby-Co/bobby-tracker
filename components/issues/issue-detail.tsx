@@ -4,16 +4,16 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/supabase/types"
+import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type {
     Issue,
     IssuePriority,
     IssueStatus,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 import { PriorityChip, StatusChip } from "@/components/ui/status-chip"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { Dropdown } from "@/components/ui/dropdown"
 import { LabelsEditor } from "@/components/issues/labels-editor"
 import { TimelinePeek } from "@/components/timeline/timeline-peek"

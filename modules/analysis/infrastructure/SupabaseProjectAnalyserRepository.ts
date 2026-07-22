@@ -9,8 +9,8 @@
 // db_error 500 must keep their inline query until the port grows an error channel.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { RepositoryError } from "@/lib/kernel"
-import type { ProjectAnalyser } from "@/lib/supabase/types"
+import { RepositoryError } from "@/lib/shared/kernel"
+import type { ProjectAnalyser } from "@/lib/shared/types"
 import type { AnalyserReadinessRow, ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 
 const READINESS_COLS = "enabled,status,graph_id"

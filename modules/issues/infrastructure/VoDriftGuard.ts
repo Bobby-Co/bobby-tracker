@@ -3,7 +3,7 @@
 // stored IssueStatus union; these lines fail to typecheck if the two ever diverge
 // (checked both directions). Type-only: no runtime output.
 
-import type { IssueStatus } from "@/lib/supabase/types"
+import type { IssueStatus } from "@/lib/shared/types"
 import type { IssueStatusValue } from "../domain/Issue"
 
 /** Errors unless `Sub` is assignable to `Sup`. */

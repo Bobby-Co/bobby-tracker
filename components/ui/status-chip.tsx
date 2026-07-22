@@ -1,5 +1,5 @@
 import { cn } from "@/components/ui/cn"
-import type { IssuePriority, IssueStatus } from "@/lib/supabase/types"
+import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import { PRIORITY_META, STATUS_META } from "@/components/issues/issue-meta"
 
 // Minimal inline chips — a coloured dot + label. Status carries a soft

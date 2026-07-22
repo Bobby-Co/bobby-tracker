@@ -4,7 +4,7 @@
 // and the PR routes depend on this interface; the service-role Supabase adapter
 // lives in ../infrastructure. Replaces the old free-function pr-store.
 
-import type { PRAnalysis } from "@/lib/supabase/types"
+import type { PRAnalysis } from "@/lib/shared/types"
 
 /** A PR metadata upsert. Fields left `undefined` are dropped from the write so a
  *  poorer source (e.g. the /pulls list, which omits additions/deletions) never

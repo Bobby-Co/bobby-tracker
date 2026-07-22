@@ -5,12 +5,12 @@
 //
 // (Legacy trigger-path renderer; retires when the outbox cutover takes over.)
 
-import { mergeVerdictLabel } from "@/lib/rendering/badge"
+import { mergeVerdictLabel } from "@/lib/shared/rendering/badge"
 import { findingState, createServicePullRequestStore } from "@/modules/vcs"
-import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
+import { isEmailConfigured, sendMail } from "@/lib/server/email/jmap"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { NotificationKind, PRAnalysis } from "@/lib/supabase/types"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { NotificationKind, PRAnalysis } from "@/lib/shared/types"
 
 type Svc = ReturnType<typeof createServiceClient>
 

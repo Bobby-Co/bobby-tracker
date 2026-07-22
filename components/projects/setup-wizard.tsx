@@ -5,7 +5,7 @@ import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { cn } from "@/components/ui/cn"
 import { BobbyMark, BOBBY_MARK_PATH } from "@/components/layout/brand-lockup"
-import type { GithubSyncDirection } from "@/lib/supabase/types"
+import type { GithubSyncDirection } from "@/lib/shared/types"
 import {useRouter} from "next/navigation";
 
 // SetupWizard — the presentational first-run onboarding: three animated scenes

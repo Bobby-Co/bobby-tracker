@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { useAuth } from "@/lib/auth/auth-context"
-import { isAllowed } from "@/lib/auth/access"
+import { createClient } from "@/lib/client/supabase"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { isAllowed } from "@/lib/server/auth/access"
 import { BrandLockup } from "@/components/layout/brand-lockup"
 import PixelScatter from "@/components/ui/pixel-scatter"
 

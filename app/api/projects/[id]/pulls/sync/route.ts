@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/sync

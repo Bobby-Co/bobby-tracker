@@ -3,9 +3,9 @@
 // Swapping runtime = swapping this file (Workers `after()` → a Node queue),
 // and nothing that depends on the ports changes.
 //
-// NOTE: import adapters explicitly from "@/lib/kernel/adapters" at a composition
+// NOTE: import adapters explicitly from "@/lib/shared/kernel/adapters" at a composition
 // root — they are deliberately NOT re-exported from the kernel barrel, so pure
-// code that imports "@/lib/kernel" never transitively pulls in next/server.
+// code that imports "@/lib/shared/kernel" never transitively pulls in next/server.
 
 import { after } from "next/server"
 import type { BackgroundTasks, Clock, IdGenerator } from "./ports"

@@ -11,7 +11,7 @@ import type {
     IssueStatus,
     IssuePriority,
     ProjectLabelIcon,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 const DAY = 24 * 60 * 60 * 1000
 

@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { jsonError, repoRead, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, repoRead, requireProjectAccess } from "@/lib/server/http/api"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 import type {
@@ -9,7 +9,7 @@ import type {
     Project,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // GET /api/projects/[id]/issues/[issueId]
 //

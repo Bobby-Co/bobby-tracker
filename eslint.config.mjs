@@ -22,11 +22,11 @@ const eslintConfig = defineConfig([
     files: [
       "modules/**/domain/**/*.{ts,tsx}",
       "modules/**/application/**/*.{ts,tsx}",
-      "lib/kernel/result.ts",
-      "lib/kernel/events.ts",
-      "lib/kernel/ports.ts",
-      "lib/kernel/repository.ts",
-      "lib/kernel/index.ts",
+      "lib/shared/kernel/result.ts",
+      "lib/shared/kernel/events.ts",
+      "lib/shared/kernel/ports.ts",
+      "lib/shared/kernel/repository.ts",
+      "lib/shared/kernel/index.ts",
     ],
     rules: {
       "no-restricted-imports": [
@@ -39,9 +39,9 @@ const eslintConfig = defineConfig([
                 "Domain/application must stay runtime-agnostic — import kernel ports, not Next. Put framework calls in an infrastructure adapter.",
             },
             {
-              group: ["@supabase/*", "@/lib/supabase/*"],
+              group: ["@supabase/*", "@/lib/server/*", "@/lib/shared/types"],
               message:
-                "No direct DB/SDK access in domain/application — depend on a Repository port and implement it in infrastructure.",
+                "No direct DB/SDK access in domain/application — depend on a Repository port and implement it in infrastructure. (Server-only lib + the DB types live behind ports.)",
             },
           ],
         },

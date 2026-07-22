@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/server/supabase"
 
 // Honors an optional `next` form field so callers (e.g. the
 // invite-only public page's "use a different account" button) can

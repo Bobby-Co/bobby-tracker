@@ -1,5 +1,5 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
 
 // DELETE /api/teams/[id]/invites/[token] — revoke a pending invite (admins).
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; token: string }> }) {

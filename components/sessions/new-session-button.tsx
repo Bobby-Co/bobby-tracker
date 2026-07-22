@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { Modal } from "@/components/ui/modal"
 import { Spinner } from "@/components/ui/spinner"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 interface ProjectOption {
     id: string

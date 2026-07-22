@@ -3,10 +3,10 @@
 // close. Every collaborator is injected by the composition root; the
 // pull_request_analyses table is reached through PullRequestAnalysisStore.
 
-import { tryOrNull } from "@/lib/kernel"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
-import type { PRAnalysis } from "@/lib/supabase/types"
+import type { PRAnalysis } from "@/lib/shared/types"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { Analyser } from "../ports/Analyser"
 import type { PRAnalyseFile } from "../ports/AnalyserTypes"

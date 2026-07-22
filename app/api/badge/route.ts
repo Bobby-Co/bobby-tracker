@@ -1,4 +1,4 @@
-import { isBadgeTone, renderBadge } from "@/lib/rendering/badge"
+import { isBadgeTone, renderBadge } from "@/lib/shared/rendering/badge"
 
 // GET /api/badge?text=<label>&tone=<tone>&dot=<0|1>
 //

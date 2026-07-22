@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { getCurrentUser } from "@/lib/supabase/server"
-import { isAllowed } from "@/lib/auth/access"
+import { getCurrentUser } from "@/lib/server/supabase"
+import { isAllowed } from "@/lib/server/auth/access"
 import PixelGradient, { EMBER_STOPS } from "@/components/ui/pixel-gradient"
 
 const BobbyMark = () => (

@@ -1,6 +1,6 @@
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/server/supabase"
 import { getPublicSessionService } from "@/modules/public"
-import type { Issue, IssueEmbedding } from "@/lib/supabase/types"
+import type { Issue, IssueEmbedding } from "@/lib/shared/types"
 
 interface SimilarRow {
     id: string

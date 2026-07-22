@@ -1,7 +1,7 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError, requireUser } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
-import { clientKey, enforceRateLimit } from "@/lib/platform/rate-limit"
+import { clientKey, enforceRateLimit } from "@/lib/server/rate-limit"
 
 // AUTH. The signed-in user rejects a pending pairing by user_code. The
 // relay's next poll then sees status "denied" and stops.

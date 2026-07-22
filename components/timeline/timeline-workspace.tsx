@@ -11,7 +11,7 @@ import type {
     Project,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // TimelineWorkspace — the full-screen page chrome around the
 // planning timeline. Renders as a fixed overlay so the parent

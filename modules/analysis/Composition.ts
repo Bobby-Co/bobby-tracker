@@ -5,7 +5,7 @@
 // service extraction swaps ONLY this file — callers depend on getAnalyser() /
 // the service factories, never on the transport or the concrete collaborators.
 
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/server/supabase"
 import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getVcsAppService } from "@/modules/vcs"

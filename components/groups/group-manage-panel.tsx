@@ -3,8 +3,8 @@
 import Link from "next/link"
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import type { ProjectGroup } from "@/lib/supabase/types"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import type { ProjectGroup } from "@/lib/shared/types"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { Spinner } from "@/components/ui/spinner"
 import { MultiDropdown } from "@/components/ui/multi-dropdown"
 

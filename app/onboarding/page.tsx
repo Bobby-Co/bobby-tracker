@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { useAuth } from "@/lib/auth/auth-context"
-import { isAllowed } from "@/lib/auth/access"
+import { createClient } from "@/lib/client/supabase"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { isAllowed } from "@/lib/server/auth/access"
 import { AuthShell } from "@/components/layout/auth-shell"
 
 const ROLES = [

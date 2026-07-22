@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 import { cn } from "@/components/ui/cn"
 import { PrStateChip, ReviewChip, PR_STATE_META, prState } from "@/components/pulls/pr-meta"
 

@@ -1,5 +1,5 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import type { ProjectPublicIntegration } from "@/lib/supabase/types"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import type { ProjectPublicIntegration } from "@/lib/shared/types"
 
 // Per-project toggle for the public-submissions integration.
 // Disabling also removes the project from any sessions that cover it,

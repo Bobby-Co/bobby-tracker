@@ -1,7 +1,7 @@
 import { after } from "next/server"
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
-import type { PullRequest, PullRequestAnalysis } from "@/lib/supabase/types"
+import type { PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/pulls
 //

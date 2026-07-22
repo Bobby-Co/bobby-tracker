@@ -1,6 +1,6 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import type { Team, TeamWithRole } from "@/lib/supabase/types"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import type { Team, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id] — a team the caller belongs to, with their role.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {

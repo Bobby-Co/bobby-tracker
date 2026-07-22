@@ -2,9 +2,9 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import { useAuth } from "@/lib/auth/auth-context"
-import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import type { PublicSession, PublicSessionInvite } from "@/lib/shared/types"
 import { SessionManagePanel } from "@/components/sessions/session-manage-panel"
 
 interface ProjectOption {

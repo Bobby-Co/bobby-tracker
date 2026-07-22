@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { EffortControl, EFFORT_LABEL } from "@/components/ui/effort-control"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/client/supabase"
 import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { AnalyseEffort } from "@/modules/analysis"
-import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/supabase/types"
+import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/shared/types"
 
 interface Props {
     issueId: string

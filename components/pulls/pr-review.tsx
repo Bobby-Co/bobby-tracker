@@ -6,10 +6,10 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { cn } from "@/components/ui/cn"
-import { severityLabel } from "@/lib/rendering/badge"
-import { findingState } from "@/lib/rendering/finding-state"
-import { apiMutate } from "@/lib/platform/http/api-client"
-import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/supabase/types"
+import { severityLabel } from "@/lib/shared/rendering/badge"
+import { findingState } from "@/lib/shared/rendering/finding-state"
+import { apiMutate } from "@/lib/client/http/api-client"
+import type { PRAnalysis, PRChecks, PRConfidenceDimension, PRConfidences, PRFinding, PullRequestAnalysis } from "@/lib/shared/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
 // `.prose-tracker .hljs-*` theme in globals.css). Used for summary/impact/detail

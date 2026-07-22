@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/shared/types"
 import { IssueTile } from "@/components/issues/issue-tile"
 import { StatusChip } from "@/components/ui/status-chip"
 import { Modal } from "@/components/ui/modal"

@@ -3,9 +3,9 @@
 import { useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { useApi } from "@/lib/hooks/use-api"
-import { createClient } from "@/lib/supabase/client"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { createClient } from "@/lib/client/supabase"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { timeAgo } from "@/components/issues/issue-meta"
 
 // Shared GitHub comment thread for PRs and issues. Comments carry a provenance:

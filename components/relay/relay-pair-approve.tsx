@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Spinner } from "@/components/ui/spinner"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // Significant characters in a pairing code — keep in sync with
 // USER_CODE_LEN in lib/relay.ts.

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { EffortControl } from "@/components/ui/effort-control"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { AnalyseEffort } from "@/modules/analysis"
 
 type Current = AnalyseEffort | ""

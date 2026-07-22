@@ -1,5 +1,5 @@
-import { jsonError, requireTeam } from "@/lib/platform/http/api"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import { jsonError, requireTeam } from "@/lib/server/http/api"
+import type { ProjectGroup } from "@/lib/shared/types"
 
 // "Collections" (project_groups): a group of PROJECTS for AI routing. Now scoped
 // to the active team (migration 0052) — distinct from a team's people Groups.

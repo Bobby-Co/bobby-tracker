@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { flushSync } from "react-dom"
 import { ScheduleOutbox, type SchedulePatch } from "./outbox"
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/shared/types"
 
 const OUTBOX_FLUSH_MS = 2000
 

@@ -1,6 +1,6 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import { TEAM_ROLES, type TeamRole } from "@/lib/supabase/types"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 
 // PATCH /api/teams/[id]/members/[userId] — change a member's role (admins). The
 // DB last-owner trigger blocks demoting the final owner.

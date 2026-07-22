@@ -1,8 +1,8 @@
 import { after } from "next/server"
-import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError, requireUser } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { createNotificationService } from "@/modules/notifications"
-import type { Notification } from "@/lib/supabase/types"
+import type { Notification } from "@/lib/shared/types"
 
 // The tray renders a bounded list, and migration 0049 trims each user's feed to
 // 50 rows on write — so this ceiling is really just belt-and-braces.

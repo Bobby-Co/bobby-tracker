@@ -3,11 +3,11 @@
 // callback; cancel on close. Every collaborator is injected by the composition
 // root, so this never touches a token, owner/repo, DB client, or renderer detail.
 
-import { tryOrNull } from "@/lib/kernel"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { type IssuePrompt, type IssueSyncStore, type IssueSyncPatch } from "@/modules/issues"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
-import type { IssueAnalysisData, IssuePriority } from "@/lib/supabase/types"
+import type { IssueAnalysisData, IssuePriority } from "@/lib/shared/types"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { Analyser } from "../ports/Analyser"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"

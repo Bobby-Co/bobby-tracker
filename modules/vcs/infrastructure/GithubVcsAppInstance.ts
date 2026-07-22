@@ -8,7 +8,7 @@
 //                         methods over the client. Construct via the composition
 //                         root (resolveVcsAppInstance); callers depend on the port.
 
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/server/supabase"
 import type { VcsAppInstance } from "../ports/VcsAppInstance"
 import {
     VcsMergeError,

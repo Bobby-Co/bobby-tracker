@@ -1,7 +1,7 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
+import { jsonError, requireUser } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
 import { EmbeddingText } from "@/modules/issues"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import type { ProjectGroup } from "@/lib/shared/types"
 
 // POST /api/groups/[id]/ai-compose
 //

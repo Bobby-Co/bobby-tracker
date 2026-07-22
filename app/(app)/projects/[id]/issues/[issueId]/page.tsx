@@ -2,8 +2,8 @@
 
 import { notFound, useParams } from "next/navigation"
 import Link from "next/link"
-import { useApi } from "@/lib/hooks/use-api"
-import { useAuth } from "@/lib/auth/auth-context"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { useAuth } from "@/lib/client/auth/auth-context"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 import { IssueDetail } from "@/components/issues/issue-detail"
 import { IssueSuggestions } from "@/components/issues/issue-suggestions"
@@ -17,7 +17,7 @@ import type {
     ProjectAnalyser,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 interface IssueView {
     issue: Issue | null

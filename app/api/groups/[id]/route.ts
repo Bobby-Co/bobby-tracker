@@ -1,5 +1,5 @@
-import { jsonError, requireCollectionAccess, requireUser } from "@/lib/platform/http/api"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import { jsonError, requireCollectionAccess, requireUser } from "@/lib/server/http/api"
+import type { ProjectGroup } from "@/lib/shared/types"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params

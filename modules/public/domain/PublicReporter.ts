@@ -2,7 +2,7 @@
 // parent/children duplicate tree, and per-reporter grouping. Pure — lives outside
 // any "use client" file so server components can call it directly.
 
-// Local status vocabulary — kept in-domain (not @/lib/supabase/types) so this
+// Local status vocabulary — kept in-domain (not @/lib/shared/types) so this
 // pure policy carries no SDK dependency; byte-identical to the stored IssueStatus.
 export type PublicIssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 

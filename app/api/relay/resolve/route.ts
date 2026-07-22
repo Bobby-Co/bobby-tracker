@@ -1,5 +1,5 @@
-import { jsonError } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 
 // SERVER-TO-SERVER. The bobby-analyser presents an opaque worker token and
 // gets back the owning userId + workerId. Authenticated with the shared

@@ -3,7 +3,7 @@
 // row stops being assignable to the ProjectInsight aggregate's local
 // ProjectInsightState, this fails to typecheck. Type-only: no runtime output.
 
-import type { GithubSyncDirection, ProjectInsight as ProjectInsightRow } from "@/lib/supabase/types"
+import type { GithubSyncDirection, ProjectInsight as ProjectInsightRow } from "@/lib/shared/types"
 import type { ProjectInsightState } from "../domain/ProjectInsight"
 import type { SyncDirection } from "../domain/Project"
 

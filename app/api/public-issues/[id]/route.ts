@@ -1,7 +1,7 @@
-import { createServiceClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/server/supabase"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { tryOrNull } from "@/lib/kernel"
-import type { IssueSuggestion, PublicIssueReporter } from "@/lib/supabase/types"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { IssueSuggestion, PublicIssueReporter } from "@/lib/shared/types"
 import { getPublicSessionService } from "@/modules/public"
 
 // GET /api/public-issues/[id]?token=<session_token>

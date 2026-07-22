@@ -3,7 +3,7 @@
 // escaping, and the transport call. Swapping the channel = swapping this file;
 // nothing that depends on the InviteNotifier port changes.
 
-import { isEmailConfigured, sendMail } from "@/lib/platform/email/jmap"
+import { isEmailConfigured, sendMail } from "@/lib/server/email/jmap"
 import type { InviteMessage, InviteNotifier } from "../ports/InviteNotifier"
 
 /** Delivers invites over the app's JMAP transport. No-ops when email is

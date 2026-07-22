@@ -1,8 +1,8 @@
 import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
-import { jsonError, repoRead, requireIssueAccess } from "@/lib/platform/http/api"
+import { jsonError, repoRead, requireIssueAccess } from "@/lib/server/http/api"
 import { IssuePrompt, createSupabaseIssuesRepository } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
-import type { IssueAnalysisData } from "@/lib/supabase/types"
+import type { IssueAnalysisData } from "@/lib/shared/types"
 
 // POST /api/issues/[id]/suggest
 //

@@ -1,11 +1,11 @@
 import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { tryOrNull } from "@/lib/kernel"
-import { assertProjectAccess, roleAtLeast } from "@/lib/auth/team-access"
-import { findIcon } from "@/lib/icons/iconly"
-import { ICONLY_NAMES } from "@/lib/icons/iconly-catalog"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { Project } from "@/lib/supabase/types"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
+import { assertProjectAccess, roleAtLeast } from "@/lib/server/auth/team-access"
+import { findIcon } from "@/lib/shared/icons/iconly"
+import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
+import { createServiceClient } from "@/lib/server/supabase"
+import type { Project } from "@/lib/shared/types"
 
 // Same gate as the label-icons route: only slugs the renderer can actually draw
 // (the 361-icon catalog, or a legacy path-based icon) are allowed to be stored.

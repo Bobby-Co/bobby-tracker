@@ -3,7 +3,7 @@
 // what an agent rediscovers by opening the repo (stack rollup, generic advice) —
 // and stays safe when fields are missing (issue + project alone still works).
 
-import type { Issue, IssueSuggestion, Project } from "@/lib/supabase/types"
+import type { Issue, IssueSuggestion, Project } from "@/lib/shared/types"
 
 export interface IssuePromptInput {
     project: Pick<Project, "name" | "repo_url" | "repo_full_name" | "description">

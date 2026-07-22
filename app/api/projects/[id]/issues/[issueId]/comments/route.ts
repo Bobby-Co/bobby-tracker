@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError } from "@/modules/vcs"
 import { createServiceIssueSyncStore } from "@/modules/issues"
 

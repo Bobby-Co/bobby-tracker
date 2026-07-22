@@ -1,5 +1,5 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
-import type { PublicSession } from "@/lib/supabase/types"
+import { jsonError, requireUser } from "@/lib/server/http/api"
+import type { PublicSession } from "@/lib/shared/types"
 
 // GET — everything the owner's /sessions list needs in one round-trip:
 //   { sessions, projects, projectsBySession }

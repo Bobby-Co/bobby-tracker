@@ -1,4 +1,4 @@
-import { jsonError, requireCollectionAccess } from "@/lib/platform/http/api"
+import { jsonError, requireCollectionAccess } from "@/lib/server/http/api"
 
 // POST — add a project to a group. Membership row's RLS with-check
 // already enforces same-owner on both sides, so a stray project id

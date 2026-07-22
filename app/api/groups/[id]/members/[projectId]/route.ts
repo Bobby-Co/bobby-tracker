@@ -1,4 +1,4 @@
-import { jsonError, requireCollectionAccess } from "@/lib/platform/http/api"
+import { jsonError, requireCollectionAccess } from "@/lib/server/http/api"
 
 // DELETE — remove a project from a group. Owner-only via RLS on the
 // membership table; no extra check needed here.

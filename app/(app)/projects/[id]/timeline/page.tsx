@@ -2,14 +2,14 @@
 
 import { useMemo } from "react"
 import { notFound, useParams, useSearchParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { TimelineWorkspace } from "@/components/timeline/timeline-workspace"
 import type {
     Issue,
     Project,
     ProjectLabelIcon,
     ProjectStatusColor,
-} from "@/lib/supabase/types"
+} from "@/lib/shared/types"
 
 // Full-page planning timeline. Lives at its own route so the user
 // gets the whole viewport — the parent project layout's header /

@@ -1,5 +1,5 @@
-import { jsonError, requireSessionAccess, requireUser } from "@/lib/platform/http/api"
-import type { PublicSessionInvite } from "@/lib/supabase/types"
+import { jsonError, requireSessionAccess, requireUser } from "@/lib/server/http/api"
+import type { PublicSessionInvite } from "@/lib/shared/types"
 
 // GET — list whitelisted emails for a session.
 // POST — add one or more emails. Owner-only via RLS on the table.

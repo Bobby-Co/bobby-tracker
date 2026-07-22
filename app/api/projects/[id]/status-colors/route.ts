@@ -1,6 +1,6 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
-import { ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { ProjectStatusColor } from "@/lib/supabase/types"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
+import { ISSUE_STATUSES } from "@/lib/shared/types"
+import type { ProjectStatusColor } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/status-colors — overrides only. Defaults
 // live in lib/timeline/colors.ts and are merged client-side.

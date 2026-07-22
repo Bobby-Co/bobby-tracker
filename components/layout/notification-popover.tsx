@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation"
 import { motion, useAnimationControls, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion"
 import { MiniIcon, type Tone } from "@/components/ui/field-card"
 import { timeAgo } from "@/components/issues/issue-meta"
-import { createClient } from "@/lib/supabase/client"
-import { apiMutate } from "@/lib/platform/http/api-client"
-import type { Notification, NotificationKind } from "@/lib/supabase/types"
+import { createClient } from "@/lib/client/supabase"
+import { apiMutate } from "@/lib/client/http/api-client"
+import type { Notification, NotificationKind } from "@/lib/shared/types"
 
 // Notification popover for the topbar. The bell "chip" MORPHS into the panel
 // using the exact technique from the analyser effort selector

@@ -1,4 +1,4 @@
-import { jsonError, requireSessionAccess } from "@/lib/platform/http/api"
+import { jsonError, requireSessionAccess } from "@/lib/server/http/api"
 
 // DELETE /api/sessions/[id]/invites/[email] — remove a whitelisted
 // email. The email path segment is URL-encoded by the caller; we

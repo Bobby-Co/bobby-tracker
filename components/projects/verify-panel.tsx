@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { createClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/client/supabase"
 import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { VerifyReport, VerifyBrokenCite, VerifyStaleNote, VerifyContentStaleNote } from "@/modules/analysis"
 
 // VerifyPanel shows a "graph health" coverage report for a project.

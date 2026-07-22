@@ -5,7 +5,7 @@
 //   1. Don't allow merge until the review has FINISHED.
 //   2. Don't allow merge when the review found something CRITICAL.
 
-import { findingState } from "@/lib/rendering/finding-state"
+import { findingState } from "@/lib/shared/rendering/finding-state"
 
 // Domain value-objects — the minimal PR + review shape the policy reads. Kept
 // local (not the DB rows) so it stays a pure rule; the rows are assignable to these.

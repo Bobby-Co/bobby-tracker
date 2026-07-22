@@ -1,4 +1,4 @@
-import { jsonError, requireProjectAccess } from "@/lib/platform/http/api"
+import { jsonError, requireProjectAccess } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
 
 // POST /api/projects/[id]/pulls/[number]/comments

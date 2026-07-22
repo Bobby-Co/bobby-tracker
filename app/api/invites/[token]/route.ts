@@ -1,7 +1,7 @@
-import { jsonError, requireUser } from "@/lib/platform/http/api"
-import { createServiceClient } from "@/lib/supabase/server"
+import { jsonError, requireUser } from "@/lib/server/http/api"
+import { createServiceClient } from "@/lib/server/supabase"
 import { Email } from "@/modules/teams"
-import type { TeamInvite } from "@/lib/supabase/types"
+import type { TeamInvite } from "@/lib/shared/types"
 
 // The invitee is not (yet) a team admin, so RLS on team_invites hides the row
 // from them. Both handlers look the invite up with the service-role client and

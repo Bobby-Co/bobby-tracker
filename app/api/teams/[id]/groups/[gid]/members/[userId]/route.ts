@@ -1,5 +1,5 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
 
 // DELETE /api/teams/[id]/groups/[gid]/members/[userId] — remove a person from a
 // people-group (admins).

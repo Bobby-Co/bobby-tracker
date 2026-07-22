@@ -1,4 +1,4 @@
-import type { Issue } from "@/lib/supabase/types"
+import type { Issue } from "@/lib/shared/types"
 
 // Subset of Issue that the timeline can mutate via the schedule
 // endpoint. Pulled out of the component file so the outbox can

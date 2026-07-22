@@ -2,11 +2,11 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
-import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, IssueSuggestion } from "@/lib/supabase/types"
+import type { IssueAnalysisData, IssueFinding, IssuePriority, IssueStatus, IssueSuggestion } from "@/lib/shared/types"
 import { Spinner } from "@/components/ui/spinner"
 import { PublicReporter } from "@/modules/public/domain/PublicReporter"
-import { createClient as createSupabaseBrowserClient } from "@/lib/supabase/client"
-import { publicIssueSuggestionChannel } from "@/lib/util/realtime-channels"
+import { createClient as createSupabaseBrowserClient } from "@/lib/client/supabase"
+import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
 
 interface PublicIssue {
     id: string

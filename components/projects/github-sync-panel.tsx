@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { createClient } from "@/lib/supabase/client"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
-import type { GithubSyncDirection } from "@/lib/supabase/types"
+import { createClient } from "@/lib/client/supabase"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import type { GithubSyncDirection } from "@/lib/shared/types"
 
 // GitHub App slug for the install deep-link. Read from a public env at build
 // time (mirrors NEXT_PUBLIC_GITHUB_CLIENT_ID in components/projects/project-form.tsx).

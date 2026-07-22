@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { Issue } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { Issue } from "@/lib/shared/types"
 import { Issue as IssueEntity } from "@/modules/issues"
 import { IssueList, type ParentRow } from "@/components/issues/issue-list"
 import { IssueTile } from "@/components/issues/issue-tile"

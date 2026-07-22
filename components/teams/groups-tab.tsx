@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { useApi } from "@/lib/hooks/use-api"
-import { ApiError, apiMutate } from "@/lib/platform/http/api-client"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { cn } from "@/components/ui/cn"
-import type { AccessGroupWithDetail, Project, TeamMemberView, TeamWithRole } from "@/lib/supabase/types"
+import type { AccessGroupWithDetail, Project, TeamMemberView, TeamWithRole } from "@/lib/shared/types"
 
 export function GroupsTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boolean }) {
     const groupsQ = useApi<{ groups: AccessGroupWithDetail[] }>(`/api/teams/${team.id}/groups`)

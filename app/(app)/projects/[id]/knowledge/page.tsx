@@ -1,13 +1,13 @@
 "use client"
 
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { AnalyserPanel } from "@/components/projects/analyser-panel"
 import { AutoUpdatePanel } from "@/components/projects/auto-update-panel"
 import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-effort"
 import { VerifyPanel } from "@/components/projects/verify-panel"
 import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import type { Project, ProjectAnalyser } from "@/lib/shared/types"
 import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 
 // Knowledge tab — single home for everything that drives the project's

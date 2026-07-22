@@ -1,7 +1,7 @@
-import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import { resolveUserProfiles } from "@/lib/auth/user-profiles"
-import type { AccessGroup, AccessGroupWithDetail } from "@/lib/supabase/types"
+import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
+import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import { resolveUserProfiles } from "@/lib/server/auth/user-profiles"
+import type { AccessGroup, AccessGroupWithDetail } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/groups — the team's people-groups with their members
 // (resolved profiles) and granted project ids. Any team member may view. This is

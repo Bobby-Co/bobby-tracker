@@ -1,5 +1,5 @@
-import { requireProjectAccess } from "@/lib/platform/http/api"
-import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
+import { requireProjectAccess } from "@/lib/server/http/api"
+import type { ProjectPublicIntegration, PublicSession } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/sessions — backs the Integrations tab: the
 // project's public-submissions integration row plus the public sessions
