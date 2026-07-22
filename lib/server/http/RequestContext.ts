@@ -17,6 +17,7 @@ import { createGithubTokenRepository } from "@/modules/vcs"
 import { createSupabaseTeamMembershipRepository } from "@/modules/teams"
 import { createSupabasePublicSessionRepository } from "@/modules/public"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
+import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
 
 export class RequestContext {
     constructor(private readonly db: SupabaseRlsClient) {}
@@ -45,6 +46,9 @@ export class RequestContext {
     }
     get relayWorkers() {
         return createSupabaseRelayWorkerRepository(this.db)
+    }
+    get notifications() {
+        return createSupabaseNotificationFeedRepository(this.db)
     }
 
     /** TRANSITIONAL escape hatch — the raw RLS client for routes not yet migrated

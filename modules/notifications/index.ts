@@ -30,6 +30,10 @@ export { createEmailChannel } from "./infrastructure/EmailChannel"
 export { createSupabaseRecipientResolver } from "./infrastructure/SupabaseRecipientResolver"
 export { createSupabaseOutboxStore } from "./infrastructure/SupabaseOutboxStore"
 
+// The user-facing tray feed (RLS-scoped reads/writes on the notifications table).
+export type { NotificationFeedRepository } from "./ports/NotificationFeedRepository"
+export { createSupabaseNotificationFeedRepository } from "./infrastructure/SupabaseNotificationFeedRepository"
+
 // Composition root: assembles a NotificationService (which owns drain()).
 export { createNotificationService } from "./Composition"
 

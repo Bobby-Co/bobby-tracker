@@ -1,4 +1,4 @@
-import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 
 // PATCH /api/notifications/[id] — mark one notification read.
 //
@@ -7,15 +7,11 @@ import { ApiContext, jsonError } from "@/lib/server/http/api"
 // alone rather than sliding it forward.
 export async function PATCH(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { error: dbErr } = await supabase
-        .from("notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("id", id)
-        .is("read_at", null)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.notifications.markRead(id))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }
 
@@ -28,10 +24,10 @@ export async function PATCH(_: Request, { params }: { params: Promise<{ id: stri
 // if the user double-clicks or two tabs race.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { error: dbErr } = await supabase.from("notifications").delete().eq("id", id)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.notifications.remove(id))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }
