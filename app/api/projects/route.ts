@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError, requireRole, requireTeam } from "@/lib/server/http/api"
-import { getAccessibleProjectIds } from "@/lib/server/auth/team-access"
+import { getAccessService } from "@/modules/access"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/shared/icons/suggest"
 import { canonicalRepoUrl, validateRepoUrl } from "@/lib/shared/repo-url"
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     const withStats = new URL(request.url).searchParams.get("stats") === "1"
 
-    const accessible = await getAccessibleProjectIds(supabase, teamId, user.id, role)
+    const accessible = await getAccessService(supabase).accessibleProjectIds(teamId, user.id, role)
     // A member with no group grants sees nothing — short-circuit the query.
     if (Array.isArray(accessible) && accessible.length === 0) {
         return Response.json({ projects: [] })

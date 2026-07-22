@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/client/auth/auth-context"
-import { isAllowed } from "@/lib/server/auth/access"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
 import { TeamProvider } from "@/lib/client/auth/team-context"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { AppShell, ShellSkeleton } from "@/components/layout/app-shell"
@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             return
         }
         // Onboarded but not on the beta whitelist → coming-soon page.
-        if (!isAllowed(user)) router.replace("/waitlist")
+        if (!new BetaAccess().isAllowed(user)) router.replace("/waitlist")
     }, [loading, user, pathname, router])
 
     // Only fetch the sidebar list once we know there's a user — avoids a
@@ -47,7 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     // Still resolving the session, or mid-redirect to /login, /onboarding or
     // /waitlist. Show the shell skeleton rather than flashing protected content.
-    if (loading || !user || !user.user_metadata?.onboarded || !isAllowed(user)) {
+    if (loading || !user || !user.user_metadata?.onboarded || !new BetaAccess().isAllowed(user)) {
         return <ShellSkeleton />
     }
 

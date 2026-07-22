@@ -3,7 +3,7 @@
 import { cookies } from "next/headers"
 import type { User } from "@supabase/supabase-js"
 import { createClient, getCurrentUser } from "@/lib/server/supabase"
-import { assertProjectAccess, getTeamRole, resolveActiveTeam, roleAtLeast } from "@/lib/server/auth/team-access"
+import { getAccessService, Role } from "@/modules/access"
 import { RepositoryError, tryOrNull } from "@/lib/shared/kernel"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
 import type { TeamRole, TeamWithRole } from "@/lib/shared/types"
@@ -98,7 +98,7 @@ export async function requireTeam(request?: Request): Promise<TeamOK | TeamFail>
 
     let team: TeamWithRole | null
     try {
-        team = await resolveActiveTeam(supabase, user.id, requested, personalTeamName(user))
+        team = await getAccessService(supabase).resolveActiveTeam(user.id, requested, personalTeamName(user))
     } catch (e) {
         return {
             supabase, user: null, team: null, teamId: null, role: null,
@@ -116,7 +116,7 @@ export async function requireTeam(request?: Request): Promise<TeamOK | TeamFail>
 
 /** Guard: returns a 403 Response if `role` is below `min`, else null. */
 export function requireRole(role: TeamRole, min: TeamRole): Response | null {
-    return roleAtLeast(role, min) ? null : forbidden(`requires ${min} role`)
+    return Role.of(role).atLeast(min) ? null : forbidden(`requires ${min} role`)
 }
 
 type ProjectOK = { supabase: SupabaseServer; user: User; teamId: string; role: TeamRole; error: null }
@@ -132,7 +132,7 @@ export async function requireProjectAccess(projectId: string): Promise<ProjectOK
     const base = await requireUser()
     if (base.error) return { supabase: base.supabase, user: null, teamId: null, role: null, error: base.error }
     const { supabase, user } = base
-    const access = await assertProjectAccess(supabase, user.id, projectId)
+    const access = await getAccessService(supabase).canAccessProject(user.id, projectId)
     if (!access.ok || !access.teamId || !access.role) {
         return { supabase, user: null, teamId: null, role: null, error: jsonError("not_found", "project not found", 404) }
     }
@@ -163,7 +163,7 @@ export async function requireIssueAccess(issueId: string): Promise<IssueOK | Iss
     const notFound: IssueFail = { supabase, user: null, projectId: null, teamId: null, role: null, error: jsonError("not_found", "issue not found", 404) }
     if (!projectId) return notFound
 
-    const access = await assertProjectAccess(supabase, user.id, projectId)
+    const access = await getAccessService(supabase).canAccessProject(user.id, projectId)
     if (!access.ok || !access.teamId || !access.role) return notFound
     return { supabase, user, projectId, teamId: access.teamId, role: access.role, error: null }
 }
@@ -195,11 +195,11 @@ async function requireTeamRowAccess(
     const r = row as { team_id: string; user_id: string } | null
     if (!r?.team_id) return notFound
 
-    const role = await getTeamRole(supabase, r.team_id, user.id)
+    const role = await getAccessService(supabase).teamRole(r.team_id, user.id)
     if (!role) return notFound
 
     const isCreator = r.user_id === user.id
-    if (opts?.write && !isCreator && !roleAtLeast(role, "admin")) {
+    if (opts?.write && !isCreator && !Role.of(role).atLeast("admin")) {
         return { supabase, user: null, teamId: null, role: null, isCreator: false, error: forbidden("only the creator or a team admin can change this") }
     }
     return { supabase, user, teamId: r.team_id, role, isCreator, error: null }

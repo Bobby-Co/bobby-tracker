@@ -1,5 +1,5 @@
 import { jsonError, personalTeamName, requireUser } from "@/lib/server/http/api"
-import { getUserTeams } from "@/lib/server/auth/team-access"
+import { getAccessService } from "@/modules/access"
 import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams — the caller's teams (each with their role), personal team
@@ -8,7 +8,7 @@ export async function GET() {
     const { supabase, user, error } = await requireUser()
     if (error) return error
     try {
-        const teams = await getUserTeams(supabase, user.id, personalTeamName(user))
+        const teams = await getAccessService(supabase).listTeams(user.id, personalTeamName(user))
         return Response.json({ teams })
     } catch (e) {
         return jsonError("team_error", e instanceof Error ? e.message : "failed to load teams", 500)

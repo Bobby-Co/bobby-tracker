@@ -3,7 +3,7 @@
 // projects.user_id, so teammates and collection members heard nothing. Here we
 // fan an event out to every team member who can actually see the project.
 //
-// It is the INVERSE of lib/auth/team-access.ts. That module answers "which
+// It is the INVERSE of modules/access (AccessService). That module answers "which
 // projects may this user see?" (owner/admin ⇒ all; a plain member ⇒ only
 // projects granted to a group they belong to). We answer the mirror question:
 // "which team members may see THIS project?" — same owner/admin-vs-member rule,
@@ -29,7 +29,7 @@ import type { Recipient, RecipientResolver } from "../ports/RecipientResolver"
 
 // Loosely-typed client: the tracker schema types are hand-written, so `.from`
 // results are cast to concrete row shapes at each call site (same convention as
-// lib/auth/team-access.ts and the rest of the app).
+// the rest of the app).
 type DB = SupabaseClient
 
 // Until a preferences store exists, every recipient gets every channel; the
@@ -83,8 +83,8 @@ export function createSupabaseRecipientResolver(db: SupabaseClient): RecipientRe
 }
 
 // resolveGroupMemberUserIds returns the userIds of every team member who belongs
-// to a group this project is granted to. Mirrors getAccessibleProjectIds in
-// reverse: there we walk user → groups → projects; here we walk project →
+// to a group this project is granted to. Mirrors AccessService.accessibleProjectIds
+// in reverse: there we walk user → groups → projects; here we walk project →
 // granting groups → member userIds.
 async function resolveGroupMemberUserIds(db: DB, teamId: string, projectId: string): Promise<Set<string>> {
     const teams = createSupabaseTeamMembershipRepository(db)

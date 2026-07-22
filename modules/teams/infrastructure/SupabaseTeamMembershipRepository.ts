@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
+import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
 import type { TeamMember, TeamMembershipRepository } from "../ports/TeamMembershipRepository"
 
 // The RLS client and the service-role client carry different schema generics
@@ -46,6 +47,65 @@ export class SupabaseTeamMembershipRepository implements TeamMembershipRepositor
             .eq("projects.project_public_integration.enabled", true)
             .returns<{ project_id: string }[]>()
         return (data ?? []).map((r) => r.project_id)
+    }
+
+    // ─── authz reads (used by modules/access) ────────────────────────────────
+
+    async listUserTeams(userId: string): Promise<TeamWithRole[]> {
+        const { data, error } = await this.db
+            .from("team_members")
+            .select("role, teams(*)")
+            .eq("user_id", userId)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        type Row = { role: TeamRole; teams: Team | Team[] | null }
+        const teams = ((data ?? []) as Row[])
+            .map((r) => {
+                // PostgREST returns the embed as an object, but falls back to an
+                // array when it can't prove uniqueness — normalise both.
+                const t = Array.isArray(r.teams) ? r.teams[0] : r.teams
+                return t ? ({ ...t, role: r.role } as TeamWithRole) : null
+            })
+            .filter((t): t is TeamWithRole => t !== null)
+        teams.sort(
+            (a, b) => Number(b.is_personal) - Number(a.is_personal) || a.name.localeCompare(b.name),
+        )
+        return teams
+    }
+
+    async findTeamRole(teamId: string, userId: string): Promise<TeamRole | null> {
+        // Fail-safe by design: the original getTeamRole ignored the query error
+        // and the guards treat a null role as "no access", so we keep that shape.
+        const { data } = await this.db
+            .from("team_members")
+            .select("role")
+            .eq("team_id", teamId)
+            .eq("user_id", userId)
+            .maybeSingle()
+        return (data as { role: TeamRole } | null)?.role ?? null
+    }
+
+    async listUserGroupIds(teamId: string, userId: string): Promise<string[]> {
+        const { data, error } = await this.db
+            .from("access_group_members")
+            .select("group_id")
+            .eq("user_id", userId)
+            .eq("team_id", teamId)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return ((data ?? []) as { group_id: string }[]).map((r) => r.group_id)
+    }
+
+    async listProjectIdsForGroups(groupIds: string[]): Promise<string[]> {
+        const { data, error } = await this.db
+            .from("access_group_projects")
+            .select("project_id")
+            .in("group_id", groupIds)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return ((data ?? []) as { project_id: string }[]).map((r) => r.project_id)
+    }
+
+    async ensurePersonalTeam(userId: string, name: string | null): Promise<void> {
+        const { error } = await this.db.rpc("ensure_personal_team", { p_user: userId, p_name: name })
+        if (error) throw new RepositoryError(`ensure_personal_team failed: ${error.message}`, { cause: error })
     }
 }
 

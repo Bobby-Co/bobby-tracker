@@ -4,7 +4,7 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/client/supabase"
 import { useAuth } from "@/lib/client/auth/auth-context"
-import { isAllowed } from "@/lib/server/auth/access"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
 import { AuthShell } from "@/components/layout/auth-shell"
 
 const ROLES = [
@@ -77,7 +77,7 @@ function OnboardingInner() {
         // Already-onboarded users skip straight through: to the app if they're
         // allowed, otherwise to the coming-soon waitlist.
         if (user.user_metadata?.onboarded) {
-            router.replace(isAllowed(user) ? next : "/waitlist")
+            router.replace(new BetaAccess().isAllowed(user) ? next : "/waitlist")
         }
     }, [loading, user, next, router])
 
@@ -122,7 +122,7 @@ function OnboardingInner() {
         }
         // Onboarded — hand off to where they were headed if they're on the
         // whitelist, otherwise to the coming-soon waitlist.
-        router.replace(isAllowed(user) ? next : "/waitlist")
+        router.replace(new BetaAccess().isAllowed(user) ? next : "/waitlist")
     }
 
     // Resolving the session or mid-redirect — keep the shell, swap a skeleton

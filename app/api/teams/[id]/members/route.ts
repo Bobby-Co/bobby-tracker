@@ -1,5 +1,5 @@
 import { jsonError, requireUser } from "@/lib/server/http/api"
-import { getTeamRole } from "@/lib/server/auth/team-access"
+import { getAccessService } from "@/modules/access"
 import { toMemberViews } from "@/lib/server/auth/user-profiles"
 import type { TeamRole } from "@/lib/shared/types"
 
@@ -10,7 +10,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
 
     const { data, error: dbErr } = await supabase

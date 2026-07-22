@@ -1,5 +1,5 @@
 import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import { getAccessService, Role } from "@/modules/access"
 
 // POST /api/teams/[id]/groups/[gid]/members — add a team member to a people-group
 // (admins). The double composite FK rejects a user who isn't on the team.
@@ -7,9 +7,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id, gid } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
-    if (!roleAtLeast(role, "admin")) return forbidden("only team admins can manage group members")
+    if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can manage group members")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }

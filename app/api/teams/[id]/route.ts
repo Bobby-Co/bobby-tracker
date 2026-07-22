@@ -1,5 +1,5 @@
 import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import { getAccessService, Role } from "@/modules/access"
 import type { Team, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id] — a team the caller belongs to, with their role.
@@ -7,7 +7,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     const { data, error: dbErr } = await supabase.from("teams").select("*").eq("id", id).maybeSingle<Team>()
     if (dbErr) return jsonError("db_error", dbErr.message, 500)
@@ -20,9 +20,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
-    if (!roleAtLeast(role, "admin")) return forbidden("only team admins can rename a team")
+    if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can rename a team")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -44,7 +44,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (role !== "owner") return forbidden("only the team owner can delete a team")
 

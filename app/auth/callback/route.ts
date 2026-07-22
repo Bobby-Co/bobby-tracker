@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/server/supabase"
-import { isAllowed } from "@/lib/server/auth/access"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
 
 // Supabase OAuth callback. Exchanges the `code` query param for a session,
 // captures the GitHub provider token (so the app can later list private
@@ -139,7 +139,7 @@ export async function GET(request: Request) {
 
     // Beta gate: onboarded users who aren't on the whitelist land on the
     // coming-soon page instead of the app.
-    if (user && !isAllowed(user)) {
+    if (user && !new BetaAccess().isAllowed(user)) {
         return NextResponse.redirect(new URL("/waitlist", url.origin))
     }
 

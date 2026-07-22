@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/client/supabase"
 import { useAuth } from "@/lib/client/auth/auth-context"
-import { isAllowed } from "@/lib/server/auth/access"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
 import { BrandLockup } from "@/components/layout/brand-lockup"
 import PixelScatter from "@/components/ui/pixel-scatter"
 
@@ -33,7 +33,7 @@ export default function WaitlistPage() {
             router.replace("/login?next=/waitlist")
             return
         }
-        if (isAllowed(user)) router.replace("/projects")
+        if (new BetaAccess().isAllowed(user)) router.replace("/projects")
     }, [loading, user, router])
 
     // Returning visitors who already raised their hand see the joined state;
@@ -85,7 +85,7 @@ export default function WaitlistPage() {
 
     // Resolving the session or mid-redirect (whitelisted users bounce to the
     // app) — hold a warm brand splash so nothing flashes.
-    if (loading || !user || isAllowed(user)) {
+    if (loading || !user || new BetaAccess().isAllowed(user)) {
         return (
             <main className="relative grid min-h-screen place-items-center overflow-hidden bg-white">
                 <div className="opacity-60">

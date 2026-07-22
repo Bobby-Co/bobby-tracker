@@ -1,5 +1,5 @@
 import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import { getAccessService, Role } from "@/modules/access"
 import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 
 // PATCH /api/teams/[id]/members/[userId] — change a member's role (admins). The
@@ -8,9 +8,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id, userId } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
-    if (!roleAtLeast(role, "admin")) return forbidden("only team admins can change roles")
+    if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can change roles")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -38,10 +38,10 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { id, userId } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     const isSelf = userId === user.id
-    if (!isSelf && !roleAtLeast(role, "admin")) return forbidden("only team admins can remove members")
+    if (!isSelf && !Role.of(role).atLeast("admin")) return forbidden("only team admins can remove members")
 
     const { error: dbErr } = await supabase
         .from("team_members")

@@ -1,7 +1,7 @@
 import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
 import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
-import { assertProjectAccess, roleAtLeast } from "@/lib/server/auth/team-access"
+import { getAccessService, Role } from "@/modules/access"
 import { findIcon } from "@/lib/shared/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
 import { createServiceClient } from "@/lib/server/supabase"
@@ -14,14 +14,14 @@ function isKnownIconName(name: string): boolean {
 }
 
 // GET /api/projects/[id] — single project. Shape: { project: Project | null }.
-// RLS blocks cross-team reads; assertProjectAccess adds the group-level gate so a
-// plain member can't open a same-team project they weren't granted (returns 404,
-// not 403, so we don't reveal the project exists).
+// RLS blocks cross-team reads; AccessService.canAccessProject adds the group-level
+// gate so a plain member can't open a same-team project they weren't granted
+// (returns 404, not 403, so we don't reveal the project exists).
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const access = await assertProjectAccess(supabase, user.id, id)
+    const access = await getAccessService(supabase).canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
     const { data, error: dbErr } = await supabase
         .from("projects")
@@ -37,9 +37,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { supabase, user, error } = await requireUser()
     if (error) return error
     // Renaming/reconfiguring a project is an admin action within its team.
-    const access = await assertProjectAccess(supabase, user.id, id)
+    const access = await getAccessService(supabase).canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
-    if (!roleAtLeast(access.role, "admin")) return forbidden("only team admins can edit a project")
+    if (!Role.of(access.role).atLeast("admin")) return forbidden("only team admins can edit a project")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -88,9 +88,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const { supabase, user, error } = await requireUser()
     if (error) return error
     // Deleting a project (and its knowledge graph) is an admin action.
-    const access = await assertProjectAccess(supabase, user.id, id)
+    const access = await getAccessService(supabase).canAccessProject(user.id, id)
     if (!access.ok) return Response.json({ project: null })
-    if (!roleAtLeast(access.role, "admin")) return forbidden("only team admins can delete a project")
+    if (!Role.of(access.role).atLeast("admin")) return forbidden("only team admins can delete a project")
 
     // Fail-safe: a query error folds to null → skip the (best-effort) graph
     // teardown, exactly as the old inline read (which ignored the error) did.

@@ -1,6 +1,7 @@
 // Teams bounded context — PUBLIC CONTRACT (see modules/README.md).
-// Team invitations + membership/access-control reads. (Team-based authorization —
-// team-access/assertProjectAccess — is cross-cutting and stays in lib/auth.)
+// Team invitations + membership/access-control reads. (The team-based
+// authorization POLICY — role gates, project visibility — lives in modules/access,
+// which reads membership through this module's TeamMembershipRepository.)
 
 // ─── invite value objects ───────────────────────────────────────────────────
 export { Invite } from "./domain/Invite"
@@ -13,3 +14,8 @@ export { createInviteNotifier } from "./Composition"
 // ─── team membership / access reads ─────────────────────────────────────────
 export type { TeamMember, TeamMembershipRepository } from "./ports/TeamMembershipRepository"
 export { createSupabaseTeamMembershipRepository } from "./infrastructure/SupabaseTeamMembershipRepository"
+
+// The team vocabulary (role + team-with-role row shapes). Re-exported so modules
+// that reason over teams — notably modules/access, whose pure layers may not
+// import @/lib/shared/types directly — speak them through the Teams contract.
+export type { TeamRole, TeamWithRole } from "@/lib/shared/types"

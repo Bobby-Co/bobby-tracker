@@ -1,5 +1,5 @@
 import { forbidden, jsonError, requireUser } from "@/lib/server/http/api"
-import { getTeamRole, roleAtLeast } from "@/lib/server/auth/team-access"
+import { getAccessService, Role } from "@/modules/access"
 import { resolveUserProfiles } from "@/lib/server/auth/user-profiles"
 import type { AccessGroup, AccessGroupWithDetail } from "@/lib/shared/types"
 
@@ -10,7 +10,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
 
     const { data: groups, error: gErr } = await supabase
@@ -49,9 +49,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params
     const { supabase, user, error } = await requireUser()
     if (error) return error
-    const role = await getTeamRole(supabase, id, user.id)
+    const role = await getAccessService(supabase).teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
-    if (!roleAtLeast(role, "admin")) return forbidden("only team admins can create groups")
+    if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can create groups")
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }

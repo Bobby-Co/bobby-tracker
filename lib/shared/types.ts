@@ -10,7 +10,7 @@ export interface Project {
     id: string
     /** The team that OWNS this project (migration 0052). Access is scoped to
      *  members of this team; the finer "which member sees it" gate lives in
-     *  lib/auth/team-access.ts, not in RLS. */
+     *  modules/access (AccessService), not in RLS. */
     team_id: string
     /** The creator. Since 0052 this is provenance only ("created_by") — ownership
      *  is team_id. Left named user_id (and typed non-null) to avoid churning ~30
@@ -696,9 +696,9 @@ export interface Notification {
 // ─── Collaboration: teams, members, people-groups (migration 0052) ──────────
 
 /** A member's standing in a team. Drives the app-layer authz decisions in
- *  lib/auth/team-access.ts (owner/admin see all team projects; member sees only
- *  projects granted to a group they're in). RLS itself is coarse (team membership
- *  only) — roles are NOT a DB gate except on the escalation-sensitive tables. */
+ *  modules/access (owner/admin see all team projects; member sees only projects
+ *  granted to a group they're in). RLS itself is coarse (team membership only) —
+ *  roles are NOT a DB gate except on the escalation-sensitive tables. */
 export type TeamRole = "owner" | "admin" | "member"
 export const TEAM_ROLES: TeamRole[] = ["owner", "admin", "member"]
 
