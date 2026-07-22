@@ -33,11 +33,6 @@ export type ProjectStatus =
 
 const HOUR = 3_600_000
 
-function age(ts: string | null | undefined, now: number): number {
-    if (!ts) return Infinity
-    const t = Date.parse(ts)
-    return Number.isNaN(t) ? Infinity : now - t
-}
 
 export class ProjectInsight {
     /** How long a newly-urgent issue outranks everything else on the tile. */
@@ -62,11 +57,11 @@ export class ProjectInsight {
         const s = this.state
         if (!s) return { kind: "clear", at: null }
 
-        if (s.urgent_open > 0 && age(s.last_urgent_at, now) < ProjectInsight.URGENT_WINDOW_MS) {
+        if (s.urgent_open > 0 && this.age(s.last_urgent_at, now) < ProjectInsight.URGENT_WINDOW_MS) {
             return { kind: "critical", count: s.urgent_open, at: s.last_urgent_at }
         }
 
-        const recentPrs = (s.recent_pr_opens ?? []).filter((t) => age(t, now) < ProjectInsight.PR_WINDOW_MS)
+        const recentPrs = (s.recent_pr_opens ?? []).filter((t) => this.age(t, now) < ProjectInsight.PR_WINDOW_MS)
         if (recentPrs.length > 0) {
             // max(), not [0] — the trigger prepends, but webhook deliveries can
             // arrive out of order, so newest-first isn't guaranteed.
@@ -78,5 +73,11 @@ export class ProjectInsight {
         if (total === 0) return { kind: "clear", at: s.last_issue_created_at }
 
         return { kind: "progress", done: s.done_total, total, at: s.last_issue_created_at }
+    }
+
+    private age(ts: string | null | undefined, now: number): number {
+        if (!ts) return Infinity
+        const t = Date.parse(ts)
+        return Number.isNaN(t) ? Infinity : now - t
     }
 }
