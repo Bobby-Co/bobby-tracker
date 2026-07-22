@@ -1,34 +1,27 @@
-import { ApiContext, forbidden, jsonError } from "@/lib/server/http/api"
-import { getAccessService, Role } from "@/modules/access"
+import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/api"
+import { Role } from "@/modules/access"
 import { createServiceAdminUserDirectory } from "@/modules/teams"
-import type { AccessGroup, AccessGroupWithDetail } from "@/lib/shared/types"
+import type { AccessGroupWithDetail } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/groups — the team's people-groups with their members
 // (resolved profiles) and granted project ids. Any team member may view. This is
 // tracker.access_groups (NOT project_groups / "Collections").
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const role = await getAccessService(supabase).teamRole(id, user.id)
+    const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
 
-    const { data: groups, error: gErr } = await supabase
-        .from("access_groups")
-        .select("*")
-        .eq("team_id", id)
-        .order("name")
-    if (gErr) return jsonError("db_error", gErr.message, 500)
-    const groupList = (groups ?? []) as AccessGroup[]
+    const { data: groupList, error: gErr } = await repoRead(() => ctx.accessGroups.listForTeam(id))
+    if (gErr) return gErr
     if (groupList.length === 0) return Response.json({ groups: [] })
 
     const groupIds = groupList.map((g) => g.id)
-    const [{ data: memRows }, { data: projRows }] = await Promise.all([
-        supabase.from("access_group_members").select("group_id, user_id").in("group_id", groupIds),
-        supabase.from("access_group_projects").select("group_id, project_id").in("group_id", groupIds),
+    const [mem, proj] = await Promise.all([
+        ctx.accessGroups.listMembers(groupIds),
+        ctx.accessGroups.listProjectGrants(groupIds),
     ])
-    const mem = (memRows ?? []) as { group_id: string; user_id: string }[]
-    const proj = (projRows ?? []) as { group_id: string; project_id: string }[]
 
     const profiles = await createServiceAdminUserDirectory().resolveProfiles(mem.map((m) => m.user_id))
     const detailed: AccessGroupWithDetail[] = groupList.map((g) => ({
@@ -47,9 +40,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // POST /api/teams/[id]/groups — create a people-group (admins).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
-    const role = await getAccessService(supabase).teamRole(id, user.id)
+    const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can create groups")
 
@@ -59,11 +52,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!name) return jsonError("bad_request", "name is required", 400)
     const description = body?.description ? String(body.description) : null
 
-    const { data, error: dbErr } = await supabase
-        .from("access_groups")
-        .insert({ team_id: id, name, description, created_by: user.id })
-        .select("*")
-        .single<AccessGroup>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.accessGroups.create(id, name, description, user.id))
+    if (dbErr) return dbErr
     return Response.json({ group: { ...data, members: [], project_ids: [] } as AccessGroupWithDetail })
 }

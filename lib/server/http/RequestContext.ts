@@ -18,6 +18,7 @@ import {
     createSupabaseTeamMembershipRepository,
     createSupabaseTeamsRepository,
     createSupabaseTeamInvitesRepository,
+    createSupabaseAccessGroupsRepository,
 } from "@/modules/teams"
 import { createSupabasePublicSessionRepository } from "@/modules/public"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
@@ -50,6 +51,9 @@ export class RequestContext {
     }
     get teamInvites() {
         return createSupabaseTeamInvitesRepository(this.db)
+    }
+    get accessGroups() {
+        return createSupabaseAccessGroupsRepository(this.db)
     }
     get publicSessions() {
         return createSupabasePublicSessionRepository(this.db)

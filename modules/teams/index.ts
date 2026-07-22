@@ -23,6 +23,16 @@ export { createSupabaseTeamsRepository } from "./infrastructure/SupabaseTeamsRep
 export type { TeamInvitesRepository, NewInvite, InviteCreateResult } from "./ports/TeamInvitesRepository"
 export { createSupabaseTeamInvitesRepository } from "./infrastructure/SupabaseTeamInvitesRepository"
 
+// ─── people-groups (access_groups + link tables) ────────────────────────────
+export type {
+    AccessGroupsRepository,
+    AccessGroupMemberLink,
+    AccessGroupProjectLink,
+    AccessGroupPatch,
+    LinkWriteResult,
+} from "./ports/AccessGroupsRepository"
+export { createSupabaseAccessGroupsRepository } from "./infrastructure/SupabaseAccessGroupsRepository"
+
 // The team vocabulary (role + team-with-role row shapes). Re-exported so modules
 // that reason over teams — notably modules/access, whose pure layers may not
 // import @/lib/shared/types directly — speak them through the Teams contract.
