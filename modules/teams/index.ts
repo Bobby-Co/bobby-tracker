@@ -2,8 +2,9 @@
 // Team invitations + membership/access-control reads. (Team-based authorization —
 // team-access/assertProjectAccess — is cross-cutting and stays in lib/auth.)
 
-// ─── invite value helpers (pure) ────────────────────────────────────────────
-export { newInviteToken, baseUrl, normalizeEmail, isValidEmail } from "./domain/Invite"
+// ─── invite value objects ───────────────────────────────────────────────────
+export { Invite } from "./domain/Invite"
+export { Email } from "./domain/Email"
 
 // ─── invite delivery (port + composition seam) ──────────────────────────────
 export type { InviteNotifier, InviteMessage } from "./ports/InviteNotifier"

@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { forbidden, jsonError, requireUser } from "@/lib/platform/http/api"
 import { getTeamRole, roleAtLeast } from "@/lib/auth/team-access"
-import { baseUrl, createInviteNotifier, isValidEmail, newInviteToken, normalizeEmail } from "@/modules/teams"
+import { Email, Invite, createInviteNotifier } from "@/modules/teams"
 import { TEAM_ROLES, type TeamInvite, type TeamRole } from "@/lib/supabase/types"
 
 // GET /api/teams/[id]/invites — pending (unaccepted) invites (admins). RLS on
@@ -37,12 +37,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
-    const email = normalizeEmail(String(body?.email ?? ""))
-    if (!isValidEmail(email)) return jsonError("bad_request", "a valid email is required", 400)
+    const emailVo = Email.of(String(body?.email ?? ""))
+    if (!emailVo.isValid()) return jsonError("bad_request", "a valid email is required", 400)
+    const email = emailVo.value
     const inviteRole = (TEAM_ROLES.includes(body?.role as TeamRole) ? body.role : "member") as TeamRole
     if (inviteRole === "owner") return jsonError("bad_request", "cannot invite as owner", 400)
 
-    const token = newInviteToken()
+    const inviteVo = new Invite()
+    const token = inviteVo.newToken()
     const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
     const { data: invite, error: dbErr } = await supabase
@@ -62,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { data: team } = await supabase.from("teams").select("name").eq("id", id).maybeSingle<{ name: string }>()
     const inviterName =
         (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || null
-    const acceptUrl = `${baseUrl(request)}/invite/${token}`
+    const acceptUrl = inviteVo.acceptUrl(request, token)
     after(async () => {
         try {
             await createInviteNotifier().sendInvite({ to: email, teamName: team?.name ?? "a team", inviterName, acceptUrl, role: inviteRole })

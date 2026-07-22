@@ -1,6 +1,6 @@
 import { jsonError, requireUser } from "@/lib/platform/http/api"
 import { createServiceClient } from "@/lib/supabase/server"
-import { normalizeEmail } from "@/modules/teams"
+import { Email } from "@/modules/teams"
 import type { TeamInvite } from "@/lib/supabase/types"
 
 // The invitee is not (yet) a team admin, so RLS on team_invites hides the row
@@ -49,8 +49,8 @@ export async function POST(_: Request, { params }: { params: Promise<{ token: st
     const state = inviteState(invite)
     if (!state.ok) return jsonError("invalid_invite", state.reason, state.status)
 
-    const userEmail = normalizeEmail(user.email ?? "")
-    if (!userEmail || userEmail !== normalizeEmail(state.invite.email)) {
+    const userEmail = Email.of(user.email ?? "").value
+    if (!userEmail || userEmail !== Email.of(state.invite.email).value) {
         return jsonError("email_mismatch", "this invite is for a different email address", 403)
     }
 
