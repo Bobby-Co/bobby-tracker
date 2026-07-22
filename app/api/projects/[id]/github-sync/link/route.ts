@@ -1,5 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
 import type { Project } from "@/lib/shared/types"
@@ -49,7 +49,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     // Record the installation, bound to this user (service-role: writes to
     // github_installations are service-role only).
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { error: instErr } = await svc.from("github_installations").upsert(
         {
             installation_id: installationId,

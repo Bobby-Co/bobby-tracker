@@ -5,7 +5,7 @@
 // service extraction swaps ONLY this file — callers depend on getAnalyser() /
 // the service factories, never on the transport or the concrete collaborators.
 
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getVcsAppService } from "@/modules/vcs"
@@ -25,7 +25,7 @@ export function getAnalyser(): Analyser {
 
 /** The issue auto-analysis service, bound to service-role collaborators. */
 export function createIssueAnalysisService(): IssueAnalysisService {
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     return new IssueAnalysisService(
         getAnalyser(),
         createServiceIssueSyncStore(),
@@ -39,7 +39,7 @@ export function createIssueAnalysisService(): IssueAnalysisService {
 
 /** The PR-analysis service, bound to service-role collaborators. */
 export function createPullRequestAnalysisService(): PullRequestAnalysisService {
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     return new PullRequestAnalysisService(
         getAnalyser(),
         createSupabaseProjectsRepository(svc),

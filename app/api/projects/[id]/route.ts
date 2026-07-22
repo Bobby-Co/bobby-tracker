@@ -4,7 +4,7 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { getAccessService, Role } from "@/modules/access"
 import { findIcon } from "@/lib/shared/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { Project } from "@/lib/shared/types"
 
 // Same gate as the label-icons route: only slugs the renderer can actually draw
@@ -108,7 +108,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
             console.error("[project delete] analyser graph teardown failed", id, graphId, e)
         }
         try {
-            const svc = createServiceClient()
+            const svc = Supabase.service()
             const { error: prErr } = await svc.from("pr_review_index").delete().eq("repo_id", graphId)
             if (prErr) console.error("[project delete] pr_review_index cleanup failed", id, graphId, prErr.message)
         } catch (e) {

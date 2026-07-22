@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 
 // PUBLIC. The bobby-relay app polls this with its device_code until the
 // user approves (or denies) the pairing. On approval it returns the opaque
@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     const deviceCode = url.searchParams.get("deviceCode") ?? ""
     if (!deviceCode) return jsonError("bad_request", "deviceCode required", 400)
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { data: pairing, error: dbErr } = await svc
         .from("relay_pairings")
         .select("*")

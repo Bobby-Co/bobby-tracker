@@ -1,5 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { Email } from "@/modules/teams"
 import type { TeamInvite } from "@/lib/shared/types"
 
@@ -7,7 +7,7 @@ import type { TeamInvite } from "@/lib/shared/types"
 // from them. Both handlers look the invite up with the service-role client and
 // enforce the "email must match the signed-in user" rule in code.
 async function loadInvite(token: string) {
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { data } = await svc
         .from("team_invites")
         .select("*")

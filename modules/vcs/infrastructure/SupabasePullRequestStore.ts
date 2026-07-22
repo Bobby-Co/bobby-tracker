@@ -3,7 +3,7 @@
 // Upserts intentionally omit `undefined` fields (supabase-js drops them and
 // PostgREST merge-duplicates only updates the columns it receives).
 
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { PRAnalysis } from "@/lib/shared/types"
 import type {
     PRCommentSource,
@@ -16,7 +16,7 @@ import type {
  *  factory below from a composition root (webhook / backfill / detached contexts
  *  that bypass RLS). */
 export class SupabasePullRequestStore implements PullRequestStore {
-    private readonly svc = createServiceClient()
+    private readonly svc = Supabase.service()
 
     async upsertPullRequest(projectId: string, pr: PRUpsert): Promise<void> {
         await this.svc.from("pull_requests").upsert({ project_id: projectId, ...pr }, { onConflict: "project_id,pr_number" })

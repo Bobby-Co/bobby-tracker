@@ -1,5 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
 import { RateLimiter } from "@/lib/server/RateLimiter"
 
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     // The relay has no session, so the pairing row isn't owned by anyone
     // yet — look it up through the service role.
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { data: pairing, error: pErr } = await svc
         .from("relay_pairings")
         .select("*")

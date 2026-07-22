@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/shared/kernel"
 import type { IssueSuggestion, Project, PublicIssueReporter } from "@/lib/shared/types"
@@ -34,7 +34,7 @@ async function PublicIssueDetailContent({
     params: Promise<{ token: string; id: string }>
 }) {
     const { token, id } = await params
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const gate = getPublicSessionService(svc)
 
     const sess = await gate.resolve(token, { requireOpen: false })

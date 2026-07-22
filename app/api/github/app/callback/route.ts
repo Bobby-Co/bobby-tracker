@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { ApiContext } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { githubAppClient } from "@/modules/vcs"
 import { RepoRef } from "@/modules/vcs"
 import type { Project } from "@/lib/shared/types"
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         const installationId = Number(url.searchParams.get("installation_id"))
         if (!Number.isFinite(installationId) || installationId <= 0) return back("error")
 
-        const svc = createServiceClient()
+        const svc = Supabase.service()
 
         // Capture the account the app was installed on (best-effort).
         let account: { login?: string; type?: string; id?: number } = {}

@@ -1,5 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
 import { RateLimiter } from "@/lib/server/RateLimiter"
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const userCode = new PairingCodes().normalize(String(body?.userCode ?? ""))
     if (!userCode) return jsonError("bad_request", "userCode required", 400)
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { error: dbErr } = await svc
         .from("relay_pairings")
         .update({ status: "denied" })

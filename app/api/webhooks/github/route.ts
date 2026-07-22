@@ -6,7 +6,7 @@ import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
 import { createServicePullRequestStore } from "@/modules/vcs"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { Issue, Project } from "@/lib/shared/types"
 
 // INBOUND WEBHOOK — public (NO requireUser). GitHub signs each delivery with
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const deliveryId = request.headers.get("x-github-delivery") ?? ""
     const event = request.headers.get("x-github-event") ?? ""
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
 
     // (3) Delivery dedupe. GitHub retries/redelivers; the PK on delivery_id
     // makes a re-seen delivery a unique violation → stop (already processed).
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     return ack()
 }
 
-type Svc = ReturnType<typeof createServiceClient>
+type Svc = ReturnType<typeof Supabase.service>
 
 // ─── installation lifecycle ─────────────────────────────────────────────────
 

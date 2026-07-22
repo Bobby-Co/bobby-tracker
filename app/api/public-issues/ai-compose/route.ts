@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { EmbeddingText } from "@/modules/issues"
 import { getPublicSessionService } from "@/modules/public"
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "Provide a paragraph or at least one image.", 400)
     }
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const gate = getPublicSessionService(svc)
     const sess = await gate.resolve(token, { requireOpen: true })
     if (sess.error) return sess.error

@@ -8,7 +8,7 @@
 //                         methods over the client. Construct via the composition
 //                         root (resolveVcsAppInstance); callers depend on the port.
 
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { VcsAppInstance } from "../ports/VcsAppInstance"
 import {
     VcsMergeError,
@@ -121,7 +121,7 @@ export class GithubAppClient {
         const existing = this.inflightTokens.get(installationId)
         if (existing) return existing
         const p = (async () => {
-            const svc = createServiceClient()
+            const svc = Supabase.service()
             const { data: row } = await svc
                 .from("github_installations")
                 .select("cached_token,token_expires_at")
@@ -168,7 +168,7 @@ export class GithubAppClient {
 
     private async evictInstallationToken(installationId: number): Promise<void> {
         this.inflightTokens.delete(installationId)
-        const svc = createServiceClient()
+        const svc = Supabase.service()
         await svc
             .from("github_installations")
             .update({ cached_token: null, token_expires_at: null })

@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { PairingCodes } from "@/modules/relay"
 import { RateLimiter } from "@/lib/server/RateLimiter"
 
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const userCode = codes.userCode() // dashed, for display
     const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { error: dbErr } = await svc
         .from("relay_pairings")
         .insert({

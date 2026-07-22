@@ -11,7 +11,7 @@
 // analysis_status) are GitHub-integration / analysis state that currently lives
 // on the issues row; a later physical split would remove the shared-table coupling.
 
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { IssueStatus } from "@/lib/shared/types"
 
 // The subset of a tracker.issues row the analysis flow reads.
@@ -108,7 +108,7 @@ export interface IssueSyncStore {
 
 /** The Supabase service-role implementation. Construct via the factory below. */
 export class ServiceIssueSyncStore implements IssueSyncStore {
-    private readonly svc = createServiceClient()
+    private readonly svc = Supabase.service()
 
     async findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null> {
         const { data } = await this.svc

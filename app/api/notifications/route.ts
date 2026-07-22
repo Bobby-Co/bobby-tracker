@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { createNotificationService } from "@/modules/notifications"
 import type { Notification } from "@/lib/shared/types"
 
@@ -26,7 +26,7 @@ export async function GET() {
     // after() so it never delays or fails the response. No-op when the outbox is
     // empty (i.e. before cutover).
     if (process.env.NOTIFY_DRAIN_TOKEN) {
-        after(() => createNotificationService(createServiceClient()).drain(10).catch(() => {}))
+        after(() => createNotificationService(Supabase.service()).drain(10).catch(() => {}))
     }
 
     const { data, error: dbErr } = await supabase

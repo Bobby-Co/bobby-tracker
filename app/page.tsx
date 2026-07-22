@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { getCurrentUser } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { BetaAccess } from "@/lib/shared/BetaAccess"
 import PixelGradient, { EMBER_STOPS } from "@/components/ui/pixel-gradient"
 
@@ -17,7 +17,7 @@ export default async function Home() {
     // Only whitelisted users are sent into the app. Signed-in users who
     // aren't on the beta list stay on the landing (they reach the waitlist
     // through sign-in, not by being bounced off this page).
-    const user = await getCurrentUser()
+    const user = await Supabase.currentUser()
     if (user && new BetaAccess().isAllowed(user)) redirect("/projects")
 
     return (

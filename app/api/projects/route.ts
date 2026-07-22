@@ -4,7 +4,7 @@ import { getAccessService } from "@/modules/access"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/shared/icons/suggest"
 import { canonicalRepoUrl, validateRepoUrl } from "@/lib/shared/repo-url"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/shared/types"
 
 // GET — list the ACTIVE TEAM's projects, newest first. Backs the app sidebar and
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         try {
             const icon = await topSuggestedIcon(iconSeed)
             if (!icon) return
-            const svc = createServiceClient()
+            const svc = Supabase.service()
             const { error: iconErr } = await svc.from("projects").update({ icon_name: icon }).eq("id", project.id)
             if (iconErr) console.error("[project create] auto-icon update failed", project.id, iconErr.message)
         } catch (e) {
@@ -144,7 +144,7 @@ async function topSuggestedIcon(seed: string): Promise<string | null> {
     const local = filterIconsLocal(text)
     if (local.length > 0) return local[0].name
     const { vector } = await getAnalyser().embed(text)
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { data } = await svc.rpc("find_similar_icons", {
         p_embedding: vector as unknown as string,
         p_limit: 1,

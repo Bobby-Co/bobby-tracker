@@ -1,4 +1,4 @@
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { getPublicSessionService } from "@/modules/public"
 import type { Issue, IssueEmbedding } from "@/lib/shared/types"
 
@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const url = new URL(request.url)
     const token = (url.searchParams.get("token") || "").trim()
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const gate = getPublicSessionService(svc)
     const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) return sess.error

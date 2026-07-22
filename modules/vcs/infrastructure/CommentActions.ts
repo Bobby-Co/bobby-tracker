@@ -10,9 +10,9 @@ import { getVcsUserService } from "../Composition"
 import type { VcsUserService } from "../application/VcsUserService"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { RepositoryError } from "@/lib/shared/kernel"
-import type { createClient } from "@/lib/server/supabase"
+import type { SupabaseRlsClient } from "@/lib/server/supabase"
 
-type SupabaseServer = Awaited<ReturnType<typeof createClient>>
+type SupabaseServer = SupabaseRlsClient
 
 // The comment-authoring actor: a VcsUserService already bound to the project's
 // repo + the caller's personal token, plus the login for provenance display.

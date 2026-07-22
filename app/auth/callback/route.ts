@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { BetaAccess } from "@/lib/shared/BetaAccess"
 
 // Supabase OAuth callback. Exchanges the `code` query param for a session,
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
         return NextResponse.redirect(new URL(next, url.origin))
     }
 
-    const supabase = await createClient()
+    const supabase = await Supabase.rls()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
     if (error) {
         console.error("[auth/callback] exchangeCodeForSession failed:", error.message)

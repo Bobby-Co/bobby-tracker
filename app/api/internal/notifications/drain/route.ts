@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { createNotificationService } from "@/modules/notifications"
 
 export const dynamic = "force-dynamic"
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     if (presented !== expected) return jsonError("unauthorized", "bad drain token", 401)
 
     try {
-        const drained = await createNotificationService(createServiceClient()).drain(50)
+        const drained = await createNotificationService(Supabase.service()).drain(50)
         return Response.json({ ok: true, drained })
     } catch (err) {
         const e = err as { message?: string }

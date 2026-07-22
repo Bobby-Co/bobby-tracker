@@ -9,10 +9,10 @@ import { mergeVerdictLabel } from "@/lib/shared/rendering/badge"
 import { findingState, createServicePullRequestStore } from "@/modules/vcs"
 import { EmailTransport } from "@/lib/server/email/EmailTransport"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { NotificationKind, PRAnalysis } from "@/lib/shared/types"
 
-type Svc = ReturnType<typeof createServiceClient>
+type Svc = ReturnType<typeof Supabase.service>
 
 interface NotificationRow {
     id: string
@@ -39,7 +39,7 @@ export class NotificationEmail {
     async send(notificationId: string): Promise<void> {
         if (!this.mail.isConfigured()) return
 
-        const svc = createServiceClient()
+        const svc = Supabase.service()
         const { data: n } = await svc
             .from("notifications")
             .select("id,user_id,project_id,kind,title,meta,href")

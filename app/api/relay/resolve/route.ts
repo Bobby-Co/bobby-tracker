@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 
 // SERVER-TO-SERVER. The bobby-analyser presents an opaque worker token and
 // gets back the owning userId + workerId. Authenticated with the shared
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     const token = url.searchParams.get("token") ?? ""
     if (!token) return jsonError("bad_request", "token required", 400)
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { data: worker, error: dbErr } = await svc
         .from("relay_workers")
         .select("id, user_id")

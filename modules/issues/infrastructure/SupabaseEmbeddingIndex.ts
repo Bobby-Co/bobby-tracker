@@ -11,7 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { EmbeddingIndex, EmbeddingUpsert, UnembeddedIssue } from "../ports/EmbeddingIndex"
 
 // The RLS client and the service-role client carry different schema generics;
@@ -75,5 +75,5 @@ export class SupabaseEmbeddingIndex implements EmbeddingIndex {
 /** Composition seam: bind an EmbeddingIndex to the SERVICE-ROLE client (the
  *  embedding-maintenance path is always service-role — see the file header). */
 export function createServiceEmbeddingIndex(): EmbeddingIndex {
-    return new SupabaseEmbeddingIndex(createServiceClient())
+    return new SupabaseEmbeddingIndex(Supabase.service())
 }

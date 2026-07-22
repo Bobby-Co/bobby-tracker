@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { jsonError } from "@/lib/server/http/api"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/shared/types"
 import { PUBLIC_ISSUE_LABEL, CurrentVisitor, getPublicSessionService } from "@/modules/public"
 import { createIssueEmbedder } from "@/modules/issues"
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     if (!title) return jsonError("bad_request", "title required", 400)
     if (!project_id) return jsonError("bad_request", "project_id required", 400)
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const gate = getPublicSessionService(svc)
     const { session, error } = await gate.resolve(token, { requireOpen: true })
     if (error) return error

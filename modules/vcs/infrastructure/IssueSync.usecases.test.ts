@@ -41,7 +41,7 @@ mock.module("./GithubVcsAppInstance", () => ({
         }
     },
 }))
-mock.module("@/lib/server/supabase", () => ({ createServiceClient: () => ({}) }))
+mock.module("@/lib/server/supabase", () => ({ Supabase: { service: () => ({}) } }))
 const SVC = {}
 mock.module("@/modules/issues", () => ({
     Issue: RealIssue,

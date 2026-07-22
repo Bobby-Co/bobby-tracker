@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { Issue, PublicSession, PublicSessionAccessMode } from "@/lib/shared/types"
 import { PublicIssueForm } from "@/components/public/public-issue-form"
 import { PublicProfileBadge } from "@/components/public/public-profile-badge"
@@ -47,7 +47,7 @@ async function PublicSessionContent({
     params: Promise<{ token: string }>
 }) {
     const { token } = await params
-    const svc = createServiceClient()
+    const svc = Supabase.service()
 
     const { data: session } = await svc
         .from("public_sessions")

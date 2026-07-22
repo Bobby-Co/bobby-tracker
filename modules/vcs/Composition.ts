@@ -7,7 +7,7 @@
 
 import { createServiceIssueSyncStore } from "@/modules/issues"
 import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { RepoRef } from "./domain/RepoRef"
 import { VcsAppService } from "./application/VcsAppService"
 import { VcsUserService } from "./application/VcsUserService"
@@ -105,7 +105,7 @@ export function getPullRequestService(project: VcsProviderBinding): PullRequestS
  *  the backfill routes (which hold only an id). Fetches the project's sync
  *  context and gates on it being sync-ready; null when not linked/ready. */
 export async function getPullRequestServiceForProject(projectId: string): Promise<PullRequestService | null> {
-    const project = await createSupabaseProjectsRepository(createServiceClient()).findGithubSyncContext(projectId)
+    const project = await createSupabaseProjectsRepository(Supabase.service()).findGithubSyncContext(projectId)
     if (!project || !Project.of(project).isSyncReady()) return null
     return getPullRequestService(project)
 }
@@ -116,7 +116,7 @@ export async function getPullRequestServiceForProject(projectId: string): Promis
 export async function importExistingIssues(
     projectId: string,
 ): Promise<{ imported: number; total: number; skipped: number }> {
-    const project = await createSupabaseProjectsRepository(createServiceClient()).findGithubSyncContext(projectId)
+    const project = await createSupabaseProjectsRepository(Supabase.service()).findGithubSyncContext(projectId)
     if (!project) return { imported: 0, total: 0, skipped: 0 }
     const vcs = getVcsAppService(project)
     if (!vcs) return { imported: 0, total: 0, skipped: 0 }

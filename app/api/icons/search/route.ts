@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 
 // POST /api/icons/search — semantic icon lookup.
 //
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     }
 
     const limit = clampLimit(body.limit)
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const version = await getActiveVersion(svc)
 
     const q = normalizeQuery(typeof body.q === "string" ? body.q : "")
@@ -120,7 +120,7 @@ const VERSION_TTL_MS = 30_000
 let versionCache: { value: string; expiresAt: number } | null = null
 
 async function getActiveVersion(
-    svc: ReturnType<typeof createServiceClient>,
+    svc: ReturnType<typeof Supabase.service>,
 ): Promise<string> {
     const now = Date.now()
     if (versionCache && now < versionCache.expiresAt) {
@@ -139,7 +139,7 @@ async function getActiveVersion(
 }
 
 async function bumpLru(
-    svc: ReturnType<typeof createServiceClient>,
+    svc: ReturnType<typeof Supabase.service>,
     query: string,
 ): Promise<void> {
     const { data, error } = await svc

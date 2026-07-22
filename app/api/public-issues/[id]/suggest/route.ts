@@ -2,7 +2,7 @@ import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } f
 import { tryOrNull } from "@/lib/shared/kernel"
 import { jsonError } from "@/lib/server/http/api"
 import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { IssueSuggestion } from "@/lib/shared/types"
 import { getPublicSessionService } from "@/modules/public"
 import { RateLimiter } from "@/lib/server/RateLimiter"
@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try { body = await request.json() } catch { /* allow empty */ }
     const token = String(body?.token ?? "").trim()
 
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const gate = getPublicSessionService(svc)
     const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) return sess.error

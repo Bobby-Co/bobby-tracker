@@ -12,7 +12,7 @@
 
 import { cookies } from "next/headers"
 import type { User } from "@supabase/supabase-js"
-import { createClient, getCurrentUser } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import { getAccessService, Role } from "@/modules/access"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { createSupabaseIssuesRepository } from "@/modules/issues"
@@ -21,7 +21,7 @@ import { createSupabasePublicSessionRepository } from "@/modules/public"
 import { jsonError, forbidden } from "./responses"
 import type { TeamRole, TeamWithRole } from "@/lib/shared/types"
 
-type SupabaseServer = Awaited<ReturnType<typeof createClient>>
+type SupabaseServer = Awaited<ReturnType<typeof Supabase.rls>>
 
 // The header/cookie the client uses to say which team it's acting in. The
 // TeamProvider (client) mirrors the active team into both; requireTeam prefers
@@ -79,7 +79,7 @@ export class ApiContext {
     async requireUser(): Promise<AuthOK | AuthFail> {
         // Run the (cached) auth check and the cookie-bound client setup
         // in parallel — they don't depend on each other.
-        const [user, supabase] = await Promise.all([getCurrentUser(), createClient()])
+        const [user, supabase] = await Promise.all([Supabase.currentUser(), Supabase.rls()])
         if (!user) {
             return { supabase, user: null, error: jsonError("unauthorized", "sign in required", 401) }
         }

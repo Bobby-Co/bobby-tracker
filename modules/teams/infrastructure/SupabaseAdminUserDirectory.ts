@@ -4,7 +4,7 @@
 // the client is injected by the composition seam, not constructed here.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { createServiceClient } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 import type { UserDirectory, UserProfile } from "../ports/UserDirectory"
 
 // The service-role client is "tracker"-schema-typed; accept any schema so the
@@ -46,5 +46,5 @@ export class SupabaseAdminUserDirectory implements UserDirectory {
 
 /** Composition seam: the service-role-backed UserDirectory (auth.admin API). */
 export function createServiceAdminUserDirectory(): UserDirectory {
-    return new SupabaseAdminUserDirectory(createServiceClient())
+    return new SupabaseAdminUserDirectory(Supabase.service())
 }

@@ -3,7 +3,7 @@
 // by the PublicSessionService gate and the public routes/pages at submission time
 // (attribution) and read time ('own'-visibility).
 
-import { getCurrentUser } from "@/lib/server/supabase"
+import { Supabase } from "@/lib/server/supabase"
 
 export interface PublicVisitor {
     id: string
@@ -13,7 +13,7 @@ export interface PublicVisitor {
 export class CurrentVisitor {
     /** The signed-in visitor, or null for anonymous. Never throws. */
     async current(): Promise<PublicVisitor | null> {
-        const user = await getCurrentUser()
+        const user = await Supabase.currentUser()
         if (!user) return null
         return { id: user.id, email: (user.email ?? "").trim().toLowerCase() || null }
     }
