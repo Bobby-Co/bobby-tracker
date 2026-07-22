@@ -1,14 +1,14 @@
-import { ApiContext, jsonError, personalTeamName } from "@/lib/server/http/api"
-import { getAccessService } from "@/modules/access"
-import type { Team, TeamRole, TeamWithRole } from "@/lib/shared/types"
+import { ApiContext, jsonError, personalTeamName, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { TeamRole, TeamWithRole } from "@/lib/shared/types"
 
 // GET /api/teams — the caller's teams (each with their role), personal team
 // first. Bootstraps the personal team on first call. Backs the top-bar selector.
 export async function GET() {
-    const { supabase, user, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
     try {
-        const teams = await getAccessService(supabase).listTeams(user.id, personalTeamName(user))
+        const teams = await ctx.access.listTeams(user.id, personalTeamName(user))
         return Response.json({ teams })
     } catch (e) {
         return jsonError("team_error", e instanceof Error ? e.message : "failed to load teams", 500)
@@ -19,7 +19,7 @@ export async function GET() {
 // owner. Uses the create_team RPC so the team row + owner-membership are inserted
 // atomically (RLS won't let you insert your own first membership otherwise).
 export async function POST(request: Request) {
-    const { supabase, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -27,11 +27,12 @@ export async function POST(request: Request) {
     const name = String(body?.name ?? "").trim()
     if (!name) return jsonError("bad_request", "name is required", 400)
 
-    const { data: teamId, error: rpcErr } = await supabase.rpc("create_team", { p_name: name })
-    if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
+    const { data: teamId, error: rpcErr } = await repoRead(() => ctx.teams.createTeam(name))
+    if (rpcErr) return rpcErr
 
     // Return the freshly-created team in the same shape the selector consumes.
-    const { data: team } = await supabase.from("teams").select("*").eq("id", teamId).maybeSingle<Team>()
+    // A read-back failure just yields null (best-effort), as before.
+    const team = await tryOrNull(() => ctx.teams.findById(teamId))
     const withRole: TeamWithRole | null = team ? { ...team, role: "owner" as TeamRole } : null
     return Response.json({ team: withRole })
 }

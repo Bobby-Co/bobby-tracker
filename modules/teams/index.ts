@@ -15,6 +15,10 @@ export { createInviteNotifier } from "./Composition"
 export type { TeamMember, TeamMembershipRepository } from "./ports/TeamMembershipRepository"
 export { createSupabaseTeamMembershipRepository } from "./infrastructure/SupabaseTeamMembershipRepository"
 
+// ─── team lifecycle (teams-table CRUD) ──────────────────────────────────────
+export type { TeamsRepository } from "./ports/TeamsRepository"
+export { createSupabaseTeamsRepository } from "./infrastructure/SupabaseTeamsRepository"
+
 // The team vocabulary (role + team-with-role row shapes). Re-exported so modules
 // that reason over teams — notably modules/access, whose pure layers may not
 // import @/lib/shared/types directly — speak them through the Teams contract.
