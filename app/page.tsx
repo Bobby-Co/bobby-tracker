@@ -64,7 +64,7 @@ export default async function Home() {
                         Start Now
                     </Link>
                     <Link
-                        href="/login"
+                        href="/docs"
                         className="bg-white rounded-sq-xl text-[#383838] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                         style={{ animationDelay: "200ms" }}
                     >
