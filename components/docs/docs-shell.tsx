@@ -74,7 +74,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
             {/* Top bar */}
             <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[color:var(--c-border)] bg-[color:var(--c-page)]/85 px-4 backdrop-blur-md sm:px-6">
                 <Link href="/docs" className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-red-950 p-1.5 text-white">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-black p-1.5 text-white">
                         <BobbyMark />
                     </span>
                     <span className="text-[15px] font-extrabold tracking-[-0.01em]">Ucelot</span>

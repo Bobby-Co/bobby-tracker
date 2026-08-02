@@ -8,43 +8,19 @@
 
 import type { ReactNode } from "react"
 
-function Stage({
-    n,
-    icon,
-    title,
-    children,
-    tag,
-}: {
-    n: number
-    icon: ReactNode
-    title: string
-    children: ReactNode
-    tag?: string
-}) {
+// Glyph + title + a short one-liner. The full explanation lives in the prose
+// beneath the diagram, so the box copy stays to a few words and reads at a
+// glance rather than competing with the paragraphs below.
+function Stage({ icon, title, desc }: { icon: ReactNode; title: ReactNode; desc: string }) {
     return (
-        <div className="df-stage card h-full">
-            <div className="mb-2.5 flex items-center gap-2">
-                <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-amber-50 text-amber-700">
-                    {icon}
-                </span>
-                <span className="text-[11px] font-bold text-[color:var(--c-text-dim)]">
-                    Step {n}
-                </span>
-                {tag && (
-                    <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-[color:var(--c-info-bg)] px-2 py-[2px] text-[10px] font-bold uppercase tracking-wide text-[color:var(--c-info-fg)]">
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" aria-hidden>
-                            <path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3z" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
-                        </svg>
-                        {tag}
-                    </span>
-                )}
-            </div>
-            <div className="text-[14px] font-bold tracking-[-0.01em] text-[color:var(--c-text)]">
+        <div className="df-stage card flex h-full flex-col items-center justify-center gap-2 px-3 py-4 text-center">
+            <span className="grid h-11 w-11 place-items-center rounded-[12px] bg-amber-50 text-amber-700">
+                {icon}
+            </span>
+            <span className="text-[12.5px] font-bold leading-tight tracking-[-0.01em] text-[color:var(--c-text)]">
                 {title}
-            </div>
-            <p className="mt-1 text-[12.5px] leading-[1.5] text-[color:var(--c-text-muted)]">
-                {children}
-            </p>
+            </span>
+            <span className="text-[11px] leading-snug text-[color:var(--c-text-muted)]">{desc}</span>
         </div>
     )
 }
@@ -73,22 +49,19 @@ export function DataFlowDiagram() {
 
             <div className="df-flow flex flex-col items-stretch gap-2 lg:flex-row lg:items-stretch">
                 <Stage
-                    n={1}
                     title="Connect a repository"
+                    desc="No install, nothing to run"
                     icon={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                             <path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                     }
-                >
-                    You link a Git repository. There&apos;s nothing to install and no agent to run on
-                    your own machines.
-                </Stage>
+                />
 
                 <Connector />
 
                 {/* Isolation boundary wraps the clone + analysis stages */}
-                <div className="df-zone relative flex flex-1 flex-col items-stretch gap-2 rounded-[18px] border border-dashed border-amber-400/60 bg-amber-50/30 p-3 lg:flex-row">
+                <div className="df-zone relative flex flex-1 flex-col items-stretch gap-2 rounded-[18px] border border-dashed border-amber-400/60 bg-amber-50/30 p-3 pt-5 lg:flex-row lg:pt-3">
                     <span className="df-zone-label absolute -top-2.5 left-4 inline-flex items-center gap-1 rounded-full border border-amber-400/60 bg-[color:var(--c-page)] px-2.5 py-[2px] text-[10.5px] font-bold uppercase tracking-wide text-amber-700">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
                             <path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3z" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" />
@@ -97,54 +70,46 @@ export function DataFlowDiagram() {
                     </span>
 
                     <Stage
-                        n={2}
-                        tag="Isolated"
                         title="Sandboxed clone"
+                        desc="Single-tenant, kept separate"
                         icon={
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                                 <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="2" />
                                 <path d="M9 9h6v6H9z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
                             </svg>
                         }
-                    >
-                        Your repo is cloned into a sandboxed, single-tenant workspace — kept separate
-                        from every other customer&apos;s code.
-                    </Stage>
+                    />
 
                     <Connector />
 
                     <Stage
-                        n={3}
-                        tag="Isolated"
-                        title="Examined by an agent"
+                        title={
+                            <>
+                                Examined by an agent<sup className="font-bold text-amber-700">*</sup>
+                            </>
+                        }
+                        desc="Open-source model, no training"
                         icon={
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                                 <rect x="5" y="7" width="14" height="12" rx="2.5" stroke="currentColor" strokeWidth="2" />
                                 <path d="M12 3v4M9 12h.01M15 12h.01M9 16h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                             </svg>
                         }
-                    >
-                        An agent reads the code using an <strong>open-source model</strong>, hosted on a
-                        data-privacy-compliant inference provider.<sup>*</sup> Your code isn&apos;t used
-                        to train models.
-                    </Stage>
+                    />
                 </div>
 
                 <Connector />
 
                 <Stage
-                    n={4}
                     title="Stored as a knowledge graph"
+                    desc="Provisioned vector database"
                     icon={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
                             <ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" strokeWidth="2" />
                             <path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" stroke="currentColor" strokeWidth="2" />
                         </svg>
                     }
-                >
-                    The resulting graph and vector embeddings are written to a vector database
-                    provisioned for your workspace.
-                </Stage>
+                />
             </div>
 
             <figcaption className="mt-3.5 text-[12px] leading-5 text-[color:var(--c-text-muted)]">
