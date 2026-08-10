@@ -23,6 +23,11 @@ export interface GithubTokenRepository {
      *  no row — the repos route distinguishes "not connected" from "scope
      *  downgraded" itself. THROWS RepositoryError on a query failure. */
     findAccess(userId: string): Promise<Pick<GithubToken, "access_token" | "scopes"> | null>
+
+    /** Delete the user's stored GitHub token (the "disconnect" action). Idempotent
+     *  — removing an absent row is success. Leaves the GitHub login identity
+     *  untouched; only the repo-access credential is dropped. */
+    remove(userId: string): Promise<void>
 }
 
 /** The Supabase adapter, bound to a request's client. Construct via the factory. */
@@ -48,6 +53,11 @@ export class SupabaseGithubTokenRepository implements GithubTokenRepository {
             .maybeSingle<Pick<GithubToken, "access_token" | "scopes">>()
         if (error) throw new RepositoryError(error.message, { cause: error })
         return data ?? null
+    }
+
+    async remove(userId: string): Promise<void> {
+        const { error } = await this.db.from("github_tokens").delete().eq("user_id", userId)
+        if (error) throw new RepositoryError(error.message, { cause: error })
     }
 }
 

@@ -57,6 +57,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
     const isGroups = pathname === "/groups" || pathname.startsWith("/groups/")
     const isSessions = pathname === "/sessions" || pathname.startsWith("/sessions/")
     const isWorkers = pathname === "/workers" || pathname.startsWith("/workers")
+    const isSettings = pathname === "/settings" || pathname.startsWith("/settings")
 
     const urlMatch = pathname.match(/^\/projects\/([^/]+)/)
     const activeProj = activeProjectId ?? urlMatch?.[1]
@@ -204,6 +205,18 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                         )}
                     </motion.div>
                 )}
+            </div>
+
+            {/* Settings — pinned just above the account card so account-level
+                config (VCS connections, …) is always one click away. */}
+            <div className="shrink-0 px-2.5 pb-1 pt-1">
+                <NavItem
+                    href="/settings/connections"
+                    active={isSettings}
+                    onNavigate={onNavigate}
+                    icon={<SettingsIcon />}
+                    label="Settings"
+                />
             </div>
 
             {/* User card */}
@@ -367,6 +380,14 @@ function GroupLeafIcon() {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <circle cx="9" cy="8" r="3" />
             <path d="M15.5 8a3 3 0 1 0 0 .01M4 20a5 5 0 0 1 10 0M14 20a5 5 0 0 1 6-4.5" />
+        </svg>
+    )
+}
+function SettingsIcon() {
+    return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
     )
 }
