@@ -98,5 +98,11 @@ export type {
 } from "./infrastructure/ProviderTokenRepository"
 export { createProviderTokenRepository } from "./infrastructure/ProviderTokenRepository"
 
+// GitLab provisioning + webhook-secret compare (used by the gitlab-sync enable
+// route and the GitLab webhook receiver). The adapters themselves are obtained
+// via the composition resolvers, never imported directly.
+export { provisionGitlabProject, timingSafeEqual } from "./infrastructure/GitlabVcsInstances"
+export type { ProvisionInput } from "./infrastructure/GitlabVcsInstances"
+
 // Comment-authoring gate for the PR/issue comment routes
 export { CommentActions } from "./infrastructure/CommentActions"

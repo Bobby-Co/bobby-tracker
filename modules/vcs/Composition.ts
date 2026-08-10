@@ -14,6 +14,7 @@ import { VcsUserService } from "./application/VcsUserService"
 import { PullRequestService } from "./application/PullRequestService"
 import { GithubVcsAppInstance } from "./infrastructure/GithubVcsAppInstance"
 import { GithubVcsUserInstance } from "./infrastructure/GithubVcsUserInstance"
+import { GitlabVcsAppInstance } from "./infrastructure/GitlabVcsInstances"
 import { githubWebhookVerifier } from "./infrastructure/GithubWebhookVerifier"
 import { createServicePullRequestStore } from "./infrastructure/SupabasePullRequestStore"
 import type { VcsAppInstance } from "./ports/VcsAppInstance"
@@ -27,10 +28,14 @@ export interface VcsRepoCoords {
     repo_full_name: string | null
 }
 
-/** The provider-wiring fields the APP resolver reads off a project. Adds the
- *  installation id to the repo coordinates; today only the GitHub ones exist. */
+/** The provider-wiring fields the APP resolver reads off a project. GitHub binds
+ *  by installation + owner/repo; GitLab binds by project id (its bot credential
+ *  lives in gitlab_project_links, keyed by the project's own id). */
 export interface VcsProviderBinding extends VcsRepoCoords {
+    id?: string
+    provider?: "github" | "gitlab" | null
     github_installation_id: number | null
+    gitlab_project_id?: number | null
 }
 
 /** owner/repo for a project's linked repo, or null when it can't be resolved.
@@ -48,6 +53,13 @@ function ownerRepo(project: VcsRepoCoords): [string, string] | null {
  *  linked to any VCS (no installation / no resolvable owner-repo). A null return
  *  is the signal to VcsAppService to no-op — a web-only project has no remote. */
 export function resolveVcsAppInstance(project: VcsProviderBinding): VcsAppInstance | null {
+    // GitLab: bound to the project id; the bot credential + numeric project id
+    // live in gitlab_project_links (read lazily by the adapter).
+    if (project.provider === "gitlab") {
+        if (project.gitlab_project_id == null || !project.id) return null
+        return new GitlabVcsAppInstance(project.id)
+    }
+    // GitHub: installation + owner/repo.
     if (!project.github_installation_id) return null
     const or = ownerRepo(project)
     if (!or) return null

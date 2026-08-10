@@ -21,7 +21,7 @@ import type {
 } from "../ports/ProjectsRepository"
 
 const GITHUB_SYNC_COLS =
-    "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes"
+    "id,user_id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes,provider,gitlab_project_id,gitlab_host"
 
 const ANALYSIS_COLS =
     "name,repo_url,repo_full_name,description,github_installation_id,github_repo_id,github_sync_enabled"

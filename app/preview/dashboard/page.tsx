@@ -16,7 +16,7 @@ const mk = (id: string, name: string, repo: string, description: string | null):
     description, created_at: "2026-06-01T00:00:00.000Z", updated_at: "2026-06-20T00:00:00.000Z",
     github_installation_id: null, github_repo_id: null, github_sync_enabled: false,
     github_sync_direction: "both", github_sync_deletes: false, auto_index_on_push: true,
-    icon_name: null,
+    icon_name: null, provider: "github", gitlab_project_id: null, gitlab_host: null,
 })
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString()

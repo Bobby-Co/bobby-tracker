@@ -26,6 +26,9 @@ export type GithubSyncContext = Pick<
     | "github_sync_enabled"
     | "github_sync_direction"
     | "github_sync_deletes"
+    | "provider"
+    | "gitlab_project_id"
+    | "gitlab_host"
 >
 
 /** The project fields the analysis flow reads — name/description for the prompt +

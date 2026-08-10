@@ -16,23 +16,41 @@ export class RepoRef {
         return new RepoRef(fields)
     }
 
-    /** "owner/repo" — repo_full_name, else parsed from repo_url; null when neither
-     *  resolves (e.g. a self-hosted host). */
+    /** "owner/repo" (GitHub) or "group/…/project" (GitLab) — repo_full_name, else
+     *  parsed from repo_url's path. Works for any host (GitHub, GitLab, self-
+     *  managed); null when the URL can't be parsed. */
     fullName(): string | null {
         const { repo_full_name, repo_url } = this.fields
         if (repo_full_name) return repo_full_name
-        const m = repo_url.match(/^https?:\/\/(?:www\.)?github\.com\/([^\/]+\/[^\/?#]+?)(?:\.git)?\/?$/)
-        return m ? m[1] : null
+        try {
+            const path = new URL(repo_url).pathname.replace(/^\/+/, "").replace(/\/+$/, "").replace(/\.git$/i, "")
+            return path || null
+        } catch {
+            return null
+        }
     }
 
-    /** A GitHub blob link for file[:line], optionally pinned to `sha`. Null when the
-     *  project isn't on GitHub — the caller falls back to a plain file:line label. */
+    /** The repo host (e.g. 'github.com', 'gitlab.com', 'git.acme.com'). */
+    private host(): string | null {
+        try {
+            return new URL(this.fields.repo_url).hostname.toLowerCase()
+        } catch {
+            return null
+        }
+    }
+
+    /** A blob deep-link for file[:line], optionally pinned to `sha`. GitLab uses a
+     *  `/-/blob/` path; GitHub uses `/blob/`. Null when the URL can't be resolved —
+     *  the caller falls back to a plain file:line label. */
     blobUrl(file: string, line?: number | null, sha?: string | null): string | null {
         const full = this.fullName()
-        if (!full) return null
+        const host = this.host()
+        if (!full || !host) return null
         const ref = sha || "HEAD"
         const cleanFile = file.replace(/^\/+/, "")
         const lineFrag = line && line > 0 ? `#L${line}` : ""
-        return `https://github.com/${full}/blob/${ref}/${cleanFile}${lineFrag}`
+        // GitHub is /blob/; every GitLab instance is /-/blob/.
+        const seg = host === "github.com" ? "blob" : "-/blob"
+        return `https://${host}/${full}/${seg}/${ref}/${cleanFile}${lineFrag}`
     }
 }

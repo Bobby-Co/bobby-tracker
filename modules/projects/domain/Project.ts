@@ -23,6 +23,10 @@ export interface ProjectSyncState {
     github_repo_id?: number | null
     github_sync_direction?: SyncDirection
     github_sync_deletes?: boolean
+    // GitLab linkage (migration 0055). A GitLab project is sync-ready via its
+    // numeric project id + a provisioned bot link, not a GitHub App installation.
+    provider?: "github" | "gitlab"
+    gitlab_project_id?: number | null
 }
 
 export class Project {
@@ -37,11 +41,12 @@ export class Project {
      *  AND a repo id. The precondition for any push / pull / analysis-comment
      *  work — a project missing any of the three is a silent no-op. */
     isSyncReady(): boolean {
-        return (
-            this.state.github_sync_enabled === true &&
-            this.state.github_installation_id != null &&
-            this.state.github_repo_id != null
-        )
+        if (this.state.github_sync_enabled !== true) return false
+        // GitLab: linked by numeric project id (the bot credential + webhook are
+        // provisioned into gitlab_project_links, checked by the adapter/route).
+        if (this.state.provider === "gitlab") return this.state.gitlab_project_id != null
+        // GitHub: App installation + repo id.
+        return this.state.github_installation_id != null && this.state.github_repo_id != null
     }
 
     /** Issues may flow GitHub → tracker (webhook ingest). */

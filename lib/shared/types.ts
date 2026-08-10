@@ -39,6 +39,14 @@ export interface Project {
     /** When true (and the direction allows it), deleting an issue on one
      *  side deletes/closes it on the other. Destructive → default false. */
     github_sync_deletes: boolean
+    /** VCS provider this project is linked to (migration 0055). Defaults to
+     *  'github'; 'gitlab' projects link via gitlab_project_id + gitlab_host. */
+    provider: "github" | "gitlab"
+    /** GitLab numeric project id (unique only within its instance). */
+    gitlab_project_id: number | null
+    /** GitLab instance host (e.g. 'gitlab.com' or 'git.acme.com'); with
+     *  gitlab_project_id it identifies the remote and routes inbound webhooks. */
+    gitlab_host: string | null
     /** When true (default), a push to the repo's default branch auto-triggers
      *  an incremental graph update (ADR-0058). Independent of github_sync_enabled;
      *  the webhook no-ops unless the App is installed and a graph exists. */

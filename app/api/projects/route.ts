@@ -4,6 +4,7 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { getAnalyser } from "@/modules/analysis"
 import { filterIconsLocal } from "@/lib/shared/icons/suggest"
 import { canonicalRepoUrl, validateRepoUrl } from "@/lib/shared/repo-url"
+import { provisionGitlabProject } from "@/modules/vcs"
 import { Supabase } from "@/lib/server/supabase"
 
 // GET — list the ACTIVE TEAM's projects, newest first. Backs the app sidebar and
@@ -121,6 +122,36 @@ export async function POST(request: Request) {
     if (!result.ok) return jsonError("conflict", "This team already has a project for this repository.", 409)
     const project = result.project
 
+    // GitLab: provision the bot credential + webhook and enable sync right away,
+    // so a freshly-created GitLab project is fully wired (there's no separate
+    // App-install step like GitHub). Best-effort — a failure leaves the project
+    // created-but-unsynced and surfaces a warning rather than failing creation.
+    let gitlabWarning: string | undefined
+    if (provider === "gitlab" && gitlab_project_id != null && gitlab_host) {
+        try {
+            const tok = await ctx.providerTokens.find(user.id, gitlab_host)
+            if (!tok) {
+                gitlabWarning = `Connect ${gitlab_host} in Settings, then enable sync.`
+            } else {
+                const apiBase = tok.apiBase ?? `https://${gitlab_host}/api/v4`
+                const r = await provisionGitlabProject({
+                    projectUuid: project.id,
+                    gitlabProjectId: gitlab_project_id,
+                    apiBase,
+                    userToken: tok.accessToken,
+                    webhookUrl: `${new URL(request.url).origin}/api/webhooks/gitlab`,
+                })
+                await ctx.projects.updateSyncSettings(project.id, {
+                    github_sync_enabled: true,
+                    github_sync_direction: "both",
+                })
+                gitlabWarning = r.warning
+            }
+        } catch (e) {
+            gitlabWarning = `GitLab sync setup failed: ${(e as Error).message}`
+        }
+    }
+
     // Auto-assign the top suggested icon so a fresh project isn't a faceless
     // hash glyph. Post-response (after()) since it may embed — creation must not
     // wait on a metered call — and best-effort: any failure just leaves the icon
@@ -139,7 +170,7 @@ export async function POST(request: Request) {
         }
     })
 
-    return Response.json({ project })
+    return Response.json({ project, ...(gitlabWarning ? { gitlabWarning } : {}) })
 }
 
 // Top-ranked icon for a piece of text, mirroring the picker's ordering: a local
