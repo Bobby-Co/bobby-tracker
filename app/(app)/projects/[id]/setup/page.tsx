@@ -72,6 +72,15 @@ export default function SetupWizardPage() {
     }
 
     async function connect() {
+        // GitLab has no App install — "connect" re-runs provisioning (mint bot
+        // token + register webhook + enable sync) then reloads to reflect it.
+        if (init?.provider === "gitlab") {
+            try {
+                await apiMutate(`/api/projects/${id}/gitlab-sync`, { method: "POST" })
+            } catch {}
+            window.location.reload()
+            return
+        }
         try {
             const data = await apiMutate<{ installed?: boolean; linked?: boolean }>(
                 `/api/projects/${id}/github-sync/link`,

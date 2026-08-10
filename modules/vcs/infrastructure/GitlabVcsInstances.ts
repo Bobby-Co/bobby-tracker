@@ -478,8 +478,13 @@ export async function provisionGitlabProject(
     if (hookRes.ok) {
         webhookId = ((await hookRes.json()) as { id: number }).id
     } else {
+        // Non-fatal: keep the bot credential so outbound sync + reads still work.
+        // Inbound (GitLab → tracker) needs this hook — commonly blocked when the
+        // app URL isn't publicly reachable (GitLab rejects webhooks to
+        // localhost/private hosts). Surface it; the link is still persisted below.
         const detail = await hookRes.text().catch(() => "")
-        throw new Error(`gitlab: register webhook failed (${hookRes.status}): ${detail.slice(0, 200)}`)
+        const w = `Webhook not registered (HTTP ${hookRes.status}: ${detail.slice(0, 140)}). Inbound GitLab→tracker sync needs a publicly reachable URL; outbound still works.`
+        warning = warning ? `${warning} ${w}` : w
     }
 
     // 3. Persist (service-role; secrets never exposed to the client).

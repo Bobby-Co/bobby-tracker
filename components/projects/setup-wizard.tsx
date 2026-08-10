@@ -5,6 +5,7 @@ import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { cn } from "@/components/ui/cn"
 import { BobbyMark, BOBBY_MARK_PATH } from "@/components/layout/brand-lockup"
+import { IconlyGitlab } from "@/icons/Iconly-gitlab-icon"
 import type { GithubSyncDirection } from "@/lib/shared/types"
 import {useRouter} from "next/navigation";
 
@@ -199,7 +200,7 @@ function GithubScene({
         <motion.div layout="position" className="flex flex-col items-center gap-5 text-center">
             <SceneTitle>Sync issues &amp; PRs with {label}</SceneTitle>
 
-            <FlowDiagram dir={dir} reduce={reduce} />
+            <FlowDiagram dir={dir} reduce={reduce} provider={provider} label={label} />
 
             <div className="inline-flex rounded-[12px] border border-[color:var(--c-border)] bg-white p-1">
                 {DIRS.map((d) => (
@@ -246,11 +247,20 @@ function GithubScene({
                 </button>
             )}
             {/* GitLab sync is provisioned automatically at create; if it didn't
-                activate, point the user to Connections rather than an App install. */}
+                activate, offer a retry (re-runs provisioning) rather than an App install. */}
             {installed === false && dir !== "off" && provider === "gitlab" && (
-                <span className="max-w-sm text-[12px] text-amber-700">
-                    GitLab sync isn’t active yet — check that {label} is connected in Settings → Connections.
-                </span>
+                <div className="flex flex-col items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={onConnect}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-text)] hover:border-[color:var(--c-border-strong)]"
+                    >
+                        <IconlyGitlab size={14} /> Set up GitLab sync
+                    </button>
+                    <span className="text-[11px] text-[color:var(--c-text-dim)]">
+                        Make sure {label} is connected in Settings → Connections.
+                    </span>
+                </div>
             )}
             {installed && (
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700">
@@ -268,7 +278,17 @@ function GithubScene({
 const ARC_FWD = "M 48 48 Q 150 6 252 48"
 const ARC_BACK = "M 252 48 Q 150 90 48 48"
 
-function FlowDiagram({ dir, reduce }: { dir: WizardDir; reduce: boolean }) {
+function FlowDiagram({
+    dir,
+    reduce,
+    provider,
+    label,
+}: {
+    dir: WizardDir
+    reduce: boolean
+    provider: "github" | "gitlab"
+    label: string
+}) {
     const forward = dir === "both" || dir === "inbound"
     const back = dir === "both" || dir === "outbound"
     const both = forward && back
@@ -282,8 +302,8 @@ function FlowDiagram({ dir, reduce }: { dir: WizardDir; reduce: boolean }) {
             )}
 
             <div className="absolute left-0 top-1/2 -translate-y-1/2">
-                <Node label="GitHub">
-                    <GithubMark />
+                <Node label={label}>
+                    {provider === "gitlab" ? <IconlyGitlab size={24} /> : <GithubMark />}
                 </Node>
             </div>
             <div className="absolute right-0 top-1/2 -translate-y-1/2">
