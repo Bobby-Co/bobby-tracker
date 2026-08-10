@@ -35,9 +35,13 @@ export function useScheduleSync(
     projectId: string,
     issues: Issue[],
     onPersisted?: () => void,
+    /** When false, edits stay in local state: no outbox, no PATCH. Lets the
+     *  board be mounted somewhere with no project behind it — the landing
+     *  demo — without firing writes that would 401. */
+    persist = true,
 ) {
     const [outbox] = useState<ScheduleOutbox | null>(() =>
-        typeof window === "undefined" ? null : new ScheduleOutbox(projectId),
+        typeof window === "undefined" || !persist ? null : new ScheduleOutbox(projectId),
     )
 
     const [local, setLocal] = useState<Issue[]>(() => overlayOutbox(issues, outbox))
