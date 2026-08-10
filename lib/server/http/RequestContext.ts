@@ -13,7 +13,11 @@ import { getAccessService } from "@/modules/access"
 import { createSupabaseProjectsRepository, createSupabaseProjectDisplayRepository } from "@/modules/projects"
 import { createSupabaseIssuesRepository, createSupabaseIssueCommentsReadRepository } from "@/modules/issues"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
-import { createGithubTokenRepository, createSupabasePullRequestReadRepository } from "@/modules/vcs"
+import {
+    createGithubTokenRepository,
+    createProviderTokenRepository,
+    createSupabasePullRequestReadRepository,
+} from "@/modules/vcs"
 import {
     createSupabaseTeamMembershipRepository,
     createSupabaseTeamsRepository,
@@ -53,6 +57,11 @@ export class RequestContext {
     }
     get githubTokens() {
         return createGithubTokenRepository(this.db)
+    }
+    /** Per-provider user OAuth tokens (provider_tokens) — GitLab today. GitHub
+     *  still reads via `githubTokens` (github_tokens table). */
+    get providerTokens() {
+        return createProviderTokenRepository(this.db)
     }
     get pullRequests() {
         return createSupabasePullRequestReadRepository(this.db)

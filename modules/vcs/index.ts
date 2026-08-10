@@ -86,5 +86,16 @@ export { githubAppClient } from "./infrastructure/GithubVcsAppInstance"
 export type { GithubTokenRepository, UserGithub } from "./infrastructure/GithubTokenRepository"
 export { createGithubTokenRepository } from "./infrastructure/GithubTokenRepository"
 
+// The signed-in user's per-provider OAuth token (provider_tokens, migration
+// 0055) — the multi-provider sibling of github_tokens. GitLab lives here; the
+// connections route + repo-listing read it, the OAuth callback writes it.
+export type {
+    ProviderTokenRepository,
+    ProviderTokenProvider,
+    UserProviderToken,
+    ProviderTokenUpsert,
+} from "./infrastructure/ProviderTokenRepository"
+export { createProviderTokenRepository } from "./infrastructure/ProviderTokenRepository"
+
 // Comment-authoring gate for the PR/issue comment routes
 export { CommentActions } from "./infrastructure/CommentActions"

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { Supabase } from "@/lib/server/supabase"
 import { BetaAccess } from "@/lib/shared/BetaAccess"
+import { createProviderTokenRepository } from "@/modules/vcs"
 
 // Supabase OAuth callback. Exchanges the `code` query param for a session,
 // captures the GitHub provider token (so the app can later list private
@@ -59,12 +60,58 @@ export async function GET(request: Request) {
     const user = data?.user
     const accessToken = session?.provider_token
 
+    // Our own "Connect GitLab" flow (Settings → Connections) sets ?connect=gitlab
+    // on the callback URL. We can't infer the provider from app_metadata.provider
+    // here: a user who first signed in with GitHub keeps provider === "github"
+    // even while linking GitLab, so without this hint the GitLab token would be
+    // mis-written into github_tokens below. The hint is our own redirect param,
+    // not attacker-controlled provider data.
+    const connectProvider = url.searchParams.get("connect")
+
+    // Capture the GitLab OAuth token into provider_tokens (migration 0055). Only
+    // on our explicit connect flow, so a plain GitHub sign-in never reaches here.
+    if (user && connectProvider === "gitlab") {
+        if (!accessToken) {
+            console.warn("[auth/callback] no provider_token on GitLab connect")
+            const dest = new URL(next, url.origin)
+            dest.searchParams.set("gitlab", "connect_failed")
+            return NextResponse.redirect(dest)
+        }
+        const identity = user.identities?.find((i) => i.provider === "gitlab")
+        const data = identity?.identity_data as
+            | { nickname?: string; preferred_username?: string; user_name?: string }
+            | undefined
+        const login = data?.nickname ?? data?.preferred_username ?? data?.user_name ?? null
+        // GitLab access tokens expire (~2h); Supabase doesn't expose the exact
+        // expiry, so store a conservative one and let the read-side refresh via
+        // the refresh_token when it lapses.
+        const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+        try {
+            await createProviderTokenRepository(supabase).upsert(user.id, "gitlab", {
+                accessToken,
+                refreshToken: session?.provider_refresh_token ?? null,
+                expiresAt,
+                scopes: null,
+                providerUserId: identity?.id ?? null,
+                login,
+            })
+        } catch (e) {
+            console.error("[auth/callback] provider_tokens (gitlab) upsert failed:", (e as Error).message)
+            const dest = new URL(next, url.origin)
+            dest.searchParams.set("gitlab", "connect_failed")
+            return NextResponse.redirect(dest)
+        }
+        // Fall through to the onboarding/beta/redirect logic (an already
+        // signed-in user connecting GitLab just lands back on `next`).
+    }
+
     // Only GitHub sign-ins need a provider token captured (for repo access).
     // Google/Apple are identity-only and may return no provider_token at all
     // (Apple typically doesn't), so running the GitHub-token logic for them
     // would wrongly flag `reconnect_failed` or stash a non-GitHub token in
-    // `github_tokens`. Skip straight to the app for those providers.
-    const isGithub = user?.app_metadata?.provider === "github"
+    // `github_tokens`. Skip straight to the app for those providers. The GitLab
+    // connect flow is handled above, never as a GitHub sign-in.
+    const isGithub = connectProvider !== "gitlab" && user?.app_metadata?.provider === "github"
 
     // Reached here when the user authenticated but GitHub didn't return a
     // provider token (Supabase only includes it on a fresh grant). The
