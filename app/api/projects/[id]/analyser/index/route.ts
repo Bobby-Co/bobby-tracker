@@ -1,4 +1,5 @@
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { getGitlabCloneAuth } from "@/modules/vcs"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 import type { AnalyserProgress } from "@/lib/shared/types"
@@ -54,6 +55,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { error: upErr } = await repoRead(() => ctx.analyser.markIndexing(id, initial))
     if (upErr) return upErr
 
+    // GitLab private-repo clone: the analyser's user_id path reads github_tokens
+    // (GitLab-blind), so we pass an explicit git_auth (bot token + oauth2 user).
+    // Null for GitHub / public / unprovisioned → the user_id path is used as before.
+    const gitAuth = await getGitlabCloneAuth(id)
+
     try {
         const result = await getAnalyser().startIndex({
             job_type: jobType,
@@ -66,6 +72,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             // tracker.github_tokens (keyed by user_id) to clone private
             // repos — no credential crosses the wire from here.
             user_id: user.id,
+            ...(gitAuth ? { git_auth: gitAuth } : {}),
             // Connection details (Supabase URL, service-role JWT,
             // schema, table, key column) live in the analyser's env.
             // We send only the row key to PATCH.

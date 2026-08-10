@@ -407,6 +407,27 @@ export class GitlabVcsUserInstance implements VcsUserInstance {
     }
 }
 
+// ── clone auth (for the analyser's server-side git clone) ────────────────────
+
+/** The clone credential the analyser needs for a PRIVATE GitLab repo, as the
+ *  job contract's git_auth shape. GitLab accepts basic auth with username
+ *  "oauth2" + the token as password (works for OAuth tokens and PATs). Reads the
+ *  project's provisioned bot token (gitlab_project_links). Null for a GitHub /
+ *  unprovisioned project — the caller then falls back to the user_id path. Public
+ *  repos don't need this at all. */
+export async function getGitlabCloneAuth(
+    projectUuid: string,
+): Promise<{ token: string; username: string; scheme: "basic" } | null> {
+    const svc = Supabase.service()
+    const { data } = await svc
+        .from("gitlab_project_links")
+        .select("access_token")
+        .eq("project_id", projectUuid)
+        .maybeSingle<{ access_token: string | null }>()
+    if (!data?.access_token) return null
+    return { token: data.access_token, username: "oauth2", scheme: "basic" }
+}
+
 // ── provisioning ─────────────────────────────────────────────────────────────
 
 /** Constant-time compare for the X-Gitlab-Token webhook secret. */

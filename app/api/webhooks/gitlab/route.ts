@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { getAnalyser, createIssueAnalysisService, createPullRequestAnalysisService, createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/shared/kernel"
-import { SyncHash, timingSafeEqual, createServicePullRequestStore } from "@/modules/vcs"
+import { SyncHash, timingSafeEqual, createServicePullRequestStore, getGitlabCloneAuth } from "@/modules/vcs"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
 import { Project as ProjectAggregate } from "@/modules/projects"
 import { Supabase } from "@/lib/server/supabase"
@@ -292,11 +292,15 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
     const graphId = analyser.graph_id
     after(async () => {
         try {
+            // Explicit git_auth (bot token + oauth2 user) so the analyser can clone
+            // a private GitLab repo — its user_id path only knows github_tokens.
+            const gitAuth = await getGitlabCloneAuth(project.id)
             await getAnalyser().startIndex({
                 job_type: "incremental",
                 repo_url: project.repo_url,
                 repo_id: graphId,
                 user_id: project.user_id,
+                ...(gitAuth ? { git_auth: gitAuth } : {}),
                 supabase_progress: { key_value: project.id },
             })
         } catch (e) {
