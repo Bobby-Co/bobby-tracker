@@ -25,7 +25,7 @@ export interface ProjectSyncState {
     github_sync_deletes?: boolean
     // GitLab linkage (migration 0055). A GitLab project is sync-ready via its
     // numeric project id + a provisioned bot link, not a GitHub App installation.
-    provider?: "github" | "gitlab"
+    provider?: "github" | "gitlab" | null
     gitlab_project_id?: number | null
 }
 

@@ -164,6 +164,17 @@ export class VcsAppService {
         return this.vcs.updateIssueComment(issueNumber, commentId, body)
     }
 
+    /** Post a bot comment on a PR/MR (GitLab routes MR notes to a distinct
+     *  endpoint, so PR comments don't reuse the issue-comment methods). */
+    postPrComment(prNumber: number, body: string): Promise<{ id: number }> {
+        return this.vcs.createPullRequestComment(prNumber, body)
+    }
+
+    /** Edit a bot comment on a PR/MR in place. */
+    updatePrComment(prNumber: number, commentId: number, body: string): Promise<void> {
+        return this.vcs.updatePullRequestComment(prNumber, commentId, body)
+    }
+
     // ─── PR reads (used by the PR-analysis flow for the diff) ─────────────────
     /** A PR's changed files (with per-file unified patches). */
     listPullRequestFiles(number: number): Promise<VcsPullRequestFile[]> {

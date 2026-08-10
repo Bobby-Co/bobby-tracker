@@ -91,7 +91,7 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin
     if (event === "Issue Hook") return handleIssue(svc, project, payload, origin)
     if (event === "Note Hook") return handleNote(svc, project, payload)
-    if (event === "Merge Request Hook") return handleMr(svc, project, payload)
+    if (event === "Merge Request Hook") return handleMr(svc, project, payload, origin)
     if (event === "Push Hook") return handlePush(svc, project, payload)
     return ack()
 }
@@ -197,7 +197,7 @@ async function handleNote(svc: Svc, project: GlProjectRow, payload: Record<strin
 }
 
 // ── merge requests → pull_requests mirror ────────────────────────────────────
-async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string, unknown>): Promise<Response> {
+async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string, unknown>, origin: string): Promise<Response> {
     if (!project.github_sync_enabled) return ack()
     const a = payload.object_attributes as
         | {
@@ -250,10 +250,29 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
 
     if (a?.action === "close" || a?.action === "merge") {
         after(() => createPullRequestAnalysisService().cancel(project.id, number))
+        return ack()
     }
-    // NB: MR auto-review (PullRequestAnalysisService.start) is deferred — it
-    // resolves the app instance from a GitHub-shaped project; wiring it to the
-    // GitLab adapter is a follow-up. The MR is mirrored above regardless.
+    if (a?.draft || a?.work_in_progress) return ack()
+
+    // Auto-review the MR (already mirrored above). Build a provider-aware
+    // PrProject so the analysis service resolves the GitLab adapter + notes.
+    const prProject = {
+        id: project.id,
+        repo_url: project.repo_url,
+        repo_full_name: project.repo_full_name,
+        github_installation_id: null,
+        github_repo_id: null,
+        github_sync_enabled: project.github_sync_enabled,
+        provider: "gitlab" as const,
+        gitlab_project_id: project.gitlab_project_id,
+    }
+    after(() =>
+        createPullRequestAnalysisService().start(
+            prProject,
+            { number, title: a?.title ?? "", body: a?.description ?? null, baseSha: null, headSha: a?.last_commit?.id ?? null },
+            origin,
+        ),
+    )
     return ack()
 }
 

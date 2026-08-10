@@ -324,6 +324,18 @@ export class GithubVcsAppInstance implements VcsAppInstance {
         return rows.map((c) => this.toComment(c))
     }
 
+    // GitHub serves PR comments from the same /issues/{n}/comments endpoint (a PR
+    // is an issue), so these delegate to the issue-comment impl.
+    createPullRequestComment(prNumber: number, body: string): Promise<{ id: number }> {
+        return this.createIssueComment(prNumber, body)
+    }
+    updatePullRequestComment(prNumber: number, commentId: number, body: string): Promise<void> {
+        return this.updateIssueComment(prNumber, commentId, body)
+    }
+    listPullRequestComments(prNumber: number): Promise<VcsComment[]> {
+        return this.listIssueComments(prNumber)
+    }
+
     // ── port: pull requests ──────────────────────────────────────────────────
     async listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]> {
         const state = opts?.state ?? "all"

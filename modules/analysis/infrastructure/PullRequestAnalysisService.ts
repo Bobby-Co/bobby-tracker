@@ -22,6 +22,10 @@ export type PrProject = {
     github_installation_id: number | null
     github_repo_id: number | null
     github_sync_enabled: boolean
+    // Provider wiring so a GitLab MR resolves to the GitLab adapter (isSyncReady +
+    // vcsFor both branch on these). Omitted → treated as GitHub.
+    provider?: "github" | "gitlab" | null
+    gitlab_project_id?: number | null
 }
 
 /** The PR metadata from the webhook payload. */
@@ -80,14 +84,14 @@ export class PullRequestAnalysisService {
         let commentId = existing?.githubCommentId ?? null
         if (commentId != null) {
             try {
-                await vcs.updateComment(pr.number, commentId, this.comment.loading(origin, pr.title, loadingUrl))
+                await vcs.updatePrComment(pr.number, commentId, this.comment.loading(origin, pr.title, loadingUrl))
             } catch {
                 commentId = null
             }
         }
         if (commentId == null) {
             try {
-                const created = await vcs.postComment(pr.number, this.comment.loading(origin, pr.title, loadingUrl))
+                const created = await vcs.postPrComment(pr.number, this.comment.loading(origin, pr.title, loadingUrl))
                 commentId = created.id
             } catch {
                 return
@@ -143,7 +147,7 @@ export class PullRequestAnalysisService {
                               ? this.comment.cancelled(origin, row.prNumber)
                               : this.comment.failed(origin, row.prNumber)
                     try {
-                        await vcs.updateComment(row.prNumber, row.githubCommentId, body)
+                        await vcs.updatePrComment(row.prNumber, row.githubCommentId, body)
                     } catch {
                         // Comment may have been deleted on the remote — don't fail the callback.
                     }

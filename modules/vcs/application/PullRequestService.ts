@@ -98,7 +98,7 @@ export class PullRequestService {
     // Pull a single PR's conversation comments + review summaries into the mirror.
     private async syncComments(projectId: string, prNumber: number): Promise<void> {
         const [comments, reviews] = await Promise.all([
-            this.vcs.listIssueComments(prNumber).catch((): VcsComment[] => []),
+            this.vcs.listPullRequestComments(prNumber).catch((): VcsComment[] => []),
             this.vcs.listPullRequestReviews(prNumber).catch((): VcsReview[] => []),
         ])
         for (const c of comments) {

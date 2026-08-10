@@ -240,6 +240,39 @@ export class GitlabVcsAppInstance implements VcsAppInstance {
         }))
     }
 
+    // ── MR comments (GitLab's note endpoint is per-noteable: merge_requests) ──
+    async createPullRequestComment(prNumber: number, body: string): Promise<{ id: number }> {
+        const { c, pid } = await this.client()
+        const res = await c.fetch(`/projects/${pid}/merge_requests/${prNumber}/notes`, {
+            method: "POST",
+            body: JSON.stringify({ body }),
+        })
+        if (!res.ok) await fail(res, "create MR note")
+        return { id: ((await res.json()) as GlNote).id }
+    }
+
+    async updatePullRequestComment(prNumber: number, commentId: number, body: string): Promise<void> {
+        const { c, pid } = await this.client()
+        const res = await c.fetch(`/projects/${pid}/merge_requests/${prNumber}/notes/${commentId}`, {
+            method: "PUT",
+            body: JSON.stringify({ body }),
+        })
+        if (!res.ok) await fail(res, "update MR note")
+    }
+
+    async listPullRequestComments(prNumber: number): Promise<VcsComment[]> {
+        const { c, pid } = await this.client()
+        const rows = await c.paginate<GlNote>(`/projects/${pid}/merge_requests/${prNumber}/notes?sort=asc`, 5)
+        return rows.map((n) => ({
+            id: n.id,
+            body: n.body,
+            url: "",
+            author: toActor(n.author),
+            createdAt: n.created_at,
+            updatedAt: n.updated_at,
+        }))
+    }
+
     // ── merge requests ───────────────────────────────────────────────────────
     async listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]> {
         const { c, pid } = await this.client()

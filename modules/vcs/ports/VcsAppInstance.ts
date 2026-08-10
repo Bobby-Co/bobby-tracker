@@ -49,8 +49,19 @@ export interface VcsAppInstance {
      *  comment lives on — GitHub ignores it (it edits by global comment id);
      *  GitLab needs it (note edits are scoped to the issue). */
     updateIssueComment(issueNumber: number, commentId: number, body: string): Promise<void>
-    /** The conversation-thread comments on an issue/PR, oldest first. */
+    /** The conversation-thread comments on an ISSUE, oldest first. */
     listIssueComments(issueNumber: number): Promise<VcsComment[]>
+
+    // ─── PR/MR conversation comments (as the app/bot) ───────────────────────
+    // Separate from the issue-comment methods because GitLab has DISTINCT note
+    // endpoints for issues vs merge requests (GitHub serves both from one). GitHub
+    // adapters delegate to the issue-comment impl; GitLab uses /merge_requests/.
+    /** Post a bot comment on a PR/MR; returns its id for a later in-place edit. */
+    createPullRequestComment(prNumber: number, body: string): Promise<{ id: number }>
+    /** Edit a bot comment on a PR/MR in place. */
+    updatePullRequestComment(prNumber: number, commentId: number, body: string): Promise<void>
+    /** The conversation-thread comments on a PR/MR, oldest first. */
+    listPullRequestComments(prNumber: number): Promise<VcsComment[]>
 
     // ─── pull requests ──────────────────────────────────────────────────────
     listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]>
