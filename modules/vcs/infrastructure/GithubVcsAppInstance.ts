@@ -310,7 +310,8 @@ export class GithubVcsAppInstance implements VcsAppInstance {
         return { id: ((await res.json()) as { id: number }).id }
     }
 
-    async updateIssueComment(commentId: number, body: string): Promise<void> {
+    async updateIssueComment(_issueNumber: number, commentId: number, body: string): Promise<void> {
+        // GitHub edits by global comment id; issueNumber is unused here (GitLab needs it).
         const res = await this.client.fetch(this.installationId, this.path(`/issues/comments/${commentId}`), {
             method: "PATCH",
             body: JSON.stringify({ body }),

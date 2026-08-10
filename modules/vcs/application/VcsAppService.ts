@@ -159,9 +159,9 @@ export class VcsAppService {
         return this.vcs.createIssueComment(issueNumber, body)
     }
 
-    /** Edit a bot comment in place by id. */
-    updateComment(commentId: number, body: string): Promise<void> {
-        return this.vcs.updateIssueComment(commentId, body)
+    /** Edit a bot comment in place. `issueNumber` scopes it (GitLab needs it). */
+    updateComment(issueNumber: number, commentId: number, body: string): Promise<void> {
+        return this.vcs.updateIssueComment(issueNumber, commentId, body)
     }
 
     // ─── PR reads (used by the PR-analysis flow for the diff) ─────────────────

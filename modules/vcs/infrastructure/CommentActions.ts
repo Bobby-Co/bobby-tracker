@@ -5,6 +5,7 @@
 
 import { jsonError } from "@/lib/server/http/api"
 import { createGithubTokenRepository } from "./GithubTokenRepository"
+import { createProviderTokenRepository } from "./ProviderTokenRepository"
 import { RepoRef } from "../domain/RepoRef"
 import { getVcsUserService } from "../Composition"
 import type { VcsUserService } from "../application/VcsUserService"
@@ -24,25 +25,32 @@ export class CommentActions {
         userId: string,
         projectId: string,
     ): Promise<CommentActor | { error: Response }> {
-        // Read the project through the Projects contract. findRepoRef throws on a
-        // genuine DB error so we keep the 500-vs-404 distinction.
+        // Read the project's sync context (provider + repo + gitlab linkage).
         const projects = createSupabaseProjectsRepository(supabase)
-        let project: Awaited<ReturnType<typeof projects.findRepoRef>>
+        let project: Awaited<ReturnType<typeof projects.findGithubSyncContext>>
         try {
-            project = await projects.findRepoRef(projectId)
+            project = await projects.findGithubSyncContext(projectId)
         } catch (e) {
             if (e instanceof RepositoryError) return { error: jsonError("db_error", e.message, 500) }
             throw e
         }
         if (!project) return { error: jsonError("not_found", "project not found", 404) }
         if (!RepoRef.of(project).fullName()) {
-            return { error: jsonError("not_github", "this project isn't linked to a GitHub repo", 400) }
+            return { error: jsonError("not_linked", "this project isn't linked to a repository", 400) }
         }
 
+        // GitLab: comment as the user with their per-instance token.
+        if (project.provider === "gitlab") {
+            if (!project.gitlab_host) return { error: jsonError("bad_request", "gitlab project missing host", 400) }
+            const tok = await createProviderTokenRepository(supabase).find(userId, project.gitlab_host)
+            if (!tok) return { error: jsonError("gitlab_reauth_required", `Connect ${project.gitlab_host} to comment.`, 401) }
+            const vcs = getVcsUserService(project, tok.accessToken)!
+            return { vcs, login: tok.login }
+        }
+
+        // GitHub: comment as the user with their personal token.
         const gh = await createGithubTokenRepository(supabase).find(userId)
         if (!gh) return { error: jsonError("github_reauth_required", "Connect GitHub to comment.", 401) }
-
-        // fullName resolved above → the user service is non-null.
         const vcs = getVcsUserService(project, gh.token)!
         return { vcs, login: gh.login }
     }

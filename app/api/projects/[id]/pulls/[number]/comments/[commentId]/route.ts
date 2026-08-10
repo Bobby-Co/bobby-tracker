@@ -49,7 +49,7 @@ export async function PATCH(
 
     let updated
     try {
-        updated = await actions.vcs.updateComment(ghId, body)
+        updated = await actions.vcs.updateComment(owned.row.pr_number, ghId, body)
     } catch (e) {
         if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)
@@ -84,7 +84,7 @@ export async function DELETE(
     if ("error" in actions) return actions.error
 
     try {
-        await actions.vcs.deleteComment(ghId)
+        await actions.vcs.deleteComment(owned.row.pr_number, ghId)
     } catch (e) {
         if (e instanceof VcsReauthError) return jsonError("github_reauth_required", "Reconnect GitHub to comment.", 401)
         return jsonError("github_error", (e as Error).message, 502)

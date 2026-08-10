@@ -19,13 +19,13 @@ export class VcsUserService {
         return this.vcs.createComment(issueNumber, body)
     }
 
-    /** Edit the user's own comment in place. */
-    updateComment(commentId: number, body: string): Promise<VcsComment> {
-        return this.vcs.updateComment(commentId, body)
+    /** Edit the user's own comment in place. `issueNumber` scopes it (GitLab). */
+    updateComment(issueNumber: number, commentId: number, body: string): Promise<VcsComment> {
+        return this.vcs.updateComment(issueNumber, commentId, body)
     }
 
-    /** Delete the user's own comment (idempotent). */
-    deleteComment(commentId: number): Promise<void> {
-        return this.vcs.deleteComment(commentId)
+    /** Delete the user's own comment (idempotent). `issueNumber` scopes it. */
+    deleteComment(issueNumber: number, commentId: number): Promise<void> {
+        return this.vcs.deleteComment(issueNumber, commentId)
     }
 }

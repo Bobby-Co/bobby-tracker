@@ -17,9 +17,10 @@ import type { VcsComment } from "./VcsTypes"
 export interface VcsUserInstance {
     /** Post a comment as the user on an issue/PR; returns the created comment. */
     createComment(issueNumber: number, body: string): Promise<VcsComment>
-    /** Edit the user's own comment in place; returns the updated comment. */
-    updateComment(commentId: number, body: string): Promise<VcsComment>
+    /** Edit the user's own comment in place; returns the updated comment.
+     *  `issueNumber` scopes the edit — GitHub ignores it, GitLab requires it. */
+    updateComment(issueNumber: number, commentId: number, body: string): Promise<VcsComment>
     /** Delete the user's own comment. Idempotent — an already-deleted comment is
-     *  treated as success. */
-    deleteComment(commentId: number): Promise<void>
+     *  treated as success. `issueNumber` scopes it (GitLab needs it). */
+    deleteComment(issueNumber: number, commentId: number): Promise<void>
 }

@@ -31,7 +31,7 @@ export class GithubVcsUserInstance implements VcsUserInstance {
         return this.readComment(res, "create comment")
     }
 
-    async updateComment(commentId: number, body: string): Promise<VcsComment> {
+    async updateComment(_issueNumber: number, commentId: number, body: string): Promise<VcsComment> {
         const res = await this.fetch(`/repos/${this.owner}/${this.repo}/issues/comments/${commentId}`, {
             method: "PATCH",
             body: JSON.stringify({ body }),
@@ -39,7 +39,7 @@ export class GithubVcsUserInstance implements VcsUserInstance {
         return this.readComment(res, "update comment")
     }
 
-    async deleteComment(commentId: number): Promise<void> {
+    async deleteComment(_issueNumber: number, commentId: number): Promise<void> {
         const res = await this.fetch(`/repos/${this.owner}/${this.repo}/issues/comments/${commentId}`, { method: "DELETE" })
         if (res.status === 401 || res.status === 403) throw new VcsReauthError()
         // 404 = already deleted on GitHub — idempotent success.

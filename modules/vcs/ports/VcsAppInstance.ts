@@ -45,8 +45,10 @@ export interface VcsAppInstance {
     /** Post a bot comment on an issue or PR; returns its id so a later edit can
      *  swap it in place (e.g. the "analysing…" placeholder → result). */
     createIssueComment(issueNumber: number, body: string): Promise<{ id: number }>
-    /** Edit an existing bot comment in place by id. */
-    updateIssueComment(commentId: number, body: string): Promise<void>
+    /** Edit an existing bot comment in place. `issueNumber` is the issue/PR the
+     *  comment lives on — GitHub ignores it (it edits by global comment id);
+     *  GitLab needs it (note edits are scoped to the issue). */
+    updateIssueComment(issueNumber: number, commentId: number, body: string): Promise<void>
     /** The conversation-thread comments on an issue/PR, oldest first. */
     listIssueComments(issueNumber: number): Promise<VcsComment[]>
 

@@ -80,7 +80,7 @@ export class PullRequestAnalysisService {
         let commentId = existing?.githubCommentId ?? null
         if (commentId != null) {
             try {
-                await vcs.updateComment(commentId, this.comment.loading(origin, pr.title, loadingUrl))
+                await vcs.updateComment(pr.number, commentId, this.comment.loading(origin, pr.title, loadingUrl))
             } catch {
                 commentId = null
             }
@@ -143,7 +143,7 @@ export class PullRequestAnalysisService {
                               ? this.comment.cancelled(origin, row.prNumber)
                               : this.comment.failed(origin, row.prNumber)
                     try {
-                        await vcs.updateComment(row.githubCommentId, body)
+                        await vcs.updateComment(row.prNumber, row.githubCommentId, body)
                     } catch {
                         // Comment may have been deleted on the remote — don't fail the callback.
                     }

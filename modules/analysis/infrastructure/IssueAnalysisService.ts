@@ -106,7 +106,12 @@ export class IssueAnalysisService {
         const project = await this.projects.findAnalysisContext(issue.project_id)
 
         // Edit the placeholder in place (when we still have its id + a linked repo).
-        if (project && Project.of(project).isSyncReady() && issue.github_analysis_comment_id != null) {
+        if (
+            project &&
+            Project.of(project).isSyncReady() &&
+            issue.github_analysis_comment_id != null &&
+            issue.github_issue_number != null
+        ) {
             const vcs = this.vcsFor(project)
             if (vcs) {
                 const ctx: CommentCtx = { origin, projectId: issue.project_id, issueId: issue.id }
@@ -117,7 +122,7 @@ export class IssueAnalysisService {
                           ? this.comment.cancelled(ctx)
                           : this.comment.failed(ctx)
                 try {
-                    await vcs.updateComment(issue.github_analysis_comment_id, body)
+                    await vcs.updateComment(issue.github_issue_number, issue.github_analysis_comment_id, body)
                 } catch {
                     // The comment may have been deleted on the remote — don't fail the callback.
                 }

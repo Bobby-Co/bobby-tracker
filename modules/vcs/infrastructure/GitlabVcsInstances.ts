@@ -218,11 +218,13 @@ export class GitlabVcsAppInstance implements VcsAppInstance {
         return { id: ((await res.json()) as GlNote).id }
     }
 
-    async updateIssueComment(commentId: number, _body: string): Promise<void> {
-        // GitLab note edits require the parent issue iid, which the port doesn't
-        // provide. No-op so the analysis-result callback doesn't throw; the
-        // placeholder note just isn't rewritten. TODO: thread the iid through.
-        console.warn(`[gitlab] updateIssueComment(${commentId}) skipped — needs issue iid`)
+    async updateIssueComment(issueNumber: number, commentId: number, body: string): Promise<void> {
+        const { c, pid } = await this.client()
+        const res = await c.fetch(`/projects/${pid}/issues/${issueNumber}/notes/${commentId}`, {
+            method: "PUT",
+            body: JSON.stringify({ body }),
+        })
+        if (!res.ok) await fail(res, "update note")
     }
 
     async listIssueComments(issueNumber: number): Promise<VcsComment[]> {
@@ -353,13 +355,22 @@ export class GitlabVcsUserInstance implements VcsUserInstance {
         return { id: n.id, body: n.body, url: "", author: toActor(n.author), createdAt: n.created_at, updatedAt: n.updated_at }
     }
 
-    async updateComment(commentId: number, _body: string): Promise<VcsComment> {
-        // Same iid limitation as the app instance.
-        throw new Error(`gitlab: updateComment(${commentId}) needs the issue iid (not yet threaded through)`)
+    async updateComment(issueNumber: number, commentId: number, body: string): Promise<VcsComment> {
+        const res = await this.c.fetch(`/projects/${this.projectId}/issues/${issueNumber}/notes/${commentId}`, {
+            method: "PUT",
+            body: JSON.stringify({ body }),
+        })
+        if (!res.ok) await fail(res, "update note")
+        const n = (await res.json()) as GlNote
+        return { id: n.id, body: n.body, url: "", author: toActor(n.author), createdAt: n.created_at, updatedAt: n.updated_at }
     }
 
-    async deleteComment(commentId: number): Promise<void> {
-        throw new Error(`gitlab: deleteComment(${commentId}) needs the issue iid (not yet threaded through)`)
+    async deleteComment(issueNumber: number, commentId: number): Promise<void> {
+        const res = await this.c.fetch(`/projects/${this.projectId}/issues/${issueNumber}/notes/${commentId}`, {
+            method: "DELETE",
+        })
+        // 404 = already gone → idempotent success.
+        if (!res.ok && res.status !== 404) await fail(res, "delete note")
     }
 }
 

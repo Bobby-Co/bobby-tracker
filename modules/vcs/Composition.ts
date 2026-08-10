@@ -14,7 +14,7 @@ import { VcsUserService } from "./application/VcsUserService"
 import { PullRequestService } from "./application/PullRequestService"
 import { GithubVcsAppInstance } from "./infrastructure/GithubVcsAppInstance"
 import { GithubVcsUserInstance } from "./infrastructure/GithubVcsUserInstance"
-import { GitlabVcsAppInstance } from "./infrastructure/GitlabVcsInstances"
+import { GitlabVcsAppInstance, GitlabVcsUserInstance } from "./infrastructure/GitlabVcsInstances"
 import { githubWebhookVerifier } from "./infrastructure/GithubWebhookVerifier"
 import { createServicePullRequestStore } from "./infrastructure/SupabasePullRequestStore"
 import type { VcsAppInstance } from "./ports/VcsAppInstance"
@@ -70,8 +70,21 @@ export function resolveVcsAppInstance(project: VcsProviderBinding): VcsAppInstan
  *  token, or null when the project has no resolvable owner-repo. Acquiring the
  *  token (a DB read + scope check) is the service/gate's job, not the composition
  *  root's — this only binds a known token to the repo. */
-export function resolveVcsUserInstance(repo: VcsRepoCoords, token: string): VcsUserInstance | null {
-    const or = ownerRepo(repo)
+/** What the USER-authority resolver reads to bind a comment actor. GitHub needs
+ *  owner/repo; GitLab needs the numeric project id + instance host. */
+export interface VcsUserBinding extends VcsRepoCoords {
+    provider?: "github" | "gitlab" | null
+    gitlab_project_id?: number | null
+    gitlab_host?: string | null
+}
+
+export function resolveVcsUserInstance(binding: VcsUserBinding, token: string): VcsUserInstance | null {
+    if (binding.provider === "gitlab") {
+        if (binding.gitlab_project_id == null) return null
+        const apiBase = binding.gitlab_host ? `https://${binding.gitlab_host}/api/v4` : "https://gitlab.com/api/v4"
+        return new GitlabVcsUserInstance(token, apiBase, binding.gitlab_project_id)
+    }
+    const or = ownerRepo(binding)
     if (!or) return null
     return new GithubVcsUserInstance(token, or[0], or[1])
 }
@@ -95,8 +108,8 @@ export function getVcsAppService(project: VcsProviderBinding): VcsAppService | n
 
 /** The user-authority orchestrator for a project + the caller's already-resolved
  *  VCS token, or null when the project has no resolvable owner-repo. */
-export function getVcsUserService(repo: VcsRepoCoords, token: string): VcsUserService | null {
-    const instance = resolveVcsUserInstance(repo, token)
+export function getVcsUserService(binding: VcsUserBinding, token: string): VcsUserService | null {
+    const instance = resolveVcsUserInstance(binding, token)
     if (!instance) return null
     return new VcsUserService(instance)
 }
