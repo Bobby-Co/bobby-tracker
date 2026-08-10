@@ -87,13 +87,17 @@ export async function GET(request: Request) {
         // the refresh_token when it lapses.
         const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
         try {
-            await createProviderTokenRepository(supabase).upsert(user.id, "gitlab", {
+            // OAuth is only brokered for public gitlab.com (Supabase's single
+            // GitLab provider); self-managed instances connect via PAT paste.
+            await createProviderTokenRepository(supabase).upsert(user.id, "gitlab.com", {
+                authKind: "oauth",
                 accessToken,
                 refreshToken: session?.provider_refresh_token ?? null,
                 expiresAt,
                 scopes: null,
                 providerUserId: identity?.id ?? null,
                 login,
+                apiBase: null,
             })
         } catch (e) {
             console.error("[auth/callback] provider_tokens (gitlab) upsert failed:", (e as Error).message)

@@ -3,11 +3,11 @@ import { ApiContext, jsonError } from "@/lib/server/http/api"
 // GET /api/connections
 //
 // Account-level VCS connection status for the Settings → Connections page.
-// Reports, per provider, whether the signed-in user has a usable stored OAuth
-// token and the login to show ("connected as @user"). GitHub reads from
-// github_tokens (githubTokens repo); GitLab from provider_tokens (providerTokens
-// repo, migration 0055). Connecting/disconnecting is handled elsewhere — this is
-// read-only status.
+// GitHub is a single connection (github.com, via github_tokens). GitLab is a
+// LIST: because this is a public service, a user can connect gitlab.com (OAuth)
+// and any number of self-managed instances (PAT), each its own row keyed by host
+// (provider_tokens, migration 0055). Read-only status; connect/disconnect live
+// on the sibling routes.
 export async function GET() {
     const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
@@ -15,12 +15,12 @@ export async function GET() {
     try {
         const [github, gitlab] = await Promise.all([
             ctx.githubTokens.find(user.id),
-            ctx.providerTokens.find(user.id, "gitlab"),
+            ctx.providerTokens.list(user.id),
         ])
         return Response.json({
             providers: {
                 github: { connected: !!github, login: github?.login ?? null },
-                gitlab: { connected: !!gitlab, login: gitlab?.login ?? null },
+                gitlab: { connections: gitlab },
             },
         })
     } catch (e) {

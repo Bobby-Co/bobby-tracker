@@ -33,22 +33,36 @@ create table if not exists tracker.provider_tokens (
     user_id           uuid        not null references auth.users(id) on delete cascade,
     -- 'github' | 'gitlab'. A user may connect both, hence the composite PK.
     provider          text        not null check (provider in ('github', 'gitlab')),
-    -- The user's OAuth access token (acts AS the signed-in user).
+    -- The instance this credential is for. 'gitlab.com', or a self-managed host
+    -- like 'gitlab.acme.com'. Part of the key because this is a PUBLIC service:
+    -- one user can connect BOTH public gitlab.com (via OAuth) and their own
+    -- self-hosted instance(s) (via a pasted token) — different hosts, different
+    -- rows. GitHub rows use 'github.com'.
+    host              text        not null default 'gitlab.com',
+    -- How the credential was obtained: 'oauth' (gitlab.com, Supabase-brokered,
+    -- refreshable) or 'pat' (a user-pasted Personal/Project Access Token for a
+    -- self-managed instance — the only mechanism that works across arbitrary
+    -- instances, since OAuth can't be brokered to an unknown host).
+    auth_kind         text        not null default 'oauth' check (auth_kind in ('oauth', 'pat')),
+    -- The user's access token (acts AS the signed-in user).
     access_token      text        not null,
-    -- Refresh token. GitLab always issues one; used to mint a new access token
-    -- when the current one expires (there is no scheduler here — refresh is
-    -- lazy, on read, when expires_at has passed).
+    -- Refresh token. OAuth (gitlab.com) issues one; used to mint a new access
+    -- token when the current one expires (no scheduler here — refresh is lazy,
+    -- on read, when expires_at has passed). Null for PATs.
     refresh_token     text,
-    -- When access_token expires. Null = non-expiring (GitHub classic OAuth).
+    -- When access_token expires. Null = non-expiring (a PAT with no expiry).
     expires_at        timestamptz,
     -- Space/comma-separated granted scopes, for deciding whether to re-consent.
     scopes            text,
     -- Provider numeric user id (diagnostics) + login ("connected as @user").
     provider_user_id  text,
     provider_login    text,
+    -- API base for a self-managed instance (e.g. https://gitlab.acme.com/api/v4).
+    -- Null → derive from host (https://<host>/api/v4).
+    api_base          text,
     created_at        timestamptz not null default now(),
     updated_at        timestamptz not null default now(),
-    primary key (user_id, provider)
+    primary key (user_id, provider, host)
 );
 
 drop trigger if exists touch_provider_tokens on tracker.provider_tokens;

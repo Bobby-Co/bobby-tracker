@@ -91,7 +91,8 @@ export { createGithubTokenRepository } from "./infrastructure/GithubTokenReposit
 // connections route + repo-listing read it, the OAuth callback writes it.
 export type {
     ProviderTokenRepository,
-    ProviderTokenProvider,
+    ProviderAuthKind,
+    GitlabConnection,
     UserProviderToken,
     ProviderTokenUpsert,
 } from "./infrastructure/ProviderTokenRepository"
