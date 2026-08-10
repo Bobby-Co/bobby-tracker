@@ -46,6 +46,13 @@ export interface NewProject {
     repo_url: string
     repo_full_name: string | null
     description: string | null
+    // VCS provider fields. Omitted for GitHub (the DB defaults provider to
+    // 'github'); set for a GitLab-sourced project so it's correctly tagged and
+    // routable. gitlab_host + gitlab_project_id together identify the remote
+    // (project ids are only unique within an instance).
+    provider?: string
+    gitlab_project_id?: number | null
+    gitlab_host?: string | null
 }
 
 /** The GitHub-sync settings projection the sync-settings route returns. */

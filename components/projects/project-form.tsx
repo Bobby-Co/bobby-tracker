@@ -1,52 +1,128 @@
 "use client"
 
 import { useCallback, useEffect, useState, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/client/supabase"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { GithubRepoSummary } from "@/lib/shared/types"
+import { IconlyGithub } from "@/icons/Iconly-github-icon"
+import { IconlyGitlab } from "@/icons/Iconly-gitlab-icon"
 
-// GitHub's per-app authorization page lets the user grant access to
-// organizations they skipped at sign-in time (or that an org admin has
-// since approved). When NEXT_PUBLIC_GITHUB_CLIENT_ID is set we deep-link
-// straight to the app; otherwise we point at the OAuth-apps list and
-// let the user find this app by name.
-const GH_CLIENT_ID = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID
-const GH_APP_SETTINGS_URL = GH_CLIENT_ID
-    ? `https://github.com/settings/connections/applications/${GH_CLIENT_ID}`
-    : "https://github.com/settings/applications"
+// A provider-neutral repo row for the unified picker. GitHub and GitLab repos
+// (across every connected instance) are normalized into this shape and shown in
+// one list, each tagged with its source.
+interface PickerRepo {
+    provider: "github" | "gitlab"
+    host: string
+    full_name: string
+    name: string
+    description: string | null
+    private: boolean
+    html_url: string
+    external_id: number | null // GitLab project id; null for GitHub
+}
+
+interface GitlabRepo {
+    provider: "gitlab"
+    host: string
+    external_id: number
+    full_name: string
+    name: string
+    description: string | null
+    private: boolean
+    html_url: string
+}
 
 type LoadState =
     | { kind: "loading" }
-    | { kind: "needs_reauth"; message: string }
+    | {
+          kind: "ready"
+          repos: PickerRepo[]
+          truncated: boolean
+          anyConnected: boolean
+          warnings: string[]
+          refreshing: boolean
+      }
     | { kind: "error"; message: string }
-    | { kind: "ready"; repos: GithubRepoSummary[]; truncated: boolean; refreshing: boolean }
 
+// Pull repos from every connected source in parallel. A provider that isn't
+// connected (GitHub 401, or no GitLab instances) just contributes nothing —
+// connecting is done in Settings → Connections, not here.
 async function fetchRepoListState(): Promise<LoadState> {
-    const res = await fetch("/api/github/repos", { cache: "no-store" })
-    if (res.status === 401) {
-        const body = await res.json().catch(() => null)
-        return {
-            kind: "needs_reauth",
-            message: body?.error?.message || "Connect GitHub to list your repositories.",
+    const [gh, gl] = await Promise.allSettled([
+        fetch("/api/github/repos", { cache: "no-store" }),
+        fetch("/api/gitlab/repos", { cache: "no-store" }),
+    ])
+
+    const repos: PickerRepo[] = []
+    const warnings: string[] = []
+    let githubConnected = false
+    let gitlabConnected = false
+    let truncated = false
+
+    if (gh.status === "fulfilled") {
+        if (gh.value.ok) {
+            githubConnected = true
+            const body = (await gh.value.json()) as { repos: GithubRepoSummary[]; truncated: boolean }
+            truncated = truncated || body.truncated
+            for (const r of body.repos) {
+                repos.push({
+                    provider: "github",
+                    host: "github.com",
+                    full_name: r.full_name,
+                    name: r.name,
+                    description: r.description,
+                    private: r.private,
+                    html_url: r.html_url,
+                    external_id: null,
+                })
+            }
+        }
+        // 401 = GitHub not connected; silently contribute nothing.
+    }
+
+    if (gl.status === "fulfilled" && gl.value.ok) {
+        const body = (await gl.value.json()) as {
+            repos: GitlabRepo[]
+            errors: { host: string; reason: string }[]
+        }
+        gitlabConnected = body.repos.length > 0 || body.errors.length > 0
+        for (const r of body.repos) {
+            repos.push({
+                provider: "gitlab",
+                host: r.host,
+                full_name: r.full_name,
+                name: r.name,
+                description: r.description,
+                private: r.private,
+                html_url: r.html_url,
+                external_id: r.external_id,
+            })
+        }
+        for (const e of body.errors) {
+            warnings.push(
+                e.reason === "reauth"
+                    ? `${e.host}: reconnect in Settings — the token expired or was revoked.`
+                    : `${e.host}: couldn't load repos (${e.reason}).`,
+            )
         }
     }
-    if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        return {
-            kind: "error",
-            message: body?.error?.message || `Failed to load repositories (${res.status}).`,
-        }
+
+    return {
+        kind: "ready",
+        repos,
+        truncated,
+        anyConnected: githubConnected || gitlabConnected,
+        warnings,
+        refreshing: false,
     }
-    const body = (await res.json()) as { repos: GithubRepoSummary[]; truncated: boolean }
-    return { kind: "ready", repos: body.repos, truncated: body.truncated, refreshing: false }
 }
 
 export function ProjectForm() {
     const router = useRouter()
     const [name, setName] = useState("")
     const [description, setDescription] = useState("")
-    const [selected, setSelected] = useState<GithubRepoSummary | null>(null)
+    const [selected, setSelected] = useState<PickerRepo | null>(null)
     const [filter, setFilter] = useState("")
     const [load, setLoad] = useState<LoadState>({ kind: "loading" })
     const [error, setError] = useState<string | null>(null)
@@ -64,31 +140,9 @@ export function ProjectForm() {
     }, [])
 
     const refresh = useCallback(async () => {
-        setLoad((prev) =>
-            prev.kind === "ready" ? { ...prev, refreshing: true } : { kind: "loading" },
-        )
-        const next = await fetchRepoListState()
-        setLoad(next)
+        setLoad((prev) => (prev.kind === "ready" ? { ...prev, refreshing: true } : { kind: "loading" }))
+        setLoad(await fetchRepoListState())
     }, [])
-
-    async function reconnect() {
-        const supabase = createClient()
-        // Return to the projects list after re-authorizing GitHub. There
-        // is NO /projects/new route — the new-project form is a modal on
-        // /projects — so sending the user there fell through to
-        // /projects/[id] (id="new") and redirected to /projects/new/issues,
-        // which errored. window.location.origin keeps the callback on
-        // whatever host we're actually on (ucelot.com, localhost, a preview).
-        const redirectTo = new URL("/auth/callback", window.location.origin)
-        redirectTo.searchParams.set("next", "/projects")
-        await supabase.auth.signInWithOAuth({
-            provider: "github",
-            options: {
-                redirectTo: redirectTo.href,
-                scopes: "repo read:user user:email",
-            },
-        })
-    }
 
     function submit(e: React.FormEvent) {
         e.preventDefault()
@@ -106,10 +160,12 @@ export function ProjectForm() {
                         repo_url: selected.html_url,
                         repo_full_name: selected.full_name,
                         description,
+                        provider: selected.provider,
+                        ...(selected.provider === "gitlab"
+                            ? { gitlab_project_id: selected.external_id }
+                            : {}),
                     },
                 })
-                // Land on the setup page first — connect GitHub, confirm auto-index
-                // on push, pick analyser effort — then the user moves into the project.
                 router.push(`/projects/${project.id}/setup`)
                 router.refresh()
             } catch (e) {
@@ -121,7 +177,7 @@ export function ProjectForm() {
 
     return (
         <form onSubmit={submit} className="flex flex-col gap-3">
-            <Field label="GitHub repository">
+            <Field label="Repository">
                 <RepoPicker
                     load={load}
                     filter={filter}
@@ -129,11 +185,8 @@ export function ProjectForm() {
                     selected={selected}
                     onSelect={(r) => {
                         setSelected(r)
-                        // Auto-fill the project name on first pick so the
-                        // common case is one click.
                         if (!name) setName(r.name)
                     }}
-                    onReconnect={reconnect}
                     onRefresh={refresh}
                 />
             </Field>
@@ -157,15 +210,23 @@ export function ProjectForm() {
             </Field>
             {error && <p className="text-[12.5px] text-rose-700">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
-                <button
-                    type="submit"
-                    disabled={pending || !selected}
-                    className="btn-primary"
-                >
+                <button type="submit" disabled={pending || !selected} className="btn-primary">
                     {pending ? "Creating…" : "Create project"}
                 </button>
             </div>
         </form>
+    )
+}
+
+// The small GitHub/GitLab mark shown on every row so the source is unambiguous.
+function ProviderIcon({ provider }: { provider: "github" | "gitlab" }) {
+    return (
+        <span
+            title={provider === "github" ? "GitHub" : "GitLab"}
+            className="grid h-4 w-4 shrink-0 place-items-center text-[color:var(--c-text-muted)]"
+        >
+            {provider === "github" ? <IconlyGithub size={14} /> : <IconlyGitlab size={14} />}
+        </span>
     )
 }
 
@@ -175,58 +236,48 @@ function RepoPicker({
     onFilterChange,
     selected,
     onSelect,
-    onReconnect,
     onRefresh,
 }: {
     load: LoadState
     filter: string
     onFilterChange: (s: string) => void
-    selected: GithubRepoSummary | null
-    onSelect: (r: GithubRepoSummary) => void
-    onReconnect: () => void
+    selected: PickerRepo | null
+    onSelect: (r: PickerRepo) => void
     onRefresh: () => void
 }) {
     if (load.kind === "loading") {
         return <div className="input text-[13px] text-[color:var(--c-text-muted)]">Loading your repositories…</div>
     }
-    if (load.kind === "needs_reauth") {
-        return (
-            <div className="flex flex-col gap-2 rounded-[10px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-3">
-                <p className="text-[12.5px] text-[color:var(--c-text-muted)]">{load.message}</p>
-                <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={onReconnect}
-                        className="btn-primary py-1.5 text-[12.5px]"
-                    >
-                        Connect GitHub
-                    </button>
-                    <OrgAccessLink />
-                </div>
-            </div>
-        )
-    }
     if (load.kind === "error") {
         return <p className="text-[12.5px] text-rose-700">{load.message}</p>
     }
-    if (load.kind === "ready" && load.repos.length === 0) {
+    // Nothing connected → send the user to Settings (this form only lists).
+    if (!load.anyConnected) {
         return (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 rounded-[10px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-3">
                 <p className="text-[12.5px] text-[color:var(--c-text-muted)]">
-                    No repositories visible to your GitHub account.
+                    Connect GitHub or GitLab to list your repositories.
                 </p>
-                <OrgAccessFooter onRefresh={onRefresh} refreshing={false} />
+                <Link href="/settings/connections" className="btn-primary self-start py-1.5 text-[12.5px]">
+                    Go to Connections
+                </Link>
             </div>
         )
     }
 
-    const filtered = filter.trim()
-        ? load.repos.filter((r) => r.full_name.toLowerCase().includes(filter.trim().toLowerCase()))
-        : load.repos
+    const q = filter.trim().toLowerCase()
+    const filtered = q ? load.repos.filter((r) => r.full_name.toLowerCase().includes(q)) : load.repos
     const visible = filtered.slice(0, 50)
 
     return (
         <div className="flex flex-col gap-2">
+            {load.warnings.length > 0 && (
+                <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">
+                    {load.warnings.map((w, i) => (
+                        <div key={i}>{w}</div>
+                    ))}
+                </div>
+            )}
             <input
                 autoFocus
                 value={filter}
@@ -236,15 +287,17 @@ function RepoPicker({
             />
             <div className="max-h-64 overflow-y-auto rounded-[10px] border border-[color:var(--c-border)] bg-white">
                 {visible.length === 0 && (
-                    <p className="px-3 py-2 text-[12.5px] text-[color:var(--c-text-muted)]">
-                        No matches.
-                    </p>
+                    <p className="px-3 py-2 text-[12.5px] text-[color:var(--c-text-muted)]">No matches.</p>
                 )}
                 <ul role="listbox" className="divide-y divide-[color:var(--c-border)]">
                     {visible.map((r) => {
-                        const isSelected = selected?.full_name === r.full_name
+                        const key = `${r.provider}:${r.host}:${r.full_name}`
+                        const isSelected =
+                            selected?.provider === r.provider &&
+                            selected?.host === r.host &&
+                            selected?.full_name === r.full_name
                         return (
-                            <li key={r.full_name}>
+                            <li key={key}>
                                 <button
                                     type="button"
                                     onClick={() => onSelect(r)}
@@ -254,20 +307,32 @@ function RepoPicker({
                                     role="option"
                                     aria-selected={isSelected}
                                 >
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="truncate font-medium">{r.full_name}</span>
-                                            {r.private && (
-                                                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
-                                                    Private
-                                                </span>
+                                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                                        <span className="mt-0.5">
+                                            <ProviderIcon provider={r.provider} />
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="truncate font-medium">{r.full_name}</span>
+                                                {r.private && (
+                                                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                                                        Private
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {/* self-managed GitLab host, so identical paths on
+                                                different instances are distinguishable */}
+                                            {r.provider === "gitlab" && r.host !== "gitlab.com" && (
+                                                <p className="truncate text-[11px] text-[color:var(--c-text-muted)]">
+                                                    {r.host}
+                                                </p>
+                                            )}
+                                            {r.description && (
+                                                <p className="mt-0.5 truncate text-[11.5px] text-[color:var(--c-text-muted)]">
+                                                    {r.description}
+                                                </p>
                                             )}
                                         </div>
-                                        {r.description && (
-                                            <p className="mt-0.5 truncate text-[11.5px] text-[color:var(--c-text-muted)]">
-                                                {r.description}
-                                            </p>
-                                        )}
                                     </div>
                                     {isSelected && (
                                         <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-emerald-700">
@@ -280,61 +345,23 @@ function RepoPicker({
                     })}
                 </ul>
             </div>
-            {load.truncated && (
-                <p className="text-[11px] text-[color:var(--c-text-muted)]">
-                    Showing the {load.repos.length} most-recently-updated repos. Filter to find older ones.
-                </p>
-            )}
-            <OrgAccessFooter onRefresh={onRefresh} refreshing={load.refreshing} />
-        </div>
-    )
-}
-
-// Renders below the repo picker. Tells the user where to go on GitHub
-// when an organization is missing from the list — re-running OAuth
-// rarely re-prompts, so we deep-link straight to GitHub's app-permissions
-// page where they can grant additional org access. The Refresh button
-// then re-pulls /user/repos so newly-granted orgs show up without a
-// page reload.
-function OrgAccessFooter({ onRefresh, refreshing }: { onRefresh: () => void; refreshing: boolean }) {
-    return (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[color:var(--c-text-muted)]">
-            <span>
-                Missing an organization?{" "}
-                <a
-                    href={GH_APP_SETTINGS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-[color:var(--c-text)] underline decoration-dotted underline-offset-2 hover:decoration-solid"
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-[color:var(--c-text-muted)]">
+                <Link
+                    href="/settings/connections"
+                    className="font-medium underline decoration-dotted underline-offset-2 hover:text-[color:var(--c-text)]"
                 >
-                    Grant access on GitHub ↗
-                </a>
-            </span>
-            <button
-                type="button"
-                onClick={onRefresh}
-                disabled={refreshing}
-                className="rounded-[8px] border border-[color:var(--c-border)] bg-white px-2 py-1 text-[11.5px] font-medium hover:bg-[color:var(--c-surface)] disabled:opacity-60"
-            >
-                {refreshing ? "Refreshing…" : "↻ Refresh"}
-            </button>
+                    Manage connections ↗
+                </Link>
+                <button
+                    type="button"
+                    onClick={onRefresh}
+                    disabled={load.refreshing}
+                    className="rounded-[8px] border border-[color:var(--c-border)] bg-white px-2 py-1 text-[11.5px] font-medium hover:bg-[color:var(--c-surface)] disabled:opacity-60"
+                >
+                    {load.refreshing ? "Refreshing…" : "↻ Refresh"}
+                </button>
+            </div>
         </div>
-    )
-}
-
-// Compact inline variant used inside the needs_reauth banner. Same
-// destination as OrgAccessFooter; no refresh button (there's nothing
-// to refresh until the user reconnects).
-function OrgAccessLink() {
-    return (
-        <a
-            href={GH_APP_SETTINGS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11.5px] font-medium text-[color:var(--c-text-muted)] underline decoration-dotted underline-offset-2 hover:decoration-solid"
-        >
-            Manage org access ↗
-        </a>
     )
 }
 

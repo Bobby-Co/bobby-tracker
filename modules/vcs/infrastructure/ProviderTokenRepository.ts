@@ -51,6 +51,10 @@ export interface ProviderTokenRepository {
      *  THROWS RepositoryError on a query failure. */
     list(userId: string): Promise<GitlabConnection[]>
 
+    /** Every connected instance WITH its credential (for repo-listing across all
+     *  sources). Server-only; the tokens never leave the request. */
+    all(userId: string): Promise<UserProviderToken[]>
+
     /** The full credential for one instance, or null when not connected. */
     find(userId: string, host: string): Promise<UserProviderToken | null>
 
@@ -90,6 +94,29 @@ export class SupabaseProviderTokenRepository implements ProviderTokenRepository 
             login: r.provider_login ?? null,
             authKind: r.auth_kind,
         }))
+    }
+
+    async all(userId: string): Promise<UserProviderToken[]> {
+        const { data, error } = await this.db
+            .from("provider_tokens")
+            .select("host,auth_kind,access_token,refresh_token,expires_at,scopes,provider_login,api_base")
+            .eq("user_id", userId)
+            .eq("provider", PROVIDER)
+            .order("host", { ascending: true })
+            .returns<ProviderTokenRow[]>()
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return (data ?? [])
+            .filter((r) => !!r.access_token)
+            .map((r) => ({
+                host: r.host,
+                authKind: r.auth_kind,
+                accessToken: r.access_token,
+                refreshToken: r.refresh_token ?? null,
+                expiresAt: r.expires_at ?? null,
+                scopes: r.scopes ?? null,
+                login: r.provider_login ?? null,
+                apiBase: r.api_base ?? null,
+            }))
     }
 
     async find(userId: string, host: string): Promise<UserProviderToken | null> {

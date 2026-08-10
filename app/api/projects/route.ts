@@ -72,6 +72,24 @@ export async function POST(request: Request) {
     // www., host case) can't create "different" projects for the same repo.
     const canonical_url = canonicalRepoUrl(repo_url)
 
+    // Provider tagging. The picker sends provider='gitlab' + the numeric project
+    // id for GitLab-sourced repos; GitHub omits both (the DB defaults to
+    // 'github'). gitlab_host is derived from the URL host — project ids are only
+    // unique within an instance, so (host, id) is the real remote identity.
+    const provider = body?.provider === "gitlab" ? "gitlab" : "github"
+    const gitlab_project_id =
+        provider === "gitlab" && typeof body?.gitlab_project_id === "number"
+            ? body.gitlab_project_id
+            : null
+    let gitlab_host: string | null = null
+    if (provider === "gitlab") {
+        try {
+            gitlab_host = new URL(canonical_url).hostname.toLowerCase()
+        } catch {
+            gitlab_host = null
+        }
+    }
+
     // Reject a repo the TEAM already has. The DB's unique(team_id, repo_url)
     // constraint (0052) only catches an EXACT string match, so we also compare by
     // canonical URL and by repo_full_name case-insensitively (a repo's real
@@ -87,7 +105,16 @@ export async function POST(request: Request) {
     }
 
     const { data: result, error: dbErr } = await repoRead(() =>
-        ctx.projects.create({ team_id: teamId, user_id: user.id, name, repo_url: canonical_url, repo_full_name, description }),
+        ctx.projects.create({
+            team_id: teamId,
+            user_id: user.id,
+            name,
+            repo_url: canonical_url,
+            repo_full_name,
+            description,
+            provider,
+            ...(provider === "gitlab" ? { gitlab_project_id, gitlab_host } : {}),
+        }),
     )
     if (dbErr) return dbErr
     // Backstop for the pre-check race — the unique(team_id, repo_url) index.
