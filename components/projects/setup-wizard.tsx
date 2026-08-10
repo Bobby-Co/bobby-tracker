@@ -19,7 +19,12 @@ export type WizardEffort = "low" | "medium" | "high"
 
 export interface SetupWizardProps {
     projectName: string
-    /** null = unknown/loading; false = App not on the repo; true = connected. */
+    /** Which VCS this project syncs with — drives labels + the connect step.
+     *  GitLab sync is provisioned automatically at create, so its "connect" step
+     *  is informational, not a GitHub-App install. */
+    provider?: "github" | "gitlab"
+    /** null = unknown/loading; false = not connected/provisioned; true = connected.
+     *  For GitLab this reflects sync being enabled (auto-provisioned), not an App. */
     installed: boolean | null
     initialDir?: WizardDir
     initialAutoUpdate?: boolean
@@ -41,6 +46,7 @@ const EASE = [0.16, 1, 0.3, 1] as const
 
 export function SetupWizard({
     projectName,
+    provider = "github",
     installed,
     initialDir = "both",
     initialAutoUpdate = true,
@@ -52,6 +58,7 @@ export function SetupWizard({
     onBuild,
 }: SetupWizardProps) {
     const reduce = useReducedMotion()
+    const label = provider === "gitlab" ? "GitLab" : "GitHub"
     const [step, setStep] = useState(0)
     const [dir, setDir] = useState<WizardDir>(initialDir)
     const router = useRouter()
@@ -110,7 +117,7 @@ export function SetupWizard({
                         exit={{ opacity: 0, x: reduce ? 0 : -32 }}
                         transition={{ duration: 0.4, ease: EASE }}
                     >
-                        {step === 0 && <GithubScene dir={dir} onPick={setDir} installed={installed} onConnect={onConnect} reduce={!!reduce} />}
+                        {step === 0 && <GithubScene dir={dir} onPick={setDir} installed={installed} onConnect={onConnect} reduce={!!reduce} provider={provider} label={label} />}
                         {step === 1 && <AutoUpdateScene defaultOn={autoUpdate} onToggle={() => setAutoUpdate((v) => !v)} reduce={!!reduce} />}
                         {step === 2 && <EffortScene value={effort} onPick={setEffort} reduce={!!reduce} />}
                     </motion.div>
@@ -138,7 +145,7 @@ export function SetupWizard({
                         type="button"
                         onClick={next}
                         disabled={githubBlocked}
-                        title={githubBlocked ? "Connect the GitHub App first, or choose “No sync” to skip it" : undefined}
+                        title={githubBlocked ? `Connect ${label} first, or choose “No sync” to skip it` : undefined}
                         className="btn-primary min-w-[120px] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                         Continue
@@ -161,12 +168,14 @@ export function SetupWizard({
 
 // ── Scene 1: GitHub sync mode ────────────────────────────────────────────────
 
-const DIRS: { val: WizardDir; short: string; title: string; blurb: string; icon: React.ReactNode }[] = [
-    { val: "both", short: "Two-way", title: "Two-way sync", blurb: "Issues and PRs stay in sync both ways — edit on either side, and the other follows.", icon: <TwoWayIcon /> },
-    { val: "inbound", short: "In", title: "GitHub → Ucelot", blurb: "GitHub is the source of truth. Changes there flow into Ucelot; nothing is pushed back.", icon: <ArrowRightIcon /> },
-    { val: "outbound", short: "Out", title: "Ucelot → GitHub", blurb: "Ucelot is the source of truth. What you do here is pushed to GitHub, not the reverse.", icon: <ArrowLeftIcon /> },
-    { val: "off", short: "Off", title: "No sync", blurb: "No issue or PR mirroring. You can still index the code and use Mind.", icon: <OffIcon /> },
-]
+function makeDirs(label: string): { val: WizardDir; short: string; title: string; blurb: string; icon: React.ReactNode }[] {
+    return [
+        { val: "both", short: "Two-way", title: "Two-way sync", blurb: "Issues and PRs stay in sync both ways — edit on either side, and the other follows.", icon: <TwoWayIcon /> },
+        { val: "inbound", short: "In", title: `${label} → Ucelot`, blurb: `${label} is the source of truth. Changes there flow into Ucelot; nothing is pushed back.`, icon: <ArrowRightIcon /> },
+        { val: "outbound", short: "Out", title: `Ucelot → ${label}`, blurb: `Ucelot is the source of truth. What you do here is pushed to ${label}, not the reverse.`, icon: <ArrowLeftIcon /> },
+        { val: "off", short: "Off", title: "No sync", blurb: "No issue or PR mirroring. You can still index the code and use Mind.", icon: <OffIcon /> },
+    ]
+}
 
 function GithubScene({
     dir,
@@ -174,16 +183,21 @@ function GithubScene({
     installed,
     onConnect,
     reduce,
+    provider,
+    label,
 }: {
     dir: WizardDir
     onPick: (d: WizardDir) => void
     installed: boolean | null
     onConnect: () => void
     reduce: boolean
+    provider: "github" | "gitlab"
+    label: string
 }) {
+    const DIRS = makeDirs(label)
     return (
         <motion.div layout="position" className="flex flex-col items-center gap-5 text-center">
-            <SceneTitle>Sync issues &amp; PRs with GitHub</SceneTitle>
+            <SceneTitle>Sync issues &amp; PRs with {label}</SceneTitle>
 
             <FlowDiagram dir={dir} reduce={reduce} />
 
@@ -222,7 +236,7 @@ function GithubScene({
                 </AnimatePresence>
             </div>
 
-            {installed === false && dir !== "off" && (
+            {installed === false && dir !== "off" && provider === "github" && (
                 <button
                     type="button"
                     onClick={onConnect}
@@ -231,9 +245,16 @@ function GithubScene({
                     <GithubMark /> Connect the GitHub App to activate
                 </button>
             )}
+            {/* GitLab sync is provisioned automatically at create; if it didn't
+                activate, point the user to Connections rather than an App install. */}
+            {installed === false && dir !== "off" && provider === "gitlab" && (
+                <span className="max-w-sm text-[12px] text-amber-700">
+                    GitLab sync isn’t active yet — check that {label} is connected in Settings → Connections.
+                </span>
+            )}
             {installed && (
                 <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-emerald-700">
-                    <DotPulse reduce={reduce} /> GitHub App connected
+                    <DotPulse reduce={reduce} /> {provider === "gitlab" ? "GitLab sync connected" : "GitHub App connected"}
                 </span>
             )}
         </motion.div>

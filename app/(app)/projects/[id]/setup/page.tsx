@@ -13,7 +13,13 @@ import type { GithubSyncDirection } from "@/lib/shared/types"
 export default function SetupWizardPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
-    const [init, setInit] = useState<{ name: string; installed: boolean; dir: WizardDir; autoUpdate: boolean } | null>(null)
+    const [init, setInit] = useState<{
+        name: string
+        provider: "github" | "gitlab"
+        installed: boolean
+        dir: WizardDir
+        autoUpdate: boolean
+    } | null>(null)
 
     useEffect(() => {
         let cancelled = false
@@ -21,19 +27,26 @@ export default function SetupWizardPage() {
             const supabase = createClient()
             const { data } = await supabase
                 .from("projects")
-                .select("name,github_installation_id,github_sync_enabled,github_sync_direction,auto_index_on_push")
+                .select("name,provider,github_installation_id,github_sync_enabled,github_sync_direction,auto_index_on_push")
                 .eq("id", id)
                 .maybeSingle<{
                     name: string
+                    provider: "github" | "gitlab" | null
                     github_installation_id: number | null
                     github_sync_enabled: boolean
                     github_sync_direction: GithubSyncDirection
                     auto_index_on_push: boolean
                 }>()
             if (cancelled) return
+            const provider = data?.provider === "gitlab" ? "gitlab" : "github"
+            // GitLab sync is auto-provisioned at create (no App install), so
+            // "connected" means sync is enabled; GitHub means the App is linked.
+            const installed =
+                provider === "gitlab" ? !!data?.github_sync_enabled : !!data?.github_installation_id
             setInit({
                 name: data?.name ?? "",
-                installed: !!data?.github_installation_id,
+                provider,
+                installed,
                 dir: data?.github_sync_enabled ? (data.github_sync_direction as WizardDir) : "both",
                 autoUpdate: data?.auto_index_on_push ?? true,
             })
@@ -95,6 +108,7 @@ export default function SetupWizardPage() {
     return (
         <SetupWizard
             projectName={init.name}
+            provider={init.provider}
             installed={init.installed}
             initialDir={init.dir}
             initialAutoUpdate={init.autoUpdate}
