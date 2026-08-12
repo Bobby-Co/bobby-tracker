@@ -140,8 +140,12 @@ export async function GET(request: Request): Promise<Response> {
     return new Response(stream, {
         status: 200,
         headers: {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-store, no-transform",
+            // Matched byte-for-byte to app/api/projects/[id]/mind/route.ts, the
+            // SSE route already streaming in production here — this stack is known
+            // to flush with exactly these, and this is not the place to find out
+            // that a different spelling buffers.
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
             Connection: "keep-alive",
             // Defeats proxy buffering, which would otherwise hold the keepalives
             // and leave the client believing the stream never opened.
