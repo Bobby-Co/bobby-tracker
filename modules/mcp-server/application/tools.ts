@@ -24,7 +24,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     {
         name: "list_knowledge_bases",
         description:
-            "List the Ocelot knowledge bases (indexed codebases) you can query. Call this first when you don't know which project name to pass to the other tools, or to check whether the current repository has one.",
+            "List the Ucelot knowledge bases (indexed codebases) you can query. Call this first when you don't know which project name to pass to the other tools, or to check whether the current repository has one.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
     },
     {
@@ -36,7 +36,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
             properties: {
                 project: {
                     type: "string",
-                    description: "Which knowledge base: 'owner/repo', the repo name, or the Ocelot project name.",
+                    description: "Which knowledge base: 'owner/repo', the repo name, or the Ucelot project name.",
                 },
                 query: {
                     type: "string",
@@ -66,7 +66,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
             properties: {
                 project: {
                     type: "string",
-                    description: "Which knowledge base: 'owner/repo', the repo name, or the Ocelot project name.",
+                    description: "Which knowledge base: 'owner/repo', the repo name, or the Ucelot project name.",
                 },
                 question: { type: "string", description: "The question to answer about the codebase." },
             },
@@ -134,7 +134,7 @@ export async function executeTool(
 // ─── rendering ───────────────────────────────────────────────────────────────
 function renderList(bases: Awaited<ReturnType<KnowledgeBaseService["list"]>>): string {
     if (bases.length === 0) {
-        return "No knowledge bases are available to you.\n\nTo expose one: open the project in Ocelot → Integrations tab → enable MCP access. The project also needs to have finished indexing."
+        return "No knowledge bases are available to you.\n\nTo expose one: open the project in Ucelot → Integrations tab → enable MCP access. The project also needs to have finished indexing."
     }
     const lines = bases.map((b) => {
         const label = b.repoFullName ? `${b.repoFullName} (${b.name})` : b.name

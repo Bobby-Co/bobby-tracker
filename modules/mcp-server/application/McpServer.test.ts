@@ -35,7 +35,7 @@ describe("initialize", () => {
     test("advertises tools and identifies the server", async () => {
         const res = await server().handle({ jsonrpc: "2.0", id: 1, method: "initialize" })
         expect(ok(res).capabilities.tools).toBeDefined()
-        expect(ok(res).serverInfo.name).toBe("ocelot")
+        expect(ok(res).serverInfo.name).toBe("ucelot")
         // The instructions are what steer the model to call the tool BEFORE it
         // starts opening files — the whole point of the integration.
         expect(ok(res).instructions).toContain("locate_files")

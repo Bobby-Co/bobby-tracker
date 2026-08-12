@@ -174,13 +174,13 @@ export function McpConnectPanel() {
             <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
                 <div className="text-[14px] font-bold">Connect Claude to your knowledge bases</div>
                 <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
-                    Ocelot exposes your indexed codebases over MCP. Once connected, Claude can ask where
+                    Ucelot exposes your indexed codebases over MCP. Once connected, Claude can ask where
                     something lives and get the exact files and line numbers back — instead of searching
                     through your repository and reading files to find out.
                 </p>
 
                 <CopyRow label="MCP server URL" value={endpoint} />
-                <CopyRow label="Claude Code" value={`claude mcp add --transport http ocelot ${endpoint}`} />
+                <CopyRow label="Claude Code" value={`claude mcp add --transport http ucelot ${endpoint}`} />
 
                 <p className="mt-4 text-[13px] text-[color:var(--c-text-muted)]">
                     For Claude Desktop or claude.ai, go to <strong>Settings → Connectors → Add custom

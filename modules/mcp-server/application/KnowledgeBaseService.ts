@@ -105,7 +105,7 @@ export class KnowledgeBaseService {
         const bases = await this.list()
         if (bases.length === 0) {
             throw new McpToolError(
-                "No knowledge bases are available to you. Enable MCP for a project in its Integrations tab in Ocelot, then try again.",
+                "No knowledge bases are available to you. Enable MCP for a project in its Integrations tab in Ucelot, then try again.",
             )
         }
 
@@ -151,7 +151,7 @@ export class KnowledgeBaseService {
 
         if (!hit.indexed) {
             throw new McpToolError(
-                `"${hit.repoFullName || hit.name}" has no knowledge graph yet — it hasn't finished indexing in Ocelot. Fall back to reading files directly for this one.`,
+                `"${hit.repoFullName || hit.name}" has no knowledge graph yet — it hasn't finished indexing in Ucelot. Fall back to reading files directly for this one.`,
             )
         }
 

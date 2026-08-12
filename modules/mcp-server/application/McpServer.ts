@@ -25,10 +25,10 @@ import type { KnowledgeBaseService } from "./KnowledgeBaseService"
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"]
 const PREFERRED_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
-const SERVER_INFO = { name: "ocelot", title: "Ocelot Knowledge Base", version: "1.0.0" }
+const SERVER_INFO = { name: "ucelot", title: "Ucelot Knowledge Base", version: "1.0.0" }
 
 const INSTRUCTIONS = [
-    "Ocelot exposes indexed knowledge graphs of the user's codebases.",
+    "Ucelot exposes indexed knowledge graphs of the user's codebases.",
     "",
     "Before exploring a repository by grepping or opening files, call locate_files with a plain-language description of what you need to change or understand. It returns the ranked files and the exact file:line snippets that matter, so you can read only those and go straight to implementing.",
     "Use ask_codebase for 'how does this work' questions, and list_knowledge_bases when you don't know which project name to pass.",
