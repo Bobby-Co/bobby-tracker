@@ -3,7 +3,7 @@ import { Supabase } from "@/lib/server/supabase"
 import {
     AuthorizationRequest,
     ConsentCsrf,
-    ConsentSessionSecret,
+    ConsentServerSecret,
     OAuthServerConfig,
     getOAuthAuthorizationService,
     type AuthorizeQuery,
@@ -11,12 +11,18 @@ import {
 
 // GET /oauth/consent — the human step of the authorization code flow.
 //
-// Reached from /oauth/authorize (app/(app)/oauth/authorize/route.ts), which is
-// the endpoint clients are told about and which owns the signed-out bounce. By
-// the time a request lands here there is a session, so the (app) layout renders
-// this page inside the normal app shell. The session check below is still made:
-// this URL is directly reachable, and a page that assumes an upstream guard ran
-// is a page that stops being safe the moment someone links to it.
+// Reached from /oauth/authorize (app/oauth/authorize/route.ts), which is the
+// endpoint clients are told about and which owns the signed-out bounce. The
+// session check below is still made: this URL is directly reachable, and a page
+// that assumes an upstream guard ran is a page that stops being safe the moment
+// someone links to it.
+//
+// DELIBERATELY OUTSIDE app/(app). This is an account-authorization screen shown
+// to someone arriving from another application — the dashboard chrome (sidebar,
+// team switcher, project nav) is noise at best and misleading at worst, since the
+// decision is about granting access, not navigating the product. Sitting at the
+// top level alongside /login and /invite also means it renders under the root
+// layout alone, with no client-side auth guard between the request and the form.
 //
 // HOW FAILURES ARE REPORTED is the security-critical part and it is not uniform;
 // AuthorizationRequest.validate decides. In short: if the client_id is unknown or
@@ -43,6 +49,17 @@ export default async function ConsentPage({
             <ConsentError
                 title="Authorization isn't available"
                 message="This deployment has no public URL configured, so it can't complete an OAuth flow. Ask an administrator to set NEXT_PUBLIC_APP_URL."
+            />
+        )
+    }
+
+    // Refuse to render a form we can't protect rather than minting a forgeable
+    // token — an unprotected Approve button is worse than an unavailable one.
+    if (!ConsentServerSecret.isConfigured()) {
+        return (
+            <ConsentError
+                title="Authorization isn't available"
+                message="This deployment has no server secret configured, so the consent form can't be secured. Ask an administrator to set SUPABASE_SERVICE_ROLE_KEY (or MCP_CONSENT_SECRET)."
             />
         )
     }
@@ -93,7 +110,7 @@ export default async function ConsentPage({
     // The anti-CSRF token, derived from the caller's own session cookies and bound
     // to THIS request's client / redirect / PKCE challenge. See domain/ConsentCsrf.
     const csrf = await ConsentCsrf.mint(
-        await ConsentSessionSecret.read(),
+        ConsentServerSecret.read(),
         user.id,
         ConsentCsrf.bindingFor({
             clientId: request.clientId,
@@ -103,6 +120,11 @@ export default async function ConsentPage({
     )
 
     const account = user.email || (user.user_metadata?.full_name as string) || "your account"
+    // Set by POST /api/oauth/authorize when it bounces back here. "retry" = the
+    // CSRF token no longer matched (a sign-in refresh mid-consent); "invalid" =
+    // re-validation against the client registry failed. Both used to return the
+    // user to this screen with no explanation, which read as a dead button.
+    const consentError = one(params.consent_error)
 
     return (
         <div className="flex min-h-full items-center justify-center px-6 py-12">
@@ -116,6 +138,17 @@ export default async function ConsentPage({
                 <p className="mt-2 text-[13px] text-[color:var(--c-text-muted)]">
                     Signed in as <span className="font-semibold text-[color:var(--c-text)]">{account}</span>
                 </p>
+
+                {consentError && (
+                    <p
+                        role="alert"
+                        className="mt-4 rounded-[10px] bg-amber-50 px-3 py-2 text-[12.5px] leading-5 text-amber-900"
+                    >
+                        {consentError === "invalid"
+                            ? "That request couldn't be verified when you submitted it, so it wasn't approved. Nothing was shared. If pressing Approve again doesn't work, start over from the application that sent you here."
+                            : "That request couldn't be completed — your sign-in changed while this page was open. Nothing was shared. Press Approve again to continue."}
+                    </p>
+                )}
 
                 <div className="mt-5 rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-4">
                     <div className="text-[12px] font-semibold">If you approve, it will be able to:</div>

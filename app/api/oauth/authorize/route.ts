@@ -2,7 +2,7 @@ import { Supabase } from "@/lib/server/supabase"
 import {
     AuthorizationRequest,
     ConsentCsrf,
-    ConsentSessionSecret,
+    ConsentServerSecret,
     OAuthServerConfig,
     getOAuthAuthorizationService,
     type AuthorizeQuery,
@@ -87,14 +87,16 @@ export async function POST(request: Request) {
         }
         // Un-redirectable: bounce back to the consent page, which renders the
         // same refusal with an explanation instead of forwarding it anywhere.
-        return seeOther(`/oauth/authorize?${consentQuery(form)}`) // re-enters via the session-checking gateway
+        // Tagged distinctly from the CSRF bounce so the two silent-looking
+        // outcomes are told apart from the screen alone.
+        return seeOther(`/oauth/authorize?${consentQuery(form)}&consent_error=invalid`)
     }
     const authorizeRequest = described.request
 
-    // ── defence 2: the session-bound, request-bound CSRF token ───────────────
+    // ── defence 2: the user-bound, request-bound CSRF token ──────────────────
     const csrfOk = await ConsentCsrf.verify(
         form.get("csrf") ?? "",
-        await ConsentSessionSecret.read(),
+        ConsentServerSecret.read(),
         user.id,
         ConsentCsrf.bindingFor({
             clientId: authorizeRequest.clientId,
@@ -103,9 +105,11 @@ export async function POST(request: Request) {
         }),
     )
     if (!csrfOk) {
-        // Also the outcome when a session legitimately refreshed mid-consent, so
-        // the recovery is "show the screen again", not a dead end.
-        return seeOther(`/oauth/authorize?${consentQuery(form)}`) // re-enters via the session-checking gateway
+        // Re-render the screen with a fresh token — but SAY SO. Bouncing back
+        // silently is indistinguishable from a dead button, which is exactly how
+        // this failed before: the user clicks Approve, lands on the same page, and
+        // has no idea anything went wrong or that clicking again might work.
+        return seeOther(`/oauth/authorize?${consentQuery(form)}&consent_error=retry`)
     }
 
     // ── the decision ─────────────────────────────────────────────────────────

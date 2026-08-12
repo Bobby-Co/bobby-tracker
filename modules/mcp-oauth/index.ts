@@ -46,7 +46,7 @@ export { RedirectUris } from "./domain/RedirectUris"
 
 // ─── server identity (issuer / endpoints / canonical resource) ──────────────
 export { OAuthServerConfig } from "./infrastructure/OAuthServerConfig"
-export { ConsentSessionSecret } from "./infrastructure/ConsentSessionSecret"
+export { ConsentServerSecret } from "./infrastructure/ConsentServerSecret"
 
 // ─── HTTP plumbing for the route handlers (CORS / cache / error envelope) ───
 export { corsPreflight, credentialJson, discoveryJson, oauthErrorJson } from "./infrastructure/OAuthHttp"
