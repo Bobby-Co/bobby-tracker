@@ -60,4 +60,10 @@ export type {
     IssuePreferences,
     KickoffJobInput,
     KickoffResult,
+    RetrieveHints,
+    RetrieveInput,
+    RetrieveHeatEntry,
+    RetrievePinpoint,
+    RetrieveSymbol,
+    RetrieveResult,
 } from "./ports/AnalyserTypes"

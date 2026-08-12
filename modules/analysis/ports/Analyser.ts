@@ -22,6 +22,8 @@ import type {
     KickoffResult,
     AnalyserRunCallback,
     DeepDiveResult,
+    RetrieveInput,
+    RetrieveResult,
 } from "./AnalyserTypes"
 
 /** The tracker's outbound contract to the bobby-analyser service. Methods reject
@@ -30,6 +32,11 @@ import type {
 export interface Analyser {
     // ─── /query — one-shot Q&A against an indexed graph ──────────────────────
     query(repoId: string, question: string, maxBudgetUsd?: number): Promise<QueryResult>
+
+    // ─── /retrieve — ranked files + grounded pinpoints, no synthesis ─────────
+    /** The retrieval engine's raw Evidence: which files matter and the exact
+     *  file:line bodies backing that. Backs the MCP `locate_files` tool. */
+    retrieve(input: RetrieveInput): Promise<RetrieveResult>
 
     // ─── /chat — streaming SSE; returns the raw Response to pipe to the browser ─
     streamChat(

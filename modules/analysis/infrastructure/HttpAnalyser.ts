@@ -25,6 +25,8 @@ import type {
     KickoffResult,
     PrAnalyseInput,
     QueryResult,
+    RetrieveInput,
+    RetrieveResult,
     VerifyInput,
     VerifyReport,
 } from "../ports/AnalyserTypes"
@@ -61,6 +63,36 @@ export class HttpAnalyser implements Analyser {
         })
         if (!res.ok) return this.fail(res, `query failed: HTTP ${res.status}`, "query_failed")
         return (await res.json()) as QueryResult
+    }
+
+    // ─── /retrieve — structured Evidence, no synthesis pass ───────────────────
+    async retrieve(input: RetrieveInput): Promise<RetrieveResult> {
+        const res = await fetch(`${this.base()}/retrieve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...this.authHeader() },
+            // Omitted keys never reach the wire (JSON.stringify drops undefined),
+            // so the analyser applies its own defaults for budget/agents/pinpoint.
+            body: JSON.stringify({
+                repo_id: input.repoId,
+                query: input.query,
+                hints: input.hints,
+                max_budget_usd: input.maxBudgetUsd,
+                max_agents: input.maxAgents,
+                pinpoint: input.pinpoint,
+            }),
+        })
+        if (!res.ok) return this.fail(res, `retrieve failed: HTTP ${res.status}`, "retrieve_failed")
+        const body = (await res.json()) as Partial<RetrieveResult>
+        // Normalise: the tools downstream map/slice these unconditionally, and a
+        // null array from an older analyser build shouldn't throw at a call site.
+        return {
+            heat: body.heat ?? [],
+            pinpoints: body.pinpoints ?? [],
+            symbols: body.symbols ?? [],
+            notes: body.notes ?? [],
+            clusters: body.clusters ?? [],
+            stats: body.stats,
+        }
     }
 
     // ─── /chat (SSE) — return the raw Response so the caller pipes body through ─

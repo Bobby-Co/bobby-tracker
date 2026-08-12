@@ -42,6 +42,66 @@ export interface QueryResult {
     tool_calls?: number
 }
 
+// ─── /retrieve ───────────────────────────────────────────────────────────────
+// The goal-agnostic retrieval engine WITHOUT the synthesis pass: ranked files
+// plus grounded file:line pinpoints, and nothing written by an LLM narrator.
+// This is what the MCP `locate_files` tool serves — an external agent wants
+// coordinates to read, not prose to re-read.
+
+/** Optional anchors the caller already knows, to seed the walk. */
+export interface RetrieveHints {
+    symbols?: string[]
+    files?: string[]
+}
+
+export interface RetrieveInput {
+    repoId: string
+    query: string
+    hints?: RetrieveHints
+    maxBudgetUsd?: number
+    maxAgents?: number
+    /** Read the actual function bodies (slower). Defaults to true analyser-side. */
+    pinpoint?: boolean
+}
+
+/** A file the swarm's attention converged on. `opens` is how many times an agent
+ *  opened it — a rough confidence signal alongside `score`. */
+export interface RetrieveHeatEntry {
+    file: string
+    score: number
+    opens?: number
+}
+
+/** A citable snippet: the resolved symbol plus its line-numbered body. */
+export interface RetrievePinpoint {
+    file: string
+    symbol?: string
+    label?: string
+    line?: number
+    body?: string
+}
+
+export interface RetrieveSymbol {
+    name: string
+    file: string
+    line?: number
+    kind?: string
+}
+
+export interface RetrieveResult {
+    heat: RetrieveHeatEntry[]
+    pinpoints: RetrievePinpoint[]
+    symbols: RetrieveSymbol[]
+    notes: string[]
+    clusters: { label: string; score?: number }[]
+    stats?: {
+        agents_run?: number
+        clusters_visited?: number
+        cost_usd?: number
+        duration_ms?: number
+    }
+}
+
 // ─── /chat (SSE) ─────────────────────────────────────────────────────────────
 export interface ChatCitation {
     file: string

@@ -1,0 +1,194 @@
+// Characterization tests for KnowledgeBaseService — the gate that decides which
+// knowledge bases an MCP caller can reach.
+//
+// This matters more than a typical service test: MCP requests run on the
+// SERVICE-ROLE client, so RLS is not filtering anything underneath. The rules
+// pinned here ARE the access boundary. The two that must never regress:
+//
+//   • a project the caller can access but has NOT enabled for MCP is invisible
+//     and unresolvable, and
+//   • enumeration and resolution share one path, so nothing can be addressed
+//     that list() wouldn't have shown.
+
+import { test, expect, describe, mock, beforeEach } from "bun:test"
+import { KnowledgeBaseService } from "./KnowledgeBaseService"
+import { McpToolError } from "../domain/McpTool"
+
+const access = { listTeams: mock(), accessibleProjectIds: mock(), canAccessProject: mock() }
+const projects = { listForTeam: mock() }
+const mcpIntegration = { listEnabledProjectIds: mock() }
+const analyser = { findGraphId: mock() }
+const analyserPort = { retrieve: mock(), query: mock() }
+
+// The service takes PORTS by constructor (no DB client, no RequestContext), so
+// plain mocks are enough — no module mocking needed.
+const svc = () =>
+    new KnowledgeBaseService(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        access as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        projects as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mcpIntegration as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        analyser as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        analyserPort as any,
+        "u1",
+    )
+
+const project = (id: string, name: string, repo: string | null) => ({
+    id,
+    name,
+    repo_full_name: repo,
+    description: null,
+})
+
+beforeEach(() => {
+    access.listTeams.mockReset()
+    access.accessibleProjectIds.mockReset()
+    access.canAccessProject.mockReset()
+    projects.listForTeam.mockReset()
+    mcpIntegration.listEnabledProjectIds.mockReset()
+    analyser.findGraphId.mockReset()
+    analyserPort.retrieve.mockReset()
+    analyserPort.query.mockReset()
+
+    // Default happy path: one team, admin, two projects, both indexed.
+    access.listTeams.mockResolvedValue([{ id: "t1", role: "admin", is_personal: true }])
+    access.accessibleProjectIds.mockResolvedValue("all")
+    access.canAccessProject.mockResolvedValue({ ok: true, teamId: "t1", role: "admin" })
+    projects.listForTeam.mockResolvedValue([
+        project("p1", "Tracker", "phongpak/bobby-tracker"),
+        project("p2", "Analyser", "phongpak/bobby-analyser"),
+    ])
+    mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p1", "p2"])
+    analyser.findGraphId.mockResolvedValue("graph-x")
+})
+
+describe("list — exposure filtering", () => {
+    test("returns only MCP-enabled projects", async () => {
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p2"])
+        const bases = await svc().list()
+        expect(bases.map((b) => b.projectId)).toEqual(["p2"])
+    })
+
+    test("is empty when nothing is enabled, even though both are accessible", async () => {
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue([])
+        expect(await svc().list()).toEqual([])
+    })
+
+    test("skips a team where the member's project scope is empty, without querying it", async () => {
+        access.accessibleProjectIds.mockResolvedValue([])
+        expect(await svc().list()).toEqual([])
+        expect(projects.listForTeam).not.toHaveBeenCalled()
+    })
+
+    test("marks a project with no graph as not indexed", async () => {
+        projects.listForTeam.mockResolvedValue([project("p1", "Tracker", "phongpak/bobby-tracker")])
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p1"])
+        analyser.findGraphId.mockResolvedValue(null)
+        const [base] = await svc().list()
+        expect(base.indexed).toBe(false)
+    })
+
+    test("dedupes a project reachable through several teams", async () => {
+        access.listTeams.mockResolvedValue([
+            { id: "t1", role: "admin", is_personal: true },
+            { id: "t2", role: "member", is_personal: false },
+        ])
+        projects.listForTeam.mockResolvedValue([project("p1", "Tracker", "phongpak/bobby-tracker")])
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p1"])
+        const bases = await svc().list()
+        expect(bases).toHaveLength(1)
+    })
+})
+
+describe("resolve — identifier matching", () => {
+    test("matches an exact project id", async () => {
+        expect((await svc().resolve("p2")).projectId).toBe("p2")
+    })
+
+    test("matches owner/repo", async () => {
+        expect((await svc().resolve("phongpak/bobby-analyser")).projectId).toBe("p2")
+    })
+
+    test("matches the display name, case-insensitively", async () => {
+        expect((await svc().resolve("tracker")).projectId).toBe("p1")
+    })
+
+    test("matches a bare repo name", async () => {
+        expect((await svc().resolve("bobby-analyser")).projectId).toBe("p2")
+    })
+
+    test("carries the analyser graph id through", async () => {
+        analyser.findGraphId.mockResolvedValue("graph-42")
+        expect((await svc().resolve("p1")).graphId).toBe("graph-42")
+    })
+
+    test("reports ambiguity instead of guessing", async () => {
+        projects.listForTeam.mockResolvedValue([
+            project("p1", "api", "acme/api-server"),
+            project("p2", "api-gateway", "acme/api-gateway"),
+        ])
+        // "api" hits both on the substring pass; neither exact pass singles one out.
+        await expect(svc().resolve("api-")).rejects.toThrow(McpToolError)
+    })
+
+    test("lists the alternatives when nothing matches", async () => {
+        await expect(svc().resolve("nope")).rejects.toThrow(/No knowledge base matches/)
+    })
+
+    test("guides the user when they have no knowledge bases at all", async () => {
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue([])
+        await expect(svc().resolve("anything")).rejects.toThrow(/Integrations tab/)
+    })
+
+    test("refuses an un-indexed project with a fallback hint", async () => {
+        analyser.findGraphId.mockResolvedValue(null)
+        await expect(svc().resolve("p1")).rejects.toThrow(/hasn't finished indexing/)
+    })
+})
+
+describe("resolve — the access boundary", () => {
+    test("a project that is accessible but NOT MCP-enabled cannot be resolved by id", async () => {
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p1"])
+        await expect(svc().resolve("p2")).rejects.toThrow(/No knowledge base matches/)
+    })
+
+    test("denies when the access check fails, even if the project was listed", async () => {
+        // Defence in depth: list() and canAccessProject disagreeing must deny.
+        access.canAccessProject.mockResolvedValue({ ok: false, teamId: "t1", role: "member" })
+        await expect(svc().resolve("p1")).rejects.toThrow(McpToolError)
+    })
+
+    test("an empty identifier is rejected outright", async () => {
+        await expect(svc().resolve("   ")).rejects.toThrow(/No project given/)
+    })
+})
+
+describe("locate / ask — delegation", () => {
+    test("locate addresses the analyser by graph id, not project id", async () => {
+        analyser.findGraphId.mockResolvedValue("graph-7")
+        analyserPort.retrieve.mockResolvedValue({ heat: [], pinpoints: [], symbols: [], notes: [], clusters: [] })
+        await svc().locate("p1", "where is auth", { symbols: ["Verify"] })
+        expect(analyserPort.retrieve).toHaveBeenCalledWith({
+            repoId: "graph-7",
+            query: "where is auth",
+            hints: { symbols: ["Verify"] },
+        })
+    })
+
+    test("ask passes the question through to the analyser query", async () => {
+        analyser.findGraphId.mockResolvedValue("graph-7")
+        analyserPort.query.mockResolvedValue({ markdown: "answer", cost_usd: 0, duration_ms: 1 })
+        const { answer } = await svc().ask("p1", "how does sync work?")
+        expect(analyserPort.query).toHaveBeenCalledWith("graph-7", "how does sync work?")
+        expect(answer.markdown).toBe("answer")
+    })
+
+    test("an unresolvable project never reaches the analyser", async () => {
+        await expect(svc().locate("ghost", "q")).rejects.toThrow(McpToolError)
+        expect(analyserPort.retrieve).not.toHaveBeenCalled()
+    })
+})

@@ -20,6 +20,8 @@ import type {
     IssueComposeProposal,
     EmbedResult,
     QueryResult,
+    RetrieveInput,
+    RetrieveResult,
 } from "@/modules/analysis"
 import { pointsForUsage } from "../domain/ProwlPoints"
 import type { BillingSubject, UsageRecorder } from "../ports/UsageRecorder"
@@ -43,6 +45,12 @@ export class MeteringAnalyser implements Analyser {
     async query(repoId: string, question: string, maxBudgetUsd?: number): Promise<QueryResult> {
         const result = await this.inner.query(repoId, question, maxBudgetUsd)
         await this.meter("query", { costUsd: result.cost_usd })
+        return result
+    }
+
+    async retrieve(input: RetrieveInput): Promise<RetrieveResult> {
+        const result = await this.inner.retrieve(input)
+        await this.meter("retrieve", { costUsd: result.stats?.cost_usd })
         return result
     }
 

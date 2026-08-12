@@ -30,8 +30,10 @@ import {
     createSupabasePublicSessionAdminRepository,
     createSupabaseProjectPublicIntegrationRepository,
 } from "@/modules/public"
+import { createSupabaseProjectMcpIntegrationRepository } from "@/modules/mcp"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
 import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
+import { createSupabaseSubscriptionsRepository, createSupabaseUsageRepository } from "@/modules/billing"
 
 export class RequestContext {
     constructor(private readonly db: SupabaseRlsClient) {}
@@ -90,11 +92,25 @@ export class RequestContext {
     get publicIntegration() {
         return createSupabaseProjectPublicIntegrationRepository(this.db)
     }
+    /** Per-project MCP exposure flag (project_mcp_integration) — whether this
+     *  project's knowledge base may be served to an MCP client. */
+    get mcpIntegration() {
+        return createSupabaseProjectMcpIntegrationRepository(this.db)
+    }
     get relayWorkers() {
         return createSupabaseRelayWorkerRepository(this.db)
     }
     get notifications() {
         return createSupabaseNotificationFeedRepository(this.db)
+    }
+    /** Prowl billing — the team's subscription (tier + allowance). */
+    get subscriptions() {
+        return createSupabaseSubscriptionsRepository(this.db)
+    }
+    /** Prowl billing — the team's usage ledger (reads; writes go via the
+     *  service-role recorder in the metering layer). */
+    get usage() {
+        return createSupabaseUsageRepository(this.db)
     }
 
     /** The raw RLS client — the last remaining escape hatch, used ONLY where a

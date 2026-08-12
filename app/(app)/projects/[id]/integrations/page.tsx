@@ -6,6 +6,7 @@ import { useApi } from "@/lib/client/hooks/use-api"
 import type { ProjectPublicIntegration, PublicSession } from "@/lib/shared/types"
 import { PublicIntegrationPanel } from "@/components/public/public-integration-panel"
 import { GithubSyncPanel } from "@/components/projects/github-sync-panel"
+import { McpIntegrationPanel } from "@/components/projects/mcp-integration-panel"
 import IntegrationsLoading from "./loading"
 
 // Integrations tab — external-service syncs and the per-project
@@ -117,6 +118,10 @@ export default function IntegrationsPage() {
                 )}
 
                 <GithubSyncPanel projectId={id} />
+
+                {/* MCP exposure — independent of the public_* tables above, so it
+                    renders even when those migrations are pending. */}
+                <McpIntegrationPanel projectId={id} />
             </div>
         </div>
     )
