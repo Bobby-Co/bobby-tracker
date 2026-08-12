@@ -11,4 +11,9 @@
 // It is also the friendlier URL to hand a human, and worth keeping for that
 // alone once the diagnostic need has passed.
 
-export { GET, POST, OPTIONS, dynamic } from "../api/mcp/route"
+// Handlers are re-exported; the segment config is NOT. Next resolves route
+// config statically at build time, so `dynamic` has to be declared literally in
+// the file it applies to — re-exporting it fails the build outright.
+export { GET, POST, OPTIONS } from "../api/mcp/route"
+
+export const dynamic = "force-dynamic"
