@@ -167,7 +167,9 @@ export function McpConnectPanel() {
     // hostname the user happens to be browsing could fail to match. One source of
     // truth keeps the copied command and the issued token in agreement.
     const origin = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "")
-    const endpoint = `${origin}/api/mcp`
+    // /mcp, not /api/mcp — the same server, but this is the address we advertise.
+    // See app/mcp/route.ts for why the second address exists.
+    const endpoint = `${origin}/mcp`
 
     return (
         <div className="space-y-4">

@@ -1,15 +1,18 @@
-// A second public URL for the same MCP server: https://<app>/mcp
+// The MCP server's PUBLIC address: https://<app>/mcp
 //
 // Identical behaviour to /api/mcp — same handlers, re-exported, no logic of its
-// own. It exists because a client that keys a saved connector to its URL cannot
-// be given a clean slate any other way: claude.ai recognises a re-added
-// https://<app>/api/mcp and offers to "reconnect" the existing record, carrying
-// forward whatever state made it fail. A different URL is a different server to
-// it, so this is the only way to get a genuinely fresh connection without
-// waiting for the far side to expire something we cannot see.
+// own. This is the URL the Settings page hands out and the one to give a person.
 //
-// It is also the friendlier URL to hand a human, and worth keeping for that
-// alone once the diagnostic need has passed.
+// It exists because /api/mcp could not be connected from claude.ai. A client that
+// keys a saved connector to its URL cannot be given a clean slate: re-adding
+// https://<app>/api/mcp was recognised as the same server and offered a
+// "reconnect" against the existing record, carrying forward whatever state made
+// it fail — state living on the far side, where we can neither see nor clear it.
+// A different URL is a different server to it, so this address is what finally
+// produced a working connection.
+//
+// /api/mcp stays live and unchanged: it is the current transport, it works, and
+// existing clients (Claude Code among them) are connected to it.
 
 // Handlers are re-exported; the segment config is NOT. Next resolves route
 // config statically at build time, so `dynamic` has to be declared literally in

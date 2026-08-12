@@ -1,7 +1,9 @@
 // The MCP endpoint — Streamable HTTP transport for the Model Context Protocol.
 //
-// This is what a user points Claude at:
-//     claude mcp add --transport http ucelot https://<app>/api/mcp
+// This is what a user points Claude at — advertised as https://<app>/mcp, which
+// re-exports these same handlers (see app/mcp/route.ts for why that address is
+// the one we hand out):
+//     claude mcp add --transport http ucelot https://<app>/mcp
 //
 // It is an OAuth 2.1 protected resource: a 401 from here carries the
 // `WWW-Authenticate` challenge that tells the client where to discover the
