@@ -9,10 +9,21 @@ export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60 // 1 hour
  *  re-prompting; rotation on every use is what keeps that safe. */
 export const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 60 // 60 days
 
-/** Authorization-code lifetime. RFC 6749 §4.1.2 says "maximum of 10 minutes";
- *  a code is redeemed within a second in practice, so 60s is plenty and shrinks
- *  the interception window to almost nothing. */
-export const AUTHORIZATION_CODE_TTL_SECONDS = 60
+/** Authorization-code lifetime — the RFC 6749 §4.1.2 recommended maximum.
+ *
+ *  This was 60s on the reasoning that "a code is redeemed within a second in
+ *  practice". That holds for a browser-only flow, but NOT for the one real
+ *  clients actually use: Claude approves in the browser, claude.ai's callback
+ *  hands the code back to the DESKTOP APP, and the desktop app performs the
+ *  exchange. That hop involves a process wake-up and a deep link, and it is
+ *  easily slower than a minute — after which the exchange fails and the user is
+ *  told only "Couldn't connect".
+ *
+ *  Ten minutes is safe here because the code's protection was never its
+ *  lifetime: it is single-use (consumed atomically), PKCE-bound so an
+ *  interceptor without the verifier cannot redeem it, pinned to the client and
+ *  redirect_uri, and a replay revokes every token descended from it. */
+export const AUTHORIZATION_CODE_TTL_SECONDS = 60 * 10
 
 /** The claims a resolved access token yields. THIS TYPE IS A PUBLISHED CONTRACT —
  *  the MCP server imports it from the module barrel. */

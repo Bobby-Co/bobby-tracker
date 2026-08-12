@@ -18,7 +18,10 @@
 //
 //  3. NO ORACLES. Unknown / expired / revoked / wrong-client / bad-PKCE all
 //     collapse to one `invalid_grant`. Distinguishing them would let a caller
-//     enumerate what exists.
+//     enumerate what exists. The real reason IS recorded, but only in the server
+//     log (see denyCode) — an operator debugging "Couldn't connect" should not
+//     have to guess which of six rules fired, and the client still learns
+//     nothing.
 
 import { ok, err, type Result } from "@/lib/shared/kernel"
 import { MCP_SCOPE } from "../domain/AuthorizationRequest"
@@ -30,6 +33,7 @@ import type { OAuthCodeRepository } from "../ports/OAuthCodeRepository"
 import type { OAuthTokenRepository } from "../ports/OAuthTokenRepository"
 import {
     ACCESS_TOKEN_TTL_SECONDS,
+    AUTHORIZATION_CODE_TTL_SECONDS,
     REFRESH_TOKEN_TTL_SECONDS,
     type IssuedTokens,
     type McpTokenClaims,
@@ -84,24 +88,25 @@ export class OAuthTokenService {
         } catch (e) {
             return err(OAuthError.serverError(e instanceof Error ? e.message : "code lookup failed"))
         }
-        if (!found) return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+        if (!found) return this.denyCode("no such code")
         const record = found
 
         // Already redeemed → treat as compromise, not as a retry.
         if (record.consumedAt) {
             await this.safely(() => this.tokens.revokeByCodeHash(codeHash))
-            return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+            return this.denyCode("already redeemed - descended tokens revoked")
         }
         if (Date.parse(record.expiresAt) <= Date.now()) {
-            return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+            const lateBy = Math.round((Date.now() - Date.parse(record.expiresAt)) / 1000)
+            return this.denyCode(`expired ${lateBy}s ago (ttl ${AUTHORIZATION_CODE_TTL_SECONDS}s)`)
         }
         if (record.clientId !== client.value.clientId) {
-            return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+            return this.denyCode("client_id does not match the code")
         }
         // Byte-exact: the redirect_uri presented here must be the one the code was
         // minted against, which is itself one of the client's registered URIs.
         if (record.redirectUri !== req.redirectUri) {
-            return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+            return this.denyCode("redirect_uri does not match the code")
         }
 
         if (!(await Pkce.verify(req.codeVerifier, record.codeChallenge))) {
@@ -109,7 +114,7 @@ export class OAuthTokenService {
             // it. Burn the code so the real client's later, correct attempt can't
             // be the one that succeeds for an interceptor sitting in between.
             await this.safely(() => this.codes.consume(codeHash).then(() => undefined))
-            return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+            return this.denyCode("PKCE code_verifier did not match - code burned")
         }
 
         // RFC 8707: if the client names a resource now, it must be the one the
@@ -128,7 +133,7 @@ export class OAuthTokenService {
         if (!won) {
             // Lost the race with a concurrent exchange of the same code.
             await this.safely(() => this.tokens.revokeByCodeHash(codeHash))
-            return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+            return this.denyCode("lost the single-use race with a concurrent exchange")
         }
 
         return this.issue(record.clientId, record.userId, record.scope, codeHash)
@@ -242,6 +247,19 @@ export class OAuthTokenService {
     }
 
     // ─── internals ──────────────────────────────────────────────────────────
+
+    /** Refuse a code grant.
+     *
+     *  Every refusal returns the SAME message to the client on purpose: one that
+     *  could tell "expired" from "wrong client" from "already redeemed" is an
+     *  oracle for probing codes. That is right for the client and useless for an
+     *  operator, who then sees only "Couldn't connect" with no way to tell a
+     *  timing problem from a misconfigured client — so the real reason is logged
+     *  server-side (captured by Workers observability) and never transmitted. */
+    private denyCode(reason: string): Result<never, OAuthError> {
+        console.warn(`[oauth] authorization_code refused: ${reason}`)
+        return err(OAuthError.invalidGrant("authorization code is invalid or has expired"))
+    }
 
     /** Identify (and, for a confidential client, authenticate) the caller. */
     private async authenticateClient(creds: ClientCredentials): Promise<Result<OAuthClientRecord, OAuthError>> {
