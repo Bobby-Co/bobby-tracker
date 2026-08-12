@@ -57,13 +57,25 @@ function withCors(response: Response): Response {
     return new Response(response.body, { status: response.status, headers })
 }
 
+// Traced for the same reason the token endpoint is: a client that fails here
+// reports nothing more useful than "couldn't connect", and the alternative is
+// guessing which of auth, protocol or a tool call went wrong. Tokens are never
+// logged — only whether one was present and how it resolved.
+function trace(message: string): void {
+    console.warn(`[mcp] ${message}`)
+}
+
 export async function OPTIONS(): Promise<Response> {
+    trace("OPTIONS preflight")
     return new Response(null, { status: 204, headers: CORS_HEADERS })
 }
 
 /** No server-initiated messages exist for a stateless tools-only server, so the
- *  optional SSE channel is declined rather than left hanging open. */
+ *  optional SSE channel is declined rather than left hanging open. The MCP spec
+ *  permits 405 here — but a client that INSISTS on the stream would fail with no
+ *  explanation, so record the attempt. */
 export async function GET(): Promise<Response> {
+    trace("GET (SSE channel) declined with 405 — client may expect a stream")
     return new Response(JSON.stringify({ error: "method_not_allowed", error_description: "This MCP server is POST-only." }), {
         status: 405,
         headers: { "Content-Type": "application/json", Allow: "POST, OPTIONS", ...CORS_HEADERS },
@@ -72,9 +84,17 @@ export async function GET(): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
     // ─── authenticate ────────────────────────────────────────────────────────
+    const hadBearer = /^Bearer\s+\S/i.test(request.headers.get("authorization") ?? "")
     const principal = await authenticateMcp(request)
-    if (!principal) return withCors(unauthorizedResponse())
+    if (!principal) {
+        // Distinguishing "sent nothing" from "sent something that didn't resolve"
+        // is the difference between a client that never got a token and one whose
+        // token is expired, revoked, or for another deployment.
+        trace(hadBearer ? "401 — bearer present but did not resolve" : "401 — no bearer presented")
+        return withCors(unauthorizedResponse())
+    }
     if (!principal.scopes.includes(MCP_SCOPE)) {
+        trace(`401 — token scopes [${principal.scopes.join(",")}] lack ${MCP_SCOPE}`)
         return withCors(unauthorizedResponse("insufficient_scope", `token is missing the ${MCP_SCOPE} scope`))
     }
 
@@ -98,15 +118,19 @@ export async function POST(request: Request): Promise<Response> {
     const responses: JsonRpcResponse[] = []
     for (const message of messages) {
         if (!isJsonRpcRequest(message)) {
+            trace("received a payload that is not a JSON-RPC 2.0 message")
             responses.push(rpcFailure(null, RpcError.invalidRequest, "not a JSON-RPC 2.0 message"))
             continue
         }
+        const label = message.method === "tools/call" ? `tools/call ${String(message.params?.name ?? "?")}` : message.method
         try {
             const response = await server.handle(message)
+            trace(`${label} → ok`)
             // null = notification: the spec requires no reply for those.
             if (response) responses.push(response)
         } catch (e) {
             const detail = e instanceof Error ? e.message : String(e)
+            trace(`${label} → THREW: ${detail}`)
             responses.push(rpcFailure(message.id ?? null, RpcError.internal, `internal error: ${detail}`))
         }
     }
