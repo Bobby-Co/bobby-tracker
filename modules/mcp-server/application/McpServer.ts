@@ -19,10 +19,23 @@ import { McpToolError, errorResult } from "../domain/McpTool"
 import { TOOL_DEFINITIONS, executeTool } from "./tools"
 import type { KnowledgeBaseService } from "./KnowledgeBaseService"
 
-/** Protocol revisions we can speak. If a client asks for one of these we echo it
- *  back; otherwise we answer with our preferred version and let the client decide
- *  whether it can proceed (per the MCP version-negotiation rules). */
-const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"]
+/** Protocol revisions we can speak, newest first. If a client asks for one of
+ *  these we echo it back; otherwise we answer with our preferred version and let
+ *  the client decide whether it can proceed (per the MCP version-negotiation
+ *  rules).
+ *
+ *  2025-11-25 is listed because that is what current clients ask for — the MCP
+ *  Inspector requests it, and Anthropic's own connector beta
+ *  (`mcp-client-2025-11-20`) cites that revision's authorization spec. We were
+ *  answering 2025-06-18 to every one of them, i.e. downgrading every modern
+ *  client on its very first message. A lenient client shrugs; a strict one has
+ *  every right to give up there, and it would look like a connection failure
+ *  with no explanation.
+ *
+ *  Nothing in the newer revisions obliges a TOOLS-ONLY server to do more work:
+ *  tasks, elicitation and the UI extensions are client capabilities or optional
+ *  server features, and we simply don't advertise them. */
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"]
 const PREFERRED_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 const SERVER_INFO = { name: "ucelot", title: "Ucelot Knowledge Base", version: "1.0.0" }

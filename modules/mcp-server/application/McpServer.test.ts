@@ -27,9 +27,17 @@ describe("initialize", () => {
         expect(ok(res).protocolVersion).toBe("2025-03-26")
     })
 
+    // The regression that matters: current clients (the MCP Inspector, and
+    // Anthropic's connector) ask for 2025-11-25. Answering anything else
+    // downgrades every modern client on its first message.
+    test("echoes the current revision rather than downgrading it", async () => {
+        const res = await server().handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-11-25" } })
+        expect(ok(res).protocolVersion).toBe("2025-11-25")
+    })
+
     test("falls back to its preferred version for an unknown one", async () => {
         const res = await server().handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "1999-01-01" } })
-        expect(ok(res).protocolVersion).toBe("2025-06-18")
+        expect(ok(res).protocolVersion).toBe("2025-11-25")
     })
 
     test("advertises tools and identifies the server", async () => {
