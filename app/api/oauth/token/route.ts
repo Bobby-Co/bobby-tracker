@@ -23,13 +23,35 @@ import {
 // Rate-limited because it is unauthenticated in the "no session" sense: a caller
 // who guesses a code or a refresh token gets in, so guessing must be expensive.
 
+// Every refusal here answers the client with a deliberately terse RFC 6749
+// envelope, which leaves an operator debugging a client-side "Couldn't connect"
+// with nothing to work from — the failure can be any of a dozen rules across the
+// route and the service. So each exit is traced (Workers observability is on).
+// Credentials never appear: no code, verifier, secret or issued token, and the
+// client_id only as a short prefix, enough to correlate one attempt.
+function trace(message: string): void {
+    console.warn(`[oauth] token: ${message}`)
+}
+
+function shortId(clientId: string | null): string {
+    if (!clientId) return "<none>"
+    return clientId.length <= 12 ? clientId : `${clientId.slice(0, 12)}…`
+}
+
 export async function POST(request: Request) {
     const rl = new RateLimiter()
     const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "oauth-token"))
-    if (limited) return limited
+    if (limited) {
+        // Worth surfacing loudly: the key is the CALLER's IP, and a hosted client
+        // (claude.ai) exchanges from a shared backend address, so this can fire for
+        // reasons that have nothing to do with the user hitting it.
+        trace("rate limited (PUBLIC_RL) — shared client IPs can trip this")
+        return limited
+    }
 
     const contentType = request.headers.get("content-type") ?? ""
     if (!contentType.includes("application/x-www-form-urlencoded")) {
+        trace(`rejected content-type "${contentType}"`)
         return oauthErrorJson(
             OAuthError.invalidRequest("content-type must be application/x-www-form-urlencoded"),
         )
@@ -39,6 +61,7 @@ export async function POST(request: Request) {
     try {
         form = new URLSearchParams(await request.text())
     } catch {
+        trace("body did not parse as form-urlencoded")
         return oauthErrorJson(OAuthError.invalidRequest("could not parse the request body"))
     }
 
@@ -46,12 +69,24 @@ export async function POST(request: Request) {
     const credentials = readClientCredentials(request, form)
     // A malformed Authorization header is a client-authentication failure, not a
     // bad grant — say so with the right code and status.
-    if (!credentials.ok) return oauthErrorJson(credentials.error, true)
+    if (!credentials.ok) {
+        trace(`client credentials malformed: ${credentials.error.description}`)
+        return oauthErrorJson(credentials.error, true)
+    }
 
     const grantType = form.get("grant_type")
     const usedBasicAuth = credentials.usedBasicAuth
+    const who = `client=${shortId(credentials.clientId)} grant=${grantType ?? "<none>"}`
 
     if (grantType === "authorization_code") {
+        // Which optional parameters actually arrived is the single most useful
+        // fact when an exchange fails, and none of them are secret by name.
+        trace(
+            `${who} redirect_uri=${form.get("redirect_uri") ?? "<none>"} ` +
+                `resource=${form.get("resource") ?? "<none>"} ` +
+                `has_verifier=${Boolean(form.get("code_verifier"))} ` +
+                `basic_auth=${usedBasicAuth}`,
+        )
         const result = await service.exchangeCode({
             clientId: credentials.clientId,
             clientSecret: credentials.clientSecret,
@@ -60,7 +95,12 @@ export async function POST(request: Request) {
             codeVerifier: form.get("code_verifier"),
             resource: form.get("resource"),
         })
-        return result.ok ? tokenResponse(result.value) : oauthErrorJson(result.error, usedBasicAuth)
+        if (!result.ok) {
+            trace(`${who} REFUSED ${result.error.code} (${result.error.status}): ${result.error.description}`)
+            return oauthErrorJson(result.error, usedBasicAuth)
+        }
+        trace(`${who} issued access+refresh tokens`)
+        return tokenResponse(result.value)
     }
 
     if (grantType === "refresh_token") {
@@ -70,10 +110,19 @@ export async function POST(request: Request) {
             refreshToken: form.get("refresh_token"),
             scope: form.get("scope"),
         })
-        return result.ok ? tokenResponse(result.value) : oauthErrorJson(result.error, usedBasicAuth)
+        if (!result.ok) {
+            trace(`${who} REFUSED ${result.error.code} (${result.error.status}): ${result.error.description}`)
+            return oauthErrorJson(result.error, usedBasicAuth)
+        }
+        trace(`${who} rotated refresh token`)
+        return tokenResponse(result.value)
     }
 
-    if (!grantType) return oauthErrorJson(OAuthError.invalidRequest("grant_type is required"))
+    if (!grantType) {
+        trace("grant_type missing")
+        return oauthErrorJson(OAuthError.invalidRequest("grant_type is required"))
+    }
+    trace(`unsupported grant_type "${grantType}"`)
     return oauthErrorJson(
         OAuthError.unsupportedGrantType(`grant_type "${grantType}" is not supported`),
     )
