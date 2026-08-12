@@ -104,36 +104,34 @@ export async function GET(request: Request): Promise<Response> {
     trace("GET — opening SSE channel")
     const encoder = new TextEncoder()
 
+    const openedAt = Date.now()
+
+    // Driven from pull(), NOT from a timer in start(). On Workers a setInterval
+    // scheduled in start() is not reliably retained once the response has been
+    // returned: with no pending work the runtime may consider the invocation
+    // finished and tear the response down, which the client sees as a stream that
+    // died on open — indistinguishable from "this isn't a valid MCP server".
+    // Awaiting inside pull() leaves a promise outstanding, which IS tracked as
+    // work, so the stream stays alive because it is genuinely still being served.
     const stream = new ReadableStream<Uint8Array>({
         start(controller) {
-            // Flush headers immediately so the client sees an established stream
-            // rather than waiting on the first byte.
+            // Flush immediately so the client sees an established stream rather
+            // than waiting on the first byte.
             controller.enqueue(encoder.encode(": mcp stream open\n\n"))
-
-            const keepalive = setInterval(() => {
-                try {
-                    controller.enqueue(encoder.encode(": keepalive\n\n"))
-                } catch {
-                    close()
-                }
-            }, KEEPALIVE_MS)
-
-            const expiry = setTimeout(() => close(), STREAM_MAX_MS)
-
-            // A declaration, so it can be referenced by the timers above; it only
-            // ever RUNS after both are assigned.
-            function close() {
-                clearInterval(keepalive)
-                clearTimeout(expiry)
-                try {
-                    controller.close()
-                } catch {
-                    // Already closed by the peer disconnecting — nothing to do.
-                }
+        },
+        async pull(controller) {
+            if (request.signal.aborted || Date.now() - openedAt > STREAM_MAX_MS) {
+                controller.close()
+                return
             }
-
-            // The client going away is the normal end of a stream, not an error.
-            request.signal.addEventListener("abort", close)
+            await new Promise((resolve) => setTimeout(resolve, KEEPALIVE_MS))
+            if (request.signal.aborted) {
+                controller.close()
+                return
+            }
+            // A comment frame: ignored by the client's SSE parser, but it is
+            // traffic, which is what stops an intermediary reaping the connection.
+            controller.enqueue(encoder.encode(": keepalive\n\n"))
         },
     })
 
