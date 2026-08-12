@@ -1,4 +1,5 @@
-import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
+import { AnalyserError, ProjectAnalyser } from "@/modules/analysis"
+import { getMeteredAnalyser } from "@/modules/billing"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { IssuePrompt } from "@/modules/issues"
 import type { IssueAnalysisData } from "@/lib/shared/types"
@@ -17,7 +18,7 @@ import type { IssueAnalysisData } from "@/lib/shared/types"
 // so the drawer can copy it synchronously on click.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, user, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, user, teamId, projectId, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     // Per-issue effort, resolved in priority order:
@@ -56,7 +57,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!project) return jsonError("not_found", "project not found", 404)
 
     try {
-        const result = await getAnalyser().analyseIssue({
+        // Metered analyser — records this call's spend to the team's Prowl ledger.
+        const result = await getMeteredAnalyser({ teamId, userId: user.id }, { projectId }).analyseIssue({
             repoId:   analyser.graph_id,
             title:    issue.title,
             body:     issue.body || "",
