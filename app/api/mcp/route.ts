@@ -70,15 +70,84 @@ export async function OPTIONS(): Promise<Response> {
     return new Response(null, { status: 204, headers: CORS_HEADERS })
 }
 
-/** No server-initiated messages exist for a stateless tools-only server, so the
- *  optional SSE channel is declined rather than left hanging open. The MCP spec
- *  permits 405 here — but a client that INSISTS on the stream would fail with no
- *  explanation, so record the attempt. */
-export async function GET(): Promise<Response> {
-    trace("GET (SSE channel) declined with 405 — client may expect a stream")
-    return new Response(JSON.stringify({ error: "method_not_allowed", error_description: "This MCP server is POST-only." }), {
-        status: 405,
-        headers: { "Content-Type": "application/json", Allow: "POST, OPTIONS", ...CORS_HEADERS },
+// How often to write a comment frame. Any traffic keeps proxies from reaping an
+// idle connection; SSE comments are ignored by the client's parser.
+const KEEPALIVE_MS = 15_000
+// Streams are recycled rather than held forever: a serverless instance shouldn't
+// pin a connection indefinitely, and an MCP client reconnects on close.
+const STREAM_MAX_MS = 10 * 60_000
+
+/** GET is the Streamable HTTP server→client channel.
+ *
+ *  This server is stateless and tools-only, so it has nothing to push, and the
+ *  MCP spec explicitly allows answering 405 here. That is what we did — and
+ *  Claude Desktop treats it as a failed connection, tears down, and re-runs the
+ *  whole OAuth dance, looping forever (observed: 405 → re-register → re-consent,
+ *  three client_ids in ten minutes). Being technically permitted is worth nothing
+ *  if the client on the other end disagrees.
+ *
+ *  So the stream is opened and simply held: an initial comment to flush headers,
+ *  keepalives thereafter, and no messages, which is truthful for a server with
+ *  no server-initiated traffic. */
+export async function GET(request: Request): Promise<Response> {
+    const hadBearer = /^Bearer\s+\S/i.test(request.headers.get("authorization") ?? "")
+    const principal = await authenticateMcp(request)
+    if (!principal) {
+        trace(hadBearer ? "GET 401 — bearer present but did not resolve" : "GET 401 — no bearer presented")
+        return withCors(unauthorizedResponse())
+    }
+    if (!principal.scopes.includes(MCP_SCOPE)) {
+        trace(`GET 401 — token scopes [${principal.scopes.join(",")}] lack ${MCP_SCOPE}`)
+        return withCors(unauthorizedResponse("insufficient_scope", `token is missing the ${MCP_SCOPE} scope`))
+    }
+
+    trace("GET — opening SSE channel")
+    const encoder = new TextEncoder()
+
+    const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+            // Flush headers immediately so the client sees an established stream
+            // rather than waiting on the first byte.
+            controller.enqueue(encoder.encode(": mcp stream open\n\n"))
+
+            const keepalive = setInterval(() => {
+                try {
+                    controller.enqueue(encoder.encode(": keepalive\n\n"))
+                } catch {
+                    close()
+                }
+            }, KEEPALIVE_MS)
+
+            const expiry = setTimeout(() => close(), STREAM_MAX_MS)
+
+            // A declaration, so it can be referenced by the timers above; it only
+            // ever RUNS after both are assigned.
+            function close() {
+                clearInterval(keepalive)
+                clearTimeout(expiry)
+                try {
+                    controller.close()
+                } catch {
+                    // Already closed by the peer disconnecting — nothing to do.
+                }
+            }
+
+            // The client going away is the normal end of a stream, not an error.
+            request.signal.addEventListener("abort", close)
+        },
+    })
+
+    return new Response(stream, {
+        status: 200,
+        headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-store, no-transform",
+            Connection: "keep-alive",
+            // Defeats proxy buffering, which would otherwise hold the keepalives
+            // and leave the client believing the stream never opened.
+            "X-Accel-Buffering": "no",
+            ...CORS_HEADERS,
+        },
     })
 }
 
