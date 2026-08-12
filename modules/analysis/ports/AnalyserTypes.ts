@@ -290,6 +290,18 @@ export interface VerifyReport {
     coverage_rate: number
     content_stale_notes?: VerifyContentStaleNote[]
     content_stale_total: number
+    // Seedability — whether RETRIEVAL can start on this graph, which is separate
+    // from note quality and fails on its own. The swarm is seeded from Module
+    // nodes' embeddings; with none, issue analysis, PR review and the MCP tools
+    // all return empty results while every other metric still reads healthy.
+    // `seedable: false` means the graph needs re-indexing. Optional because an
+    // older analyser build won't send them.
+    modules_indexed?: number
+    modules_sampled?: number
+    modules_with_embedding?: number
+    embedding_rate?: number
+    seedable?: boolean
+    seedability_note?: string
     overall_health: number
 }
 
