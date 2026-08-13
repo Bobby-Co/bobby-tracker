@@ -5,6 +5,7 @@ import { motion, type PanInfo, useDragControls, useMotionValue } from "framer-mo
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { useScheduleSync } from "@/lib/client/timeline/use-schedule-sync"
+import { pastelFor as pastelById } from "@/lib/client/timeline/palette"
 import {
     CELL,
     MIN_DURATION_DAYS,
@@ -51,6 +52,10 @@ export function TimelineGridPlayful({
     focusIssueId = null,
     onPersisted,
     initialTileRows,
+    persist = true,
+    edgeAutoPan = true,
+    lockCamera = false,
+    demoRef,
 }: {
     projectId: string
     issues: Issue[]
@@ -65,8 +70,24 @@ export function TimelineGridPlayful({
      *  Height is view-local (there's no schedule field for it yet), so
      *  this lets a caller open the board with some tiles pre-expanded. */
     initialTileRows?: Record<string, number>
+    /** Set false to run the board with no backend — drags stay local. */
+    persist?: boolean
+    /** Auto-pan the camera when a drag nears a viewport edge. Sized for a
+     *  full-screen board (56px bands); in a short embedded frame those bands
+     *  cover most of the surface, so nearly any grab pans forever — pass false
+     *  there. */
+    edgeAutoPan?: boolean
+    /** Pin the camera where it starts: no wheel pan, no pinch/⌘ zoom, no
+     *  grab-drag on the canvas, no zoom controls. Dragging a TILE to an edge
+     *  still auto-pans (that's `edgeAutoPan`) — the lock is about the reader
+     *  moving the view, not the plan. Embedded in a scrolling page the wheel
+     *  is also left alone, so the page scrolls over the board as it should. */
+    lockCamera?: boolean
+    /** Cell-space control for the landing's scripted demo. Populated on mount,
+     *  inert if omitted — the board's own gestures never touch it. */
+    demoRef?: React.RefObject<BoardDemoHandle | null>
 }) {
-    const { local, commitSchedule } = useScheduleSync(projectId, issues, onPersisted)
+    const { local, commitSchedule } = useScheduleSync(projectId, issues, onPersisted, persist)
 
     // Wall clock, mounted post-hydration so SSR and first client
     // paint agree (see issue-timeline for the same pattern).
@@ -117,6 +138,9 @@ export function TimelineGridPlayful({
     const zoomRef = useRef(1)
     useEffect(() => { zoomRef.current = zoom }, [zoom])
     const cell = cellFor(zoom)
+    // The wheel listener is bound once, so it reads the lock through a ref.
+    const lockRef = useRef(lockCamera)
+    useEffect(() => { lockRef.current = lockCamera }, [lockCamera])
 
     const panRef = useRef({ x: 0, y: 0 })
     const vpSizeRef = useRef({ w: 0, h: 0 })
@@ -259,7 +283,7 @@ export function TimelineGridPlayful({
     // edge. Sign moves the camera so the cursor's edge reveals more board.
     function edgeDelta(clientX: number, clientY: number): { dx: number; dy: number } {
         const vp = viewportRef.current?.getBoundingClientRect()
-        if (!vp) return { dx: 0, dy: 0 }
+        if (!vp || !edgeAutoPan) return { dx: 0, dy: 0 }
         const EDGE = 56, MAX = 18
         const ramp = (over: number) => MAX * Math.min(1, over / EDGE)
         let dx = 0, dy = 0
@@ -291,6 +315,10 @@ export function TimelineGridPlayful({
     // The drag / resize gesture in flight. Neighbours are pushed clear of
     // it live (see `displace`) so tiles can never end up overlapping.
     const [active, setActive] = useState<Active | null>(null)
+    // True only while the demo handle is driving the gesture in cell space —
+    // then the parent owns the tile's cell, because there is no drag transform
+    // moving it. Always false for a real drag. See `demoRef`.
+    const [demoDriven, setDemoDriven] = useState(false)
     // Per-tile lane height (1..MAX_TILE_ROWS), keyed by issue id. Kept in
     // view state rather than the schedule because there's no persisted
     // field for it — a taller tile just reveals more of its issue.
@@ -389,7 +417,7 @@ export function TimelineGridPlayful({
         const issue = local.find((i) => i.id === issueId)
         if (vp && issue) {
             const cz = cellFor(zoomRef.current)
-            const p = pastelFor(issue)
+            const p = pastelById(issue.id)
             const iconName = issue.labels[0] ? labelIconMap.get(issue.labels[0])?.icon_name ?? null : null
             const from = ghostRect ?? { left: clientX - Math.min(80, cz), top: clientY - cz / 2, width: Math.max(130, cz + 96), height: cz }
             setPlaceAnim({
@@ -442,7 +470,7 @@ export function TimelineGridPlayful({
     // --- Grab-drag panning on the empty canvas ---
     const panning = useRef<{ sx: number; sy: number; px: number; py: number; moved: boolean } | null>(null)
     function onViewportPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-        if (e.button !== 0) return
+        if (e.button !== 0 || lockCamera) return
         const t = e.target as HTMLElement
         // Bricks and floating UI handle their own gestures.
         if (t.closest("[data-brick]") || t.closest("[data-ui]")) return
@@ -488,6 +516,9 @@ export function TimelineGridPlayful({
         const vp = viewportRef.current
         if (!vp) return
         function onWheel(e: WheelEvent) {
+            // Locked: don't swallow the wheel either, or the reader gets
+            // stuck on the board halfway down a page.
+            if (lockRef.current) return
             e.preventDefault()
             if (e.ctrlKey || e.metaKey) {
                 const rect = vp!.getBoundingClientRect()
@@ -502,17 +533,10 @@ export function TimelineGridPlayful({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mounted])
 
-
-    // Hold render until the wall clock is real so the day columns and
-    // "today" highlight are correct on first paint. All hooks above run
-    // unconditionally.
-    if (!mounted) {
-        return <div className="skeleton min-h-0 flex-1 rounded-[16px]" />
-    }
-
     // --- Interaction plumbing: a tile reports its live footprint as it is
     // dragged or resized; we mirror it in `active` (driving the neighbour
     // push) and, on release, commit the tile plus every shifted neighbour.
+    // Declared above the mount gate so the demo handle can close over them.
     function beginInteract(id: string, kind: Active["kind"], fp: Footprint) {
         setActive({ id, kind, ...fp })
     }
@@ -548,6 +572,65 @@ export function TimelineGridPlayful({
         setActive(null)
     }
 
+    // --- Cell-space control, for the landing's scripted demo only ----------
+    // Inert unless a caller passes `demoRef`; the board's own gestures are
+    // untouched and never go through here.
+    //
+    // A scripted gesture has no cursor to speak of — it knows the tile and the
+    // cell it wants. Expressing that as pointer events means converting cells
+    // to client coordinates and having the board convert them back, and that
+    // round trip trips over viewport coordinates: while a page is scrolling,
+    // the main thread's idea of where the board sits is stale (the compositor
+    // owns the scroll), so no rect read is trustworthy and the tile snaps to
+    // cells that don't match. Handing the demo the cell directly removes the
+    // coordinate system from the path entirely — nothing to be stale about.
+    //
+    // Everything below the entry point is the shipped mechanism: the same
+    // `active` state, so pushNeighbours() runs for real, and the same commit
+    // on release.
+    useEffect(() => {
+        if (!demoRef) return
+        demoRef.current = {
+            cell,
+            footprintOf: (id) => cells.get(id) ?? null,
+            localOf: (col, row) => ({
+                x: panRef.current.x + col * cell,
+                y: panRef.current.y + row * cell,
+            }),
+            begin(id, kind, fp) {
+                setDemoDriven(true)
+                beginInteract(id, kind, fp)
+            },
+            to: (id, kind, fp) => updateInteract(id, kind, fp),
+            end(id, kind, fp) {
+                endInteract(id, kind, fp)
+                setDemoDriven(false)
+            },
+            reset() {
+                setActive(null)
+                setDemoDriven(false)
+                setPlaceAnim(null)
+                setTileRows({ ...initialTileRows })
+                setTilePad({})
+                // A tray brick the reader armed but never placed, and its
+                // hover preview, would otherwise sit there through the replay.
+                setArmed(null)
+                setDropPreview(null)
+                setGrabbing(false)
+            },
+        }
+        return () => {
+            if (demoRef) demoRef.current = null
+        }
+    })
+
+    // Hold render until the wall clock is real so the day columns and
+    // "today" highlight are correct on first paint. All hooks above run
+    // unconditionally.
+    if (!mounted) {
+        return <div className="skeleton min-h-0 flex-1 rounded-[16px]" />
+    }
+
     return (
         <div
             ref={viewportRef}
@@ -567,8 +650,11 @@ export function TimelineGridPlayful({
             }}
             style={{ overscrollBehavior: "none" }}
             className={cn(
-                "absolute inset-0 touch-none select-none overflow-clip",
-                armed ? "cursor-copy" : grabbing ? "cursor-grabbing" : "cursor-grab",
+                "absolute inset-0 select-none overflow-clip",
+                // A locked board has nothing to pan, so the canvas shouldn't
+                // advertise a grab — and the wheel/touch must reach the page.
+                lockCamera ? "cursor-default" : "touch-none",
+                armed ? "cursor-copy" : lockCamera ? "" : grabbing ? "cursor-grabbing" : "cursor-grab",
             )}
         >
             {/* Dotted paper — the system's ambient canvas texture. Static so
@@ -619,7 +705,17 @@ export function TimelineGridPlayful({
                             daysOverride={isActive && active!.kind !== "y" && active!.kind !== "pad" ? active!.days : null}
                             padCols={tilePad[issue.id] ?? 0}
                             visualOverride={isActive && active!.kind === "pad" ? active!.vcols ?? null : null}
-                            rowOverride={displace.get(issue.id) ?? null}
+                            // A demo-driven gesture has no drag transform
+                            // moving the tile, so the parent places it at the
+                            // cell the script asked for. Null for every real
+                            // drag, which positions itself as it always has.
+                            colOverride={isActive && demoDriven ? active!.col : null}
+                            rowOverride={
+                                isActive && demoDriven
+                                    ? active!.row
+                                    : displace.get(issue.id) ?? null
+                            }
+                            lifted={isActive && demoDriven}
                             isActive={isActive}
                             onInteractStart={(kind, fp) => beginInteract(issue.id, kind, fp)}
                             onInteractMove={(kind, fp) => updateInteract(issue.id, kind, fp)}
@@ -634,6 +730,28 @@ export function TimelineGridPlayful({
                         />
                     )
                 })}
+
+                {/* Board-local twin of the floating date pill below. Lives in
+                    the world, so it rides with the board and needs no viewport
+                    reading at all. Used when the camera is locked — i.e. the
+                    board is embedded in a page that can scroll, where the
+                    floating one strands itself: it is positioned `fixed` from
+                    a viewport rect read at render, and a scroll moves the
+                    board without changing `active`. A full-screen board can't
+                    scroll, so it keeps the floating pill, which is free to
+                    overflow the frame near a bottom edge. */}
+                {lockCamera && active && active.kind === "x" && (
+                    <div
+                        className={cn(DATE_PILL_CLS, "absolute")}
+                        style={{
+                            left: fin((active.col + active.days) * cell),
+                            top: fin((active.row + active.span) * cell + 7),
+                            transform: "translateX(-50%)",
+                        }}
+                    >
+                        <DateRange originMs={originMs} col={active.col} days={active.days} />
+                    </div>
+                )}
             </div>
 
             {/* Pinned date header — stays at the top; columns scale with
@@ -700,22 +818,24 @@ export function TimelineGridPlayful({
                 </div>
             </div>
 
-            {/* Zoom controls */}
-            <div
-                data-ui
-                className="pointer-events-auto absolute bottom-5 right-5 z-30 flex items-center gap-0.5 rounded-full bg-[color:var(--c-surface)]/95 p-1 shadow-[var(--shadow-pop)] ring-1 ring-[color:var(--c-border)] backdrop-blur"
-            >
-                <ZoomBtn label="−" onClick={() => zoomByButton(1 / 1.2)} />
-                <button
-                    type="button"
-                    onClick={() => zoomTo(1, (viewportRef.current?.clientWidth ?? 0) / 2, (viewportRef.current?.clientHeight ?? 0) / 2)}
-                    className="min-w-[46px] px-1 text-[11px] font-bold tabular-nums text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]"
-                    title="Reset zoom"
+            {/* Zoom controls — nothing to offer on a locked camera. */}
+            {!lockCamera && (
+                <div
+                    data-ui
+                    className="pointer-events-auto absolute bottom-5 right-5 z-30 flex items-center gap-0.5 rounded-full bg-[color:var(--c-surface)]/95 p-1 shadow-[var(--shadow-pop)] ring-1 ring-[color:var(--c-border)] backdrop-blur"
                 >
-                    {Math.round(zoom * 100)}%
-                </button>
-                <ZoomBtn label="+" onClick={() => zoomByButton(1.2)} />
-            </div>
+                    <ZoomBtn label="−" onClick={() => zoomByButton(1 / 1.2)} />
+                    <button
+                        type="button"
+                        onClick={() => zoomTo(1, (viewportRef.current?.clientWidth ?? 0) / 2, (viewportRef.current?.clientHeight ?? 0) / 2)}
+                        className="min-w-[46px] px-1 text-[11px] font-bold tabular-nums text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]"
+                        title="Reset zoom"
+                    >
+                        {Math.round(zoom * 100)}%
+                    </button>
+                    <ZoomBtn label="+" onClick={() => zoomByButton(1.2)} />
+                </div>
+            )}
 
             {/* Armed-to-place hint */}
             {armed && (
@@ -748,7 +868,7 @@ export function TimelineGridPlayful({
             {trayDrag && (() => {
                 const issue = local.find((i) => i.id === trayDrag.id)
                 if (!issue) return null
-                const pastel = pastelFor(issue)
+                const pastel = pastelById(issue.id)
                 const iconName = issue.labels[0] ? labelIconMap.get(issue.labels[0])?.icon_name ?? null : null
                 return (
                     <div
@@ -804,30 +924,43 @@ export function TimelineGridPlayful({
                 floats above everything, updating start → end in realtime.
                 Reads the camera refs during render, but re-renders on every
                 `active` change (and the camera doesn't move during a resize),
-                so the values are current. */}
+                so the values are current. Superseded by the board-local twin
+                above when the camera is locked; see the note there. */}
             {/* eslint-disable-next-line react-hooks/refs */}
-            {active && active.kind === "x" && (() => {
+            {!lockCamera && active && active.kind === "x" && (() => {
                 const cz = cellFor(zoomRef.current)
                 const vp = viewportRef.current?.getBoundingClientRect()
                 if (!vp) return null
                 const gripX = vp.left + panRef.current.x + (active.col + active.days) * cz
                 const botY = vp.top + panRef.current.y + (active.row + active.span) * cz
-                const fmt = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" })
-                const startMs = addDays(originMs, active.col)
-                const endMs = addDays(originMs, active.col + active.days - 1)
                 return (
                     <div
-                        className="pointer-events-none fixed z-[60] flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[color:var(--c-primary)] px-2.5 py-1 text-[11px] font-extrabold text-white shadow-[var(--shadow-pop)]"
+                        className={cn(DATE_PILL_CLS, "fixed")}
                         style={{ left: gripX, top: botY + 7, transform: "translateX(-50%)" }}
                     >
-                        <span>{fmt(startMs)}</span>
-                        <span className="opacity-60">→</span>
-                        <span>{fmt(endMs)}</span>
-                        <span className="ml-0.5 rounded-full bg-white/25 px-1.5 py-px text-[10px]">{active.days}d</span>
+                        <DateRange originMs={originMs} col={active.col} days={active.days} />
                     </div>
                 )
             })()}
         </div>
+    )
+}
+
+// The live start → end readout shown while a tile's duration is being dragged.
+// Rendered in one of two places (see both call sites), so the styling and the
+// contents live here rather than being written twice.
+const DATE_PILL_CLS =
+    "pointer-events-none z-[60] flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[color:var(--c-primary)] px-2.5 py-1 text-[11px] font-extrabold text-white shadow-[var(--shadow-pop)]"
+
+function DateRange({ originMs, col, days }: { originMs: number; col: number; days: number }) {
+    const fmt = (ms: number) => new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    return (
+        <>
+            <span>{fmt(addDays(originMs, col))}</span>
+            <span className="opacity-60">→</span>
+            <span>{fmt(addDays(originMs, col + days - 1))}</span>
+            <span className="ml-0.5 rounded-full bg-white/25 px-1.5 py-px text-[10px]">{days}d</span>
+        </>
     )
 }
 
@@ -867,36 +1000,8 @@ export function tileCols(days: number): number {
 // The design system's app palette — soft -bg tints paired with a
 // saturated tone. Hashed onto tiles (the same way project tiles are
 // coloured) for a warm, colourful sticker-board look.
-const PALETTE: { bg: string; fg: string }[] = [
-    { bg: "#EAE6FB", fg: "#7350D6" }, // violet
-    { bg: "#E0EBFD", fg: "#3370D4" }, // blue
-    { bg: "#DEEDFC", fg: "#2484CC" }, // azure
-    { bg: "#D8F3F4", fg: "#0E9AA4" }, // cyan
-    { bg: "#D7F2EC", fg: "#10917F" }, // teal
-    { bg: "#DDF5EB", fg: "#1FA06E" }, // mint
-    { bg: "#E0F4DC", fg: "#3D9A37" }, // green
-    { bg: "#EDF5CE", fg: "#7C9011" }, // lime
-    { bg: "#FBF1CC", fg: "#B8930C" }, // gold
-    { bg: "#FBE9C9", fg: "#C57F0C" }, // amber
-    { bg: "#FDE7C9", fg: "#CE7A12" }, // tangerine
-    { bg: "#FCE3D0", fg: "#D26B26" }, // orange
-    { bg: "#FCE3DD", fg: "#D45441" }, // coral
-    { bg: "#FBE3EF", fg: "#C84C86" }, // pink
-    { bg: "#F8E0F0", fg: "#BC3F94" }, // magenta
-    { bg: "#F2E4F7", fg: "#9D4DBB" }, // orchid
-    { bg: "#E6E9FC", fg: "#5566D6" }, // periwinkle
-]
 
-function hashStr(s: string): number {
-    let h = 0
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
-    return Math.abs(h)
-}
 
-// A stable pastel chip for an issue (hashed by id).
-function pastelFor(issue: Issue): { bg: string; fg: string } {
-    return PALETTE[hashStr(issue.id) % PALETTE.length]
-}
 
 // Effective (continuous) cell size for a given zoom. Kept fractional so
 // zooming animates smoothly — the integer version snapped in whole-pixel
@@ -920,6 +1025,31 @@ function fin(n: number): number {
 // `vcols` is the reserved width (total columns) the tile blocks; when
 // absent it falls back to the readable minimum.
 interface Footprint { col: number; row: number; days: number; span: number; vcols?: number }
+/** Cell-space control surface, used only by the landing's scripted demo. */
+export type BoardDemoHandle = {
+    /** Effective cell size in px at the current zoom. */
+    cell: number
+    /** A scheduled tile's footprint in cells, or null if it isn't on the board. */
+    footprintOf: (id: string) => Footprint | null
+    /**
+     * Cell → pixels, in the board VIEWPORT's own coordinate space — which is
+     * where the demo draws its cursor. Deliberately not client coordinates:
+     * everything here rides with the board, so a page scroll moves the lot
+     * together and there is nothing to recompute.
+     */
+    localOf: (col: number, row: number) => { x: number; y: number }
+    begin: (id: string, kind: InteractKind, fp: Footprint) => void
+    to: (id: string, kind: InteractKind, fp: Footprint) => void
+    end: (id: string, kind: InteractKind, fp: Footprint) => void
+    /**
+     * Put the board's VIEW-local state back to how it opened: tile heights,
+     * reserved widths, any gesture in flight. Schedules (dates and lanes) live
+     * in the caller's issues array, so it resets those itself — this covers
+     * what the board owns and the caller can't reach.
+     */
+    reset: () => void
+}
+
 // The live drag / resize gesture in flight, so neighbours can be pushed
 // clear of the tile the user is moving or growing.
 type InteractKind = "move" | "x" | "y" | "xy" | "pad"
@@ -1117,7 +1247,9 @@ function ColHeader({ dateMs, isToday, weekStart, left, top, cell }: { dateMs: nu
 
 // Hover-revealed resize handle — a small rounded chip in the card's own colour
 // that masks the text beneath it (so a centred grip stays legible over the
-// title) with a short accent bar inside. Shown on group-hover.
+// title) with a short accent bar inside. Shown on group-hover, or when
+// something marks the brick `data-hot` — synthetic pointer events can't
+// trigger :hover, so the landing's scripted drag says so explicitly.
 function GripChip({
     axis,
     bg,
@@ -1142,7 +1274,7 @@ function GripChip({
         : { height: 2.5, width: w * 0.6 }
     return (
         <span
-            className="absolute flex items-center justify-center rounded-[5px] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+            className="absolute flex items-center justify-center rounded-[5px] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-data-[hot=true]:opacity-100"
             style={{ width: w, height: h, background: bg, boxShadow: `0 0 0 1px ${ring}`, ...style }}
         >
             <span className="rounded-full" style={{ ...bar, background: line }} />
@@ -1161,7 +1293,9 @@ function Brick({
     daysOverride,
     padCols,
     visualOverride,
+    colOverride = null,
     rowOverride,
+    lifted = false,
     isActive,
     onInteractStart,
     onInteractMove,
@@ -1188,6 +1322,11 @@ function Brick({
     /** Lane this tile is pushed to while a neighbour is dragged; null =
      *  sit at its own stored lane. */
     rowOverride: number | null
+    /** Column this tile is placed at by a DEMO-driven gesture; null = derive
+     *  from the schedule, which is what every real drag does. */
+    colOverride?: number | null
+    /** Show the picked-up lift without a drag in flight (demo-driven only). */
+    lifted?: boolean
     /** This tile is the one being dragged / resized right now. */
     isActive: boolean
     onInteractStart: (kind: InteractKind, fp: Footprint) => void
@@ -1228,7 +1367,7 @@ function Brick({
 
     if (!slot) return null
 
-    const pastel = pastelFor(issue)
+    const pastel = pastelById(issue.id)
     const bg = pastel.bg          // soft card tint
     const fg = pastel.fg          // saturated accent — icon fill + text
     const labelKey = issue.labels[0]
@@ -1401,6 +1540,7 @@ function Brick({
     return (
         <motion.div
             data-brick
+            data-issue-id={issue.id}
             drag
             dragListener={false}
             dragControls={dragControls}
@@ -1414,8 +1554,11 @@ function Brick({
             onDoubleClick={(e) => { e.stopPropagation(); onUnschedule() }}
             style={{
                 x, y,
+                // The lift a real drag gets from whileDrag. A demo-driven
+                // gesture never enters framer's drag, so it says so here.
+                scale: lifted ? 1.04 : 1,
                 position: "absolute",
-                left: fin(slot.col * cell),
+                left: fin((colOverride ?? slot.col) * cell),
                 top: fin((rowOverride ?? slot.row) * cell),
                 width: fin(visW),
                 height: fin(rowSpan * cell),
@@ -1423,7 +1566,9 @@ function Brick({
                 // A pushed neighbour glides to its new lane. The active tile
                 // is positioned by the framer transform (drag) or grows in
                 // place (resize), so it must NOT also transition `top`.
-                transition: isActive ? undefined : "top 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+                transition: isActive
+                    ? undefined
+                    : "top 220ms cubic-bezier(0.22, 1, 0.36, 1), left 220ms cubic-bezier(0.22, 1, 0.36, 1), width 220ms cubic-bezier(0.22, 1, 0.36, 1)",
                 zIndex: isActive ? 40 : rowOverride != null ? 30 : undefined,
             }}
             className="touch-none"
@@ -1687,7 +1832,7 @@ function TrayBrick({
     // it follows the cursor and is never clipped by the tray's overflow
     // — and because this pill never unmounts mid-gesture, dropping (which
     // schedules the issue) doesn't freeze an in-flight drag animation.
-    const pastel = pastelFor(issue)
+    const pastel = pastelById(issue.id)
     const bg = pastel.bg
     const fg = pastel.fg
     const cardRing = `color-mix(in srgb, ${fg} 24%, transparent)`

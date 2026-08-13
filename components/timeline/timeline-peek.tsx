@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { DAY_MS } from "@/lib/client/timeline/scale"
-import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/client/timeline/colors"
+import { pastelFor, ringFor } from "@/lib/client/timeline/palette"
 import type { Issue, IssueStatus, ProjectLabelIcon, ProjectStatusColor } from "@/lib/shared/types"
 
 const RANGE_FMT = new Intl.DateTimeFormat("en-US", {
@@ -130,7 +130,6 @@ export function TimelinePeek({
                         windowMs={windowMs}
                         isFocal={false}
                         labelIconMap={labelIconMap}
-                        colorOverrides={colorOverrides}
                     />
                 ))}
                 {/* Focal rendered last so it stacks above the
@@ -141,7 +140,6 @@ export function TimelinePeek({
                     windowMs={windowMs}
                     isFocal
                     labelIconMap={labelIconMap}
-                    colorOverrides={colorOverrides}
                 />
             </div>
 
@@ -152,74 +150,128 @@ export function TimelinePeek({
     )
 }
 
+// Geometry is the playful board's own, evaluated at CELL = 32 (its 100% zoom),
+// so a peek tile is the same object as a board tile — not a lookalike.
+const CELL = 32
+const cl = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi))
+const RADIUS    = cl(CELL * 0.3, 8, 17)   // 9.6
+const ICON_BOX  = cl(CELL * 0.4, 12, 22)  // 12.8
+const ICON_SIZE = Math.round(cl(CELL * 0.24, 8, 13))
+const TITLE_F   = cl(CELL * 0.3, 8, 15)   // 9.6
+const NUM_F     = cl(CELL * 0.24, 7, 12)  // 7.68
+const ROW_H     = CELL - cl(CELL * 0.09, 2, 6) * 2 // 26.24
+const PAD_L     = Math.max(5, CELL * 0.13)
+const ICON_GAP  = Math.max(8, CELL * 0.2)
+const ICON_SLOT = PAD_L + ICON_BOX + ICON_GAP // 25.8
+// Borrowed room, in px, so a short tile's label still reads — the board does the
+// same thing in whole columns (MIN_TILE_COLS).
+const MIN_LABEL_PX = 108
+
 function PeekTile({
     item,
     windowStart,
     windowMs,
     isFocal,
     labelIconMap,
-    colorOverrides,
 }: {
     item: Issue
     windowStart: number
     windowMs: number
     isFocal: boolean
     labelIconMap: Map<string, ProjectLabelIcon>
-    colorOverrides: Partial<Record<IssueStatus, string>>
 }) {
     if (!item.starts_at || !item.ends_at) return null
     const start = Date.parse(item.starts_at)
     const end   = Date.parse(item.ends_at)
-    // Pill anchors at start, regardless of how short the duration
-    // is, and keeps its intrinsic width so the icon + #N are
-    // always readable. The bar below is what carries the duration
-    // — it scales with widthPct and can be narrower than the pill.
     const leftPct  = Math.max(0, Math.min(100, ((start - windowStart) / windowMs) * 100))
     const rightPct = Math.max(0, Math.min(100, ((end - windowStart) / windowMs) * 100))
     const widthPct = Math.max(0, rightPct - leftPct)
-    const fill = item.color ?? colorOverrides[item.status] ?? DEFAULT_STATUS_COLORS[item.status]
-    const fg = isDarkColor(fill) ? "#ffffff" : "#0a0a0a"
+
+    // Same pastel sticker as the board — hashed off the issue id, so a tile
+    // keeps its colour between the peek and the full timeline.
+    const { bg, fg } = pastelFor(item.id)
+    const ring  = ringFor(fg)
+    const faint = `color-mix(in srgb, ${fg} 7%, transparent)`
+    const dash  = `color-mix(in srgb, ${fg} 34%, transparent)`
     const labelKey = item.labels[0]
     const iconName = labelKey ? labelIconMap.get(labelKey)?.icon_name ?? null : null
 
-    // Two-row layout: focal on the top row, neighbours on the
-    // bottom row. Vertical positions are explicit pixels so they
-    // line up regardless of overlap density.
-    const pillTop = isFocal ? 4  : 44
-    const barTop  = isFocal ? 26 : 66
-    const z       = isFocal ? 10 : 1
-    const opacity = isFocal ? 1  : 0.7
+    const top = isFocal ? 6 : 44
+    const z   = isFocal ? 10 : 1
+    const op  = isFocal ? 1 : 0.72
 
     return (
         <>
+            {/* Solid card — its width IS the duration. */}
             <div
-                className="absolute flex h-5 items-center gap-1 whitespace-nowrap rounded-full px-1.5"
+                className="absolute"
                 style={{
                     left: `${leftPct}%`,
-                    top: pillTop,
-                    background: fill,
-                    color: fg,
-                    opacity,
+                    width: `${widthPct}%`,
+                    top,
+                    height: ROW_H,
                     zIndex: z,
+                    opacity: op,
+                    background: bg,
+                    borderRadius: RADIUS,
                     boxShadow: isFocal
-                        ? `0 0 0 1.5px #ffffff, 0 0 0 3px ${fill}, 0 1px 3px rgba(0,0,0,0.1)`
-                        : undefined,
-                }}
-            >
-                <IconlyIcon name={iconName} size={11} />
-                <span className="font-mono text-[10px] font-bold opacity-90">#{item.issue_number}</span>
-            </div>
-            <div
-                className="absolute h-1 rounded-full"
-                style={{
-                    left: `${leftPct}%`,
-                    width: `${Math.max(0.5, widthPct)}%`,
-                    top: barTop,
-                    background: fill,
-                    opacity: isFocal ? 0.85 : 0.4,
-                    zIndex: z,
+                        ? `0 0 0 1.5px ${ring}, 0 0 0 3px #ffffff, 0 3px 8px -3px ${ring}`
+                        : `0 0 0 1.5px ${ring}, 0 3px 8px -3px ${ring}`,
                 }}
             />
+            {/* Detached, dashed, ghosted extension — the tile does NOT occupy
+                this time; the room is only borrowed so the label stays legible. */}
+            <div
+                className="absolute"
+                style={{
+                    left: `calc(${leftPct}% + ${widthPct}% + 3px)`,
+                    width: `max(0px, calc(${MIN_LABEL_PX}px - ${widthPct}% - 3px))`,
+                    top,
+                    height: ROW_H,
+                    zIndex: z,
+                    opacity: op,
+                    borderRadius: RADIUS,
+                    border: `1.5px dashed ${dash}`,
+                    background: faint,
+                }}
+            />
+            {/* Label spanning both pieces: icon slot, title, then #N. */}
+            <div
+                className="pointer-events-none absolute flex items-center overflow-hidden"
+                style={{
+                    left: `${leftPct}%`,
+                    width: `max(${MIN_LABEL_PX}px, ${widthPct}%)`,
+                    top,
+                    height: ROW_H,
+                    zIndex: z,
+                    opacity: op,
+                    color: fg,
+                }}
+            >
+                <div
+                    className="flex shrink-0 items-center"
+                    style={{ width: ICON_SLOT, paddingLeft: PAD_L }}
+                >
+                    <span
+                        className="grid shrink-0 place-items-center rounded-[7px]"
+                        style={{ width: ICON_BOX, height: ICON_BOX, background: fg, boxShadow: `0 1px 2px ${ring}` }}
+                    >
+                        <IconlyIcon name={iconName} size={ICON_SIZE} color="#ffffff" secondColor="#ffffff" />
+                    </span>
+                </div>
+                <span
+                    className="min-w-0 flex-1 truncate font-extrabold leading-none"
+                    style={{ fontSize: TITLE_F }}
+                >
+                    {item.title}
+                </span>
+                <span
+                    className="shrink-0 pl-1 pr-2 font-mono font-bold opacity-45"
+                    style={{ fontSize: NUM_F }}
+                >
+                    #{item.issue_number}
+                </span>
+            </div>
         </>
     )
 }
