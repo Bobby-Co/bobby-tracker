@@ -50,7 +50,7 @@ function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
                                     className={cn(
                                         "rounded-[9px] px-3 py-[7px] text-[13.5px] font-medium transition-colors",
                                         active
-                                            ? "bg-zinc-900 text-white"
+                                            ? "bg-[var(--c-secondary)] text-white"
                                             : "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)]",
                                     )}
                                 >
@@ -74,7 +74,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
             {/* Top bar */}
             <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-[color:var(--c-border)] bg-[color:var(--c-page)]/85 px-4 backdrop-blur-md sm:px-6">
                 <Link href="/docs" className="flex items-center gap-2.5">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-black p-1.5 text-white">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[var(--c-secondary)] p-1.5 text-white">
                         <BobbyMark />
                     </span>
                     <span className="text-[15px] font-extrabold tracking-[-0.01em]">Ucelot</span>
@@ -112,7 +112,7 @@ export function DocsShell({ children }: { children: React.ReactNode }) {
                 {mobileOpen && (
                     <div className="fixed inset-0 z-40 lg:hidden">
                         <div
-                            className="absolute inset-0 bg-black/30"
+                            className="absolute inset-0 bg-[var(--c-secondary)]/30"
                             onClick={() => setMobileOpen(false)}
                         />
                         <div className="absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-[color:var(--c-border)] bg-[color:var(--c-page)] px-3 py-6">

@@ -108,7 +108,7 @@ export function Step({ title, children }: { title: string; children?: ReactNode 
     return (
         <li className="relative pl-11 [counter-increment:step]">
             <span
-                className="absolute left-0 top-0 grid h-7 w-7 place-items-center rounded-full bg-zinc-900 text-[13px] font-bold text-white
+                className="absolute left-0 top-0 grid h-7 w-7 place-items-center rounded-full bg-[var(--c-secondary)] text-[13px] font-bold text-white
                     before:content-[counter(step)]"
             />
             <div className="text-[14.5px] font-bold text-[color:var(--c-text)]">{title}</div>
