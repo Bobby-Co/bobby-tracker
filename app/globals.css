@@ -44,6 +44,23 @@
     --c-accent:        #c2410c;
     --c-accent-2:      #9a3412;
 
+    /* brand — Ucelot midnight (SECONDARY). The dark register the ember burns
+       against: the marketing surfaces' ink, and the ground the pixel ramp
+       resolves into. The ember stays the only warm thing on screen, which is
+       what the brown register it replaced could never allow.
+
+       secondary      the ink itself — dark sections, the mark tile, buttons,
+                      and body copy on cream (one value at different weights).
+       secondary-deep one step darker, for a panel the ramp blends OUT into —
+                      the login aside, the sidebar mark. It matches the final
+                      stop of DARK_EMBER_STOPS, so change one and change both
+                      or the glow rings the panel in a halo.
+
+       The ramps themselves live in components/ui/pixel-gradient.tsx: a gradient
+       is per-tile RGB interpolation, so it can't read a CSS variable. */
+    --c-secondary:      #0a0d1c;
+    --c-secondary-deep: #090c1c;
+
     --r-sm:  8px;
     --r-md:  12px;
     --r-lg:  16px;

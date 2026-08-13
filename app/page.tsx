@@ -20,6 +20,9 @@ import NewsletterForm from "@/components/ui/newsletter-form"
 // It is also the page's only dark value: the mark tile, the buttons, the CTA card
 // and the body copy all use it, so the cream half and the dark half are the same
 // ink at different weights.
+// Kept as a literal, not var(--c-secondary): this value is handed to HeroDissolve
+// and PixelEdge, which paint into a canvas / an SVG fill and need a real colour
+// string, not something the cascade resolves. It must track --c-secondary.
 const INK = "#0a0d1c"
 
 // DARK_EMBER_STOPS, retuned to bottom out at INK. That palette's final stop is
@@ -73,7 +76,7 @@ function GlyphTile({ children }: { children: ReactNode }) {
 function FooterCol({ title, children }: { title: string; children: ReactNode }) {
     return (
         <div>
-            <h3 className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#0a0d1c]/45">
+            <h3 className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[color:var(--c-secondary)]/45">
                 {title}
             </h3>
             <ul className="mt-3 flex flex-col gap-2.5">{children}</ul>
@@ -84,7 +87,7 @@ function FooterCol({ title, children }: { title: string; children: ReactNode }) 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
     return (
         <li>
-            <Link href={href} className="text-[13.5px] font-semibold text-[#0a0d1c]/70 hover:text-[#0a0d1c]">
+            <Link href={href} className="text-[13.5px] font-semibold text-[color:var(--c-secondary)]/70 hover:text-[color:var(--c-secondary)]">
                 {children}
             </Link>
         </li>
@@ -193,7 +196,7 @@ export default async function Home() {
     // `clip`, not `hidden`: clip doesn't create a scroll container, so the
     // hero's `sticky top-0` still pins against the viewport.
     return (
-        <main data-page="landing" className="overflow-x-clip bg-[#fffae8] text-[#0a0d1c]">
+        <main data-page="landing" className="overflow-x-clip bg-[#fffae8] text-[color:var(--c-secondary)]">
             {/* ─── Hero ─────────────────────────────────────────────────────
                 The hero pins for the length of this runway. Across it the ember
                 field shifts to the dark palette and ripples away to INK, and the
@@ -223,7 +226,7 @@ export default async function Home() {
                 <div
                     className="relative z-10 flex w-full max-w-xl flex-col items-start text-left"
                     style={{
-                        color: `color-mix(in srgb, #0a0d1c, #ffffff calc(${INVERT} * 100%))`,
+                        color: `color-mix(in srgb, var(--c-secondary), #ffffff calc(${INVERT} * 100%))`,
                         opacity: "clamp(0, calc((0.58 - var(--hero-p, 0)) / 0.24), 1)",
                     }}
                 >
@@ -241,7 +244,7 @@ export default async function Home() {
                             layers keep class-based backgrounds; only opacity and
                             the mark's colour are inline. */}
                         <div className="relative size-14 shrink-0">
-                            <div className="absolute inset-0 rounded-sq-2xl bg-[#0a0d1c] shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]" />
+                            <div className="absolute inset-0 rounded-sq-2xl bg-[var(--c-secondary)] shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]" />
                             <div
                                 className="absolute inset-0 rounded-sq-2xl bg-white"
                                 style={{ opacity: INVERT }}
@@ -281,16 +284,16 @@ export default async function Home() {
                             className="anim-rise relative isolate mt-7 px-6 py-2.5 text-[14px] font-bold text-white"
                             style={{ animationDelay: "200ms" }}
                         >
-                            <span className="absolute inset-0 -z-10 rounded-sq-xl bg-[#0a0d1c] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]" />
+                            <span className="absolute inset-0 -z-10 rounded-sq-xl bg-[var(--c-secondary)] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]" />
                             <span
-                                className="absolute inset-0 -z-10 rounded-sq-xl bg-[#0a0d1c]"
+                                className="absolute inset-0 -z-10 rounded-sq-xl bg-[var(--c-secondary)]"
                                 style={{ opacity: INVERT }}
                             />
                             Start Now
                         </Link>
                         <Link
                             href="/docs"
-                            className="bg-white rounded-sq-xl text-[#0a0d1c] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                            className="bg-white rounded-sq-xl text-[color:var(--c-secondary)] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                             style={{ animationDelay: "200ms" }}
                         >
                             Documentation
@@ -299,7 +302,7 @@ export default async function Home() {
                 </div>
                     {/* scroll cue */}
                     <div
-                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[#0a0d1c]/40"
+                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[color:var(--c-secondary)]/40"
                         style={{ opacity: "clamp(0, calc((0.1 - var(--hero-s, 0)) / 0.1), 1)" }}
                     >
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden className="animate-bounce">
@@ -426,12 +429,12 @@ export default async function Home() {
                             <div key={s.title} className="relative">
                                 <div className="flex items-center gap-3">
                                     <GlyphTile>{s.icon}</GlyphTile>
-                                    <span className="text-[13px] font-extrabold text-[#0a0d1c]/40">
+                                    <span className="text-[13px] font-extrabold text-[color:var(--c-secondary)]/40">
                                         0{i + 1}
                                     </span>
                                 </div>
                                 <h3 className="mt-4 text-[16px] font-extrabold tracking-[-0.01em]">{s.title}</h3>
-                                <p className="mt-1.5 text-[13.5px] leading-6 text-[#0a0d1c]/70">{s.body}</p>
+                                <p className="mt-1.5 text-[13.5px] leading-6 text-[color:var(--c-secondary)]/70">{s.body}</p>
                             </div>
                         ))}
                     </div>
@@ -453,7 +456,7 @@ export default async function Home() {
                 button actually does. Saying "Start Now" and landing them on a
                 holding page would be a bait. */}
             <section className={`${SECTION_X} pb-24`}>
-                <div className="mx-auto max-w-6xl overflow-hidden rounded-sq-xl bg-[#0a0d1c] px-8 py-16 text-center sm:px-16">
+                <div className="mx-auto max-w-6xl overflow-hidden rounded-sq-xl bg-[var(--c-secondary)] px-8 py-16 text-center sm:px-16">
                     <span className="inline-flex items-center gap-2 rounded-full border border-[#fffae8]/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fffae8]/70">
                         <span className="size-1.5 rounded-full bg-[color:var(--c-primary)]" />
                         Private beta
@@ -468,7 +471,7 @@ export default async function Home() {
                     <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
                         <Link
                             href="/login"
-                            className="rounded-sq-xl bg-[#fffae8] px-7 py-3 text-[14px] font-bold text-[#0a0d1c] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5"
+                            className="rounded-sq-xl bg-[#fffae8] px-7 py-3 text-[14px] font-bold text-[color:var(--c-secondary)] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5"
                         >
                             Join the waitlist
                         </Link>
@@ -487,29 +490,29 @@ export default async function Home() {
                 now runs under it, so the inset is added to the 2.5rem rather
                 than replacing it (env() is 0 everywhere else). */}
             <footer
-                className={`${SECTION_X} border-t border-[#0a0d1c]/10 pt-14 pb-[calc(2.5rem+env(safe-area-inset-bottom))]`}
+                className={`${SECTION_X} border-t border-[color:var(--c-secondary)]/10 pt-14 pb-[calc(2.5rem+env(safe-area-inset-bottom))]`}
             >
                 <div className="mx-auto max-w-6xl">
                     <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                         {/* Brand + newsletter */}
                         <div>
                             <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 place-items-center rounded-sq bg-[#0a0d1c] p-1.5 text-white">
+                                <span className="grid size-8 place-items-center rounded-sq bg-[var(--c-secondary)] p-1.5 text-white">
                                     <BobbyMark />
                                 </span>
                                 <span className="text-[14px] font-extrabold tracking-[-0.01em]">Ucelot</span>
-                                <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#0a0d1c]/40">
+                                <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[color:var(--c-secondary)]/40">
                                     by Bobby
                                 </span>
                             </div>
-                            <p className="mt-4 max-w-xs text-[13.5px] leading-6 text-[#0a0d1c]/70">
+                            <p className="mt-4 max-w-xs text-[13.5px] leading-6 text-[color:var(--c-secondary)]/70">
                                 Issue tracking that reads your code — every issue tied back to the
                                 files and lines it&apos;s actually about.
                             </p>
-                            <h3 className="mt-8 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#0a0d1c]/45">
+                            <h3 className="mt-8 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[color:var(--c-secondary)]/45">
                                 Newsletter
                             </h3>
-                            <p className="mt-2 text-[13.5px] leading-6 text-[#0a0d1c]/70">
+                            <p className="mt-2 text-[13.5px] leading-6 text-[color:var(--c-secondary)]/70">
                                 Occasional notes on what we&apos;re building. No noise.
                             </p>
                             <NewsletterForm />
@@ -533,7 +536,7 @@ export default async function Home() {
                         </div>
                     </div>
 
-                    <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[#0a0d1c]/10 pt-6 text-[12.5px] text-[#0a0d1c]/55 sm:flex-row sm:items-center">
+                    <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[color:var(--c-secondary)]/10 pt-6 text-[12.5px] text-[color:var(--c-secondary)]/55 sm:flex-row sm:items-center">
                         <p>© {new Date().getFullYear()} Bobby. All rights reserved.</p>
                         <p>Made for teams who&apos;d rather read code than guess.</p>
                     </div>
