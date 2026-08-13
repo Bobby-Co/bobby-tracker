@@ -67,7 +67,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     {
         name: "get_neighbours",
         description:
-            "Walk one hop through the codebase graph from a file, symbol or node id: callers and callees, imports and importers, implementations of an interface, the module a file belongs to. Fast and free — no model runs. Use it while reading code to answer 'what calls this', 'what breaks if I change this', 'what implements this' without grepping the repository.",
+            "Walk one hop through the codebase graph from a file, symbol or node id: which modules import this one, what it imports, which module or cluster a symbol belongs to. Fast and free — no model runs. Use it while reading code to answer 'what depends on this' and 'what would a change here reach'. IMPORTANT: dependency edges are indexed at MODULE level, so a symbol anchor answers at the granularity of the module that defines it, and the tool tells you when it did that. Symbol-level call graphs (CALLS/IMPLEMENTS) are not indexed for most projects — an empty result is not proof that nothing references a symbol, and the response says so explicitly. Read the notes before concluding anything from an empty answer.",
         inputSchema: {
             type: "object",
             properties: {
@@ -98,7 +98,8 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
                             "DEPENDS_ON",
                         ],
                     },
-                    description: "Restrict to these edge types. Omit for all of them.",
+                    description:
+                        "Restrict to these edge types. Omit for all of them (recommended). Reliably indexed: IMPORTS and DEPENDS_ON (module/cluster level), CONTAINS (module → symbol), MEMBER_OF (module → cluster). The rest are part of the schema but are usually empty, so filtering to them returns nothing.",
                 },
                 direction: {
                     type: "string",
@@ -276,13 +277,30 @@ function renderNeighbours(
     }
 
     const anchored = graph.anchors
-        .map((a) => `- ${a.name} (${a.kind})${a.file ? ` — ${a.file}${a.line ? `:${a.line}` : ""}` : ""}`)
+        .map(
+            (a) =>
+                `- ${a.name} (${a.kind})${a.file ? ` — ${a.file}${a.line ? `:${a.line}` : ""}` : ""}${
+                    a.via ? `  [added automatically: ${a.via}]` : ""
+                }`,
+        )
         .join("\n")
     out.push(`\n## Anchored on\n${anchored}`)
 
+    // An empty list is the one result that must never be shipped bare: read as
+    // "nothing references this", it is exactly the wrong answer before a
+    // refactor. The analyser's notes say whether the edges are absent or merely
+    // unindexed, so lead with them.
     if (graph.neighbours.length === 0) {
-        out.push(`\nNo neighbours over the requested edges. Try direction "both", or drop the edge filter.`)
+        const why = graph.notes.length
+            ? graph.notes.map((n) => `- ${n}`).join("\n")
+            : "- No neighbours over the requested edges, and the analyser gave no reason. Do not read this as 'nothing references this'."
+        out.push(`\n## No neighbours returned — read this before concluding anything\n${why}`)
+        out.push(`\nRetry with direction "both" and no edge filter, or fall back to searching the repository.`)
         return out.join("\n")
+    }
+
+    if (graph.notes.length) {
+        out.push(`\n## How to read this\n${graph.notes.map((n) => `- ${n}`).join("\n")}`)
     }
 
     // Grouped by kind so a long list stays scannable; the analyser already
@@ -297,7 +315,11 @@ function renderNeighbours(
         const rows = nodes.map((n) => {
             const where = n.file ? `${n.file}${n.line ? `:${n.line}` : ""}` : ""
             const summary = clampSummary(n.summary)
-            return `- ${n.name}${where ? `  — ${where}` : ""}${summary ? `\n    ${summary}` : ""}`
+            // `via` matters when the walk ran from more than one anchor: a hit
+            // through the containing module is an importer of that MODULE, not
+            // a caller of the symbol you asked about.
+            const via = n.via ? `  [via ${n.via}]` : ""
+            return `- ${n.name}${where ? `  — ${where}` : ""}${via}${summary ? `\n    ${summary}` : ""}`
         })
         out.push(`\n## ${kind}\n${rows.join("\n")}`)
     }

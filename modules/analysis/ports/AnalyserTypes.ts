@@ -138,11 +138,18 @@ export interface NeighbourNode {
     signature?: string
     summary?: string
     language?: string
+    /** On an anchor: why it is in the set ("defines resolvePublicSession").
+     *  On a neighbour: which anchor it was reached from. */
+    via?: string
 }
 
 export interface NeighboursResult {
     anchors: NeighbourNode[]
     neighbours: NeighbourNode[]
+    /** Why the answer looks the way it does — ALWAYS rendered, and load-bearing
+     *  when `neighbours` is empty: an empty list means "no such edges indexed"
+     *  at least as often as it means "nothing references this". */
+    notes: string[]
     /** At least one anchor hit the per-anchor limit — narrow by edge kind. */
     truncated?: boolean
 }

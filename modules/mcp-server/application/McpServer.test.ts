@@ -116,6 +116,60 @@ describe("tools/call", () => {
         expect(ok(res).content[0].text).toContain("query")
     })
 
+    // An empty neighbour list reads as "nothing references this" — the most
+    // dangerous thing this tool could imply before a refactor. The analyser's
+    // notes carry the real reason, so they must lead the rendering.
+    test("an empty get_neighbours result renders the reason, not a bare nothing", async () => {
+        service.neighbours.mockResolvedValue({
+            base: { repoFullName: "acme/app", name: "App" },
+            graph: {
+                anchors: [{ id: "function:ts:lib/session:resolvePublicSession", kind: "Function", name: "resolvePublicSession" }],
+                neighbours: [],
+                notes: ["CALLS is not indexed in this graph AT ALL — the empty result says nothing about the code."],
+            },
+        })
+        const res = await server().handle({
+            jsonrpc: "2.0", id: 11, method: "tools/call",
+            params: { name: "get_neighbours", arguments: { project: "p1", symbol: "resolvePublicSession", edges: ["CALLS"] } },
+        })
+        const text = ok(res).content[0].text
+        expect(text).toContain("not indexed in this graph")
+        expect(text).toContain("read this before concluding")
+    })
+
+    // Escalated anchors and their rows must stay distinguishable: an importer of
+    // the containing module is not a caller of the symbol.
+    test("get_neighbours attributes escalated anchors and rows", async () => {
+        service.neighbours.mockResolvedValue({
+            base: { repoFullName: "acme/app", name: "App" },
+            graph: {
+                anchors: [
+                    { id: "function:ts:lib/session:resolvePublicSession", kind: "Function", name: "resolvePublicSession" },
+                    { id: "module:ts:lib/session", kind: "Module", name: "lib/session", via: "defines resolvePublicSession" },
+                ],
+                neighbours: [{ id: "module:ts:app/api/a", kind: "Module", name: "app/api/a", via: "lib/session" }],
+                notes: ["IMPORTS / DEPENDS_ON / MEMBER_OF are MODULE-level edges…"],
+            },
+        })
+        const res = await server().handle({
+            jsonrpc: "2.0", id: 12, method: "tools/call",
+            params: { name: "get_neighbours", arguments: { project: "p1", symbol: "resolvePublicSession", direction: "in" } },
+        })
+        const text = ok(res).content[0].text
+        expect(text).toContain("[added automatically: defines resolvePublicSession]")
+        expect(text).toContain("[via lib/session]")
+        expect(text).toContain("How to read this")
+    })
+
+    test("get_neighbours without an anchor tells the model what is missing", async () => {
+        const res = await server().handle({
+            jsonrpc: "2.0", id: 13, method: "tools/call",
+            params: { name: "get_neighbours", arguments: { project: "p1" } },
+        })
+        expect(ok(res).isError).toBe(true)
+        expect(ok(res).content[0].text).toContain("symbol")
+    })
+
     test("an unknown tool IS a protocol error", async () => {
         const res = await server().handle({
             jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "rm_rf", arguments: {} },

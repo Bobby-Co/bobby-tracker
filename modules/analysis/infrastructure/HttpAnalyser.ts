@@ -117,6 +117,7 @@ export class HttpAnalyser implements Analyser {
         return {
             anchors: body.anchors ?? [],
             neighbours: body.neighbours ?? [],
+            notes: body.notes ?? [],
             truncated: body.truncated,
         }
     }
