@@ -492,13 +492,24 @@ main[data-page="landing"] {
        On dark, where the fill lifts further, the label inverts to the ink for
        7.7:1. Light keeps white for now — changing it there is a visual call on
        every button in the product, not a dark-mode fix. */
-    :root[data-theme="dark"] .btn-primary { color: #1a1206; }
+       :not(.btn-github) because the GitHub variant is not an ember fill at all —
+       it carries its own inverse pair below, and this rule would otherwise
+       outrank it on specificity and repaint its label. */
+    :root[data-theme="dark"] .btn-primary:not(.btn-github) { color: #1a1206; }
     .btn-primary:disabled:hover { background-color: var(--c-primary); }
     /* GitHub provider button — brand-black. Set in CSS (not an inline style)
        so the hyperellipse squircle fallback can read it from the stylesheet
        and bake it into the SVG layer; inline backgrounds render grey. */
-    .btn-primary.btn-github { background-color: #18181b; }
-    .btn-primary.btn-github:hover { background-color: #000; }
+    /* GitHub's own convention: brand-black on a light ground, and inverted to
+       white on a dark one. Held at #18181b under the dark theme it sank into
+       the panel it sits on, so it takes the inverse pair — which is white with
+       a dark label and a dark mark, since GithubMark fills with currentColor. */
+    .btn-primary.btn-github {
+        background-color: var(--c-inverse);
+        color: var(--c-inverse-ink);
+    }
+    .btn-primary.btn-github:hover { background-color: var(--c-inverse); filter: brightness(1.12); }
+    :root[data-theme="dark"] .btn-primary.btn-github:hover { filter: brightness(0.94); }
     .btn-ghost {
         @apply inline-flex items-center justify-center gap-1.5 border border-[color:var(--c-border)]
             px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]

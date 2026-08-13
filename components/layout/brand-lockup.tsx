@@ -15,7 +15,14 @@ export const BobbyMark = ({ size = 36 }: { size?: number }) => (
 export function BrandLockup({ tone = "light", text = "default" }: { tone?: "light" | "dark", text?: "default" | "inverted" }) {
     return (
         <div className="flex items-center gap-3">
-            <div className={`grid size-11 shrink-0 place-items-center rounded-sq-xl ${tone !== "dark" ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)]" : "bg-[color:var(--c-text)] text-white"} `} suppressHydrationWarning>
+            {/* tone="dark" means "the tile is the inverse of the page", not "the
+                tile is a dark colour". It used --c-text as the fill with a white
+                mark, which held only while --c-text was dark: under the dark
+                theme that became a near-white tile carrying a white mark. The
+                inverse pair flips as a pair, so the mark stays legible either
+                way — a dark tile with a light mark on light, a light tile with a
+                dark mark on dark. */}
+            <div className={`grid size-11 shrink-0 place-items-center rounded-sq-xl ${tone !== "dark" ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)]" : "bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]"} `} suppressHydrationWarning>
                 <BobbyMark size={30} />
             </div>
             <div className="flex flex-col leading-none">

@@ -10,6 +10,7 @@ import { cn } from "@/components/ui/cn"
 // at /settings lands on the first tab. Mirrors the tabbed nav on /team.
 const TABS = [
     { href: "/settings/connections", label: "Connections" },
+    { href: "/settings/appearance", label: "Appearance" },
     { href: "/settings/mcp", label: "AI Assistant" },
     { href: "/settings/billing", label: "Usage & Billing" },
 ]
