@@ -150,12 +150,12 @@ export function LabelIconManager({
                                 onChange={(e) => { setDraftLabel(e.target.value); setDraftError(null) }}
                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); startCreate() } }}
                                 placeholder="e.g. design, perf, billing"
-                                className="flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
+                                className="flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-[color:var(--c-border-strong)]"
                             />
                             <button
                                 type="button"
                                 onClick={startCreate}
-                                className="rounded-[10px] bg-zinc-900 px-3 py-2 text-[12px] font-semibold text-white hover:bg-zinc-800"
+                                className="rounded-[10px] bg-[color:var(--c-inverse)] px-3 py-2 text-[12px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)]"
                             >
                                 Pick icon →
                             </button>
@@ -205,7 +205,7 @@ export function LabelIconManager({
                                             disabled={busy === label}
                                             className={cn(
                                                 "grid h-9 w-9 shrink-0 place-items-center rounded-[10px] disabled:opacity-50",
-                                                cur ? "bg-zinc-900 text-white" : "bg-[color:var(--c-surface-2)] text-zinc-400 hover:bg-[color:var(--c-border)]",
+                                                cur ? "bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]" : "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-dim)] hover:bg-[color:var(--c-border)]",
                                             )}
                                             title="Change icon"
                                         >

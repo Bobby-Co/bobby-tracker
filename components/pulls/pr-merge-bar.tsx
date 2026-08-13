@@ -353,7 +353,7 @@ function StatusDot({ code }: { code: MergeBlockCode }) {
               ? "bg-amber-500 animate-pulse"
               : code === "no_review"
                 ? "bg-amber-400"
-                : "bg-zinc-400"
+                : "bg-[color:var(--c-border-strong)]"
     return <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", color)} />
 }
 

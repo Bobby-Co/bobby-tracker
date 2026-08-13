@@ -201,7 +201,7 @@ export function MultiDropdown<V extends string = string>({
                     "font-medium text-[color:var(--c-text)] text-left transition-[border-color,box-shadow,background] duration-[140ms]",
                     "hover:border-[color:var(--c-border-strong)] disabled:cursor-not-allowed disabled:opacity-60",
                     open
-                        ? "border-zinc-900 ring-[3px] ring-zinc-900/8"
+                        ? "border-[color:var(--c-inverse)] ring-[3px] ring-[color:var(--c-inverse)]/8"
                         : "border-[color:var(--c-border)]",
                     triggerClassName,
                 )}
@@ -220,7 +220,7 @@ export function MultiDropdown<V extends string = string>({
                     {triggerLabel}
                 </span>
                 {selectedOptions.length > 0 && (
-                    <span className="rounded-full bg-zinc-900 px-1.5 py-[1px] text-[10.5px] font-bold text-white tabular-nums">
+                    <span className="rounded-full bg-[color:var(--c-inverse)] px-1.5 py-[1px] text-[10.5px] font-bold text-[color:var(--c-inverse-ink)] tabular-nums">
                         {selectedOptions.length}
                     </span>
                 )}
@@ -319,7 +319,7 @@ export function MultiDropdown<V extends string = string>({
                                         className={cn(
                                             "grid h-4 w-4 shrink-0 place-items-center rounded-[5px] border transition-colors",
                                             isSelected
-                                                ? "border-zinc-900 bg-zinc-900 text-white"
+                                                ? "border-[color:var(--c-inverse)] bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]"
                                                 : "border-[color:var(--c-border-strong)] bg-[color:var(--c-surface)]",
                                         )}
                                     >

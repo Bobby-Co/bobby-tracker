@@ -60,7 +60,7 @@ export function TimelinePeek({
         return (
             <Link
                 href={`/projects/${projectId}/timeline`}
-                className="anim-fade group block rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-3 text-[12px] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]"
+                className="anim-fade group block rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-3 text-[12px] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)]"
             >
                 <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.12em]">
                     Timeline
@@ -106,7 +106,7 @@ export function TimelinePeek({
 
             <div className="relative h-20 overflow-hidden">
                 {/* Centre line — marks the focal issue's mid-point. */}
-                <div className="pointer-events-none absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-zinc-300" />
+                <div className="pointer-events-none absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-[color:var(--c-border)]" />
 
                 {/* Today marker — only shown if "now" falls inside
                     the visible window. Dashed red dotted line for

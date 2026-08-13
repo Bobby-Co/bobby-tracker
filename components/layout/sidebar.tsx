@@ -25,8 +25,8 @@ interface SidebarProps {
 // raised white pill (hairline ring + soft shadow); idle rows are quiet
 // and lift on hover with a translucent overlay.
 const ROW_ACTIVE =
-    "bg-[color:var(--c-surface)] font-semibold text-[color:var(--c-text)] shadow-[0_1px_3px_rgba(180,83,9,0.12)] ring-1 ring-amber-200/80"
-const ROW_IDLE = "text-zinc-600 hover:bg-[color:var(--c-overlay)] bg-[color:var(--c-border)]/50 hover:text-[color:var(--c-text)]"
+    "bg-[color:var(--c-surface)] font-semibold text-[color:var(--c-text)] shadow-[0_1px_3px_rgba(180,83,9,0.12)] ring-1 ring-[color:var(--c-border-strong)]"
+const ROW_IDLE = "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overlay)] bg-[color:var(--c-border)]/50 hover:text-[color:var(--c-text)]"
 
 // SidebarContent mirrors the reference rail top-to-bottom: a workspace
 // header (logo + name + panel toggle), a flat icon nav, collapsible
@@ -100,7 +100,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
             <div className="relative flex min-h-0 flex-1 flex-col">
             {/* Workspace header */}
             <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-                <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[var(--c-secondary-deep)] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-amber-900/40">
+                <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[var(--c-secondary-deep)] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]">
                     {/* Brand ember — the same dark-ember pixel gradient as the login panel,
                         glowing from the top-left corner behind the mark. */}
                     <PixelGradient stops={DARK_EMBER_STOPS} variant="linear" tiltDeg={45} tilePx={8} tileAspect={1} />
@@ -229,7 +229,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
                     ) : (
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-zinc-600">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-[color:var(--c-text-muted)]">
                             {initials}
                         </span>
                     )}
@@ -281,7 +281,7 @@ function NavItem({
                 active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
-            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-amber-500" : "text-zinc-400")}>
+            <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-amber-500" : "text-[color:var(--c-text-dim)]")}>
                 {icon}
             </span>
             <span className="min-w-0 flex-1 truncate">{label}</span>

@@ -65,7 +65,7 @@ export default function IssueDetailPage() {
 
     return (
         <div className="flex flex-col gap-4 px-4">
-            <Link href={`/projects/${id}/issues`} className="text-xs text-zinc-500 hover:underline">
+            <Link href={`/projects/${id}/issues`} className="text-xs text-[color:var(--c-text-muted)] hover:underline">
                 ← Issues
             </Link>
 

@@ -38,7 +38,7 @@ function verdictClasses(v: string): string {
         case "unlikely":
             return "bg-rose-50 text-rose-700"
         default:
-            return "bg-[color:var(--c-surface-2)] text-zinc-600"
+            return "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]"
     }
 }
 

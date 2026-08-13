@@ -15,12 +15,12 @@ export const STATUS_META: Record<
     in_progress: { tone: "amber",   dot: "bg-amber-500",   chip: "bg-amber-50 text-amber-700",     label: "In progress" },
     blocked:     { tone: "rose",    dot: "bg-rose-500",    chip: "bg-rose-50 text-rose-700",       label: "Blocked" },
     done:        { tone: "emerald", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700", label: "Done" },
-    archived:    { tone: "zinc",    dot: "bg-zinc-400",    chip: "bg-[color:var(--c-surface-2)] text-zinc-600",      label: "Archived" },
+    archived:    { tone: "zinc",    dot: "bg-[color:var(--c-border-strong)]",    chip: "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",      label: "Archived" },
     duplicated:  { tone: "violet",  dot: "bg-violet-500",  chip: "bg-violet-50 text-violet-700",   label: "Duplicated" },
 }
 
 export const PRIORITY_META: Record<IssuePriority, { dot: string; label: string }> = {
-    low:    { dot: "bg-zinc-300",   label: "Low" },
+    low:    { dot: "bg-[color:var(--c-border)]",   label: "Low" },
     medium: { dot: "bg-sky-400",    label: "Medium" },
     high:   { dot: "bg-orange-400", label: "High" },
     urgent: { dot: "bg-rose-500",   label: "Urgent" },

@@ -174,7 +174,7 @@ export function NewLabelModal({
                         onChange={(e) => setName(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter" && canCreate) { e.preventDefault(); void submit() } }}
                         placeholder="Label name"
-                        className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
+                        className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-[color:var(--c-border-strong)]"
                     />
                     {isDuplicate && (
                         <p className="mt-1 text-[11px] text-rose-600">
@@ -198,7 +198,7 @@ export function NewLabelModal({
                                     onClick={() => { setColor(c); setColorTouched(true) }}
                                     className={cn(
                                         "h-6 w-6 rounded-full transition-all",
-                                        active ? "ring-2 ring-zinc-900 ring-offset-2" : "ring-1 ring-black/10 hover:ring-zinc-400",
+                                        active ? "ring-2 ring-[color:var(--c-inverse)] ring-offset-2" : "ring-1 ring-black/10 hover:ring-[color:var(--c-border-strong)]",
                                     )}
                                     style={{ background: c }}
                                     aria-label={`Colour ${c}`}
@@ -218,7 +218,7 @@ export function NewLabelModal({
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search…"
-                            className="w-32 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal text-[color:var(--c-text)] outline-none focus:border-zinc-400"
+                            className="w-32 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal text-[color:var(--c-text)] outline-none focus:border-[color:var(--c-border-strong)]"
                         />
                     </div>
                     <div
@@ -263,7 +263,7 @@ export function NewLabelModal({
                         type="button"
                         onClick={submit}
                         disabled={!canCreate}
-                        className="rounded-[10px] bg-zinc-900 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                        className="rounded-[10px] bg-[color:var(--c-inverse)] px-4 py-2 text-[12.5px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)] disabled:opacity-50"
                     >
                         {submitting ? "Creating…" : "Create"}
                     </button>
@@ -294,8 +294,8 @@ function IconButton({
                 className={cn(
                     "grid h-10 place-items-center rounded-[8px] border transition-colors",
                     active
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]",
+                        ? "border-[color:var(--c-inverse)] bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]"
+                        : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)]",
                     className,
                 )}
             >

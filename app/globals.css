@@ -74,6 +74,14 @@
        flips. */
     --c-secondary-ink:  #0a0d1c;
 
+    /* INVERTED emphasis — a surface that deliberately contrasts with the page,
+       for the one control in a view that should read as the loud one (submit
+       chips, the selected swatch in a picker, tooltips). It flips with the
+       theme, which a literal zinc-900 could not: on dark, "inverted" means
+       LIGHT. Distinct from --c-primary, which is the brand, not a contrast. */
+    --c-inverse:     #18181b;
+    --c-inverse-ink: #ffffff;
+
     --r-sm:  8px;
     --r-md:  12px;
     --r-lg:  16px;
@@ -193,6 +201,8 @@
     --c-secondary-tint: #161d3c;
     --c-secondary-line: #2a3157;
     --c-secondary-ink:  #dfe3f2;
+    --c-inverse:     #e6eaf7;
+    --c-inverse-ink: #0d1226;
 
     /* Elevation can no longer be a shadow: a soft dark halo is invisible on a
        dark desk. It becomes lightness — a hairline ring, and a surface that is
@@ -319,6 +329,8 @@ main[data-page="landing"] {
     --c-accent-2:       #9a3412;
     --c-secondary:      #0a0d1c;
     --c-secondary-ink:  #0a0d1c;
+    --c-inverse:        #18181b;
+    --c-inverse-ink:    #ffffff;
     /* The surface set too, not just the brand: the feature demos are little
        pictures OF THE LIGHT APP sitting on the dark section (see
        components/ui/feature-demos.tsx, which draws them with --c-surface,
@@ -409,10 +421,11 @@ main[data-page="landing"] {
        failure mode as responsive variants), which silently staled the whole
        components layer. */
     .input {
-        @apply w-full rounded-[12px] border bg-white px-3 py-2 text-sm
+        @apply w-full rounded-[12px] border px-3 py-2 text-sm
             text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)]
             transition-colors duration-[140ms];
         border-color: var(--c-border);
+        background-color: var(--c-surface);
     }
 
     .squircle-card {
@@ -475,6 +488,11 @@ main[data-page="landing"] {
     }
 
     .btn-primary:hover { background-color: var(--c-primary-hover); }
+    /* The ember fill is light enough that a white label only reaches 3.0:1.
+       On dark, where the fill lifts further, the label inverts to the ink for
+       7.7:1. Light keeps white for now — changing it there is a visual call on
+       every button in the product, not a dark-mode fix. */
+    :root[data-theme="dark"] .btn-primary { color: #1a1206; }
     .btn-primary:disabled:hover { background-color: var(--c-primary); }
     /* GitHub provider button — brand-black. Set in CSS (not an inline style)
        so the hyperellipse squircle fallback can read it from the stylesheet
@@ -483,9 +501,10 @@ main[data-page="landing"] {
     .btn-primary.btn-github:hover { background-color: #000; }
     .btn-ghost {
         @apply inline-flex items-center justify-center gap-1.5 border border-[color:var(--c-border)]
-            bg-white px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]
+            px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]
             hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]
             disabled:opacity-50;
+        background-color: var(--c-surface);
         border-radius: calc(16px * var(--corner-scale, 1));
         --corner-shape: squircle;
     }
@@ -494,8 +513,9 @@ main[data-page="landing"] {
        (used inside .card-stack with a .card-tab sibling) flattens just
        the top-left corner so the tab tucks under cleanly. */
     .card {
-        @apply rounded-[14px] border border-[color:var(--c-border)] bg-white p-3.5
+        @apply rounded-[14px] border border-[color:var(--c-border)] p-3.5
             transition-[transform,box-shadow,border-color] duration-[220ms];
+        background-color: var(--c-surface);
         box-shadow: var(--shadow-card);
     }
     .card-stack:has(> .card-tab) > .card {
@@ -601,7 +621,8 @@ main[data-page="landing"] {
     /* minimal chip — calmer than .pill, used for inline meta + filters */
     .chip-min {
         @apply inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)]
-            bg-white px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)];
+            px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)];
+        background-color: var(--c-surface);
     }
 
     /* breadcrumb — page chrome trail (ref top bar) */

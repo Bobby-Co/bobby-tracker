@@ -76,7 +76,7 @@ export function IconPicker({
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search icons (e.g. bug, calendar, raindrop, weather)…"
-                    className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
+                    className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-[color:var(--c-border-strong)]"
                 />
                 {/* Fixed-height scroll area so the modal keeps a stable size no
                     matter how many results there are — a short/empty result set
@@ -159,8 +159,8 @@ function IconTile({
                 className={cn(
                     "group flex flex-col items-center gap-1 rounded-[10px] border px-2 py-3 text-[10.5px] font-medium transition-colors",
                     active
-                        ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]",
+                        ? "border-[color:var(--c-inverse)] bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]"
+                        : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)]",
                 )}
             >
                 <IconlyIcon name={icon.name} size={22} />

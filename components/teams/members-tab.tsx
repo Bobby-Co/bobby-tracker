@@ -186,7 +186,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
         return <img src={url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
     }
     return (
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-zinc-600">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-[color:var(--c-text-muted)]">
             {initials}
         </span>
     )

@@ -294,7 +294,7 @@ function LiveProgress({ progress }: { progress: ProjectAnalyser["progress"] }) {
             {pct != null && (
                 <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-[color:var(--c-border)]">
                     <div
-                        className="absolute inset-y-0 left-0 rounded-full bg-zinc-900 transition-[width] duration-500 ease-out"
+                        className="absolute inset-y-0 left-0 rounded-full bg-[color:var(--c-inverse)] transition-[width] duration-500 ease-out"
                         style={{ width: `${pct}%` }}
                     />
                 </div>

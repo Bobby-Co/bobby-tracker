@@ -259,7 +259,7 @@ export function SimilarIssuesCard({
                                 type="button"
                                 onClick={() => markAsDuplicate(s)}
                                 disabled={marking !== null}
-                                className="shrink-0 rounded-[8px] bg-zinc-900 px-2.5 py-1 text-[11.5px] font-semibold text-white hover:bg-zinc-950 disabled:opacity-60"
+                                className="shrink-0 rounded-[8px] bg-[color:var(--c-inverse)] px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-zinc-950 disabled:opacity-60"
                             >
                                 {marking === s.id ? "Marking…" : "Duplicate of"}
                             </button>

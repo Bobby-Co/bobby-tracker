@@ -141,7 +141,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                         disabled={!loaded}
                         title="Change icon"
                         className={cn(
-                            "group relative grid h-14 w-14 shrink-0 place-items-center rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] text-[color:var(--c-text)] transition-colors hover:border-zinc-400 disabled:opacity-50",
+                            "group relative grid h-14 w-14 shrink-0 place-items-center rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] disabled:opacity-50",
                             savingIcon && "opacity-60",
                         )}
                     >
@@ -172,7 +172,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                             }}
                             disabled={!loaded}
                             placeholder="Project name"
-                            className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400 disabled:opacity-50"
+                            className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-[color:var(--c-border-strong)] disabled:opacity-50"
                         />
 
                         <label className="mb-1.5 mt-3 block text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
@@ -184,7 +184,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                             disabled={!loaded}
                             rows={2}
                             placeholder="One-liner about what this project tracks — also seeds the icon suggestions."
-                            className="w-full resize-y rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] leading-5 outline-none focus:border-zinc-400 disabled:opacity-50"
+                            className="w-full resize-y rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] leading-5 outline-none focus:border-[color:var(--c-border-strong)] disabled:opacity-50"
                         />
 
                         <div className="mt-3 flex items-center gap-3">
@@ -192,7 +192,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                                 type="button"
                                 onClick={saveText}
                                 disabled={!textDirty || savingText}
-                                className="rounded-[10px] bg-zinc-900 px-3.5 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-[10px] bg-[color:var(--c-inverse)] px-3.5 py-2 text-[12.5px] font-semibold text-[color:var(--c-inverse-ink)] transition-colors hover:bg-[color:var(--c-inverse)] disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 {savingText ? "Saving…" : "Save"}
                             </button>

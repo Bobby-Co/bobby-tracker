@@ -85,7 +85,7 @@ export default function SessionsPage() {
                                                 className={
                                                     s.enabled
                                                         ? "shrink-0 rounded-full bg-emerald-50 px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-emerald-700"
-                                                        : "shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-zinc-600"
+                                                        : "shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-[color:var(--c-text-muted)]"
                                                 }
                                             >
                                                 {s.enabled ? "Live" : "Paused"}

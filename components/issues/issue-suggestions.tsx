@@ -275,7 +275,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                             treats missing as not-local. Never inferred from cost. */}
                         {suggestion?.data?.local === true && <LocalChip />}
                     </h2>
-                    <p className="mt-0.5 text-xs text-zinc-500 transition-opacity">
+                    <p className="mt-0.5 text-xs text-[color:var(--c-text-muted)] transition-opacity">
                         {pending
                             ? "Reading the graph and source — typically 10–30s."
                             : suggestion
@@ -302,7 +302,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                             <ChevronIcon />
                         </span>
                         <div
-                            className="absolute right-0 top-0 z-20 overflow-hidden bg-[color:var(--c-surface)] ring-1 ring-inset ring-zinc-200 backdrop-blur-xl"
+                            className="absolute right-0 top-0 z-20 overflow-hidden bg-[color:var(--c-surface)] ring-1 ring-inset ring-[color:var(--c-border)] backdrop-blur-xl"
                             style={{
                                 width: effortOpen ? panelSize.w : chipSize.w,
                                 height: effortOpen ? panelSize.h : chipSize.h,
@@ -350,14 +350,14 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                                 }}
                             >
                                 <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--c-text-muted)]">
                                         Analyser effort
                                     </span>
                                     <button
                                         type="button"
                                         onClick={() => setEffortOpen(false)}
                                         tabIndex={effortOpen ? 0 : -1}
-                                        className="-mr-1 rounded p-0.5 text-zinc-400 transition-colors hover:text-zinc-600"
+                                        className="-mr-1 rounded p-0.5 text-[color:var(--c-text-dim)] transition-colors hover:text-[color:var(--c-text-muted)]"
                                         aria-label="Close effort picker"
                                     >
                                         <CloseIcon />
@@ -494,7 +494,7 @@ function FindingCard({
 
     return (
         <li
-            className="anim-rise overflow-hidden rounded-lg border border-zinc-200 bg-[color:var(--c-surface-2)] transition-all duration-200 hover:border-zinc-300"
+            className="anim-rise overflow-hidden rounded-lg border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] transition-all duration-200 hover:border-[color:var(--c-border-strong)]"
             style={{ ["--i" as string]: index } as React.CSSProperties}
         >
             <button
@@ -507,7 +507,7 @@ function FindingCard({
                     {headline}
                 </span>
                 {finding.symbol && !open && (
-                    <span className="hidden font-mono text-[11px] text-zinc-500 sm:inline">
+                    <span className="hidden font-mono text-[11px] text-[color:var(--c-text-muted)] sm:inline">
                         {finding.symbol}
                     </span>
                 )}
@@ -520,7 +520,7 @@ function FindingCard({
                     stroke="currentColor"
                     strokeWidth="2"
                     className={cn(
-                        "shrink-0 text-zinc-400 transition-transform duration-200",
+                        "shrink-0 text-[color:var(--c-text-dim)] transition-transform duration-200",
                         open && "rotate-180",
                     )}
                     aria-hidden
@@ -530,9 +530,9 @@ function FindingCard({
             </button>
 
             {open && (
-                <div className="anim-fade border-t border-zinc-200/60 bg-[color:var(--c-surface)] px-3 py-2.5">
+                <div className="anim-fade border-t border-[color:var(--c-border)]/60 bg-[color:var(--c-surface)] px-3 py-2.5">
                     {finding.symbol && (
-                        <div className="font-mono text-[11.5px] text-zinc-500">
+                        <div className="font-mono text-[11.5px] text-[color:var(--c-text-muted)]">
                             {finding.symbol}
                         </div>
                     )}
@@ -546,13 +546,13 @@ function FindingCard({
                             href={url}
                             target="_blank"
                             rel="noreferrer"
-                            className="mt-2.5 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[11.5px] text-zinc-500 hover:text-blue-600 hover:underline"
+                            className="mt-2.5 inline-flex max-w-full items-center gap-1.5 truncate font-mono text-[11.5px] text-[color:var(--c-text-muted)] hover:text-blue-600 hover:underline"
                         >
                             <span className="truncate">{finding.file}</span>
                             <ExternalLinkIcon />
                         </a>
                     ) : (
-                        <span className="mt-2.5 inline-block max-w-full truncate font-mono text-[11.5px] text-zinc-500">
+                        <span className="mt-2.5 inline-block max-w-full truncate font-mono text-[11.5px] text-[color:var(--c-text-muted)]">
                             {finding.file}
                         </span>
                     )}
@@ -581,8 +581,8 @@ function ConfidenceBadge({ value }: { value: string }) {
     const cls =
         v === "high"   ? "bg-green-100 text-green-800" :
         v === "medium" ? "bg-amber-100 text-amber-800" :
-        v === "low"    ? "bg-[color:var(--c-surface-2)] text-zinc-600" :
-                         "bg-[color:var(--c-surface-2)] text-zinc-600"
+        v === "low"    ? "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]" :
+                         "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]"
     return (
         <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition-colors ${cls}`}>
             {v}
@@ -602,7 +602,7 @@ function MetaRow({
     durationMs: number | null
 }) {
     return (
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--c-text-muted)]">
             {confidence && <ConfidenceBadge value={confidence} />}
             {graphId && <Pill mono>graph: {graphId}</Pill>}
             {sha && <Pill mono>sha: {sha.slice(0, 7)}</Pill>}
@@ -640,7 +640,7 @@ function Analysing() {
     return (
         <div className="mt-4 anim-fade flex flex-col items-center gap-4 py-6">
             <GraphScan />
-            <div className="flex items-center gap-2 text-[13px] font-medium text-zinc-600">
+            <div className="flex items-center gap-2 text-[13px] font-medium text-[color:var(--c-text-muted)]">
                 <SmallSpinner />
                 {/* keyed so anim-fade replays on every phase change → soft crossfade */}
                 <span key={phase} className="anim-fade">{ANALYSING_PHASES[phase]}…</span>
@@ -759,7 +759,7 @@ function NeedsIndexing() {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-    return <div className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{children}</div>
+    return <div className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--c-text-muted)]">{children}</div>
 }
 
 function Pill({ children, mono }: { children: React.ReactNode; mono?: boolean }) {

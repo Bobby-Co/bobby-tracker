@@ -241,7 +241,7 @@ function CaptureStep({
                                     onClick={() => onRemoveImage(idx)}
                                     disabled={composing}
                                     aria-label={`Remove image ${idx + 1}`}
-                                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-zinc-900/80 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-[color:var(--c-inverse)]/80 text-[color:var(--c-inverse-ink)] opacity-0 transition-opacity group-hover:opacity-100"
                                 >
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
                                         <path d="M6 6l12 12M18 6L6 18" />

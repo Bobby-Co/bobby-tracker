@@ -53,7 +53,7 @@ export function useHoverTooltip(text: string): {
     const overlay = portalReady && pos
         ? createPortal(
             <div
-                className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full rounded-md bg-zinc-900 px-2 py-1 text-[11px] font-medium text-white shadow-md whitespace-nowrap"
+                className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full rounded-md bg-[color:var(--c-inverse)] px-2 py-1 text-[11px] font-medium text-[color:var(--c-inverse-ink)] shadow-md whitespace-nowrap"
                 style={{ top: pos.top, left: pos.left }}
             >
                 {text}

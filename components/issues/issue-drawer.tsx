@@ -265,7 +265,7 @@ function DrawerBody({
             <footer className="absolute inset-x-0 bottom-0 px-7 pb-7">
                 <Link
                     href={`/projects/${projectId}/issues/${issue.id}`}
-                    className="grid h-12 w-full place-items-center rounded-full bg-zinc-950 text-[13.5px] font-semibold text-white transition-colors hover:bg-zinc-800"
+                    className="grid h-12 w-full place-items-center rounded-full bg-[color:var(--c-inverse)] text-[13.5px] font-semibold text-[color:var(--c-inverse-ink)] transition-colors hover:opacity-90"
                 >
                     Visit this issue
                 </Link>
@@ -365,7 +365,7 @@ function AnalyserCard({
                                         "rounded-[4px] px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide",
                                         f.confidence.toLowerCase() === "high" && "bg-emerald-100 text-emerald-700",
                                         f.confidence.toLowerCase() === "medium" && "bg-amber-100 text-amber-700",
-                                        f.confidence.toLowerCase() === "low" && "bg-[color:var(--c-surface-2)] text-zinc-600",
+                                        f.confidence.toLowerCase() === "low" && "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",
                                     )}>
                                         {f.confidence}
                                     </span>
@@ -383,7 +383,7 @@ function AnalyserCard({
                             "rounded-[4px] px-1.5 py-0.5 font-bold uppercase tracking-wide",
                             suggestion.confidence.toLowerCase() === "high" && "bg-emerald-100 text-emerald-700",
                             suggestion.confidence.toLowerCase() === "medium" && "bg-amber-100 text-amber-700",
-                            suggestion.confidence.toLowerCase() === "low" && "bg-[color:var(--c-surface-2)] text-zinc-600",
+                            suggestion.confidence.toLowerCase() === "low" && "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",
                         )}>
                             {suggestion.confidence}
                         </span>
@@ -605,7 +605,7 @@ function RegenerateButton({ issueId }: { issueId: string }) {
             type="button"
             onClick={trigger}
             disabled={busy}
-            className="rounded-full bg-zinc-950 px-3 py-1.5 text-[11.5px] font-semibold text-white hover:bg-zinc-800 disabled:opacity-60"
+            className="rounded-full bg-[color:var(--c-inverse)] px-3 py-1.5 text-[11.5px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)] disabled:opacity-60"
         >
             {busy ? "Running…" : "Regenerate"}
         </button>
@@ -657,7 +657,7 @@ function LabelChip({
 
 function PriorityPill({ priority }: { priority: Issue["priority"] }) {
     const cfg = {
-        low:    { bg: "bg-[color:var(--c-surface-2)]",   fg: "text-zinc-600",   label: "low" },
+        low:    { bg: "bg-[color:var(--c-surface-2)]",   fg: "text-[color:var(--c-text-muted)]",   label: "low" },
         medium: { bg: "bg-[color:var(--c-border)]",   fg: "text-[color:var(--c-text-muted)]",   label: "medium" },
         high:   { bg: "bg-orange-200", fg: "text-orange-900", label: "high" },
         urgent: { bg: "bg-rose-300",   fg: "text-rose-900",   label: "urgent" },

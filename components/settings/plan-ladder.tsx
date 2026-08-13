@@ -25,7 +25,7 @@ interface LadderData {
 }
 
 const TIER_ACCENT: Record<string, { wash: string; fg: string; dot: string }> = {
-    kit:     { wash: "bg-[color:var(--c-surface-2)]", fg: "text-[color:var(--c-text-muted)]", dot: "bg-zinc-400" },
+    kit:     { wash: "bg-[color:var(--c-surface-2)]", fg: "text-[color:var(--c-text-muted)]", dot: "bg-[color:var(--c-border-strong)]" },
     prowler: { wash: "bg-amber-50",  fg: "text-amber-600",  dot: "bg-amber-500" },
     pride:   { wash: "bg-emerald-50", fg: "text-emerald-600", dot: "bg-emerald-500" },
     apex:    { wash: "bg-indigo-50", fg: "text-indigo-600", dot: "bg-indigo-500" },

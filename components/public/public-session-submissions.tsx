@@ -152,7 +152,7 @@ function ReporterSection({
     return (
         <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2 px-1">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-bold text-white">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[color:var(--c-inverse)] text-[11px] font-bold text-[color:var(--c-inverse-ink)]">
                     {(group.display_name || "?").trim().charAt(0).toUpperCase()}
                 </span>
                 <span className="truncate text-[13px] font-bold">

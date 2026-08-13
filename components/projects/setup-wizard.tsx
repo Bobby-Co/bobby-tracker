@@ -450,7 +450,7 @@ function BigToggle({ on, onToggle, reduce }: { on: boolean; onToggle: () => void
             onClick={onToggle}
             className={cn(
                 "relative flex h-16 w-28 items-center rounded-full p-2 transition-colors duration-300",
-                on ? "bg-[color:var(--c-primary)]" : "bg-zinc-300",
+                on ? "bg-[color:var(--c-primary)]" : "bg-[color:var(--c-border)]",
             )}
         >
             <motion.span
@@ -465,7 +465,7 @@ function BigToggle({ on, onToggle, reduce }: { on: boolean; onToggle: () => void
                     initial={{ scale: 0.6, opacity: 0, rotate: reduce ? 0 : -30 }}
                     animate={{ scale: 1, opacity: 1, rotate: 0 }}
                     transition={{ duration: 0.28, ease: EASE }}
-                    className={on ? "text-[color:var(--c-primary)]" : "text-zinc-400"}
+                    className={on ? "text-[color:var(--c-primary)]" : "text-[color:var(--c-text-dim)]"}
                 >
                     {on ? <RefreshMark /> : <PauseMark />}
                 </motion.span>

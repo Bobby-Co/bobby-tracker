@@ -76,7 +76,7 @@ function ToggleLink({
             className={cn(
                 "inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold transition-colors",
                 active
-                    ? "bg-zinc-900 text-white"
+                    ? "bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]"
                     : "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]",
             )}
         >

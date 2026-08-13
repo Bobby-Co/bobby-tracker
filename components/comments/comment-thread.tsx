@@ -99,7 +99,7 @@ function Avatar({ url, login }: { url: string | null; login: string | null }) {
         return <img src={url} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded-full object-cover" />
     }
     return (
-        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[10px] font-bold text-zinc-600">
+        <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[10px] font-bold text-[color:var(--c-text-muted)]">
             {(login ?? "?")[0]?.toUpperCase()}
         </span>
     )
@@ -112,7 +112,7 @@ function ProvenanceChip({ c }: { c: ThreadComment }) {
     if (c.provenance === "tracker") {
         return <span className="rounded-full bg-amber-50 px-1.5 py-[1px] text-[10px] font-semibold text-amber-700">Ucelot</span>
     }
-    return <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-semibold text-zinc-600">GitHub</span>
+    return <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-text-muted)]">GitHub</span>
 }
 
 // Every bot PR comment (loading / result / cancelled / failed) is prefixed with
@@ -289,7 +289,7 @@ function CommentRow({
                                 type="button"
                                 onClick={save}
                                 disabled={busy || !draft.trim()}
-                                className="rounded-[8px] bg-zinc-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                                className="rounded-[8px] bg-[color:var(--c-inverse)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)] disabled:opacity-50"
                             >
                                 {busy ? "Saving…" : "Save"}
                             </button>
@@ -370,7 +370,7 @@ function Composer({
                     type="button"
                     onClick={post}
                     disabled={busy || !body.trim()}
-                    className="rounded-[10px] bg-zinc-900 px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
+                    className="rounded-[10px] bg-[color:var(--c-inverse)] px-3.5 py-2 text-[12.5px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)] disabled:opacity-50"
                 >
                     {busy ? "Posting…" : "Comment"}
                 </button>

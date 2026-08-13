@@ -201,7 +201,7 @@ export function Dropdown<V extends string = string>({
                     "font-medium text-[color:var(--c-text)] text-left transition-[border-color,box-shadow,background] duration-[140ms]",
                     "hover:border-[color:var(--c-border-strong)] disabled:cursor-not-allowed disabled:opacity-60",
                     open
-                        ? "border-zinc-900 ring-[3px] ring-zinc-900/8"
+                        ? "border-[color:var(--c-inverse)] ring-[3px] ring-[color:var(--c-inverse)]/8"
                         : "border-[color:var(--c-border)]",
                     triggerClassName,
                 )}

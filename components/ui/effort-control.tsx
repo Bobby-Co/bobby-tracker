@@ -65,7 +65,7 @@ export function EffortControl({
                 <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[color:var(--c-border)]" />
                 {/* filled portion up to the current stop */}
                 <div
-                    className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-900"
+                    className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[color:var(--c-inverse)]"
                     style={{ width: pct(index) }}
                 />
                 {/* per-stop tick lines */}
@@ -75,7 +75,7 @@ export function EffortControl({
                         aria-hidden
                         className={cn(
                             "absolute top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 rounded-full",
-                            i <= index ? "bg-zinc-400" : "bg-zinc-300",
+                            i <= index ? "bg-[color:var(--c-border-strong)]" : "bg-[color:var(--c-border)]",
                         )}
                         style={{ left: pct(i) }}
                     />
@@ -98,7 +98,7 @@ export function EffortControl({
                 {/* thumb (visual only; the input above drives it) */}
                 <span
                     aria-hidden
-                    className="pointer-events-none absolute top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-zinc-900 shadow ring-zinc-400 transition-shadow peer-focus-visible:ring-2"
+                    className="pointer-events-none absolute top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[color:var(--c-inverse)] shadow ring-[color:var(--c-border-strong)] transition-shadow peer-focus-visible:ring-2"
                     style={{ left: pct(index) }}
                 />
             </div>

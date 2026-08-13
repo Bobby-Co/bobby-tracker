@@ -69,7 +69,7 @@ export function AutoUpdatePanel({ projectId }: { projectId: string }) {
                                 <span
                                     className={cn(
                                         "rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em]",
-                                        on ? "bg-emerald-100 text-emerald-800" : "bg-[color:var(--c-surface-2)] text-zinc-600",
+                                        on ? "bg-emerald-100 text-emerald-800" : "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",
                                     )}
                                 >
                                     {on ? "On" : "Off"}
@@ -119,7 +119,7 @@ function Switch({
             onClick={onClick}
             className={cn(
                 "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50",
-                checked ? "bg-[color:var(--c-primary)]" : "bg-zinc-300",
+                checked ? "bg-[color:var(--c-primary)]" : "bg-[color:var(--c-border)]",
             )}
         >
             <span

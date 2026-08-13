@@ -838,7 +838,7 @@ function statusDot(status?: string): string | null {
         case "done":
             return "bg-emerald-500"
         case "archived":
-            return "bg-zinc-400"
+            return "bg-[color:var(--c-border-strong)]"
         case "duplicated":
             return "bg-violet-500"
         default:

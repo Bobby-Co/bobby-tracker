@@ -142,7 +142,7 @@ export function LabelsEditor({
                     <motion.span
                         layout="position"
                         onClick={() => setCreating(true)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2.5 py-[3px] cursor-pointer text-[11px] font-semibold text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2.5 py-[3px] cursor-pointer text-[11px] font-semibold text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
                     >
                         <span aria-hidden>+</span>
                         New

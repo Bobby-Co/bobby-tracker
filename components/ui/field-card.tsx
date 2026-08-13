@@ -20,7 +20,7 @@ const TONE: Record<Tone, string> = {
     violet:  "bg-violet-50 text-violet-600",
     indigo:  "bg-indigo-50 text-indigo-600",
     cyan:    "bg-cyan-50 text-cyan-600",
-    zinc:    "bg-[color:var(--c-surface-2)] text-zinc-500",
+    zinc:    "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",
 }
 
 // Solid, saturated fill with a white glyph — the bolder avatar treatment
@@ -34,7 +34,7 @@ const TONE_SOLID: Record<Tone, string> = {
     violet:  "bg-violet-500 text-white ring-1 ring-inset ring-white/15",
     indigo:  "bg-indigo-500 text-white ring-1 ring-inset ring-white/15",
     cyan:    "bg-cyan-500 text-white ring-1 ring-inset ring-white/15",
-    zinc:    "bg-zinc-900 text-white ring-1 ring-inset ring-white/10",
+    zinc:    "bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)] ring-1 ring-inset ring-white/10",
 }
 
 // Deterministic tone from a seed string (e.g. a project name) so each

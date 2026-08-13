@@ -169,7 +169,7 @@ function TeamAvatar({ name, personal, size = 24 }: { name: string; personal: boo
         <span
             className={cn(
                 "grid shrink-0 place-items-center rounded-[6px] font-bold text-white",
-                personal ? "bg-zinc-500" : "bg-[color:var(--c-primary)]",
+                personal ? "bg-[color:var(--c-text-dim)]" : "bg-[color:var(--c-primary)]",
             )}
             style={{ width: size, height: size, fontSize: size <= 20 ? 10 : 11 }}
             aria-hidden

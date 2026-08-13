@@ -15,7 +15,7 @@ export function prState(pr: Pick<PullRequest, "state" | "merged" | "draft">): Pr
 
 export const PR_STATE_META: Record<PrState, { dot: string; chip: string; label: string }> = {
     open:   { dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700", label: "Open" },
-    draft:  { dot: "bg-zinc-400",    chip: "bg-[color:var(--c-surface-2)] text-zinc-600",      label: "Draft" },
+    draft:  { dot: "bg-[color:var(--c-border-strong)]",    chip: "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",      label: "Draft" },
     merged: { dot: "bg-violet-500",  chip: "bg-violet-50 text-violet-700",   label: "Merged" },
     closed: { dot: "bg-rose-500",    chip: "bg-rose-50 text-rose-700",       label: "Closed" },
 }
@@ -38,7 +38,7 @@ export const REVIEW_META: Record<Exclude<ReviewStatus, null>, { dot: string; chi
     analysing: { dot: "bg-amber-500 animate-pulse", chip: "bg-amber-50 text-amber-700",   label: "Reviewing" },
     done:      { dot: "bg-emerald-500",             chip: "bg-emerald-50 text-emerald-700", label: "Reviewed" },
     failed:    { dot: "bg-rose-500",                chip: "bg-rose-50 text-rose-700",       label: "Review failed" },
-    cancelled: { dot: "bg-zinc-400",                chip: "bg-[color:var(--c-surface-2)] text-zinc-600",      label: "Review cancelled" },
+    cancelled: { dot: "bg-[color:var(--c-border-strong)]",                chip: "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",      label: "Review cancelled" },
 }
 
 export function ReviewChip({ status }: { status: ReviewStatus }) {

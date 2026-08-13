@@ -977,7 +977,7 @@ function ZoomToggle({ zoom, onChange }: { zoom: Zoom; onChange: (z: Zoom) => voi
                     className={cn(
                         "rounded-[8px] px-2.5 py-1 text-[12px] font-semibold",
                         zoom === z
-                            ? "bg-zinc-900 text-white"
+                            ? "bg-[color:var(--c-inverse)] text-[color:var(--c-inverse-ink)]"
                             : "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overlay)]",
                     )}
                 >
