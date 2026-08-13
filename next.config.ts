@@ -73,7 +73,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   /* config options here */
-  allowedDevOrigins: ['devserver-development--bobby-tracker.netlify.app'],
+  allowedDevOrigins: ['devserver-development--bobby-tracker.netlify.app','192.168.1.134'],
   async headers() {
     return [
       {
