@@ -18,8 +18,22 @@ export function AuthShell({
     subtext?: string
     contentClassName?: string
 }) {
+    // Two separate reasons this shell is sized and clipped the way it is:
+    //
+    // svh, not vh — on iOS `100vh` is the LARGE viewport (the height the page
+    // would have with Safari's toolbars hidden), so with the toolbar showing the
+    // shell is taller than what's on screen. Nothing here scrolls, so the
+    // surplus sat below the fold as a band of the panel's white. `100svh` is the
+    // SMALL viewport, the height really on screen. On desktop the two match.
+    //
+    // overflow-clip — on Safari/Firefox the squircle polyfill redraws the card
+    // as an SVG ::before and INFLATES it by the box-shadow's blur so the shadow
+    // fits inside. main's `lg:shadow-[...60px...]` put that layer at top:-60px /
+    // bottom:-60px, hanging 60px past the shell and making the document
+    // scrollable — the same white band, but on desktop. Chrome draws no such
+    // layer (native corner-shape), which is why it only showed in Safari.
     return (
-        <div className="flex min-h-screen">
+        <div className="flex min-h-svh overflow-clip">
             {/* Left brand panel — desktop only. The hero pixel gradient pulled
                 into a dark register, glowing from the top-left behind the mark. */}
             <aside className="relative hidden w-[51.5%] shrink-0 overflow-hidden bg-[#0b090b] lg:block">
