@@ -34,7 +34,7 @@ export default function GraphAnalysisPage() {
                 <p>This is what powers grounded issues: when an issue references code, it&apos;s drawing on the graph.</p>
             </DocSection>
 
-            <Callout tone="info">
+            <Callout tone="secondary">
                 <p>
                     For the high-level thinking behind the graph — the top-down, graph-plus-vectors,
                     agentic approach — see <a href="/docs/intelligence">Codebase intelligence</a>.

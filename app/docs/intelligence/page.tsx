@@ -92,7 +92,7 @@ export default function IntelligencePage() {
                 </p>
             </DocSection>
 
-            <Callout tone="info" title="A deliberate outline">
+            <Callout tone="secondary" title="A deliberate outline">
                 <p>
                     This page describes the <em>approach</em> at a high level on purpose. The exact way
                     Ucelot constructs and traverses this model is part of what makes it work — but the

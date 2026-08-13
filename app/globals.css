@@ -60,6 +60,14 @@
        is per-tile RGB interpolation, so it can't read a CSS variable. */
     --c-secondary:      #0a0d1c;
     --c-secondary-deep: #090c1c;
+    /* the ink as a SURFACE on a light page — a cool wash and its hairline, for
+       asides written in the brand's voice rather than carrying a semantic
+       (see the docs Callout's `secondary` tone). Literal rather than a
+       color-mix of --c-secondary because these are backgrounds: where
+       color-mix is unsupported the fallback is the solid ink, i.e. dark text
+       on a dark block. */
+    --c-secondary-tint: #f1f2f7;
+    --c-secondary-line: #dcdfe9;
 
     --r-sm:  8px;
     --r-md:  12px;

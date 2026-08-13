@@ -58,8 +58,17 @@ export function DocSection({
     )
 }
 
+// Two families here, and the distinction is what picks the tone:
+//
+//   secondary  an editorial aside — the product's thinking, a pointer to the
+//              piece that explains it. Brand voice, so it carries the brand's
+//              own ink rather than a status colour.
+//   warn / success / ember  semantics. Something to act on, or a state.
+//
+// `secondary` replaced an `info` tone that used the app's violet, which said
+// "system notice" about paragraphs that were really the writer talking.
 const CALLOUT_TONE = {
-    info: "border-[color:var(--c-info-fg)]/20 bg-[color:var(--c-info-bg)] text-[color:var(--c-info-fg)]",
+    secondary: "border-[color:var(--c-secondary-line)] bg-[color:var(--c-secondary-tint)] text-[color:var(--c-secondary)]",
     warn: "border-[color:var(--c-warn)]/20 bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]",
     success: "border-[color:var(--c-success)]/20 bg-[color:var(--c-success-bg)] text-[color:var(--c-success)]",
     ember: "border-amber-500/25 bg-amber-50 text-amber-900",
@@ -67,7 +76,7 @@ const CALLOUT_TONE = {
 
 /** Highlighted aside — a tinted, bordered block for tips / key facts. */
 export function Callout({
-    tone = "info",
+    tone = "secondary",
     title,
     children,
 }: {
@@ -78,7 +87,17 @@ export function Callout({
     return (
         <div className={`my-5 rounded-[14px] border px-4 py-3.5 ${CALLOUT_TONE[tone]}`}>
             {title && <div className="mb-1 text-[13px] font-bold">{title}</div>}
-            <div className="text-[13.5px] leading-6 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0">
+            {/* Links are styled here, not inherited: a callout's body sits
+                outside .prose-tracker, so its <a> picked up no link treatment at
+                all and read as plain text — on a cross-reference aside, whose
+                entire job is the link, that made the one thing worth clicking
+                invisible. Underlined in the tone's own colour, ember on hover
+                like every other link in the docs. */}
+            <div
+                className="text-[13.5px] leading-6 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0
+                    [&_a]:font-semibold [&_a]:underline [&_a]:underline-offset-2
+                    [&_a:hover]:text-[color:var(--c-accent)]"
+            >
                 {children}
             </div>
         </div>
