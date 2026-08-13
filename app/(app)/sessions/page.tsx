@@ -61,7 +61,7 @@ export default function SessionsPage() {
             </header>
 
             {(sessions?.length ?? 0) === 0 ? (
-                <div className="mt-8 rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                <div className="mt-8 rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     <div className="text-[14px] font-bold text-[color:var(--c-text)]">No sessions yet</div>
                     <p className="mt-1">Create one to get a public link you can share.</p>
                 </div>
@@ -85,7 +85,7 @@ export default function SessionsPage() {
                                                 className={
                                                     s.enabled
                                                         ? "shrink-0 rounded-full bg-emerald-50 px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-emerald-700"
-                                                        : "shrink-0 rounded-full bg-zinc-100 px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-zinc-600"
+                                                        : "shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-2 py-[1px] text-[10px] font-bold uppercase tracking-[0.07em] text-zinc-600"
                                                 }
                                             >
                                                 {s.enabled ? "Live" : "Paused"}

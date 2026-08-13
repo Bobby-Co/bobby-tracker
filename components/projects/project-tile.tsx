@@ -179,7 +179,7 @@ export function ProjectTile({
             <motion.div
                 whileHover={{ y: -3 }}
                 transition={{type: "spring", stiffness: 300, damping: 20}}
-                className="block h-full rounded-sq-xl shadow-xs border border-[color:var(--c-border)] bg-white focus:outline-none"
+                className="block h-full rounded-sq-xl shadow-xs border border-[color:var(--c-border)] bg-[color:var(--c-surface)] focus:outline-none"
             >
                 {/* Org header bar — chip tint from the --app-* palette, same per org. */}
                 <div className="relative rounded-sq-t-xl pt-2 pb-7.5" style={{ backgroundColor: chip.bg, color: chip.fg }}>
@@ -198,7 +198,7 @@ export function ProjectTile({
                     <span className="text-[12px] font-bold">{peopleLabel}</span>
                 </span>
                     </div>
-                    <div className="w-full z-10 -bottom-14 h-20 absolute bg-white rounded-sq-xl"/>
+                    <div className="w-full z-10 -bottom-14 h-20 absolute bg-[color:var(--c-surface)] rounded-sq-xl"/>
                     <div style={{background:  chip.bg}} className="absolute w-full bottom-0 left-0 h-4"/>
                 </div>
 

@@ -18,7 +18,7 @@ export function StatusChip({ status }: { status: IssueStatus }) {
 export function PriorityChip({ priority }: { priority: IssuePriority }) {
     const m = PRIORITY_META[priority]
     return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-[2px] text-[11px] font-semibold text-[color:var(--c-text-muted)]">
             <span className={cn("h-1.5 w-1.5 rounded-full", m.dot)} />
             {m.label}
         </span>

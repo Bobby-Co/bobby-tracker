@@ -96,7 +96,7 @@ export function Modal({ open, onClose, title, description, children, size = "md"
                 ref={cardRef}
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                    "relative anim-rise flex w-full max-h-[90vh] flex-col overflow-hidden rounded-[18px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-pop)]",
+                    "relative anim-rise flex w-full max-h-[90vh] flex-col overflow-hidden rounded-[18px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-[var(--shadow-pop)]",
                     SIZES[size],
                 )}
             >

@@ -13,7 +13,7 @@ export default function GroupLayout({ children }: { children: React.ReactNode })
     const { id } = useParams<{ id: string }>()
     return (
         <div className="flex min-h-full flex-col">
-            <div className="border-b border-[color:var(--c-border)] bg-white">
+            <div className="border-b border-[color:var(--c-border)] bg-[color:var(--c-surface)]">
                 <div className="flex w-full max-w-5xl items-start justify-between gap-4 px-4 pt-5 sm:px-6 sm:pt-6">
                     <div className="min-w-0 max-w-full">
                         <GroupHeader id={id} />

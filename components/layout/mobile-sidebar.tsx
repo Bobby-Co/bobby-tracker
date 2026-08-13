@@ -48,7 +48,7 @@ export function MobileSidebar({ projects, activeProjectId }: Props) {
                 onClick={() => setOpen(true)}
                 aria-label="Open menu"
                 aria-expanded={open}
-                className="grid h-9 w-9 place-items-center rounded-[10px] border border-[color:var(--c-border)] bg-white text-[color:var(--c-text)] transition-colors hover:bg-[color:var(--c-surface-2)] md:hidden"
+                className="grid h-9 w-9 place-items-center rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text)] transition-colors hover:bg-[color:var(--c-surface-2)] md:hidden"
             >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
                     <path d="M4 6h16M4 12h16M4 18h16" />
@@ -67,7 +67,7 @@ export function MobileSidebar({ projects, activeProjectId }: Props) {
                     {/* drawer */}
                     <aside
                         onClick={(e) => e.stopPropagation()}
-                        className="anim-rise relative h-full w-72 max-w-[80vw] border-r border-[color:var(--c-border)] bg-white shadow-[var(--shadow-pop)]"
+                        className="anim-rise relative h-full w-72 max-w-[80vw] border-r border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-[var(--shadow-pop)]"
                         style={{ ["--i" as string]: 0 } as React.CSSProperties}
                     >
                         <button

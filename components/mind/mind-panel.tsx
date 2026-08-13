@@ -315,7 +315,7 @@ export function MindPanel({
                 blur — the ember shows at rest, then fades out to clean white. */}
             <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 bg-white"
+                className="pointer-events-none absolute inset-0 bg-[color:var(--c-surface)]"
                 style={{ opacity: messages.length > 0 ? 1 : 0, transition: "opacity 2800ms cubic-bezier(0.4,0,0.2,1)" }}
             />
 
@@ -461,7 +461,7 @@ function Composer({
                 e.preventDefault()
                 onSubmit()
             }}
-            className="rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-panel transition-[border-color,box-shadow] focus-within:border-[color:var(--c-primary)] focus-within:ring-[3px] focus-within:ring-[color:var(--c-ring)]"
+            className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-panel transition-[border-color,box-shadow] focus-within:border-[color:var(--c-primary)] focus-within:ring-[3px] focus-within:ring-[color:var(--c-ring)]"
         >
             {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-3 pt-3">
@@ -592,7 +592,7 @@ function AttachmentFan({
                     animate={open ? { x: (i + 1) * GAP, opacity: 1, scale: 1 } : { x: 0, opacity: 0, scale: 0.4 }}
                     transition={{ type: "spring", stiffness: 420, damping: 22, delay: (open ? i : actions.length - 1 - i) * 0.045 }}
                     style={{ pointerEvents: open ? "auto" : "none" }}
-                    className="absolute left-0 grid h-8 w-8 place-items-center rounded-full border border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] shadow-sm transition-colors hover:text-[color:var(--c-text)]"
+                    className="absolute left-0 grid h-8 w-8 place-items-center rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] shadow-sm transition-colors hover:text-[color:var(--c-text)]"
                 >
                     {a.icon}
                 </motion.button>

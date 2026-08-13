@@ -28,7 +28,7 @@ function LinkInner() {
 function LinkCard({ initialCode }: { initialCode?: string }) {
     return (
         <div className="flex min-h-full items-center justify-center px-6 py-12">
-            <div className="w-full max-w-md rounded-[20px] border border-[color:var(--c-border)] bg-white p-7 shadow-[var(--shadow-card)]">
+            <div className="w-full max-w-md rounded-[20px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-7 shadow-[var(--shadow-card)]">
                 <div className="flex items-center gap-3">
                     <BobbyMark />
                     <div>

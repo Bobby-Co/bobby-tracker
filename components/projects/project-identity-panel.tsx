@@ -132,7 +132,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
 
     return (
         <>
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5">
                 <div className="flex items-start gap-4">
                     {/* Icon — click to open the picker (which leads with suggestions). */}
                     <button
@@ -152,7 +152,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                                 {savedName ? savedName[0] : "?"}
                             </span>
                         )}
-                        <span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] shadow-sm">
+                        <span className="absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] shadow-sm">
                             <PencilIcon />
                         </span>
                     </button>
@@ -172,7 +172,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                             }}
                             disabled={!loaded}
                             placeholder="Project name"
-                            className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] outline-none focus:border-zinc-400 disabled:opacity-50"
+                            className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400 disabled:opacity-50"
                         />
 
                         <label className="mb-1.5 mt-3 block text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
@@ -184,7 +184,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                             disabled={!loaded}
                             rows={2}
                             placeholder="One-liner about what this project tracks — also seeds the icon suggestions."
-                            className="w-full resize-y rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] leading-5 outline-none focus:border-zinc-400 disabled:opacity-50"
+                            className="w-full resize-y rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] leading-5 outline-none focus:border-zinc-400 disabled:opacity-50"
                         />
 
                         <div className="mt-3 flex items-center gap-3">
@@ -200,7 +200,7 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
                                 type="button"
                                 onClick={() => setPickerOpen(true)}
                                 disabled={!loaded}
-                                className="rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12px] font-semibold hover:bg-[color:var(--c-overlay)] disabled:opacity-50"
+                                className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[12px] font-semibold hover:bg-[color:var(--c-overlay)] disabled:opacity-50"
                             >
                                 Change icon
                             </button>

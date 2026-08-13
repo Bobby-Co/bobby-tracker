@@ -15,7 +15,7 @@ export const STATUS_META: Record<
     in_progress: { tone: "amber",   dot: "bg-amber-500",   chip: "bg-amber-50 text-amber-700",     label: "In progress" },
     blocked:     { tone: "rose",    dot: "bg-rose-500",    chip: "bg-rose-50 text-rose-700",       label: "Blocked" },
     done:        { tone: "emerald", dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700", label: "Done" },
-    archived:    { tone: "zinc",    dot: "bg-zinc-400",    chip: "bg-zinc-100 text-zinc-600",      label: "Archived" },
+    archived:    { tone: "zinc",    dot: "bg-zinc-400",    chip: "bg-[color:var(--c-surface-2)] text-zinc-600",      label: "Archived" },
     duplicated:  { tone: "violet",  dot: "bg-violet-500",  chip: "bg-violet-50 text-violet-700",   label: "Duplicated" },
 }
 

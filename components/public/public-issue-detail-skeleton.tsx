@@ -10,7 +10,7 @@ export function PublicIssueDetailSkeleton() {
             <div className="skeleton h-3 w-32 rounded-full" />
             <div className="skeleton h-3 w-12 rounded-full" />
 
-            <article className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 shadow-sm sm:p-6">
+            <article className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="skeleton h-4 w-12 rounded-md" />
                     <div className="skeleton h-4 w-16 rounded-full" />
@@ -22,7 +22,7 @@ export function PublicIssueDetailSkeleton() {
                 <div className="skeleton mt-2 h-3 w-2/3 rounded-full" />
             </article>
 
-            <section className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 shadow-sm sm:p-6">
+            <section className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-sm sm:p-6">
                 <div className="flex items-center justify-between gap-2">
                     <div className="skeleton h-4 w-32 rounded-md" />
                     <div className="skeleton h-8 w-28 rounded-[10px]" />

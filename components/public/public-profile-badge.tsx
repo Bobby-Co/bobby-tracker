@@ -65,7 +65,7 @@ export function PublicProfileBadge({
     }
 
     return (
-        <div className="flex flex-wrap items-center gap-2 rounded-full border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12.5px]">
+        <div className="flex flex-wrap items-center gap-2 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12.5px]">
             <span className="grid h-6 w-6 place-items-center rounded-full bg-zinc-900 text-[11px] font-bold text-white">
                 {name ? name.trim().charAt(0).toUpperCase() : "?"}
             </span>
@@ -80,9 +80,9 @@ export function PublicProfileBadge({
                         onChange={(e) => setDraft(e.target.value)}
                         maxLength={80}
                         placeholder="Your name"
-                        className="rounded-md border border-[color:var(--c-border)] bg-white px-2 py-0.5 text-[12.5px] focus:outline-none focus:ring-2 focus:ring-zinc-900/15"
+                        className="rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-0.5 text-[12.5px] focus:outline-none focus:ring-2 focus:ring-zinc-900/15"
                     />
-                    <button type="submit" className="text-[12px] font-semibold text-zinc-900 hover:underline">
+                    <button type="submit" className="text-[12px] font-semibold text-[color:var(--c-text)] hover:underline">
                         Save
                     </button>
                     <button
@@ -102,7 +102,7 @@ export function PublicProfileBadge({
                     <button
                         type="button"
                         onClick={() => setEditing(true)}
-                        className="text-[12px] font-semibold text-zinc-900 hover:underline"
+                        className="text-[12px] font-semibold text-[color:var(--c-text)] hover:underline"
                     >
                         {name ? "Edit" : "Set name"}
                     </button>

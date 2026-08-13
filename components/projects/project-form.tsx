@@ -285,7 +285,7 @@ function RepoPicker({
                 placeholder={`Search ${load.repos.length}${load.truncated ? "+" : ""} repos…`}
                 className="input"
             />
-            <div className="max-h-64 overflow-y-auto rounded-[10px] border border-[color:var(--c-border)] bg-white">
+            <div className="max-h-64 overflow-y-auto rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)]">
                 {visible.length === 0 && (
                     <p className="px-3 py-2 text-[12.5px] text-[color:var(--c-text-muted)]">No matches.</p>
                 )}
@@ -356,7 +356,7 @@ function RepoPicker({
                     type="button"
                     onClick={onRefresh}
                     disabled={load.refreshing}
-                    className="rounded-[8px] border border-[color:var(--c-border)] bg-white px-2 py-1 text-[11.5px] font-medium hover:bg-[color:var(--c-surface)] disabled:opacity-60"
+                    className="rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-1 text-[11.5px] font-medium hover:bg-[color:var(--c-surface)] disabled:opacity-60"
                 >
                     {load.refreshing ? "Refreshing…" : "↻ Refresh"}
                 </button>

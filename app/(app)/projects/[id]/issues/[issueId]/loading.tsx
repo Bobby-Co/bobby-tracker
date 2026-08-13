@@ -15,7 +15,7 @@ export default function Loading() {
                     <div className="skeleton mt-3 h-7 w-3/4" />
                     <div className="skeleton mt-2 h-3 w-40" />
 
-                    <section className="mt-6 rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)]">
+                    <section className="mt-6 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)]">
                         <div className="mb-3 flex items-center justify-between">
                             <div className="skeleton h-3.5 w-24" />
                             <div className="skeleton h-6 w-12" />
@@ -38,7 +38,7 @@ export default function Loading() {
                 </aside>
             </div>
 
-            <section className="rounded-xl border border-zinc-200 bg-white p-4">
+            <section className="rounded-xl border border-zinc-200 bg-[color:var(--c-surface)] p-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex flex-col gap-1.5">
                         <div className="skeleton h-3.5 w-44" />

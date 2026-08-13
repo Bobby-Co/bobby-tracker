@@ -26,7 +26,7 @@ function PrRow({ pr, projectId, muted }: { pr: PullRequestRow; projectId: string
     return (
         <div
             className={
-                "flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-white pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3" +
+                "flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3" +
                 (muted ? " opacity-80" : "")
             }
         >

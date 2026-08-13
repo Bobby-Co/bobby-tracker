@@ -62,7 +62,7 @@ export function EffortControl({
                 full 0–100% — the same range the ticks and labels are placed in. */}
             <div className="relative mx-2 h-4">
                 {/* track */}
-                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-200" />
+                <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[color:var(--c-border)]" />
                 {/* filled portion up to the current stop */}
                 <div
                     className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-zinc-900"

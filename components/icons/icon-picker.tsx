@@ -76,7 +76,7 @@ export function IconPicker({
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     placeholder="Search icons (e.g. bug, calendar, raindrop, weather)…"
-                    className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
+                    className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
                 />
                 {/* Fixed-height scroll area so the modal keeps a stable size no
                     matter how many results there are — a short/empty result set
@@ -160,7 +160,7 @@ function IconTile({
                     "group flex flex-col items-center gap-1 rounded-[10px] border px-2 py-3 text-[10.5px] font-medium transition-colors",
                     active
                         ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]",
+                        : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]",
                 )}
             >
                 <IconlyIcon name={icon.name} size={22} />
@@ -194,7 +194,7 @@ export function SkeletonTile({
                 )}
                 aria-hidden
             >
-                <div className="h-[18px] w-[18px] rounded-[4px] bg-zinc-200" />
+                <div className="h-[18px] w-[18px] rounded-[4px] bg-[color:var(--c-border)]" />
             </div>
         )
     }
@@ -206,8 +206,8 @@ export function SkeletonTile({
             )}
             aria-hidden
         >
-            <div className="h-[22px] w-[22px] rounded-full bg-zinc-200" />
-            <div className="h-[10px] w-12 rounded bg-zinc-200" />
+            <div className="h-[22px] w-[22px] rounded-full bg-[color:var(--c-border)]" />
+            <div className="h-[10px] w-12 rounded bg-[color:var(--c-border)]" />
         </div>
     )
 }

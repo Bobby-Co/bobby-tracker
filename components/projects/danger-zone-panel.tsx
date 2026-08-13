@@ -72,7 +72,7 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
                     <button
                         type="button"
                         onClick={() => setArmed(true)}
-                        className="shrink-0 rounded-[10px] border border-rose-300 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-rose-700 transition-colors hover:bg-rose-100"
+                        className="shrink-0 rounded-[10px] border border-rose-300 bg-[color:var(--c-surface)] px-3.5 py-2 text-[12.5px] font-semibold text-rose-700 transition-colors hover:bg-rose-100"
                     >
                         Delete project
                     </button>
@@ -80,7 +80,7 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
             </div>
 
             {armed && (
-                <div className="mt-4 rounded-[12px] border border-rose-200 bg-white p-4">
+                <div className="mt-4 rounded-[12px] border border-rose-200 bg-[color:var(--c-surface)] p-4">
                     <label className="flex flex-col gap-1.5">
                         <span className="text-[12.5px] text-[color:var(--c-text)]">
                             Type <span className="font-mono font-semibold">{name || "the project name"}</span> to confirm
@@ -90,7 +90,7 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
                             onChange={(e) => setConfirm(e.target.value)}
                             autoFocus
                             placeholder={name}
-                            className="w-full max-w-sm rounded-[10px] border border-rose-200 bg-white px-3 py-2 text-[13px] outline-none focus:border-rose-400"
+                            className="w-full max-w-sm rounded-[10px] border border-rose-200 bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-rose-400"
                         />
                     </label>
 

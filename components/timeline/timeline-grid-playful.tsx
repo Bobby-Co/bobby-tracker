@@ -959,7 +959,7 @@ function DateRange({ originMs, col, days }: { originMs: number; col: number; day
             <span>{fmt(addDays(originMs, col))}</span>
             <span className="opacity-60">→</span>
             <span>{fmt(addDays(originMs, col + days - 1))}</span>
-            <span className="ml-0.5 rounded-full bg-white/25 px-1.5 py-px text-[10px]">{days}d</span>
+            <span className="ml-0.5 rounded-full bg-[color:var(--c-surface)]/25 px-1.5 py-px text-[10px]">{days}d</span>
         </>
     )
 }

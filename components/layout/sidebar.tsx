@@ -25,8 +25,8 @@ interface SidebarProps {
 // raised white pill (hairline ring + soft shadow); idle rows are quiet
 // and lift on hover with a translucent overlay.
 const ROW_ACTIVE =
-    "bg-[color:var(--c-surface)] font-semibold text-zinc-900 shadow-[0_1px_3px_rgba(180,83,9,0.12)] ring-1 ring-amber-200/80"
-const ROW_IDLE = "text-zinc-600 hover:bg-[color:var(--c-overlay)] bg-zinc-200/50 hover:text-zinc-900"
+    "bg-[color:var(--c-surface)] font-semibold text-[color:var(--c-text)] shadow-[0_1px_3px_rgba(180,83,9,0.12)] ring-1 ring-amber-200/80"
+const ROW_IDLE = "text-zinc-600 hover:bg-[color:var(--c-overlay)] bg-[color:var(--c-border)]/50 hover:text-[color:var(--c-text)]"
 
 // SidebarContent mirrors the reference rail top-to-bottom: a workspace
 // header (logo + name + panel toggle), a flat icon nav, collapsible
@@ -229,7 +229,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
                     ) : (
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-200 text-[11px] font-bold text-zinc-600">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-zinc-600">
                             {initials}
                         </span>
                     )}

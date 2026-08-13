@@ -35,7 +35,7 @@ const L_CORE = 40
 const ROCK = 46
 
 const CARD_CLS =
-    "flex items-center gap-2.5 rounded-[15px] border border-[color:var(--c-border)] bg-white p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+    "flex items-center gap-2.5 rounded-[15px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
 
 function ringGeom(w: number, h: number) {
     const x0 = 1

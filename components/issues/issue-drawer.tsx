@@ -284,7 +284,7 @@ function SimilarityCard({ issue }: { issue: Issue }) {
     const indexingCutoffMs = Date.parse("2025-06-01T00:00:00Z")
     const unavailable = filedAt < indexingCutoffMs
     return (
-        <div className="mt-5 rounded-[14px] border border-[color:var(--c-border)] border-dashed bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+        <div className="mt-5 rounded-[14px] border border-[color:var(--c-border)] border-dashed bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
             <span className="font-semibold text-[color:var(--c-text)]">
                 {unavailable ? "Similarity check unavailable." : "Similarity check ready."}
             </span>{" "}
@@ -313,7 +313,7 @@ function AnalyserCard({
     cost: string | null
 }) {
     return (
-        <section className="mt-5 rounded-[16px] border border-[color:var(--c-border)] bg-white p-4">
+        <section className="mt-5 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
@@ -356,7 +356,7 @@ function AnalyserCard({
                     </div>
                     <ul className="mt-2 flex flex-col gap-1.5">
                         {findings.slice(0, 5).map((f, i) => (
-                            <li key={i} className="flex items-center gap-2 rounded-[10px] border border-[color:var(--c-border)] bg-white px-2.5 py-1.5">
+                            <li key={i} className="flex items-center gap-2 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2.5 py-1.5">
                                 <span className="font-mono text-[11.5px] text-[color:var(--c-text)] truncate flex-1">
                                     {f.file}{f.line != null ? `:${f.line}` : ""}
                                 </span>
@@ -365,7 +365,7 @@ function AnalyserCard({
                                         "rounded-[4px] px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide",
                                         f.confidence.toLowerCase() === "high" && "bg-emerald-100 text-emerald-700",
                                         f.confidence.toLowerCase() === "medium" && "bg-amber-100 text-amber-700",
-                                        f.confidence.toLowerCase() === "low" && "bg-zinc-100 text-zinc-600",
+                                        f.confidence.toLowerCase() === "low" && "bg-[color:var(--c-surface-2)] text-zinc-600",
                                     )}>
                                         {f.confidence}
                                     </span>
@@ -383,7 +383,7 @@ function AnalyserCard({
                             "rounded-[4px] px-1.5 py-0.5 font-bold uppercase tracking-wide",
                             suggestion.confidence.toLowerCase() === "high" && "bg-emerald-100 text-emerald-700",
                             suggestion.confidence.toLowerCase() === "medium" && "bg-amber-100 text-amber-700",
-                            suggestion.confidence.toLowerCase() === "low" && "bg-zinc-100 text-zinc-600",
+                            suggestion.confidence.toLowerCase() === "low" && "bg-[color:var(--c-surface-2)] text-zinc-600",
                         )}>
                             {suggestion.confidence}
                         </span>
@@ -657,8 +657,8 @@ function LabelChip({
 
 function PriorityPill({ priority }: { priority: Issue["priority"] }) {
     const cfg = {
-        low:    { bg: "bg-zinc-100",   fg: "text-zinc-600",   label: "low" },
-        medium: { bg: "bg-zinc-200",   fg: "text-zinc-700",   label: "medium" },
+        low:    { bg: "bg-[color:var(--c-surface-2)]",   fg: "text-zinc-600",   label: "low" },
+        medium: { bg: "bg-[color:var(--c-border)]",   fg: "text-[color:var(--c-text-muted)]",   label: "medium" },
         high:   { bg: "bg-orange-200", fg: "text-orange-900", label: "high" },
         urgent: { bg: "bg-rose-300",   fg: "text-rose-900",   label: "urgent" },
     }[priority]

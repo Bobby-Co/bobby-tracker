@@ -20,7 +20,7 @@ const TONE: Record<Tone, string> = {
     violet:  "bg-violet-50 text-violet-600",
     indigo:  "bg-indigo-50 text-indigo-600",
     cyan:    "bg-cyan-50 text-cyan-600",
-    zinc:    "bg-zinc-100 text-zinc-500",
+    zinc:    "bg-[color:var(--c-surface-2)] text-zinc-500",
 }
 
 // Solid, saturated fill with a white glyph — the bolder avatar treatment

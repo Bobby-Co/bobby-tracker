@@ -56,7 +56,7 @@ export function AutoUpdatePanel({ projectId }: { projectId: string }) {
     const loading = on === null
 
     return (
-        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-5">
+        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5">
                     <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]">
@@ -69,7 +69,7 @@ export function AutoUpdatePanel({ projectId }: { projectId: string }) {
                                 <span
                                     className={cn(
                                         "rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em]",
-                                        on ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-600",
+                                        on ? "bg-emerald-100 text-emerald-800" : "bg-[color:var(--c-surface-2)] text-zinc-600",
                                     )}
                                 >
                                     {on ? "On" : "Off"}
@@ -124,7 +124,7 @@ function Switch({
         >
             <span
                 className={cn(
-                    "inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform",
+                    "inline-block h-5 w-5 transform rounded-full bg-[color:var(--c-surface)] shadow-sm transition-transform",
                     checked ? "translate-x-[22px]" : "translate-x-[2px]",
                 )}
             />

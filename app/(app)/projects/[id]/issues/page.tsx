@@ -221,7 +221,7 @@ function IssueGroup({
             </div>
 
             {parents.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     No issues here.
                 </div>
             ) : view === "tile" ? (

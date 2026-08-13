@@ -174,7 +174,7 @@ export function NewLabelModal({
                         onChange={(e) => setName(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter" && canCreate) { e.preventDefault(); void submit() } }}
                         placeholder="Label name"
-                        className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
+                        className="w-full rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
                     />
                     {isDuplicate && (
                         <p className="mt-1 text-[11px] text-rose-600">
@@ -218,7 +218,7 @@ export function NewLabelModal({
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Search…"
-                            className="w-32 rounded-md border border-[color:var(--c-border)] bg-white px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal text-[color:var(--c-text)] outline-none focus:border-zinc-400"
+                            className="w-32 rounded-md border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-0.5 text-[11px] font-medium normal-case tracking-normal text-[color:var(--c-text)] outline-none focus:border-zinc-400"
                         />
                     </div>
                     <div
@@ -255,7 +255,7 @@ export function NewLabelModal({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12.5px] font-semibold hover:bg-[color:var(--c-overlay)]"
+                        className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[12.5px] font-semibold hover:bg-[color:var(--c-overlay)]"
                     >
                         Cancel
                     </button>
@@ -295,7 +295,7 @@ function IconButton({
                     "grid h-10 place-items-center rounded-[8px] border transition-colors",
                     active
                         ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]",
+                        : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]",
                     className,
                 )}
             >

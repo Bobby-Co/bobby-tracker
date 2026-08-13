@@ -235,7 +235,7 @@ function SelfManagedForm({
                     setOpen(false)
                 }
             }}
-            className="flex flex-col gap-2 rounded-[12px] border border-[color:var(--c-border)] bg-white p-3"
+            className="flex flex-col gap-2 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-3"
         >
             <div className="text-[12.5px] font-semibold">Self-managed GitLab</div>
             <input
@@ -260,7 +260,7 @@ function SelfManagedForm({
                 <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    className="rounded-[9px] border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12.5px] font-medium hover:bg-[color:var(--c-surface)]"
+                    className="rounded-[9px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12.5px] font-medium hover:bg-[color:var(--c-surface)]"
                 >
                     Cancel
                 </button>
@@ -290,7 +290,7 @@ function ConnectionRow({
     badge?: string
 }) {
     return (
-        <div className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-white px-4 py-3">
+        <div className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[color:var(--c-surface)] text-[color:var(--c-text)]">
                 {icon}
             </span>
@@ -347,7 +347,7 @@ function SmallButton({
             type="button"
             onClick={onClick}
             disabled={busy}
-            className="rounded-[9px] border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12.5px] font-medium hover:bg-[color:var(--c-surface)] disabled:opacity-60"
+            className="rounded-[9px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12.5px] font-medium hover:bg-[color:var(--c-surface)] disabled:opacity-60"
         >
             {busy ? "…" : children}
         </button>

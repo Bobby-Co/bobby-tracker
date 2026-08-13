@@ -18,7 +18,7 @@ export default function Loading() {
                 {[0, 1, 2, 3].map((i) => (
                     <li
                         key={i}
-                        className="flex flex-col gap-3 rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)]"
+                        className="flex flex-col gap-3 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)]"
                     >
                         <div className="flex items-center gap-2">
                             <div className="skeleton h-5 w-5 rounded" />

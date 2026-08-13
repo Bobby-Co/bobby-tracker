@@ -62,7 +62,7 @@ export default function ProjectsPage() {
                         ))}
                     </div>
                 ) : groupList.length === 0 ? (
-                    <div className="rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                    <div className="rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                         No groups yet — create one once you have a couple of related projects to bundle.
                     </div>
                 ) : (
@@ -72,11 +72,11 @@ export default function ProjectsPage() {
                                 <Link
                                     href={`/groups/${g.id}`}
                                     prefetch={false}
-                                    className="group inline-flex items-center gap-2 rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]"
+                                    className="group inline-flex items-center gap-2 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]"
                                 >
                                     <FolderIcon />
                                     <span className="font-semibold">{g.name}</span>
-                                    <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-0.5 text-[10.5px] font-bold text-[color:var(--c-text-muted)] tabular-nums group-hover:bg-white">
+                                    <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-0.5 text-[10.5px] font-bold text-[color:var(--c-text-muted)] tabular-nums group-hover:bg-[color:var(--c-surface)]">
                                         {g.member_count}
                                     </span>
                                 </Link>
@@ -96,7 +96,7 @@ export default function ProjectsPage() {
                     ))}
                 </ul>
             ) : list.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-16 text-center">
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-16 text-center">
                     <div className="mx-auto grid h-10 w-10 place-items-center rounded-[10px] bg-[color:var(--c-surface-2)] text-[color:var(--c-text-dim)]">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                             <rect x="3" y="3" width="18" height="18" rx="3" />

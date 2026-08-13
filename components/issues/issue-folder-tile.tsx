@@ -44,11 +44,11 @@ export function IssueFolderTile({
                 {/* Bottom-only ledges suggesting a stack of papers underneath. */}
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[10px] right-[10px] bottom-[-6px] h-[12px] rounded-b-[13px] border border-t-0 border-[color:var(--c-border-strong)] bg-white"
+                    className="pointer-events-none absolute left-[10px] right-[10px] bottom-[-6px] h-[12px] rounded-b-[13px] border border-t-0 border-[color:var(--c-border-strong)] bg-[color:var(--c-surface)]"
                 />
                 <div
                     aria-hidden
-                    className="pointer-events-none absolute left-[5px] right-[5px] bottom-[-3px] h-[8px] rounded-b-[14px] border border-t-0 border-[color:var(--c-border-strong)] bg-white"
+                    className="pointer-events-none absolute left-[5px] right-[5px] bottom-[-3px] h-[8px] rounded-b-[14px] border border-t-0 border-[color:var(--c-border-strong)] bg-[color:var(--c-surface)]"
                 />
 
                 <div className="relative">
@@ -110,7 +110,7 @@ export function IssueFolderTile({
                                             setOpen(false)
                                             router.push(`/projects/${projectId}/issues/${d.id}`)
                                         }}
-                                        className="group flex w-full items-center gap-2 rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-[color:var(--c-surface-2)]"
+                                        className="group flex w-full items-center gap-2 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-[color:var(--c-surface-2)]"
                                     >
                                         <span className="font-mono text-[11px] text-[color:var(--c-text-dim)]">
                                             #{d.issue_number}

@@ -384,7 +384,7 @@ function UnlinkModal({
 
 function EmptyState({ onLink }: { onLink: () => void }) {
     return (
-        <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-16 text-center">
+        <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-16 text-center">
             <div className="mx-auto grid h-10 w-10 place-items-center rounded-[10px] bg-[color:var(--c-surface-2)] text-[color:var(--c-text-dim)]">
                 <ChipIcon />
             </div>

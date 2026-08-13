@@ -42,7 +42,7 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
         <div className={cn("flex flex-col", immersiveMind ? "h-full min-h-0" : "min-h-full")}>
             <div
                 className={cn(
-                    "overflow-hidden border-[color:var(--c-border)] bg-white transition-all duration-500",
+                    "overflow-hidden border-[color:var(--c-border)] bg-[color:var(--c-surface)] transition-all duration-500",
                     chromeless ? "max-h-0 border-b-0 opacity-0" : "max-h-[400px] border-b opacity-100",
                 )}
             >

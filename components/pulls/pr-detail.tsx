@@ -9,7 +9,7 @@ import { PrStateChip, ReviewChip } from "@/components/pulls/pr-meta"
 // and the PR body (markdown). Read-only in v1.
 export function PrDetail({ pr, reviewStatus }: { pr: PullRequest; reviewStatus: PullRequestAnalysis["status"] }) {
     return (
-        <article className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)] sm:p-5">
+        <article className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5">
             <div className="flex items-start gap-2">
                 <h1 className="min-w-0 flex-1 text-[18px] font-bold leading-snug tracking-[-0.01em] sm:text-[20px]">
                     <span className="mr-1.5 font-mono text-[color:var(--c-text-dim)]">#{pr.pr_number}</span>

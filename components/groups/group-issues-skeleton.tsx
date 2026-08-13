@@ -26,7 +26,7 @@ export function GroupIssuesSkeleton() {
                             {[0, 1, 2].map((i) => (
                                 <li
                                     key={i}
-                                    className="rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-3 shadow-[var(--shadow-card)]"
+                                    className="rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-3 shadow-[var(--shadow-card)]"
                                 >
                                     <div className="flex items-center gap-3">
                                         <div className="skeleton h-3 w-8" />

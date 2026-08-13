@@ -87,7 +87,7 @@ export default function PullsPage() {
                     type="button"
                     onClick={sync}
                     disabled={syncing}
-                    className="inline-flex items-center gap-1.5 rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12.5px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[12.5px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
                 >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={syncing ? "animate-spin" : undefined}>
                         <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
@@ -111,7 +111,7 @@ export default function PullsPage() {
                     </button>
                 </div>
             ) : pulls.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-10 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-10 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     No pull requests yet. Open one on GitHub, or hit Sync to pull existing history.
                 </div>
             ) : (
@@ -144,7 +144,7 @@ function PullGroup({
                 </span>
             </div>
             {pulls.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     No pull requests here.
                 </div>
             ) : (

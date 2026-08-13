@@ -32,7 +32,7 @@ export function IssuesViewToggle({ active, projectId }: { active: IssuesView; pr
             <div
                 role="tablist"
                 aria-label="Issue view"
-                className="inline-flex items-center rounded-[10px] border border-[color:var(--c-border)] bg-white p-0.5"
+                className="inline-flex items-center rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-0.5"
             >
                 <ToggleLink href={hrefFor("list")} active={active === "list"} label="List">
                     <ListIcon />
@@ -44,7 +44,7 @@ export function IssuesViewToggle({ active, projectId }: { active: IssuesView; pr
             {projectId && (
                 <Link
                     href={`/projects/${projectId}/timeline`}
-                    className="inline-flex items-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
+                    className="inline-flex items-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2.5 py-1.5 text-[12px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
                     aria-label="Open timeline"
                 >
                     <TimelineIcon />

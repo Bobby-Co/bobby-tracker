@@ -126,7 +126,7 @@ export default function GroupIssuesPage() {
                     </div>
 
                     {totalIssues === 0 ? (
-                        <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-12 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                        <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-12 text-center text-[13px] text-[color:var(--c-text-muted)]">
                             <div className="text-[14px] font-bold text-[color:var(--c-text)]">No issues yet</div>
                             <p className="mt-1">Use AI compose to draft and route an issue across this group, or pick a project to file one directly.</p>
                         </div>
@@ -187,7 +187,7 @@ function ProjectSectionView({
             </header>
 
             {totalCount === 0 ? (
-                <div className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+                <div className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                     No issues in this project yet.
                 </div>
             ) : view === "tile" ? (
@@ -269,7 +269,7 @@ function ProjectSectionView({
 
 function EmptyMembers({ groupId }: { groupId: string }) {
     return (
-        <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white px-5 py-12 text-center">
+        <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-12 text-center">
             <div className="text-[14px] font-bold">No projects in this group yet</div>
             <p className="mt-1 text-[12.5px] text-[color:var(--c-text-muted)]">
                 Add at least one project to enable AI compose and start filing group-aware issues.

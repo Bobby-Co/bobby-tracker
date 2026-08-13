@@ -68,7 +68,7 @@ export function DocSection({
 // `secondary` replaced an `info` tone that used the app's violet, which said
 // "system notice" about paragraphs that were really the writer talking.
 const CALLOUT_TONE = {
-    secondary: "border-[color:var(--c-secondary-line)] bg-[color:var(--c-secondary-tint)] text-[color:var(--c-secondary)]",
+    secondary: "border-[color:var(--c-secondary-line)] bg-[color:var(--c-secondary-tint)] text-[color:var(--c-secondary-ink)]",
     warn: "border-[color:var(--c-warn)]/20 bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]",
     success: "border-[color:var(--c-success)]/20 bg-[color:var(--c-success-bg)] text-[color:var(--c-success)]",
     ember: "border-amber-500/25 bg-amber-50 text-amber-900",

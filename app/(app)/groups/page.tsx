@@ -42,7 +42,7 @@ export default function GroupsPage() {
             )}
 
             {groups.length === 0 ? (
-                <div className="mt-8 rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                <div className="mt-8 rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     <div className="text-[14px] font-bold text-[color:var(--c-text)]">No groups yet</div>
                     <p className="mt-1">Create one and pick a few related projects — the AI router needs at least two indexed projects to be useful.</p>
                 </div>

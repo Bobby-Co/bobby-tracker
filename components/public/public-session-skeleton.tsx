@@ -26,7 +26,7 @@ export function PublicSessionSkeleton() {
                 <div className="skeleton h-9 w-48 rounded-full" />
             </header>
 
-            <div className="flex flex-col gap-3 rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-3 rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-sm sm:p-6">
                 <div className="skeleton h-3 w-16 rounded-full" />
                 <div className="skeleton h-9 w-full rounded-[12px]" />
                 <div className="skeleton mt-2 h-3 w-12 rounded-full" />

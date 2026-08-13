@@ -28,7 +28,7 @@ export function GroupsTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: bool
             {groupsQ.loading ? (
                 <div className="skeleton h-40 w-full rounded-[16px]" />
             ) : groups.length === 0 ? (
-                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
+                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-8 text-center text-[13px] text-[color:var(--c-text-muted)]">
                     <div className="text-[14px] font-bold text-[color:var(--c-text)]">No groups yet</div>
                     <p className="mt-1">Create a group, add people, and grant it the projects they should access.</p>
                 </div>
@@ -111,7 +111,7 @@ function GroupCard({
     }
 
     return (
-        <div className="flex flex-col gap-3 rounded-[16px] border border-[color:var(--c-border)] bg-white p-4">
+        <div className="flex flex-col gap-3 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4">
             <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                     <div className="truncate text-[14px] font-bold">{group.name}</div>

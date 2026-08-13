@@ -680,7 +680,7 @@ export function TimelineGrid({
                             color: fg,
                         }}
                     >
-                        <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-white/25">
+                        <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-[color:var(--c-surface)]/25">
                             <IconlyIcon name={iconName} size={12} />
                         </span>
                         <span className="max-w-[160px] truncate">{issue.title}</span>
@@ -705,7 +705,7 @@ export function TimelineGrid({
                             "width 220ms cubic-bezier(0.22,1,0.36,1), height 220ms cubic-bezier(0.22,1,0.36,1), left 300ms 120ms cubic-bezier(0.22,1,0.36,1), top 300ms 120ms cubic-bezier(0.22,1,0.36,1)",
                     }}
                 >
-                    <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-white/25">
+                    <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-[color:var(--c-surface)]/25">
                         <IconlyIcon name={placeAnim.iconName} size={12} />
                     </span>
                     <span className="truncate">{placeAnim.title}</span>
@@ -1218,7 +1218,7 @@ function Brick({
                                 {/* First cell — reserved for the icon, matching
                                     the narrow tiles so every tile lines up. */}
                                 <div className={cn("flex shrink-0 items-center", trueW > cell ? "justify-start" : "justify-center")} style={{ width: fin(iconSlotW), paddingLeft: trueW > cell ? padL : 0 }}>
-                                    <span className="grid place-items-center rounded-[3px] bg-white/25" style={{ width: iconBox, height: iconBox }}>
+                                    <span className="grid place-items-center rounded-[3px] bg-[color:var(--c-surface)]/25" style={{ width: iconBox, height: iconBox }}>
                                         <IconlyIcon name={iconName} size={Math.round(iconSize)} color={fg} secondColor={fg} />
                                     </span>
                                 </div>
@@ -1242,7 +1242,7 @@ function Brick({
                                         <img key={i} src={src} alt="" draggable={false} className="shrink-0 rounded object-cover ring-1 ring-white/25" style={{ height: imgH, width: imgH * 1.4 }} />
                                     ))}
                                     {images.length > 4 && (
-                                        <span className="shrink-0 rounded bg-white/25 px-1 font-bold" style={{ fontSize: numFont }}>+{images.length - 4}</span>
+                                        <span className="shrink-0 rounded bg-[color:var(--c-surface)]/25 px-1 font-bold" style={{ fontSize: numFont }}>+{images.length - 4}</span>
                                     )}
                                 </div>
                             )}
@@ -1287,7 +1287,7 @@ function Brick({
                                 title starts at cell two and shifts fully onto
                                 the reserved piece on a one-day tile. */}
                             <div className={cn("flex shrink-0 items-center", trueW > cell ? "justify-start" : "justify-center")} style={{ width: fin(iconSlotW), paddingLeft: trueW > cell ? padL : 0 }}>
-                                <span className="grid place-items-center rounded-[3px] bg-white/25" style={{ width: iconBox, height: iconBox }}>
+                                <span className="grid place-items-center rounded-[3px] bg-[color:var(--c-surface)]/25" style={{ width: iconBox, height: iconBox }}>
                                     <IconlyIcon name={iconName} size={Math.round(iconSize)} color={fg} secondColor={fg} />
                                 </span>
                             </div>
@@ -1355,7 +1355,7 @@ function Brick({
                     {/* Tick anchored to the top edge so it clears the title
                         (which sits lower) — the full-height area below still
                         grabs to resize. */}
-                    <div className="absolute right-[2px] top-[3px] w-[2px] rounded-full bg-white/45" style={{ height: Math.max(6, cell * 0.26) }} />
+                    <div className="absolute right-[2px] top-[3px] w-[2px] rounded-full bg-[color:var(--c-surface)]/45" style={{ height: Math.max(6, cell * 0.26) }} />
                 </div>
                 <div
                     onPointerDown={(e) => startResize(e, "y")}
@@ -1363,7 +1363,7 @@ function Brick({
                     className="absolute bottom-0 left-0 cursor-ns-resize"
                     style={{ height: gw, right: gw, touchAction: "none" }}
                 >
-                    <div className="absolute bottom-[2px] left-1/2 h-[2px] -translate-x-1/2 rounded-full bg-white/45" style={{ width: cell * 0.35 }} />
+                    <div className="absolute bottom-[2px] left-1/2 h-[2px] -translate-x-1/2 rounded-full bg-[color:var(--c-surface)]/45" style={{ width: cell * 0.35 }} />
                 </div>
                 <div
                     onPointerDown={(e) => startResize(e, "xy")}
@@ -1511,7 +1511,7 @@ function TrayBrick({
             }}
             title={`${issue.title} • #${issue.issue_number}`}
         >
-            <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-white/25">
+            <span className="grid h-4 w-4 shrink-0 place-items-center rounded bg-[color:var(--c-surface)]/25">
                 <IconlyIcon name={iconName} size={12} />
             </span>
             <span className="max-w-[160px] truncate">{issue.title}</span>

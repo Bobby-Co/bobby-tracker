@@ -28,7 +28,7 @@ export default function Loading() {
                 </div>
             </div>
 
-            <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-5">
+            <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5">
                 <div className="skeleton h-3.5 w-40" />
                 <div className="skeleton mt-2 h-3 w-64" />
             </div>

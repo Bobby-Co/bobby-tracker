@@ -133,7 +133,7 @@ export function PublicIssueView({
                 ← Back
             </Link>
 
-            <article className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 shadow-sm sm:p-6">
+            <article className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-[color:var(--c-text-muted)]">
                     <span className="rounded-md bg-[color:var(--c-surface-2)] px-1.5 py-0.5 font-mono font-semibold text-[color:var(--c-text)]">
                         #{issue.issue_number}
@@ -162,7 +162,7 @@ export function PublicIssueView({
                 )}
             </article>
 
-            <section className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 shadow-sm sm:p-6">
+            <section className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="flex items-center gap-2 text-[14px] font-bold">
@@ -246,11 +246,11 @@ function FindingCard({ finding }: { finding: IssueFinding }) {
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 aria-expanded={open}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-white/60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[color:var(--c-surface)]/60"
             >
                 <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{headline}</span>
                 {finding.confidence && (
-                    <span className="shrink-0 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                    <span className="shrink-0 rounded-md bg-[color:var(--c-surface-2)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                         {finding.confidence}
                     </span>
                 )}
@@ -263,7 +263,7 @@ function FindingCard({ finding }: { finding: IssueFinding }) {
                 </svg>
             </button>
             {open && (
-                <div className="anim-fade border-t border-[color:var(--c-border)] bg-white px-3 py-2.5">
+                <div className="anim-fade border-t border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2.5">
                     {finding.symbol && (
                         <div className="font-mono text-[11.5px] text-[color:var(--c-text-muted)]">{finding.symbol}</div>
                     )}

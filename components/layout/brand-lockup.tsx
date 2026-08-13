@@ -15,7 +15,7 @@ export const BobbyMark = ({ size = 36 }: { size?: number }) => (
 export function BrandLockup({ tone = "light", text = "default" }: { tone?: "light" | "dark", text?: "default" | "inverted" }) {
     return (
         <div className="flex items-center gap-3">
-            <div className={`grid size-11 shrink-0 place-items-center rounded-sq-xl ${tone !== "dark" ? "bg-white text-[color:var(--c-text)]" : "bg-[color:var(--c-text)] text-white"} `} suppressHydrationWarning>
+            <div className={`grid size-11 shrink-0 place-items-center rounded-sq-xl ${tone !== "dark" ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)]" : "bg-[color:var(--c-text)] text-white"} `} suppressHydrationWarning>
                 <BobbyMark size={30} />
             </div>
             <div className="flex flex-col leading-none">

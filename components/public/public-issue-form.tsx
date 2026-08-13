@@ -124,7 +124,7 @@ export function PublicIssueForm({
     return (
         <form
             onSubmit={submit}
-            className="anim-fade flex flex-col gap-3 rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 shadow-sm sm:p-6"
+            className="anim-fade flex flex-col gap-3 rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-sm sm:p-6"
             aria-busy={pending}
         >
             <fieldset disabled={pending} className="contents">

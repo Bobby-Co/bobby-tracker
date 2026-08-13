@@ -202,7 +202,7 @@ function GithubScene({
 
             <FlowDiagram dir={dir} reduce={reduce} provider={provider} label={label} />
 
-            <div className="inline-flex rounded-[12px] border border-[color:var(--c-border)] bg-white p-1">
+            <div className="inline-flex rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-1">
                 {DIRS.map((d) => (
                     <button
                         key={d.val}
@@ -241,7 +241,7 @@ function GithubScene({
                 <button
                     type="button"
                     onClick={onConnect}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-text)] hover:border-[color:var(--c-border-strong)]"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-text)] hover:border-[color:var(--c-border-strong)]"
                 >
                     <GithubMark /> Connect the GitHub App to activate
                 </button>
@@ -253,7 +253,7 @@ function GithubScene({
                     <button
                         type="button"
                         onClick={onConnect}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-text)] hover:border-[color:var(--c-border-strong)]"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-text)] hover:border-[color:var(--c-border-strong)]"
                     >
                         <IconlyGitlab size={14} /> Set up GitLab sync
                     </button>
@@ -316,7 +316,7 @@ function FlowDiagram({
             {!reduce && back && <Parcel path={ARC_BACK} tone="#3fb950" anim={both ? "wizard-fly-b" : "wizard-fly-solo"} />}
 
             {dir === "off" && (
-                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white px-2 text-[10px] font-semibold text-[color:var(--c-text-dim)]">
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[color:var(--c-surface)] px-2 text-[10px] font-semibold text-[color:var(--c-text-dim)]">
                     paused
                 </span>
             )}
@@ -346,7 +346,7 @@ function Parcel({ path, tone, anim }: { path: string; tone: string; anim: string
 function Node({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="flex shrink-0 flex-col items-center gap-1">
-            <span className="grid h-11 w-11 place-items-center rounded-[14px] border border-[color:var(--c-border)] bg-white text-[color:var(--c-text)] shadow-[var(--shadow-card)]">
+            <span className="grid h-11 w-11 place-items-center rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-[var(--shadow-card)]">
                 {children}
             </span>
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">{label}</span>
@@ -458,7 +458,7 @@ function BigToggle({ on, onToggle, reduce }: { on: boolean; onToggle: () => void
                 // travel = 112 - 16 - 48 = 48). margin:auto can't be transitioned.
                 animate={{ x: on ? 48 : 0 }}
                 transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 480, damping: 30 }}
-                className="grid h-12 w-12 place-items-center rounded-full bg-white shadow-md"
+                className="grid h-12 w-12 place-items-center rounded-full bg-[color:var(--c-surface)] shadow-md"
             >
                 <motion.span
                     key={on ? "on" : "off"}
@@ -537,7 +537,7 @@ function EffortScene({ value, onPick, reduce }: { value: WizardEffort; onPick: (
                             "relative rounded-[12px] border px-2 py-2.5 text-[12.5px] font-semibold transition-colors",
                             value === e.val
                                 ? "border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] text-[color:var(--c-text)]"
-                                : "border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)]",
+                                : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)]",
                         )}
                     >
                         {e.label}

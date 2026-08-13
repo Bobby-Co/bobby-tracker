@@ -419,7 +419,7 @@ function ReviewStep({
                             className={
                                 "rounded-[6px] px-2.5 py-1 transition-colors " +
                                 (bodyView === "edit"
-                                    ? "bg-white text-[color:var(--c-text)] shadow-sm"
+                                    ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-sm"
                                     : "text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]")
                             }
                         >
@@ -433,7 +433,7 @@ function ReviewStep({
                             className={
                                 "rounded-[6px] px-2.5 py-1 transition-colors " +
                                 (bodyView === "preview"
-                                    ? "bg-white text-[color:var(--c-text)] shadow-sm"
+                                    ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-sm"
                                     : "text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]")
                             }
                         >
@@ -449,7 +449,7 @@ function ReviewStep({
                         className="input text-[13px] leading-relaxed font-mono"
                     />
                 ) : (
-                    <div className="min-h-[180px] max-h-[320px] overflow-y-auto rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-3">
+                    <div className="min-h-[180px] max-h-[320px] overflow-y-auto rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-3">
                         {proposal.body.trim() ? (
                             <div className="prose-tracker">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{proposal.body}</ReactMarkdown>
@@ -552,7 +552,7 @@ function RankingPanel({
                         <li key={r.project_id}>
                             <label
                                 className={
-                                    "flex items-center gap-3 rounded-[10px] border bg-white px-3 py-2 transition-colors " +
+                                    "flex items-center gap-3 rounded-[10px] border bg-[color:var(--c-surface)] px-3 py-2 transition-colors " +
                                     (isPicked
                                         ? "border-zinc-900 bg-[color:var(--c-surface-2)]"
                                         : "border-[color:var(--c-border)] hover:border-[color:var(--c-border-strong)]") +

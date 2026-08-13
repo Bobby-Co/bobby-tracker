@@ -59,7 +59,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
         <div className="mt-3">
             <div className="text-[12px] font-semibold text-[color:var(--c-text-muted)]">{label}</div>
             <div className="mt-1 flex items-stretch gap-2">
-                <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded-[10px] bg-zinc-50 px-3 py-2 text-[12.5px] text-[color:var(--c-text)]">
+                <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded-[10px] bg-[color:var(--c-surface-2)] px-3 py-2 text-[12.5px] text-[color:var(--c-text)]">
                     {value}
                 </code>
                 <button type="button" onClick={copy} className="btn-ghost shrink-0">
@@ -119,7 +119,7 @@ function ConnectionsCard() {
     }
 
     return (
-        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
             <div className="text-[14px] font-bold">Connected assistants</div>
             {loading && <p className="mt-2 text-[13px] text-[color:var(--c-text-muted)]">Loading…</p>}
 
@@ -176,7 +176,7 @@ export function McpConnectPanel() {
 
     return (
         <div className="space-y-4">
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="text-[14px] font-bold">Connect Claude to your knowledge bases</div>
                 <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
                     Ucelot exposes your indexed codebases over MCP. Once connected, Claude can ask where
@@ -197,12 +197,12 @@ export function McpConnectPanel() {
                 </p>
             </div>
 
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="text-[14px] font-bold">What Claude can do</div>
                 <ul className="mt-2 space-y-2">
                     {TOOLS.map((t) => (
                         <li key={t.name} className="text-[13px]">
-                            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-[12px] font-semibold">{t.name}</code>
+                            <code className="rounded bg-[color:var(--c-surface-2)] px-1.5 py-0.5 text-[12px] font-semibold">{t.name}</code>
                             <span className="ml-2 text-[color:var(--c-text-muted)]">{t.blurb}</span>
                         </li>
                     ))}

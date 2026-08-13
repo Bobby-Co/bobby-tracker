@@ -67,7 +67,7 @@ export default function IntegrationsPage() {
                             coveringCount={sessions.length}
                         />
 
-                        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-5">
+                        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5">
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div>
                                     <div className="text-[14px] font-bold">Sessions covering this project</div>
@@ -99,7 +99,7 @@ export default function IntegrationsPage() {
                                                     className={
                                                         s.enabled
                                                             ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-emerald-800"
-                                                            : "rounded-full bg-zinc-100 px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-zinc-700"
+                                                            : "rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]"
                                                     }
                                                 >
                                                     {s.enabled ? "Live" : "Paused"}

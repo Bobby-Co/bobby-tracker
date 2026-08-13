@@ -17,7 +17,7 @@ export function GroupsListSkeleton() {
                 {[0, 1, 2].map((i) => (
                     <li
                         key={i}
-                        className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4"
+                        className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4"
                     >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="skeleton h-4 w-40" />

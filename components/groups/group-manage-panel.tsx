@@ -139,7 +139,7 @@ export function GroupManagePanel({
             )}
 
             {/* Members */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <div className="text-[14px] font-bold">Projects in this group</div>
@@ -176,7 +176,7 @@ export function GroupManagePanel({
                                     onClick={() => removeMember(m.id)}
                                     disabled={busy}
                                     aria-label={`Remove ${m.name}`}
-                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-[color:var(--c-surface)] hover:text-rose-700"
                                 >
                                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
                                         <path d="M6 6l12 12M18 6L6 18" />
@@ -216,7 +216,7 @@ export function GroupManagePanel({
             </div>
 
             {/* Details + delete */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="text-[14px] font-bold">Details</div>
                 <fieldset disabled={busy} className="mt-3 grid grid-cols-1 gap-3">
                     <label className="flex flex-col gap-1">

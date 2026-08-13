@@ -90,7 +90,7 @@ export function IssueDetail({
                     Updated {formatUpdated(new Date(issue.updated_at))}
                 </div>
 
-                <section className="mt-6 rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)]">
+                <section className="mt-6 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)]">
                     <div className="mb-2 flex items-center justify-between">
                         <span className="h-section">Description</span>
                         {!editingBody && (

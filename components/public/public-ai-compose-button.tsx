@@ -56,7 +56,7 @@ export function PublicAiComposeButton({
             <button
                 type="button"
                 onClick={() => setOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)]"
+                className="inline-flex items-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12.5px] font-semibold text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)]"
             >
                 <SparkleIcon />
                 Draft with AI
@@ -340,7 +340,7 @@ function ComposeBody({
                             className={
                                 "rounded-[6px] px-2.5 py-1 transition-colors " +
                                 (bodyView === "edit"
-                                    ? "bg-white text-[color:var(--c-text)] shadow-sm"
+                                    ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-sm"
                                     : "text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]")
                             }
                         >
@@ -354,7 +354,7 @@ function ComposeBody({
                             className={
                                 "rounded-[6px] px-2.5 py-1 transition-colors " +
                                 (bodyView === "preview"
-                                    ? "bg-white text-[color:var(--c-text)] shadow-sm"
+                                    ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-sm"
                                     : "text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]")
                             }
                         >
@@ -370,7 +370,7 @@ function ComposeBody({
                         className="input text-[13px] leading-relaxed font-mono"
                     />
                 ) : (
-                    <div className="min-h-[180px] max-h-[320px] overflow-y-auto rounded-[12px] border border-[color:var(--c-border)] bg-white px-3.5 py-3">
+                    <div className="min-h-[180px] max-h-[320px] overflow-y-auto rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-3">
                         {proposal.body.trim() ? (
                             <div className="prose-tracker">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{proposal.body}</ReactMarkdown>
@@ -470,7 +470,7 @@ function RoutingPanel({
                         <li key={r.project_id}>
                             <label
                                 className={
-                                    "flex items-center gap-3 rounded-[10px] border bg-white px-3 py-2 transition-colors " +
+                                    "flex items-center gap-3 rounded-[10px] border bg-[color:var(--c-surface)] px-3 py-2 transition-colors " +
                                     (isPicked
                                         ? "border-zinc-900 bg-[color:var(--c-surface-2)]"
                                         : "border-[color:var(--c-border)] hover:border-[color:var(--c-border-strong)]") +

@@ -441,7 +441,7 @@ export function IssueTimeline({
             </div>
 
             <div className={cn(
-                "rounded-[18px] border border-[color:var(--c-border)] bg-white",
+                "rounded-[18px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)]",
                 fullHeight && "flex min-h-0 flex-1 flex-col",
             )}>
                 <div
@@ -509,7 +509,7 @@ export function IssueTimeline({
                         </span>
                     </div>
                     {unscheduled.length === 0 ? (
-                        <p className="rounded-[10px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-4 text-center text-[12.5px] text-[color:var(--c-text-muted)]">
+                        <p className="rounded-[10px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-4 text-center text-[12.5px] text-[color:var(--c-text-muted)]">
                             Everything&rsquo;s on the timeline.
                         </p>
                     ) : (
@@ -650,7 +650,7 @@ function TimelineTile({
                     maxWidth: "min(220px, calc(var(--pxh) * var(--dur-hr) * 1px - 12px))",
                 }}
             >
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-white/20">
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-[color:var(--c-surface)]/20">
                     <IconlyIcon name={iconName} size={14} />
                 </span>
                 <span className="min-w-0 truncate">{issue.title}</span>
@@ -952,7 +952,7 @@ function TrayTile({
                     style={{ background: fill, color: fg, boxShadow: ringShadow(rings, fill) }}
                     title={issue.title}
                 >
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-white/20">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-md bg-[color:var(--c-surface)]/20">
                         <IconlyIcon name={iconName} size={14} />
                     </span>
                     <span className="line-clamp-1 max-w-[180px]">{issue.title}</span>
@@ -968,7 +968,7 @@ function TrayTile({
 function ZoomToggle({ zoom, onChange }: { zoom: Zoom; onChange: (z: Zoom) => void }) {
     const opts: Zoom[] = ["day", "week", "month", "quarter"]
     return (
-        <div className="inline-flex items-center rounded-[10px] border border-[color:var(--c-border)] bg-white p-0.5">
+        <div className="inline-flex items-center rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-0.5">
             {opts.map((z) => (
                 <button
                     key={z}
@@ -1056,7 +1056,7 @@ function StatusSwatch({
     }
 
     return (
-        <label className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-2 py-1 text-[11px] font-semibold cursor-pointer">
+        <label className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-1 text-[11px] font-semibold cursor-pointer">
             <span className="relative inline-block h-3.5 w-3.5 rounded-sm" style={{ background: draft }}>
                 <input
                     type="color"

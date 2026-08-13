@@ -197,7 +197,7 @@ export function Dropdown<V extends string = string>({
                     else openIt()
                 }}
                 className={cn(
-                    "inline-flex w-full items-center gap-2 rounded-[12px] border bg-white px-3 py-[9px] text-[13px]",
+                    "inline-flex w-full items-center gap-2 rounded-[12px] border bg-[color:var(--c-surface)] px-3 py-[9px] text-[13px]",
                     "font-medium text-[color:var(--c-text)] text-left transition-[border-color,box-shadow,background] duration-[140ms]",
                     "hover:border-[color:var(--c-border-strong)] disabled:cursor-not-allowed disabled:opacity-60",
                     open
@@ -254,7 +254,7 @@ export function Dropdown<V extends string = string>({
                         zIndex: 60,
                     }}
                     className={cn(
-                        "max-h-80 overflow-auto rounded-[12px] border bg-white p-1.5 shadow-[var(--shadow-pop)]",
+                        "max-h-80 overflow-auto rounded-[12px] border bg-[color:var(--c-surface)] p-1.5 shadow-[var(--shadow-pop)]",
                         "border-[color:var(--c-border)]",
                         "anim-rise",
                     )}

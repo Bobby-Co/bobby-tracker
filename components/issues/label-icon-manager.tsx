@@ -150,7 +150,7 @@ export function LabelIconManager({
                                 onChange={(e) => { setDraftLabel(e.target.value); setDraftError(null) }}
                                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); startCreate() } }}
                                 placeholder="e.g. design, perf, billing"
-                                className="flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
+                                className="flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-zinc-400"
                             />
                             <button
                                 type="button"
@@ -178,7 +178,7 @@ export function LabelIconManager({
                                 return (
                                     <li
                                         key={label}
-                                        className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2.5"
+                                        className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2.5"
                                     >
                                         {/* Color swatch — wraps a hidden
                                             <input type="color"> so a click
@@ -205,7 +205,7 @@ export function LabelIconManager({
                                             disabled={busy === label}
                                             className={cn(
                                                 "grid h-9 w-9 shrink-0 place-items-center rounded-[10px] disabled:opacity-50",
-                                                cur ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200",
+                                                cur ? "bg-zinc-900 text-white" : "bg-[color:var(--c-surface-2)] text-zinc-400 hover:bg-[color:var(--c-border)]",
                                             )}
                                             title="Change icon"
                                         >
@@ -222,7 +222,7 @@ export function LabelIconManager({
                                                 type="button"
                                                 onClick={() => setPicker({ label, current: null })}
                                                 disabled={busy === label}
-                                                className="rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12px] font-semibold hover:bg-[color:var(--c-overlay)] disabled:opacity-50"
+                                                className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12px] font-semibold hover:bg-[color:var(--c-overlay)] disabled:opacity-50"
                                             >
                                                 Pick icon
                                             </button>

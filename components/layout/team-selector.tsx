@@ -60,7 +60,7 @@ export function TeamSelector() {
                 onClick={() => setOpen((o) => !o)}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className="flex w-full items-center gap-2 rounded-sq-l bg-[color:var(--c-surface)] pl-2.5 pr-4 py-[4.5px] text-[12.5px] font-semibold text-zinc-900 ring-1 ring-[color:var(--c-border)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] hover:ring-[color:var(--c-border-strong)]"
+                className="flex w-full items-center gap-2 rounded-sq-l bg-[color:var(--c-surface)] pl-2.5 pr-4 py-[4.5px] text-[12.5px] font-semibold text-[color:var(--c-text)] ring-1 ring-[color:var(--c-border)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] hover:ring-[color:var(--c-border-strong)]"
             >
                 <TeamAvatar name={activeTeam.name} personal={activeTeam.is_personal} size={18} />
                 <span className="min-w-0 flex-1 truncate text-left">{activeTeam.name}</span>

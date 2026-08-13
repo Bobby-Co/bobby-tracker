@@ -263,7 +263,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     // their one-shot glow-bloom-in / glow-ring-in entrance.
     return (
         <div className={cn("rounded-xl", !pending && suggestion && "rainbow-glow")}>
-        <section className="rounded-xl border border-transparent bg-white p-4 transition-colors">
+        <section className="rounded-xl border border-transparent bg-[color:var(--c-surface)] p-4 transition-colors">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <h2 className="flex items-center gap-2 text-sm font-medium">
@@ -302,7 +302,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                             <ChevronIcon />
                         </span>
                         <div
-                            className="absolute right-0 top-0 z-20 overflow-hidden bg-white ring-1 ring-inset ring-zinc-200 backdrop-blur-xl"
+                            className="absolute right-0 top-0 z-20 overflow-hidden bg-[color:var(--c-surface)] ring-1 ring-inset ring-zinc-200 backdrop-blur-xl"
                             style={{
                                 width: effortOpen ? panelSize.w : chipSize.w,
                                 height: effortOpen ? panelSize.h : chipSize.h,
@@ -322,7 +322,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                                 aria-haspopup="dialog"
                                 aria-expanded={effortOpen}
                                 title="Choose how thorough the analyser is for this issue"
-                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="absolute left-0 top-0 flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-[12px] font-medium hover:bg-[color:var(--c-surface-2)] disabled:cursor-not-allowed disabled:opacity-50"
                                 style={{
                                     opacity: effortOpen ? 0 : 1,
                                     pointerEvents: effortOpen ? "none" : "auto",
@@ -423,7 +423,7 @@ function SuggestionBody({
     const data: IssueAnalysisData | null = suggestion.data
     if (!data) {
         return (
-            <div className="mt-4 anim-rise text-[13px] leading-6 text-zinc-700">
+            <div className="mt-4 anim-rise text-[13px] leading-6 text-[color:var(--c-text-muted)]">
                 {suggestion.markdown || "(no result)"}
             </div>
         )
@@ -437,7 +437,7 @@ function SuggestionBody({
             {data.summary && (
                 <div className="anim-rise" style={{ ["--i" as string]: 0 } as React.CSSProperties}>
                     <SectionLabel>Summary</SectionLabel>
-                    <p className="mt-1 text-sm leading-6 text-zinc-700">{data.summary}</p>
+                    <p className="mt-1 text-sm leading-6 text-[color:var(--c-text-muted)]">{data.summary}</p>
                 </div>
             )}
 
@@ -494,16 +494,16 @@ function FindingCard({
 
     return (
         <li
-            className="anim-rise overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition-all duration-200 hover:border-zinc-300"
+            className="anim-rise overflow-hidden rounded-lg border border-zinc-200 bg-[color:var(--c-surface-2)] transition-all duration-200 hover:border-zinc-300"
             style={{ ["--i" as string]: index } as React.CSSProperties}
         >
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 aria-expanded={open}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[color:var(--c-surface)]/60"
             >
-                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-zinc-900">
+                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-[color:var(--c-text)]">
                     {headline}
                 </span>
                 {finding.symbol && !open && (
@@ -530,14 +530,14 @@ function FindingCard({
             </button>
 
             {open && (
-                <div className="anim-fade border-t border-zinc-200/60 bg-white px-3 py-2.5">
+                <div className="anim-fade border-t border-zinc-200/60 bg-[color:var(--c-surface)] px-3 py-2.5">
                     {finding.symbol && (
                         <div className="font-mono text-[11.5px] text-zinc-500">
                             {finding.symbol}
                         </div>
                     )}
                     {finding.reason && (
-                        <p className="mt-1 text-[13px] leading-5 text-zinc-700">
+                        <p className="mt-1 text-[13px] leading-5 text-[color:var(--c-text-muted)]">
                             {finding.reason}
                         </p>
                     )}
@@ -581,8 +581,8 @@ function ConfidenceBadge({ value }: { value: string }) {
     const cls =
         v === "high"   ? "bg-green-100 text-green-800" :
         v === "medium" ? "bg-amber-100 text-amber-800" :
-        v === "low"    ? "bg-zinc-100 text-zinc-600" :
-                         "bg-zinc-100 text-zinc-600"
+        v === "low"    ? "bg-[color:var(--c-surface-2)] text-zinc-600" :
+                         "bg-[color:var(--c-surface-2)] text-zinc-600"
     return (
         <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition-colors ${cls}`}>
             {v}
@@ -765,7 +765,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function Pill({ children, mono }: { children: React.ReactNode; mono?: boolean }) {
     return (
         <span
-            className={`rounded-md bg-zinc-100 px-1.5 py-0.5 transition-colors ${mono ? "font-mono" : ""}`}
+            className={`rounded-md bg-[color:var(--c-surface-2)] px-1.5 py-0.5 transition-colors ${mono ? "font-mono" : ""}`}
         >
             {children}
         </span>

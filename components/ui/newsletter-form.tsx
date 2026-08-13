@@ -55,7 +55,7 @@ export default function NewsletterForm() {
             <label htmlFor="nl-email" className="sr-only">
                 Email address
             </label>
-            <div className="flex max-w-sm items-center gap-2 rounded-sq-l border border-[color:var(--c-secondary)]/12 bg-white p-1.5 focus-within:border-[color:var(--c-secondary)]/25">
+            <div className="flex max-w-sm items-center gap-2 rounded-sq-l border border-[color:var(--c-secondary)]/12 bg-[color:var(--c-surface)] p-1.5 focus-within:border-[color:var(--c-secondary)]/25">
                 <input
                     id="nl-email"
                     type="email"

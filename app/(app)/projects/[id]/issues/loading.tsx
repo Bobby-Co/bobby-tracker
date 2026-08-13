@@ -13,7 +13,7 @@ export default function Loading() {
 
             <section>
                 <div className="skeleton mb-3 h-3.5 w-16" />
-                <ul className="overflow-hidden rounded-[16px] border border-[color:var(--c-border)] bg-white shadow-[var(--shadow-card)] divide-y divide-[color:var(--c-border)]">
+                <ul className="overflow-hidden rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-[var(--shadow-card)] divide-y divide-[color:var(--c-border)]">
                     {[0, 1, 2, 3, 4].map((i) => (
                         <li key={i} className="flex items-center gap-3 px-4 py-3">
                             <div className="skeleton hidden h-3 w-8 sm:block" />

@@ -53,7 +53,7 @@ export function MembersTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boo
                 {membersQ.loading ? (
                     <div className="skeleton h-24 w-full rounded-[14px]" />
                 ) : (
-                    <ul className="divide-y divide-[color:var(--c-border)] overflow-hidden rounded-[14px] border border-[color:var(--c-border)] bg-white">
+                    <ul className="divide-y divide-[color:var(--c-border)] overflow-hidden rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)]">
                         {members.map((m) => {
                             const isSelf = m.user_id === user?.id
                             const canEdit = isAdmin && !(m.role === "owner" && team.role !== "owner")
@@ -98,7 +98,7 @@ export function MembersTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boo
             {isAdmin && invites.length > 0 && (
                 <section>
                     <h2 className="mb-2 text-[13px] font-bold text-[color:var(--c-text)]">Pending invites</h2>
-                    <ul className="divide-y divide-[color:var(--c-border)] overflow-hidden rounded-[14px] border border-[color:var(--c-border)] bg-white">
+                    <ul className="divide-y divide-[color:var(--c-border)] overflow-hidden rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)]">
                         {invites.map((inv) => (
                             <li key={inv.token} className="flex items-center gap-3 px-4 py-2.5">
                                 <div className="min-w-0 flex-1">
@@ -186,7 +186,7 @@ function Avatar({ name, url }: { name: string; url: string | null }) {
         return <img src={url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
     }
     return (
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-zinc-200 text-[11px] font-bold text-zinc-600">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-zinc-600">
             {initials}
         </span>
     )

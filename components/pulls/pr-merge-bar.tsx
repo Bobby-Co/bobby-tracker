@@ -285,7 +285,7 @@ function MergeableBar({
                                 "rounded-full border px-2.5 py-1 text-[11.5px] font-semibold transition-colors",
                                 method === m
                                     ? "border-transparent bg-[color:var(--c-primary)] text-white"
-                                    : "border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)]",
+                                    : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:border-[color:var(--c-border-strong)]",
                             )}
                         >
                             {MERGE_METHOD_LABEL[m]}

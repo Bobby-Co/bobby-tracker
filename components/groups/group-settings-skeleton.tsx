@@ -5,7 +5,7 @@ export function GroupSettingsSkeleton() {
     return (
         <div aria-busy className="flex flex-col gap-4">
             {/* Members card */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="skeleton h-4 w-44" />
                 <div className="skeleton mt-2 h-3 w-3/4" />
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -20,7 +20,7 @@ export function GroupSettingsSkeleton() {
             </div>
 
             {/* Details card */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="skeleton h-4 w-20" />
                 <div className="mt-3 flex flex-col gap-3">
                     <div className="flex flex-col gap-1">

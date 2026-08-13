@@ -68,6 +68,11 @@
        on a dark block. */
     --c-secondary-tint: #f1f2f7;
     --c-secondary-line: #dcdfe9;
+    /* the foreground that reads ON that wash. Separate from --c-secondary
+       because that one is a SURFACE (the mark tile, the active nav pill) and a
+       surface and its text have to move in opposite directions when the theme
+       flips. */
+    --c-secondary-ink:  #0a0d1c;
 
     --r-sm:  8px;
     --r-md:  12px;
@@ -134,6 +139,114 @@
     --app-graphite-bg: #EAEAEC;  --app-graphite: #5C5C63;
 }
 
+/* ─── dark theme ─────────────────────────────────────────────────────────────
+   Driven by data-theme on <html>, set before first paint by the inline script
+   in app/layout.tsx (stored choice, else the OS preference). One block rather
+   than a prefers-color-scheme copy AND a data-theme copy, because plain CSS has
+   no way to share a value set between two selectors without repeating it — and
+   a duplicated 60-line palette is a palette that drifts.
+
+   Every surface value is a stop from DARK_EMBER_STOPS or a step between two of
+   them, so the app is lit by the same ramp as the marketing pages:
+
+       #090c1c  desk        #22284a  border      #e89440  primary fill
+       #101630  surface     #48425c  border+     #ffc068  accent / text
+
+   The accent MOVES UP the ramp on dark. Held at its light value, --c-accent
+   (#c2410c) scores 3.4:1 on the panel — under AA for body text. #ffc068 is
+   11.0:1. The fill keeps a mid stop because its label sits on top of it. */
+:root[data-theme="dark"] {
+    --c-page:          #0b0f22;
+    --c-shell:         #090c1c;
+    --c-surface:       #101630;
+    --c-surface-2:     #161d3c;
+    --c-border:        #22284a;
+    --c-border-strong: #313a67;
+    --c-text:          #eceff8;
+    --c-text-muted:    #9ba4c4;
+    --c-text-dim:      #7780a2;
+    --c-overlay:       rgba(255,255,255,0.05);
+
+    /* CI workflow tags — the light pairs are tint+ink; on dark both invert */
+    --c-trigger-bg:    #34250e;  --c-trigger-fg:    #f5c26b;
+    --c-action-bg:     #16244a;  --c-action-fg:     #93b4f5;
+    --c-output-bg:     #0e2a22;  --c-output-fg:     #6ee7b7;
+    --c-info-bg:       #241c44;  --c-info-fg:       #b6a6f2;
+    --c-rose-bg:       #3a1620;  --c-rose-fg:       #f4a3b4;
+
+    --c-success:       #4ade80;  --c-success-bg:    #0e2a1c;
+    --c-warn:          #fbbf24;  --c-warn-bg:       #2c2110;
+    --c-error:         #f87171;  --c-error-bg:      #2e1418;
+
+    --c-primary:       #e89440;
+    --c-primary-hover: #ffc068;
+    --c-primary-tint:  #2b1e12;
+    --c-ring:          rgba(232,148,64,0.32);
+    --c-accent:        #ffc068;
+    --c-accent-2:      #e89440;
+
+    /* Midnight is the ground here, so --c-secondary can't stay #0a0d1c: as a
+       SURFACE (mark tile, active nav pill) it would vanish into the panel. It
+       lifts just enough to read as raised, while its INK flips to light. */
+    --c-secondary:      #1b2444;
+    --c-secondary-deep: #090c1c;
+    --c-secondary-tint: #161d3c;
+    --c-secondary-line: #2a3157;
+    --c-secondary-ink:  #dfe3f2;
+
+    /* Elevation can no longer be a shadow: a soft dark halo is invisible on a
+       dark desk. It becomes lightness — a hairline ring, and a surface that is
+       a step brighter than what it sits on. */
+    --shadow-card:  0 0 0 1px rgba(255,255,255,0.04);
+    --shadow-pop:   0 16px 40px -12px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.07);
+    --shadow-panel: 0 0 0 1px var(--c-border);
+
+    /* Project-tile chips. Derived, not hand-picked: each light pair keeps its
+       hue, the ground drops to 15.5% lightness (capped at 42% saturation so it
+       settles onto the indigo panel), and the foreground lifts until it clears
+       4.6:1 on that ground. Lowest pair in the set is 5.1:1. */
+    --app-crimson-bg: #38171b;  --app-crimson: #d6858f;
+    --app-rose-bg: #38171f;  --app-rose: #d88399;
+    --app-pink-bg: #381726;  --app-pink: #d586ab;
+    --app-blush-bg: #381722;  --app-blush: #d685a1;
+    --app-magenta-bg: #38172e;  --app-magenta: #d388bb;
+    --app-fuchsia-bg: #381735;  --app-fuchsia: #d18aca;
+    --app-orchid-bg: #2f1738;  --app-orchid: #bd8ccf;
+    --app-purple-bg: #261738;  --app-purple: #aa83d8;
+    --app-violet-bg: #201738;  --app-violet: #977fdc;
+    --app-lavender-bg: #1a1738;  --app-lavender: #8981da;
+    --app-periwinkle-bg: #171b38;  --app-periwinkle: #808cdb;
+    --app-indigo-bg: #171e38;  --app-indigo: #8293d9;
+    --app-blue-bg: #172438;  --app-blue: #7ca2de;
+    --app-azure-bg: #172a38;  --app-azure: #79b5e2;
+    --app-sky-bg: #172e38;  --app-sky: #75c5e6;
+    --app-cyan-bg: #173638;  --app-cyan: #70e2eb;
+    --app-teal-bg: #173833;  --app-teal: #71ead9;
+    --app-mint-bg: #17382b;  --app-mint: #7be0b9;
+    --app-spruce-bg: #17382c;  --app-spruce: #7be0bc;
+    --app-emerald-bg: #173826;  --app-emerald: #7be0a9;
+    --app-green-bg: #193817;  --app-green: #8ed18a;
+    --app-fern-bg: #253817;  --app-fern: #a6d883;
+    --app-sage-bg: #28331d;  --app-sage: #afc299;
+    --app-lime-bg: #333817;  --app-lime: #d6e972;
+    --app-olive-bg: #383617;  --app-olive: #ddd67e;
+    --app-citron-bg: #383517;  --app-citron: #ebde70;
+    --app-gold-bg: #383117;  --app-gold: #ebd070;
+    --app-yellow-bg: #382f17;  --app-yellow: #ebc870;
+    --app-amber-bg: #382c17;  --app-amber: #ebbc70;
+    --app-honey-bg: #382b17;  --app-honey: #e3b978;
+    --app-tangerine-bg: #382917;  --app-tangerine: #ebb470;
+    --app-orange-bg: #382417;  --app-orange: #e1a379;
+    --app-peach-bg: #382517;  --app-peach: #dca57f;
+    --app-coral-bg: #381b17;  --app-coral: #dd8a7e;
+    --app-clay-bg: #372318;  --app-clay: #cba58f;
+    --app-brown-bg: #34261b;  --app-brown: #c6aa95;
+    --app-sand-bg: #373118;  --app-sand: #cabf91;
+    --app-slate-bg: #21262e;  --app-slate: #a1abb9;
+    --app-stone-bg: #2b2824;  --app-stone: #b5aea6;
+    --app-graphite-bg: #262629;  --app-graphite: #ababb0;
+}
+
 @theme inline {
     --color-background: var(--c-page);
     --color-foreground: var(--c-text);
@@ -189,6 +302,40 @@ body:has(main[data-page="landing"]) {
         animation: landing-bar-tint linear both;
         animation-timeline: scroll(root block);
     }
+}
+
+/* ─── the landing opts OUT of the theme ──────────────────────────────────────
+   It is a fixed composition — cream paper, midnight ink, ember accent — and the
+   only page that is a piece of art direction rather than a surface to work on.
+   Under a dark <html> it would otherwise inherit the lifted accent (#ffc068 on
+   cream is unreadable) and a lifted secondary. Re-declaring the tokens on the
+   landing's own root pins its subtree back to the light values; the rest of the
+   site still follows the theme. */
+main[data-page="landing"] {
+    --c-primary:        #e9730f;
+    --c-primary-hover:  #cf6310;
+    --c-primary-tint:   #fff3e6;
+    --c-accent:         #c2410c;
+    --c-accent-2:       #9a3412;
+    --c-secondary:      #0a0d1c;
+    --c-secondary-ink:  #0a0d1c;
+    /* The surface set too, not just the brand: the feature demos are little
+       pictures OF THE LIGHT APP sitting on the dark section (see
+       components/ui/feature-demos.tsx, which draws them with --c-surface,
+       --c-border and --c-text). Let those follow the theme and the miniatures
+       turn dark inside a section that is already dark, and the whole conceit —
+       "this is the product, lit" — collapses. */
+    --c-page:          #fbfbfc;
+    --c-surface:       #ffffff;
+    --c-surface-2:     #f7f7f8;
+    --c-border:        #ececef;
+    --c-border-strong: #dcdfe4;
+    --c-text:          #1f2430;
+    --c-text-muted:    #6b7280;
+    --c-text-dim:      #a3a8b0;
+    --c-overlay:       rgba(17,24,39,0.035);
+    --shadow-card:     0 1px 1px rgba(17,24,39,0.025), 0 1px 2px rgba(17,24,39,0.02);
+    --shadow-pop:      0 12px 32px -8px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06);
 }
 
 /* dotted background — applied to the (app) shell so login/landing can opt out.

@@ -100,7 +100,7 @@ export function PublicSessionSubmissions({
     if (visibleGroups.length === 0) {
         if (!restrictToOwn) return null
         return (
-            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-center text-[12.5px] text-[color:var(--c-text-muted)] sm:p-6">
+            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5 text-center text-[12.5px] text-[color:var(--c-text-muted)] sm:p-6">
                 <div className="text-[13px] font-bold text-[color:var(--c-text)]">{headingLabel}</div>
                 <p className="mt-1">
                     {visitorIsAuthenticated || hydrated
@@ -230,14 +230,14 @@ function ParentRowCard({
     const hasChildren = duplicates.length > 0
 
     return (
-        <div className="flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-white pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3">
+        <div className="flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3">
             {hasChildren && (
                 <button
                     type="button"
                     onClick={onToggle}
                     aria-expanded={open}
                     aria-label={open ? "Collapse duplicates" : "Expand duplicates"}
-                    className="grid h-5 w-5 shrink-0 -mr-2 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-white hover:text-[color:var(--c-text)]"
+                    className="grid h-5 w-5 shrink-0 -mr-2 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-[color:var(--c-surface)] hover:text-[color:var(--c-text)]"
                 >
                     <svg
                         width="11"
@@ -307,7 +307,7 @@ function ChildRowCard({
     return (
         <Link
             href={`/p/${token}/issues/${child.id}`}
-            className="group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5"
+            className="group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5"
         >
             <span className="hidden shrink-0 font-mono text-[11px] text-[color:var(--c-text-dim)] sm:inline">
                 #{child.issue_number}

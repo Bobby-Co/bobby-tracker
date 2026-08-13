@@ -300,7 +300,7 @@ export function SessionManagePanel({
     return (
         <div className="mt-4 flex flex-col gap-4">
             {/* Status / link */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <div className="text-[14px] font-bold">Public link</div>
@@ -314,7 +314,7 @@ export function SessionManagePanel({
                         className={
                             session.enabled
                                 ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-emerald-800"
-                                : "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-zinc-700"
+                                : "rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]"
                         }
                     >
                         {session.enabled ? "Live" : "Paused"}
@@ -357,7 +357,7 @@ export function SessionManagePanel({
             </div>
 
             {/* Access mode + invite list */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <div className="text-[14px] font-bold">Who can access</div>
@@ -421,7 +421,7 @@ export function SessionManagePanel({
                                                     onClick={() => removeInvite(i.email)}
                                                     disabled={busy}
                                                     aria-label={`Remove ${i.email}`}
-                                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-[color:var(--c-surface)] hover:text-rose-700"
                                                 >
                                                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
                                                         <path d="M6 6l12 12M18 6L6 18" />
@@ -466,7 +466,7 @@ export function SessionManagePanel({
             </div>
 
             {/* Submissions visibility */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <div className="text-[14px] font-bold">Submissions visibility</div>
@@ -506,7 +506,7 @@ export function SessionManagePanel({
                 routing it does in the auth /groups/[id] page. The
                 manual list stays as a fallback so a user can always
                 drop back without losing their per-project edits. */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <div className="text-[14px] font-bold">Project source</div>
@@ -564,7 +564,7 @@ export function SessionManagePanel({
                 the effective list is owned by the group and we hide
                 this card to avoid implying both can edit it). */}
             {session.group_id == null && (
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <div className="text-[14px] font-bold">Projects in this session</div>
@@ -591,7 +591,7 @@ export function SessionManagePanel({
                                     onClick={() => removeProject(p.id)}
                                     disabled={busy}
                                     aria-label={`Remove ${p.name}`}
-                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-white hover:text-rose-700"
+                                    className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--c-text-dim)] hover:bg-[color:var(--c-surface)] hover:text-rose-700"
                                 >
                                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
                                         <path d="M6 6l12 12M18 6L6 18" />
@@ -632,7 +632,7 @@ export function SessionManagePanel({
             )}
 
             {/* Details + window */}
-            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+            <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
                 <div className="text-[14px] font-bold">Public details</div>
                 <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
                     What submitters see at the top of the form.
@@ -750,7 +750,7 @@ function AccessOption({
                 "flex flex-col items-start gap-1 rounded-[12px] border px-3 py-2.5 text-left transition-colors " +
                 (active
                     ? "border-[color:var(--c-text)] bg-[color:var(--c-surface-2)]"
-                    : "border-[color:var(--c-border)] bg-white hover:border-[color:var(--c-border-strong)]")
+                    : "border-[color:var(--c-border)] bg-[color:var(--c-surface)] hover:border-[color:var(--c-border-strong)]")
             }
         >
             <span className="flex w-full items-center gap-2 text-[13px] font-bold">
@@ -760,7 +760,7 @@ function AccessOption({
                         "grid h-3.5 w-3.5 place-items-center rounded-full border " +
                         (active
                             ? "border-[color:var(--c-text)] bg-[color:var(--c-text)] text-white"
-                            : "border-[color:var(--c-border-strong)] bg-white")
+                            : "border-[color:var(--c-border-strong)] bg-[color:var(--c-surface)]")
                     }
                 >
                     {active && (

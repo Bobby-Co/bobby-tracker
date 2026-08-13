@@ -38,7 +38,7 @@ function verdictClasses(v: string): string {
         case "unlikely":
             return "bg-rose-50 text-rose-700"
         default:
-            return "bg-zinc-100 text-zinc-600"
+            return "bg-[color:var(--c-surface-2)] text-zinc-600"
     }
 }
 
@@ -114,7 +114,7 @@ function VerdictIcon({ v }: { v: string }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
     return (
-        <section className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-4 shadow-[var(--shadow-card)] sm:p-5">
+        <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5">
             <div className="mb-3 flex items-center gap-2">
                 <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-amber-50 text-amber-600">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -135,7 +135,7 @@ function Placeholder({ tone, text }: { tone: "muted" | "amber" | "rose"; text: s
             ? "border-amber-200 bg-amber-50 text-amber-900"
             : tone === "rose"
               ? "border-rose-200 bg-rose-50 text-rose-800"
-              : "border-dashed border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)]"
+              : "border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)]"
     return <div className={cn("rounded-[12px] border px-4 py-6 text-center text-[13px]", cls)}>{text}</div>
 }
 
@@ -209,7 +209,7 @@ function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
             {typeof r.score === "number" && r.score_max ? (
                 <ScoreBar value={r.score} max={r.score_max} />
             ) : (
-                <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-white px-3.5 py-2.5">
+                <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-2.5">
                     <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">Merge readiness</span>
                     <span className="text-[12px] text-[color:var(--c-text-muted)]">· not ready</span>
                 </div>
@@ -345,7 +345,7 @@ function Section({
     children: React.ReactNode
 }) {
     return (
-        <details open={defaultOpen} className="group rounded-[12px] border border-[color:var(--c-border)] bg-white">
+        <details open={defaultOpen} className="group rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)]">
             <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
                 <svg
                     width="12"
@@ -560,7 +560,7 @@ function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId
                 type="button"
                 onClick={open}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-white px-3 py-1 text-[12px] font-medium text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1 text-[12px] font-medium text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
             >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M12 3a9 9 0 1 0 9 9" />

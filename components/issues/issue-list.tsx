@@ -99,7 +99,7 @@ function ParentRowCard({
     return (
         <div
             className={
-                "flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-white pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3" +
+                "flex items-center gap-2 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-2 pr-2 shadow-[var(--shadow-card)] transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-2.5 sm:pl-3 sm:pr-3" +
                 (muted ? " opacity-80" : "")
             }
         >
@@ -109,7 +109,7 @@ function ParentRowCard({
                     onClick={onToggle}
                     aria-expanded={open}
                     aria-label={open ? "Collapse duplicates" : "Expand duplicates"}
-                    className="grid h-5 w-5 shrink-0 -mr-2 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-white hover:text-[color:var(--c-text)]"
+                    className="grid h-5 w-5 shrink-0 -mr-2 place-items-center rounded-md text-[color:var(--c-text-dim)] hover:bg-[color:var(--c-surface)] hover:text-[color:var(--c-text)]"
                 >
                     <svg
                         width="11"
@@ -192,7 +192,7 @@ function ChildRowCard({
             href={`/projects/${projectId}/issues/${child.id}`}
             prefetch={false}
             className={
-                "group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5" +
+                "group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5" +
                 (muted ? " opacity-80" : "")
             }
         >

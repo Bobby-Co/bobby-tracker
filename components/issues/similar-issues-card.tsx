@@ -183,7 +183,7 @@ export function SimilarIssuesCard({
         // just-created issue may still be generating, so this is the
         // expected first state right after creation.
         return (
-            <section className="flex items-center gap-2.5 rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+            <section className="flex items-center gap-2.5 rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <Spinner />
                 <span>Checking for similar issues…</span>
             </section>
@@ -194,7 +194,7 @@ export function SimilarIssuesCard({
         // they don't wonder whether the lookup is just slow or
         // whether there genuinely are no similar issues.
         return (
-            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+            <section className="rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <span className="font-semibold text-[color:var(--c-text)]">Similarity check unavailable.</span>{" "}
                 This issue was filed before similarity indexing was added, so we can&apos;t suggest related issues for it yet.
             </section>
@@ -204,12 +204,12 @@ export function SimilarIssuesCard({
         // Transient failure (network / 5xx). Offer a manual retry so
         // the user isn't stuck staring at nothing.
         return (
-            <section className="flex items-center justify-between gap-3 rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+            <section className="flex items-center justify-between gap-3 rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <span>Couldn&apos;t check for similar issues.</span>
                 <button
                     type="button"
                     onClick={retry}
-                    className="shrink-0 rounded-[8px] border border-[color:var(--c-border)] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-text)] hover:bg-[color:var(--c-overlay)]"
+                    className="shrink-0 rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2.5 py-1 text-[11.5px] font-semibold text-[color:var(--c-text)] hover:bg-[color:var(--c-overlay)]"
                 >
                     Retry
                 </button>
@@ -221,7 +221,7 @@ export function SimilarIssuesCard({
         // Show an explicit "all clear" so the result is unambiguous
         // instead of the card silently disappearing.
         return (
-            <section className="flex items-center gap-2.5 rounded-[14px] border border-[color:var(--c-border)] bg-white px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
+            <section className="flex items-center gap-2.5 rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <CheckIcon />
                 <span>No similar issues found.</span>
             </section>
@@ -229,7 +229,7 @@ export function SimilarIssuesCard({
     }
 
     return (
-        <section className="rounded-[14px] border border-[color:var(--c-border)] bg-white p-4 sm:p-5">
+        <section className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
             <header className="flex items-baseline justify-between gap-2">
                 <h2 className="text-[12px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
                     Looks similar to

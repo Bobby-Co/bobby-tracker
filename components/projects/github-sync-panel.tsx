@@ -141,7 +141,7 @@ export function GithubSyncPanel({ projectId }: { projectId: string }) {
     }
 
     return (
-        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-white p-5">
+        <div className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <GithubIcon />

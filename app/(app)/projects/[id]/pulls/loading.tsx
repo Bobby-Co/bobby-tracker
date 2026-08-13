@@ -12,7 +12,7 @@ export default function Loading() {
                 <div className="skeleton mb-3 h-3.5 w-16" />
                 <div className="flex flex-col gap-2">
                     {[0, 1, 2, 3, 4].map((i) => (
-                        <div key={i} className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-white px-4 py-3 shadow-[var(--shadow-card)]">
+                        <div key={i} className="flex items-center gap-3 rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 shadow-[var(--shadow-card)]">
                             <div className="skeleton h-2 w-2 rounded-full" />
                             <div className="skeleton hidden h-3 w-8 sm:block" />
                             <div className="skeleton h-3.5 flex-1" />

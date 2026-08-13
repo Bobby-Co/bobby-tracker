@@ -60,7 +60,7 @@ export function TimelinePeek({
         return (
             <Link
                 href={`/projects/${projectId}/timeline`}
-                className="anim-fade group block rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-white px-3 py-3 text-[12px] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]"
+                className="anim-fade group block rounded-[14px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-3 text-[12px] text-[color:var(--c-text-muted)] hover:border-zinc-400 hover:text-[color:var(--c-text)]"
             >
                 <div className="mb-1 text-[10.5px] font-bold uppercase tracking-[0.12em]">
                     Timeline

@@ -49,11 +49,11 @@ export function TimelineWorkspace({
     return (
         <div className="fixed inset-0 z-30 flex flex-col bg-[color:var(--c-page)]">
             {/* Header */}
-            <header className="flex items-center justify-between gap-3 border-b border-[color:var(--c-border)] bg-white px-5 py-3">
+            <header className="flex items-center justify-between gap-3 border-b border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-5 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                     <Link
                         href={`/projects/${project.id}/issues`}
-                        className="grid h-8 w-8 place-items-center rounded-[10px] border border-[color:var(--c-border)] bg-white text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
+                        className="grid h-8 w-8 place-items-center rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)]"
                         aria-label="Back to issues"
                     >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -73,14 +73,14 @@ export function TimelineWorkspace({
                         <button
                             type="button"
                             onClick={() => setView("board")}
-                            className={`rounded-[8px] px-2.5 py-1 ${view === "board" ? "bg-white text-[color:var(--c-text)] shadow-sm" : "text-[color:var(--c-text-muted)]"}`}
+                            className={`rounded-[8px] px-2.5 py-1 ${view === "board" ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-sm" : "text-[color:var(--c-text-muted)]"}`}
                         >
                             Board
                         </button>
                         <button
                             type="button"
                             onClick={() => setView("timeline")}
-                            className={`rounded-[8px] px-2.5 py-1 ${view === "timeline" ? "bg-white text-[color:var(--c-text)] shadow-sm" : "text-[color:var(--c-text-muted)]"}`}
+                            className={`rounded-[8px] px-2.5 py-1 ${view === "timeline" ? "bg-[color:var(--c-surface)] text-[color:var(--c-text)] shadow-sm" : "text-[color:var(--c-text-muted)]"}`}
                         >
                             Timeline
                         </button>
@@ -93,7 +93,7 @@ export function TimelineWorkspace({
                     <button
                         type="button"
                         onClick={() => setIconsOpen(true)}
-                        className="rounded-[10px] border border-[color:var(--c-border)] bg-white px-3 py-1.5 text-[12px] font-semibold hover:bg-[color:var(--c-overlay)]"
+                        className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1.5 text-[12px] font-semibold hover:bg-[color:var(--c-overlay)]"
                     >
                         Manage label icons
                     </button>
