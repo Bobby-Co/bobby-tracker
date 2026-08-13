@@ -314,6 +314,21 @@ body:has(main[data-page="landing"]) {
     }
 }
 
+/* Dark readers open on the ink hero, so the bar can't open on hero gold — it
+   holds ink until the footer, where the page returns to its cream paper. */
+:root[data-theme="dark"] body:has(main[data-page="landing"]) {
+    background: #0a0d1c;
+}
+@keyframes landing-bar-tint-dark {
+    0%, 80%   { background-color: #0a0d1c; }
+    88%, 100% { background-color: #fffae8; }
+}
+@supports (animation-timeline: scroll()) {
+    :root[data-theme="dark"] body:has(main[data-page="landing"]) {
+        animation-name: landing-bar-tint-dark;
+    }
+}
+
 /* ─── the landing opts OUT of the theme ──────────────────────────────────────
    It is a fixed composition — cream paper, midnight ink, ember accent — and the
    only page that is a piece of art direction rather than a surface to work on.
@@ -348,6 +363,20 @@ main[data-page="landing"] {
     --c-overlay:       rgba(17,24,39,0.035);
     --shadow-card:     0 1px 1px rgba(17,24,39,0.025), 0 1px 2px rgba(17,24,39,0.02);
     --shadow-pop:      0 12px 32px -8px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06);
+
+    /* How far into the hero's dissolve the page STARTS, 0–1. The hero animates
+       cream → ink across its runway; this is the floor that animation can't go
+       below, so 0 plays the whole transition and 1 opens already arrived. */
+    --hero-dark-floor: 0;
+}
+
+/* A reader who has chosen dark has already told us which end of that transition
+   they want. Playing them into a cream hero so it can turn dark is a dishonest
+   first second — and on a real phone it is a flash of the bright thing they
+   opted out of. The runway still exists, because it also carries the manifesto
+   rising; only the palette shift is already done. */
+:root[data-theme="dark"] main[data-page="landing"] {
+    --hero-dark-floor: 1;
 }
 
 /* dotted background — applied to the (app) shell so login/landing can opt out.
@@ -491,7 +520,8 @@ main[data-page="landing"] {
     /* The ember fill is light enough that a white label only reaches 3.0:1.
        On dark, where the fill lifts further, the label inverts to the ink for
        7.7:1. Light keeps white for now — changing it there is a visual call on
-       every button in the product, not a dark-mode fix. */
+       every button in the product, not a dark-mode fix.
+
        :not(.btn-github) because the GitHub variant is not an ember fill at all —
        it carries its own inverse pair below, and this rule would otherwise
        outrank it on specificity and repaint its label. */

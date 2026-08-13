@@ -43,7 +43,11 @@ const HERO_DARK_STOPS: Stop[] = [
 // completes well before the field finishes darkening: mapping it straight to
 // `--hero-s` meant the copy only reached full white at the very END of the
 // runway, so it read as permanently half-grey the whole way down.
-const INVERT = "clamp(0, calc(var(--hero-s, 0) / 0.26), 1)"
+// max() against --hero-dark-floor rather than a branch in the component: the
+// floor is 0 on light and 1 on dark (globals.css), so a dark reader opens with
+// the lockup already inverted and scrolling can only ever hold it there. One
+// expression, no second render path, and nothing to keep in sync.
+const INVERT = "max(var(--hero-dark-floor, 0), clamp(0, calc(var(--hero-s, 0) / 0.26), 1))"
 
 const BobbyMark = () => (
   <svg viewBox="0 0 106 102" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -215,7 +219,7 @@ export default async function Home() {
                     <HeroField
                         lightStops={EMBER_STOPS}
                         darkStops={HERO_DARK_STOPS}
-                        darkOpacity="clamp(0, calc((var(--hero-s, 0) - 0.03) / 0.34), 1)"
+                        darkOpacity="max(var(--hero-dark-floor, 0), clamp(0, calc((var(--hero-s, 0) - 0.03) / 0.34), 1))"
                     />
                     <HeroDissolve color={INK} />
                 {/* Stays put while the field darkens — the copy recolours from
@@ -300,10 +304,17 @@ export default async function Home() {
                         </Link>
                     </div>
                 </div>
-                    {/* scroll cue */}
+                    {/* scroll cue — recoloured by INVERT like the rest of the
+                        lockup. It used to be a flat 40% ink, which was fine while
+                        the hero always opened cream; on a hero that opens dark
+                        that is ink on ink, and the one hint that there is more
+                        page below disappears. */}
                     <div
-                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[color:var(--c-secondary)]/40"
-                        style={{ opacity: "clamp(0, calc((0.1 - var(--hero-s, 0)) / 0.1), 1)" }}
+                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center"
+                        style={{
+                            color: `color-mix(in srgb, var(--c-secondary), #ffffff calc(${INVERT} * 100%))`,
+                            opacity: `calc(0.4 * clamp(0, calc((0.1 - var(--hero-s, 0)) / 0.1), 1))`,
+                        }}
                     >
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden className="animate-bounce">
                             <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
