@@ -55,7 +55,7 @@ export default function NewsletterForm() {
             <label htmlFor="nl-email" className="sr-only">
                 Email address
             </label>
-            <div className="flex max-w-sm items-center gap-2 rounded-sq-l border border-[#383838]/12 bg-white p-1.5 focus-within:border-[#383838]/25">
+            <div className="flex max-w-sm items-center gap-2 rounded-sq-l border border-[#1a100e]/12 bg-white p-1.5 focus-within:border-[#1a100e]/25">
                 <input
                     id="nl-email"
                     type="email"
@@ -67,12 +67,12 @@ export default function NewsletterForm() {
                     }}
                     placeholder="you@company.com"
                     autoComplete="email"
-                    className="min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-[13.5px] text-[#383838] outline-none placeholder:text-[#383838]/35"
+                    className="min-w-0 flex-1 bg-transparent px-2.5 py-1.5 text-[13.5px] text-[#1a100e] outline-none placeholder:text-[#1a100e]/35"
                 />
                 <button
                     type="submit"
                     disabled={state === "sending"}
-                    className="shrink-0 rounded-sq bg-[#383838] px-3.5 py-2 text-[12.5px] font-bold text-[#fffae8] transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="shrink-0 rounded-sq bg-[#1a100e] px-3.5 py-2 text-[12.5px] font-bold text-[#fffae8] transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                     {state === "sending" ? "Sending…" : "Subscribe"}
                 </button>

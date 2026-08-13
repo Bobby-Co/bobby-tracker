@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import type { ReactNode } from "react"
+import type { Viewport } from "next"
 import { Supabase } from "@/lib/server/supabase"
 import { BetaAccess } from "@/lib/shared/BetaAccess"
 import { EMBER_STOPS, type Stop } from "@/components/ui/pixel-gradient"
@@ -67,7 +68,7 @@ function GlyphTile({ children }: { children: ReactNode }) {
 function FooterCol({ title, children }: { title: string; children: ReactNode }) {
     return (
         <div>
-            <h3 className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#383838]/45">
+            <h3 className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#1a100e]/45">
                 {title}
             </h3>
             <ul className="mt-3 flex flex-col gap-2.5">{children}</ul>
@@ -78,7 +79,7 @@ function FooterCol({ title, children }: { title: string; children: ReactNode }) 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
     return (
         <li>
-            <Link href={href} className="text-[13.5px] font-semibold text-[#383838]/70 hover:text-[#383838]">
+            <Link href={href} className="text-[13.5px] font-semibold text-[#1a100e]/70 hover:text-[#1a100e]">
                 {children}
             </Link>
         </li>
@@ -155,6 +156,20 @@ const STEPS = [
     { icon: I.check, title: "Track grounded issues", body: "Open issues that cite the exact files and lines worth investigating." },
 ]
 
+// Edge-to-edge on iOS: `cover` is what makes 100vh the whole screen and gates
+// env(safe-area-inset-*), so the hero field reaches the physical edges instead
+// of being letterboxed. Exported from the PAGE, not the root layout, so the app
+// shell keeps the default `auto` and its chrome stays clear of the safe areas.
+//
+// themeColor does NOT drive Safari 26's bars (it samples <body> — see the
+// landing-bar-tint block in globals.css, which is what actually tints them). It
+// is still what Android Chrome and iOS < 26 read, hence the hero's gold rather
+// than the page cream.
+export const viewport: Viewport = {
+    viewportFit: "cover",
+    themeColor: "#fbd26a",
+}
+
 export default async function Home() {
     // Only whitelisted users are sent into the app. Signed-in users who
     // aren't on the beta list stay on the landing (they reach the waitlist
@@ -162,8 +177,18 @@ export default async function Home() {
     const user = await Supabase.currentUser()
     if (user && new BetaAccess().isAllowed(user)) redirect("/projects")
 
+    // main is overflow-x-clip to contain the squircle polyfill's shadow layers.
+    // On Safari/Firefox (no native corner-shape) hyperellipse redraws every
+    // rounded-sq-* box as an SVG ::before and INFLATES that layer by the
+    // box-shadow's blur so the shadow fits inside it — the "How it works" card
+    // carries an 80px blur, so its layer ran 80px past the card on each side and
+    // pushed the document 48px wider than a 390pt phone. Chrome builds no such
+    // layer (it has corner-shape), so this only ever reproduced on the device.
+    //
+    // `clip`, not `hidden`: clip doesn't create a scroll container, so the
+    // hero's `sticky top-0` still pins against the viewport.
     return (
-        <main className="bg-[#fffae8] text-[#383838]">
+        <main data-page="landing" className="overflow-x-clip bg-[#fffae8] text-[#1a100e]">
             {/* ─── Hero ─────────────────────────────────────────────────────
                 The hero pins for the length of this runway. Across it the ember
                 field shifts to the dark palette and ripples away to INK, and the
@@ -186,19 +211,19 @@ export default async function Home() {
                     />
                     <HeroDissolve color={INK} />
                 {/* Stays put while the field darkens — the copy recolours from
-                    charcoal to cream in step with `--hero-s` instead of fading,
+                    INK to cream in step with `--hero-s` instead of fading,
                     so the lockup and buttons survive the shift rather than
                     vanishing from under the reader. It only retires later, once
                     the ripple is well underway and the manifesto is due. */}
                 <div
                     className="relative z-10 flex w-full max-w-xl flex-col items-start text-left"
                     style={{
-                        color: `color-mix(in srgb, #383838, #ffffff calc(${INVERT} * 100%))`,
+                        color: `color-mix(in srgb, #1a100e, #ffffff calc(${INVERT} * 100%))`,
                         opacity: "clamp(0, calc((0.58 - var(--hero-p, 0)) / 0.24), 1)",
                     }}
                 >
                     <div className="anim-rise flex items-center gap-4" style={{ animationDelay: "0ms" }}>
-                        {/* Inverts with the field: a charcoal tile with a white
+                        {/* Inverts with the field: an INK tile with a white
                             mark on cream becomes a white tile with a dark mark on
                             ink, so the lockup stays crisp instead of going dim.
 
@@ -211,7 +236,7 @@ export default async function Home() {
                             layers keep class-based backgrounds; only opacity and
                             the mark's colour are inline. */}
                         <div className="relative size-14 shrink-0">
-                            <div className="absolute inset-0 rounded-sq-2xl bg-[#383838] shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]" />
+                            <div className="absolute inset-0 rounded-sq-2xl bg-[#1a100e] shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]" />
                             <div
                                 className="absolute inset-0 rounded-sq-2xl bg-white"
                                 style={{ opacity: INVERT }}
@@ -251,7 +276,7 @@ export default async function Home() {
                             className="anim-rise relative isolate mt-7 px-6 py-2.5 text-[14px] font-bold text-white"
                             style={{ animationDelay: "200ms" }}
                         >
-                            <span className="absolute inset-0 -z-10 rounded-sq-xl bg-[#383838] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]" />
+                            <span className="absolute inset-0 -z-10 rounded-sq-xl bg-[#1a100e] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]" />
                             <span
                                 className="absolute inset-0 -z-10 rounded-sq-xl bg-[#1a100e]"
                                 style={{ opacity: INVERT }}
@@ -260,7 +285,7 @@ export default async function Home() {
                         </Link>
                         <Link
                             href="/docs"
-                            className="bg-white rounded-sq-xl text-[#383838] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                            className="bg-white rounded-sq-xl text-[#1a100e] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                             style={{ animationDelay: "200ms" }}
                         >
                             Documentation
@@ -269,7 +294,7 @@ export default async function Home() {
                 </div>
                     {/* scroll cue */}
                     <div
-                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[#383838]/40"
+                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[#1a100e]/40"
                         style={{ opacity: "clamp(0, calc((0.1 - var(--hero-s, 0)) / 0.1), 1)" }}
                     >
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden className="animate-bounce">
@@ -301,10 +326,7 @@ export default async function Home() {
                                 transform: "translateY(calc((1 - var(--u)) * 46px))",
                             }}
                         >
-                            <span className="text-[12px] font-extrabold uppercase tracking-[0.22em] text-[color:var(--c-primary)]">
-                                What we believe
-                            </span>
-                            <h2 className="mt-7 text-[38px] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#fffae8] sm:text-[64px]">
+                            <h2 className="text-[38px] font-extrabold leading-[1.05] tracking-[-0.03em] text-[#fffae8] sm:text-[64px]">
                                 Great products
                                 <br />
                                 still need{" "}
@@ -324,9 +346,9 @@ export default async function Home() {
                                 .
                             </h2>
                             <p className="mx-auto mt-10 max-w-xl text-[17px] leading-8 text-[#fffae8]/70 sm:text-[19px] sm:leading-9">
-                                We&apos;re not building an AI to replace the people who build
-                                software. We&apos;re building one that does the reading, so you can
-                                do the thinking.
+                                Ucelot isn&apos;t an AI built to replace the people who build
+                                software. It&apos;s one that does the reading, so you can do the
+                                thinking.
                             </p>
                         </div>
                     </div>
@@ -351,7 +373,16 @@ export default async function Home() {
                             key={row.eyebrow}
                             className="grid items-center gap-10 lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)] lg:gap-14"
                         >
-                            <Reveal>
+                            {/* min-w-0 on both grid items, or the row can't get
+                                narrower than the demo window's intrinsic width.
+                                A grid item defaults to min-width:auto — its
+                                min-content — and the demo miniatures carry
+                                fixed-width internals adding up to ~390px, which
+                                became the whole DOCUMENT's floor: every phone
+                                under 390pt scrolled sideways (70px at 320,
+                                16px at 375). The windows clip their own
+                                overflow, so letting them shrink is safe. */}
+                            <Reveal className="min-w-0">
                                 <div className="max-w-sm">
                                     <span className="text-[12px] font-extrabold uppercase tracking-[0.18em] text-[color:var(--c-primary)]">
                                         {row.eyebrow}
@@ -366,7 +397,7 @@ export default async function Home() {
                             </Reveal>
                             {/* The demo trails the copy in slightly, so the eye
                                 reads the claim before the thing proving it. */}
-                            <Reveal delay={140}>{row.demo}</Reveal>
+                            <Reveal delay={140} className="min-w-0">{row.demo}</Reveal>
                         </div>
                     ))}
                 </div>
@@ -390,12 +421,12 @@ export default async function Home() {
                             <div key={s.title} className="relative">
                                 <div className="flex items-center gap-3">
                                     <GlyphTile>{s.icon}</GlyphTile>
-                                    <span className="text-[13px] font-extrabold text-[#383838]/40">
+                                    <span className="text-[13px] font-extrabold text-[#1a100e]/40">
                                         0{i + 1}
                                     </span>
                                 </div>
                                 <h3 className="mt-4 text-[16px] font-extrabold tracking-[-0.01em]">{s.title}</h3>
-                                <p className="mt-1.5 text-[13.5px] leading-6 text-[#383838]/70">{s.body}</p>
+                                <p className="mt-1.5 text-[13.5px] leading-6 text-[#1a100e]/70">{s.body}</p>
                             </div>
                         ))}
                     </div>
@@ -417,7 +448,7 @@ export default async function Home() {
                 button actually does. Saying "Start Now" and landing them on a
                 holding page would be a bait. */}
             <section className={`${SECTION_X} pb-24`}>
-                <div className="mx-auto max-w-6xl overflow-hidden rounded-sq-xl bg-[#383838] px-8 py-16 text-center sm:px-16">
+                <div className="mx-auto max-w-6xl overflow-hidden rounded-sq-xl bg-[#1a100e] px-8 py-16 text-center sm:px-16">
                     <span className="inline-flex items-center gap-2 rounded-full border border-[#fffae8]/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fffae8]/70">
                         <span className="size-1.5 rounded-full bg-[color:var(--c-primary)]" />
                         Private beta
@@ -432,7 +463,7 @@ export default async function Home() {
                     <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
                         <Link
                             href="/login"
-                            className="rounded-sq-xl bg-[#fffae8] px-7 py-3 text-[14px] font-bold text-[#383838] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5"
+                            className="rounded-sq-xl bg-[#fffae8] px-7 py-3 text-[14px] font-bold text-[#1a100e] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5"
                         >
                             Join the waitlist
                         </Link>
@@ -447,28 +478,33 @@ export default async function Home() {
             </section>
 
             {/* ─── Footer ───────────────────────────────────────────────── */}
-            <footer className={`${SECTION_X} border-t border-[#383838]/10 pb-10 pt-14`}>
+            {/* pb clears the home indicator: with viewport-fit=cover the footer
+                now runs under it, so the inset is added to the 2.5rem rather
+                than replacing it (env() is 0 everywhere else). */}
+            <footer
+                className={`${SECTION_X} border-t border-[#1a100e]/10 pt-14 pb-[calc(2.5rem+env(safe-area-inset-bottom))]`}
+            >
                 <div className="mx-auto max-w-6xl">
                     <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                         {/* Brand + newsletter */}
                         <div>
                             <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 place-items-center rounded-sq bg-[#383838] p-1.5 text-white">
+                                <span className="grid size-8 place-items-center rounded-sq bg-[#1a100e] p-1.5 text-white">
                                     <BobbyMark />
                                 </span>
                                 <span className="text-[14px] font-extrabold tracking-[-0.01em]">Ucelot</span>
-                                <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#383838]/40">
+                                <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#1a100e]/40">
                                     by Bobby
                                 </span>
                             </div>
-                            <p className="mt-4 max-w-xs text-[13.5px] leading-6 text-[#383838]/70">
+                            <p className="mt-4 max-w-xs text-[13.5px] leading-6 text-[#1a100e]/70">
                                 Issue tracking that reads your code — every issue tied back to the
                                 files and lines it&apos;s actually about.
                             </p>
-                            <h3 className="mt-8 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#383838]/45">
+                            <h3 className="mt-8 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#1a100e]/45">
                                 Newsletter
                             </h3>
-                            <p className="mt-2 text-[13.5px] leading-6 text-[#383838]/70">
+                            <p className="mt-2 text-[13.5px] leading-6 text-[#1a100e]/70">
                                 Occasional notes on what we&apos;re building. No noise.
                             </p>
                             <NewsletterForm />
@@ -492,7 +528,7 @@ export default async function Home() {
                         </div>
                     </div>
 
-                    <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[#383838]/10 pt-6 text-[12.5px] text-[#383838]/55 sm:flex-row sm:items-center">
+                    <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[#1a100e]/10 pt-6 text-[12.5px] text-[#1a100e]/55 sm:flex-row sm:items-center">
                         <p>© {new Date().getFullYear()} Bobby. All rights reserved.</p>
                         <p>Made for teams who&apos;d rather read code than guess.</p>
                     </div>

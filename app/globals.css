@@ -124,6 +124,48 @@ html, body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* ─── landing: the iOS status-bar / toolbar tint ─────────────────────────────
+   Safari 26 paints its own chrome above and below the page, and picks that
+   colour by sampling — in order — a fixed/sticky element at the viewport edge,
+   then <body>'s computed background-color, then a system default. Three things
+   follow, and they're why the obvious fixes do nothing:
+
+     · <meta name="theme-color"> is parsed and then IGNORED (it still drives
+       Android Chrome and iOS < 26, so the page keeps one).
+     · <html>'s background is ignored too — only <body> is sampled.
+     · Only a solid colour is sampled: gradients and background-images never
+       reach the bars, so the hero's pixel field CANNOT extend into them.
+
+   So the bars are always one flat colour, and the landing runs through three
+   (hero gold → INK → footer cream). A static body colour therefore has to be
+   wrong somewhere — cream is right at the footer and reads as a white strip
+   against the hero. Instead the body colour is driven off scroll position so
+   the bars track whatever section is actually at the edge.
+
+   The stops are proportions of the document scroll range, so they're tuned by
+   eye against the 400vh hero runway and the INK section that follows — adjust
+   the percentages here if either section's height changes materially. The flat
+   colour below is the fallback where scroll timelines are unsupported. */
+body:has(main[data-page="landing"]) {
+    background: #fffae8;
+}
+
+@keyframes landing-bar-tint {
+    /* hero — EMBER_STOPS' gold (0.5), the field's dominant tone at the edges */
+    0%, 10%   { background-color: #fbd26a; }
+    /* INK — the colour the hero dissolve lands in, held through the showcase */
+    20%, 80%  { background-color: #1a100e; }
+    /* cream — the footer, back on the page's own paper */
+    88%, 100% { background-color: #fffae8; }
+}
+
+@supports (animation-timeline: scroll()) {
+    body:has(main[data-page="landing"]) {
+        animation: landing-bar-tint linear both;
+        animation-timeline: scroll(root block);
+    }
+}
+
 /* dotted background — applied to the (app) shell so login/landing can opt out.
    Kept very faint so the surface reads as a clean minimal canvas (ref). */
 .dotted-bg {
