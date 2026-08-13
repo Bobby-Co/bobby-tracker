@@ -875,4 +875,41 @@ const DEMO_CSS = `
   /* the scripted cursor doesn't start at all under reduced motion (see
      useScriptedCursor), so each demo simply sits in its opening state. */
 }
+
+/* ─── narrow screens ─────────────────────────────────────────────────────────
+   These windows are miniatures of real app surfaces, so they inherit the app's
+   desktop proportions — a fixed side rail, a row of flex:none controls. The
+   landing gives them the viewport minus SECTION_X (px-8) and the card's own
+   16px padding, which on a 390pt phone is ~294px of usable width. At that size
+   the fixed parts eat nearly all of it and the flexible column collapses to a
+   sliver, so the content spills past the window edge and gets clipped.
+
+   Below 640px the fixed parts give way instead: the rail stacks under the body
+   it annotates, and the duplicate row's controls drop their reserved widths. */
+@media (max-width: 640px){
+  /* Side rail under the body rather than beside it — 172px of a ~294px window
+     left the issue text ~108px wide. */
+  .fx-detail{flex-direction:column;gap:10px}
+  .fx-iside{width:auto}
+  .fx-srow{gap:5px}
+
+  /* The button reserves 94px so its label doesn't jump between states; on a
+     phone that reservation costs more than the jump does. The match percentage
+     is the least load-bearing thing in the row, so it goes first. */
+  .fx-simrow{gap:7px}
+  .fx-dupbtn{min-width:0;padding:4px 8px}
+  .fx-pct{display:none}
+
+  /* The symbol is flex:none and the path is the flexible one, so on a narrow
+     row the path — the whole point of "issues that point at the code" — was
+     the thing that got ellipsed, down to "t…". The symbol is repeated in the
+     row's open body, so the header can drop it and let the path read. */
+  .fx-sym{display:none}
+
+  /* The list height is locked so an opening row can't resize the card (see
+     .fx-finds). That budget is measured at desktop width; down here the open
+     row's reason wraps further and its file path fell off the bottom edge, so
+     the lock is re-cut to the taller narrow layout rather than lifted. */
+  .fx-finds{height:280px}
+}
 `
