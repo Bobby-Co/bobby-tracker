@@ -127,21 +127,27 @@ export const EMBER_STOPS: Stop[] = [
     { pos: 1.0, c: [255, 250, 232] }, // lightest = soft warm white (wide range → tiles pop)
 ]
 
-// Dark ember (brand gold/amber on dark): the hero ember palette pulled down
-// into a dark register — a glowing gold-amber core ramps fast through burnt
-// amber into warm near-black corners. Built as a single-hue lightness ramp so
-// the pixel tiles stay crisp, and the last stop matches the dark login panel
-// background (#0b090b) so the diamond/linear glow blends out at the edges.
-// Front-loaded so the glow stays a tight corner bloom and the bulk of the
-// canvas reads near-black — a dark panel with a warm light source, not a wash.
+// Dark ember (brand gold/amber on dark): the hero ember palette pulled down into
+// a dark register — a glowing gold-amber core ramping fast into near-black
+// corners. Front-loaded so the glow stays a tight corner bloom and the bulk of
+// the canvas reads near-black: a dark panel with a warm light source, not a wash.
+// The last stop matches the panel background (#090c1c) so the glow blends out at
+// the edges — change one and change the other.
+//
+// The DARK END IS INDIGO, not brown. The ember core is untouched; only the
+// register it falls into changed, because a brown ground reads as soil under a
+// gold light where a cool one reads as night behind it — and it lets the ember
+// stay the single warm thing on the screen. Getting there needs the muted bronze
+// at 0.18: ramping gold straight into blue crosses the hue wheel through mud, so
+// that stop is the bridge and shouldn't be pulled toward either end.
 export const DARK_EMBER_STOPS: Stop[] = [
-    { pos: 0.0, c: [255, 188, 86] }, // glowing warm gold core (at the corner)
-    { pos: 0.08, c: [238, 142, 46] }, // amber-orange
-    { pos: 0.18, c: [178, 90, 28] }, // burnt amber
-    { pos: 0.3, c: [104, 52, 22] }, // ember-brown
-    { pos: 0.44, c: [54, 28, 18] }, // dark warm
-    { pos: 0.6, c: [26, 16, 14] }, // near-black warm
-    { pos: 1.0, c: [11, 9, 11] }, // panel background (= the dark left panel bg)
+    { pos: 0.0, c: [255, 192, 104] }, // glowing warm gold core (at the corner)
+    { pos: 0.08, c: [232, 148, 64] }, // amber-orange
+    { pos: 0.18, c: [148, 104, 74] }, // muted bronze — the warm→cool bridge
+    { pos: 0.3, c: [72, 66, 92] }, // dusk violet-blue
+    { pos: 0.44, c: [34, 40, 74] }, // deep indigo
+    { pos: 0.6, c: [16, 22, 48] }, // near-black blue
+    { pos: 1.0, c: [9, 12, 28] }, // panel background (= the dark left panel bg)
 ]
 
 // Tiny canvas (cols × rows) stretched to fill its parent with

@@ -106,7 +106,7 @@ const ScriptedCursor = forwardRef<HTMLDivElement>(function ScriptedCursor(_, ref
             <svg width="22" height="24" viewBox="0 0 22 24" fill="none">
                 <path
                     d="M4 2.2 17.4 13.1l-5.9.55 3.2 6.6-2.6 1.25-3.2-6.6-4.9 3.3z"
-                    fill="#1a100e"
+                    fill="#0a0d1c"
                     stroke="#fffae8"
                     strokeWidth="1.6"
                     strokeLinejoin="round"

@@ -12,7 +12,7 @@ import {
     TimelineDemo,
 } from "@/components/ui/feature-demos"
 
-const INK = "#1a100e" // must match the landing's INK
+const INK = "#0a0d1c" // must match the landing's INK
 
 const ROWS = [
     {

@@ -36,7 +36,7 @@ export function AuthShell({
         <div className="flex min-h-svh overflow-clip">
             {/* Left brand panel — desktop only. The hero pixel gradient pulled
                 into a dark register, glowing from the top-left behind the mark. */}
-            <aside className="relative hidden w-[51.5%] shrink-0 overflow-hidden bg-[#0b090b] lg:block">
+            <aside className="relative hidden w-[51.5%] shrink-0 overflow-hidden bg-[#090c1c] lg:block">
                 <PixelGradient
                     stops={DARK_EMBER_STOPS}
                     variant="linear"

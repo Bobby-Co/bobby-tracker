@@ -154,7 +154,7 @@ body:has(main[data-page="landing"]) {
     /* hero — EMBER_STOPS' gold (0.5), the field's dominant tone at the edges */
     0%, 10%   { background-color: #fbd26a; }
     /* INK — the colour the hero dissolve lands in, held through the showcase */
-    20%, 80%  { background-color: #1a100e; }
+    20%, 80%  { background-color: #0a0d1c; }
     /* cream — the footer, back on the page's own paper */
     88%, 100% { background-color: #fffae8; }
 }

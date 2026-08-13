@@ -14,21 +14,26 @@ import NewsletterForm from "@/components/ui/newsletter-form"
 
 // The hero dissolves into this, and the manifesto section is painted in it, so
 // the ripple lands on a real destination rather than just draining to pale.
-// Warm near-black — it's the "near-black warm" stop of DARK_EMBER_STOPS, so the
-// tone already belongs to the ember ramp rather than being a new colour.
-const INK = "#1a100e"
+// Indigo near-black — the "near-black blue" end of DARK_EMBER_STOPS, so the tone
+// belongs to that ramp rather than being a new colour.
+//
+// It is also the page's only dark value: the mark tile, the buttons, the CTA card
+// and the body copy all use it, so the cream half and the dark half are the same
+// ink at different weights.
+const INK = "#0a0d1c"
 
 // DARK_EMBER_STOPS, retuned to bottom out at INK. That palette's final stop is
-// #0b090b (the login panel colour) — darker than this section — so reusing it
+// #090c1c (the login panel colour) — darker than this section — so reusing it
 // unchanged would ring the hero in a halo darker than its own background. Same
-// ramp otherwise, so the field still reads as the product's dark ember.
+// ramp otherwise, so the field still reads as the product's dark ember: an ember
+// core over an indigo ground, not an ember ground.
 const HERO_DARK_STOPS: Stop[] = [
-    { pos: 0.0, c: [255, 188, 86] }, // glowing warm gold core (at the corner)
-    { pos: 0.08, c: [238, 142, 46] }, // amber-orange
-    { pos: 0.18, c: [178, 90, 28] }, // burnt amber
-    { pos: 0.3, c: [104, 52, 22] }, // ember-brown
-    { pos: 0.5, c: [54, 28, 18] }, // dark warm
-    { pos: 1.0, c: [26, 16, 14] }, // = INK, so the glow resolves into the page
+    { pos: 0.0, c: [255, 192, 104] }, // glowing warm gold core (at the corner)
+    { pos: 0.08, c: [232, 148, 64] }, // amber-orange
+    { pos: 0.18, c: [148, 104, 74] }, // muted bronze — the warm→cool bridge
+    { pos: 0.3, c: [72, 66, 92] }, // dusk violet-blue
+    { pos: 0.5, c: [34, 40, 74] }, // deep indigo
+    { pos: 1.0, c: [10, 13, 28] }, // = INK, so the glow resolves into the page
 ]
 
 // How far the hero lockup has inverted, 0→1, driven off `--hero-s`. Deliberately
@@ -68,7 +73,7 @@ function GlyphTile({ children }: { children: ReactNode }) {
 function FooterCol({ title, children }: { title: string; children: ReactNode }) {
     return (
         <div>
-            <h3 className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#1a100e]/45">
+            <h3 className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#0a0d1c]/45">
                 {title}
             </h3>
             <ul className="mt-3 flex flex-col gap-2.5">{children}</ul>
@@ -79,7 +84,7 @@ function FooterCol({ title, children }: { title: string; children: ReactNode }) 
 function FooterLink({ href, children }: { href: string; children: ReactNode }) {
     return (
         <li>
-            <Link href={href} className="text-[13.5px] font-semibold text-[#1a100e]/70 hover:text-[#1a100e]">
+            <Link href={href} className="text-[13.5px] font-semibold text-[#0a0d1c]/70 hover:text-[#0a0d1c]">
                 {children}
             </Link>
         </li>
@@ -188,7 +193,7 @@ export default async function Home() {
     // `clip`, not `hidden`: clip doesn't create a scroll container, so the
     // hero's `sticky top-0` still pins against the viewport.
     return (
-        <main data-page="landing" className="overflow-x-clip bg-[#fffae8] text-[#1a100e]">
+        <main data-page="landing" className="overflow-x-clip bg-[#fffae8] text-[#0a0d1c]">
             {/* ─── Hero ─────────────────────────────────────────────────────
                 The hero pins for the length of this runway. Across it the ember
                 field shifts to the dark palette and ripples away to INK, and the
@@ -218,7 +223,7 @@ export default async function Home() {
                 <div
                     className="relative z-10 flex w-full max-w-xl flex-col items-start text-left"
                     style={{
-                        color: `color-mix(in srgb, #1a100e, #ffffff calc(${INVERT} * 100%))`,
+                        color: `color-mix(in srgb, #0a0d1c, #ffffff calc(${INVERT} * 100%))`,
                         opacity: "clamp(0, calc((0.58 - var(--hero-p, 0)) / 0.24), 1)",
                     }}
                 >
@@ -236,7 +241,7 @@ export default async function Home() {
                             layers keep class-based backgrounds; only opacity and
                             the mark's colour are inline. */}
                         <div className="relative size-14 shrink-0">
-                            <div className="absolute inset-0 rounded-sq-2xl bg-[#1a100e] shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]" />
+                            <div className="absolute inset-0 rounded-sq-2xl bg-[#0a0d1c] shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]" />
                             <div
                                 className="absolute inset-0 rounded-sq-2xl bg-white"
                                 style={{ opacity: INVERT }}
@@ -276,16 +281,16 @@ export default async function Home() {
                             className="anim-rise relative isolate mt-7 px-6 py-2.5 text-[14px] font-bold text-white"
                             style={{ animationDelay: "200ms" }}
                         >
-                            <span className="absolute inset-0 -z-10 rounded-sq-xl bg-[#1a100e] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]" />
+                            <span className="absolute inset-0 -z-10 rounded-sq-xl bg-[#0a0d1c] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]" />
                             <span
-                                className="absolute inset-0 -z-10 rounded-sq-xl bg-[#1a100e]"
+                                className="absolute inset-0 -z-10 rounded-sq-xl bg-[#0a0d1c]"
                                 style={{ opacity: INVERT }}
                             />
                             Start Now
                         </Link>
                         <Link
                             href="/docs"
-                            className="bg-white rounded-sq-xl text-[#1a100e] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                            className="bg-white rounded-sq-xl text-[#0a0d1c] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                             style={{ animationDelay: "200ms" }}
                         >
                             Documentation
@@ -294,7 +299,7 @@ export default async function Home() {
                 </div>
                     {/* scroll cue */}
                     <div
-                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[#1a100e]/40"
+                        className="absolute inset-x-0 bottom-7 z-10 flex justify-center text-[#0a0d1c]/40"
                         style={{ opacity: "clamp(0, calc((0.1 - var(--hero-s, 0)) / 0.1), 1)" }}
                     >
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden className="animate-bounce">
@@ -421,12 +426,12 @@ export default async function Home() {
                             <div key={s.title} className="relative">
                                 <div className="flex items-center gap-3">
                                     <GlyphTile>{s.icon}</GlyphTile>
-                                    <span className="text-[13px] font-extrabold text-[#1a100e]/40">
+                                    <span className="text-[13px] font-extrabold text-[#0a0d1c]/40">
                                         0{i + 1}
                                     </span>
                                 </div>
                                 <h3 className="mt-4 text-[16px] font-extrabold tracking-[-0.01em]">{s.title}</h3>
-                                <p className="mt-1.5 text-[13.5px] leading-6 text-[#1a100e]/70">{s.body}</p>
+                                <p className="mt-1.5 text-[13.5px] leading-6 text-[#0a0d1c]/70">{s.body}</p>
                             </div>
                         ))}
                     </div>
@@ -448,7 +453,7 @@ export default async function Home() {
                 button actually does. Saying "Start Now" and landing them on a
                 holding page would be a bait. */}
             <section className={`${SECTION_X} pb-24`}>
-                <div className="mx-auto max-w-6xl overflow-hidden rounded-sq-xl bg-[#1a100e] px-8 py-16 text-center sm:px-16">
+                <div className="mx-auto max-w-6xl overflow-hidden rounded-sq-xl bg-[#0a0d1c] px-8 py-16 text-center sm:px-16">
                     <span className="inline-flex items-center gap-2 rounded-full border border-[#fffae8]/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fffae8]/70">
                         <span className="size-1.5 rounded-full bg-[color:var(--c-primary)]" />
                         Private beta
@@ -463,7 +468,7 @@ export default async function Home() {
                     <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
                         <Link
                             href="/login"
-                            className="rounded-sq-xl bg-[#fffae8] px-7 py-3 text-[14px] font-bold text-[#1a100e] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5"
+                            className="rounded-sq-xl bg-[#fffae8] px-7 py-3 text-[14px] font-bold text-[#0a0d1c] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-0.5"
                         >
                             Join the waitlist
                         </Link>
@@ -482,29 +487,29 @@ export default async function Home() {
                 now runs under it, so the inset is added to the 2.5rem rather
                 than replacing it (env() is 0 everywhere else). */}
             <footer
-                className={`${SECTION_X} border-t border-[#1a100e]/10 pt-14 pb-[calc(2.5rem+env(safe-area-inset-bottom))]`}
+                className={`${SECTION_X} border-t border-[#0a0d1c]/10 pt-14 pb-[calc(2.5rem+env(safe-area-inset-bottom))]`}
             >
                 <div className="mx-auto max-w-6xl">
                     <div className="grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                         {/* Brand + newsletter */}
                         <div>
                             <div className="flex items-center gap-2.5">
-                                <span className="grid size-8 place-items-center rounded-sq bg-[#1a100e] p-1.5 text-white">
+                                <span className="grid size-8 place-items-center rounded-sq bg-[#0a0d1c] p-1.5 text-white">
                                     <BobbyMark />
                                 </span>
                                 <span className="text-[14px] font-extrabold tracking-[-0.01em]">Ucelot</span>
-                                <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#1a100e]/40">
+                                <span className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#0a0d1c]/40">
                                     by Bobby
                                 </span>
                             </div>
-                            <p className="mt-4 max-w-xs text-[13.5px] leading-6 text-[#1a100e]/70">
+                            <p className="mt-4 max-w-xs text-[13.5px] leading-6 text-[#0a0d1c]/70">
                                 Issue tracking that reads your code — every issue tied back to the
                                 files and lines it&apos;s actually about.
                             </p>
-                            <h3 className="mt-8 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#1a100e]/45">
+                            <h3 className="mt-8 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#0a0d1c]/45">
                                 Newsletter
                             </h3>
-                            <p className="mt-2 text-[13.5px] leading-6 text-[#1a100e]/70">
+                            <p className="mt-2 text-[13.5px] leading-6 text-[#0a0d1c]/70">
                                 Occasional notes on what we&apos;re building. No noise.
                             </p>
                             <NewsletterForm />
@@ -528,7 +533,7 @@ export default async function Home() {
                         </div>
                     </div>
 
-                    <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[#1a100e]/10 pt-6 text-[12.5px] text-[#1a100e]/55 sm:flex-row sm:items-center">
+                    <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[#0a0d1c]/10 pt-6 text-[12.5px] text-[#0a0d1c]/55 sm:flex-row sm:items-center">
                         <p>© {new Date().getFullYear()} Bobby. All rights reserved.</p>
                         <p>Made for teams who&apos;d rather read code than guess.</p>
                     </div>

@@ -100,7 +100,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
             <div className="relative flex min-h-0 flex-1 flex-col">
             {/* Workspace header */}
             <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-                <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[#0b090b] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-amber-900/40">
+                <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[#090c1c] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-amber-900/40">
                     {/* Brand ember — the same dark-ember pixel gradient as the login panel,
                         glowing from the top-left corner behind the mark. */}
                     <PixelGradient stops={DARK_EMBER_STOPS} variant="linear" tiltDeg={45} tilePx={8} tileAspect={1} />
