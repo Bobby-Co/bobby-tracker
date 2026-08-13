@@ -299,19 +299,27 @@ function renderNeighbours(
         return out.join("\n")
     }
 
+    // A non-empty answer can still be the wrong one — e.g. every row reached
+    // over CONTAINS/MEMBER_OF, which says where the code lives, not what uses
+    // it. The analyser flags that; surface it above the results, not below,
+    // because a reader who has already scanned the list has drawn the
+    // conclusion.
     if (graph.notes.length) {
-        out.push(`\n## How to read this\n${graph.notes.map((n) => `- ${n}`).join("\n")}`)
+        out.push(`\n## Read this first\n${graph.notes.map((n) => `- ${n}`).join("\n")}`)
     }
 
-    // Grouped by kind so a long list stays scannable; the analyser already
-    // ordered by centrality, so the first of each group is the important one.
+    // Grouped by EDGE, not by node kind: the relationship is the answer here.
+    // "IMPORTS" is a list of dependents; "CONTAINS" is just the module that
+    // declares the anchor. Grouping by node kind put those in the same bucket
+    // and let a structural hit pass for a dependency.
     const groups = new Map<string, typeof graph.neighbours>()
     for (const n of graph.neighbours.slice(0, MAX_NEIGHBOURS)) {
-        const list = groups.get(n.kind) ?? []
+        const key = n.edge || "related"
+        const list = groups.get(key) ?? []
         list.push(n)
-        groups.set(n.kind, list)
+        groups.set(key, list)
     }
-    for (const [kind, nodes] of groups) {
+    for (const [edge, nodes] of groups) {
         const rows = nodes.map((n) => {
             const where = n.file ? `${n.file}${n.line ? `:${n.line}` : ""}` : ""
             const summary = clampSummary(n.summary)
@@ -319,9 +327,9 @@ function renderNeighbours(
             // through the containing module is an importer of that MODULE, not
             // a caller of the symbol you asked about.
             const via = n.via ? `  [via ${n.via}]` : ""
-            return `- ${n.name}${where ? `  — ${where}` : ""}${via}${summary ? `\n    ${summary}` : ""}`
+            return `- ${n.name} (${n.kind})${where ? `  — ${where}` : ""}${via}${summary ? `\n    ${summary}` : ""}`
         })
-        out.push(`\n## ${kind}\n${rows.join("\n")}`)
+        out.push(`\n## ${edge} (${nodes.length})\n${rows.join("\n")}`)
     }
     if (graph.neighbours.length > MAX_NEIGHBOURS) {
         out.push(`\n… ${graph.neighbours.length - MAX_NEIGHBOURS} more`)

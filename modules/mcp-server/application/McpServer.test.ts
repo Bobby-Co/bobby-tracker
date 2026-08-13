@@ -147,7 +147,9 @@ describe("tools/call", () => {
                     { id: "function:ts:lib/session:resolvePublicSession", kind: "Function", name: "resolvePublicSession" },
                     { id: "module:ts:lib/session", kind: "Module", name: "lib/session", via: "defines resolvePublicSession" },
                 ],
-                neighbours: [{ id: "module:ts:app/api/a", kind: "Module", name: "app/api/a", via: "lib/session" }],
+                neighbours: [
+                    { id: "module:ts:app/api/a", kind: "Module", name: "app/api/a", via: "lib/session", edge: "IMPORTS" },
+                ],
                 notes: ["IMPORTS / DEPENDS_ON / MEMBER_OF are MODULE-level edges…"],
             },
         })
@@ -158,7 +160,10 @@ describe("tools/call", () => {
         const text = ok(res).content[0].text
         expect(text).toContain("[added automatically: defines resolvePublicSession]")
         expect(text).toContain("[via lib/session]")
-        expect(text).toContain("How to read this")
+        expect(text).toContain("Read this first")
+        // Grouped by the EDGE, so an IMPORTS dependent can't be confused with
+        // the CONTAINS module that merely declares the symbol.
+        expect(text).toContain("## IMPORTS (1)")
     })
 
     test("get_neighbours without an anchor tells the model what is missing", async () => {

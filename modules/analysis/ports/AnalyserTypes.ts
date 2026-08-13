@@ -141,6 +141,9 @@ export interface NeighbourNode {
     /** On an anchor: why it is in the set ("defines resolvePublicSession").
      *  On a neighbour: which anchor it was reached from. */
     via?: string
+    /** The edge this neighbour was reached over. IMPORTS = a dependent;
+     *  CONTAINS/MEMBER_OF = where the code lives, not what uses it. */
+    edge?: string
 }
 
 export interface NeighboursResult {
