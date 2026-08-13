@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/client/auth/auth-context"
 import { useTeam } from "@/lib/client/auth/team-context"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { TeamSelector } from "@/components/layout/team-selector"
+import { BalancePill } from "@/components/layout/balance-pill"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
 import PixelGradient, { DARK_EMBER_STOPS } from "@/components/ui/pixel-gradient"
 import PixelScatter from "@/components/ui/pixel-scatter"
@@ -128,6 +129,8 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                     Team
                 </div>
                 <TeamSelector />
+                {/* Prowl Points balance — team-scoped, so it sits with the team switch. */}
+                <BalancePill />
             </div>
 
             {/* Scrollable nav body */}

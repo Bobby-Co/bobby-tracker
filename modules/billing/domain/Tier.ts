@@ -1,7 +1,7 @@
 // Prowl — the tier catalogue (pure domain). "Prowl" is Ucelot's usage-metering &
 // credits system: the ocelot goes *on the prowl*, and every model call spends
 // PROWL POINTS. Accounts sit on one of four wild-cat tiers, each with a monthly
-// Prowl Point allowance.
+// credit allowance.
 //
 // This file is the single source of truth for the plan ladder — display names,
 // blurbs, monthly allowances and headline prices. It is pure (no DB / Next /
@@ -21,7 +21,7 @@ export interface TierSpec {
     name: string
     /** One-line positioning blurb. */
     tagline: string
-    /** Monthly Prowl Point allowance. `null` = uncapped / negotiated (Apex). */
+    /** Monthly credit allowance. `null` = uncapped / negotiated (Apex). */
     monthlyPoints: number | null
     /** Headline monthly price in USD. `null` = "Custom" (contact sales). */
     priceUsd: number | null
@@ -33,7 +33,7 @@ export interface TierSpec {
 
 // The ladder. Points/prices are deliberate placeholders for the foundation —
 // they're config, not schema, so tuning them is a one-line change here with no
-// migration. 1,000 Prowl Points ≈ $1 of underlying model spend (see ProwlPoints).
+// migration. 1,000 credits ≈ $1 of underlying model spend (see ProwlPoints).
 const CATALOGUE: Record<TierId, TierSpec> = {
     kit: {
         id: "kit",
@@ -43,7 +43,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         priceUsd: 0,
         seats: 1,
         features: [
-            "2,000 Prowl Points / month",
+            "2,000 credits / month",
             "Issue analysis & AI compose",
             "1 teammate",
             "Community support",
@@ -57,7 +57,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         priceUsd: 19,
         seats: 3,
         features: [
-            "40,000 Prowl Points / month",
+            "40,000 credits / month",
             "Everything in Kit",
             "PR review & deep-dive chat",
             "Up to 3 teammates",
@@ -71,7 +71,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         priceUsd: 79,
         seats: 10,
         features: [
-            "150,000 Prowl Points / month",
+            "150,000 credits / month",
             "Everything in Prowler",
             "Shared team usage pool",
             "Up to 10 teammates",
@@ -86,7 +86,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         priceUsd: null,
         seats: null,
         features: [
-            "Uncapped Prowl Points",
+            "Unlimited credits",
             "Everything in Pride",
             "Unlimited teammates",
             "SSO, audit log & SLA",
