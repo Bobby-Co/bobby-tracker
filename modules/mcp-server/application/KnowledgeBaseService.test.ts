@@ -172,10 +172,14 @@ describe("locate / neighbours — delegation", () => {
         analyser.findGraphId.mockResolvedValue("graph-7")
         analyserPort.retrieve.mockResolvedValue({ files: [], symbols: [], notes: [], clusters: [] })
         await svc().locate("p1", "where is auth", { symbols: ["Verify"] })
+        // userId rides along for BILLING attribution: the analyser authenticates
+        // with a shared service token, so without it every MCP usage event lands
+        // unattributed (and, before the uuid guard, was dropped outright).
         expect(analyserPort.retrieve).toHaveBeenCalledWith({
             repoId: "graph-7",
             query: "where is auth",
             hints: { symbols: ["Verify"] },
+            userId: "u1",
         })
     })
 
@@ -188,6 +192,7 @@ describe("locate / neighbours — delegation", () => {
             symbol: "Verify",
             direction: "in",
             edges: ["CALLS"],
+            userId: "u1",
         })
     })
 

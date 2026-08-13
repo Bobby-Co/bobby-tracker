@@ -169,7 +169,11 @@ export class KnowledgeBaseService {
         hints?: RetrieveHints,
     ): Promise<{ base: ResolvedKnowledgeBase; evidence: RetrieveResult }> {
         const base = await this.resolve(identifier)
-        const evidence = await this.analyser.retrieve({ repoId: base.graphId, query, hints })
+        // userId is forwarded for BILLING attribution, not for authorization —
+        // access was already decided by resolve() above. Without it the analyser
+        // sees only the shared service token and the usage event lands
+        // unattributed.
+        const evidence = await this.analyser.retrieve({ repoId: base.graphId, query, hints, userId: this.userId })
         return { base, evidence }
     }
 
@@ -179,7 +183,7 @@ export class KnowledgeBaseService {
         anchor: Pick<NeighboursInput, "nodeId" | "symbol" | "file" | "edges" | "direction" | "limit">,
     ): Promise<{ base: ResolvedKnowledgeBase; graph: NeighboursResult }> {
         const base = await this.resolve(identifier)
-        const graph = await this.analyser.neighbours({ repoId: base.graphId, ...anchor })
+        const graph = await this.analyser.neighbours({ repoId: base.graphId, ...anchor, userId: this.userId })
         return { base, graph }
     }
 }

@@ -48,6 +48,14 @@ export class HttpAnalyser implements Analyser {
         return token ? { Authorization: `Bearer ${token}` } : {}
     }
 
+    /** Attribution for the Prowl ledger. We authenticate with a SHARED service
+     *  token, so without this header the analyser has no way to tell which user
+     *  a call belongs to — it falls back to the bearer token, which is not a
+     *  uuid and gets dropped from the usage row. */
+    private userHeader(userId?: string): Record<string, string> {
+        return userId ? { "X-Bobby-User": userId } : {}
+    }
+
     /** Parse an error body and throw AnalyserError with the analyser's code/message
      *  (falling back to the supplied defaults). */
     private async fail(res: Response, message: string, code: string): Promise<never> {
@@ -71,7 +79,7 @@ export class HttpAnalyser implements Analyser {
     async retrieve(input: RetrieveInput): Promise<RetrieveResult> {
         const res = await fetch(`${this.base()}/retrieve`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...this.authHeader() },
+            headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             // Omitted keys never reach the wire (JSON.stringify drops undefined),
             // so the analyser applies its own defaults for budget/agents/files.
             // Note the analyser rejects UNKNOWN keys outright — don't send one.
@@ -101,7 +109,7 @@ export class HttpAnalyser implements Analyser {
     async neighbours(input: NeighboursInput): Promise<NeighboursResult> {
         const res = await fetch(`${this.base()}/neighbours`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", ...this.authHeader() },
+            headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             body: JSON.stringify({
                 repo_id: input.repoId,
                 node_id: input.nodeId,
@@ -153,11 +161,7 @@ export class HttpAnalyser implements Analyser {
     async analyseIssue(input: IssueAnalyseInput): Promise<IssueAnalysis> {
         const res = await fetch(`${this.base()}/issues/analyse`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...this.authHeader(),
-                ...(input.userId ? { "X-Bobby-User": input.userId } : {}),
-            },
+            headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             // An omitted effort never reaches the wire (JSON.stringify drops
             // undefined), so the analyser applies its own fallback chain.
             body: JSON.stringify({
@@ -178,11 +182,7 @@ export class HttpAnalyser implements Analyser {
     async startIssueAnalysis(input: IssueAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
         const res = await fetch(`${this.base()}/issues/analyse/run`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...this.authHeader(),
-                ...(input.userId ? { "X-Bobby-User": input.userId } : {}),
-            },
+            headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             body: JSON.stringify({
                 repo_id: input.repoId,
                 title: input.title,
@@ -211,11 +211,7 @@ export class HttpAnalyser implements Analyser {
     async startPRAnalysis(input: PrAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
         const res = await fetch(`${this.base()}/pr/analyse/run`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...this.authHeader(),
-                ...(input.userId ? { "X-Bobby-User": input.userId } : {}),
-            },
+            headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             body: JSON.stringify({
                 repo_id: input.repoId,
                 project_id: input.projectId,

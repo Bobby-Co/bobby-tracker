@@ -64,6 +64,10 @@ export interface RetrieveInput {
     maxAgents?: number
     /** Cap on ranked file cards. Defaults to 12 analyser-side. */
     maxFiles?: number
+    /** The calling user's auth uuid, forwarded as X-Bobby-User so the analyser
+     *  can attribute the cost. Without it the analyser falls back to the shared
+     *  service token, which is not a uuid and cannot be attributed. */
+    userId?: string
 }
 
 /** One definition inside a ranked file. */
@@ -127,6 +131,8 @@ export interface NeighboursInput {
     /** "out" | "in" | "both". Defaults to "both" analyser-side. */
     direction?: string
     limit?: number
+    /** The calling user's auth uuid — see RetrieveInput.userId. */
+    userId?: string
 }
 
 export interface NeighbourNode {
