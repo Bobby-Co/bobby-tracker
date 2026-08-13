@@ -62,8 +62,11 @@ export type {
     KickoffResult,
     RetrieveHints,
     RetrieveInput,
-    RetrieveHeatEntry,
-    RetrievePinpoint,
+    RetrieveFile,
+    RetrieveFileSymbol,
     RetrieveSymbol,
     RetrieveResult,
+    NeighboursInput,
+    NeighbourNode,
+    NeighboursResult,
 } from "./ports/AnalyserTypes"

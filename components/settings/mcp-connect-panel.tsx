@@ -27,9 +27,12 @@ type Connection = {
 const TOOLS = [
     {
         name: "locate_files",
-        blurb: "Finds the files behind a feature or bug and returns the exact file:line snippets — so Claude reads two files instead of twenty.",
+        blurb: "Finds the files behind a feature or bug and ranks them with the reason each one matters — so Claude reads two files instead of twenty.",
     },
-    { name: "ask_codebase", blurb: "Answers “how does this work?” about an indexed project, with citations." },
+    {
+        name: "get_neighbours",
+        blurb: "Follows the code graph from a file or symbol: callers, imports, implementations. Instant, and no model runs.",
+    },
     { name: "list_knowledge_bases", blurb: "Lists the projects you've exposed, so Claude can pick the right one." },
 ]
 

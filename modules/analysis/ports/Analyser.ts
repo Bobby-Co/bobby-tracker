@@ -24,6 +24,8 @@ import type {
     DeepDiveResult,
     RetrieveInput,
     RetrieveResult,
+    NeighboursInput,
+    NeighboursResult,
 } from "./AnalyserTypes"
 
 /** The tracker's outbound contract to the bobby-analyser service. Methods reject
@@ -33,10 +35,15 @@ export interface Analyser {
     // ─── /query — one-shot Q&A against an indexed graph ──────────────────────
     query(repoId: string, question: string, maxBudgetUsd?: number): Promise<QueryResult>
 
-    // ─── /retrieve — ranked files + grounded pinpoints, no synthesis ─────────
-    /** The retrieval engine's raw Evidence: which files matter and the exact
-     *  file:line bodies backing that. Backs the MCP `locate_files` tool. */
+    // ─── /retrieve — ranked file cards, no synthesis, no source ──────────────
+    /** Which files matter for a goal, why they ranked, and the module/cluster
+     *  prose baked at index time. Backs the MCP `locate_files` tool. */
     retrieve(input: RetrieveInput): Promise<RetrieveResult>
+
+    // ─── /neighbours — one graph hop, no model ───────────────────────────────
+    /** Callers/callees/imports/implementors of an anchor node, file or symbol.
+     *  Backs the MCP `get_neighbours` tool. */
+    neighbours(input: NeighboursInput): Promise<NeighboursResult>
 
     // ─── /chat — streaming SSE; returns the raw Response to pipe to the browser ─
     streamChat(

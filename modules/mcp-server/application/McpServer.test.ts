@@ -12,7 +12,7 @@ import { McpServer } from "./McpServer"
 import { McpToolError } from "../domain/McpTool"
 import { RpcError } from "../domain/JsonRpc"
 
-const service = { list: mock(), resolve: mock(), locate: mock(), ask: mock() }
+const service = { list: mock(), resolve: mock(), locate: mock(), neighbours: mock() }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const server = () => new McpServer(service as any)
 
@@ -64,8 +64,16 @@ describe("tools/list", () => {
     test("advertises exactly the three tools, with schemas", async () => {
         const res = await server().handle({ jsonrpc: "2.0", id: 2, method: "tools/list" })
         const names = ok(res).tools.map((t: { name: string }) => t.name)
-        expect(names).toEqual(["list_knowledge_bases", "locate_files", "ask_codebase"])
+        expect(names).toEqual(["list_knowledge_bases", "locate_files", "get_neighbours"])
         for (const tool of ok(res).tools) expect(tool.inputSchema.type).toBe("object")
+    })
+
+    // get_neighbours takes ONE of symbol/file/node_id, so the anchor cannot be
+    // required by schema — the tool checks it and reports back to the model.
+    test("get_neighbours requires only the project by schema", async () => {
+        const res = await server().handle({ jsonrpc: "2.0", id: 2, method: "tools/list" })
+        const tool = ok(res).tools.find((t: { name: string }) => t.name === "get_neighbours")
+        expect(tool.inputSchema.required).toEqual(["project"])
     })
 
     test("locate_files requires project and query", async () => {

@@ -25,7 +25,8 @@ import type {
     ProjectAnalyserRepository,
     RetrieveHints,
     RetrieveResult,
-    QueryResult,
+    NeighboursInput,
+    NeighboursResult,
 } from "@/modules/analysis"
 import { McpToolError } from "../domain/McpTool"
 
@@ -161,7 +162,7 @@ export class KnowledgeBaseService {
         return { ...hit, graphId }
     }
 
-    /** Ranked files + grounded pinpoints for a natural-language goal. */
+    /** Ranked file cards for a natural-language goal. */
     async locate(
         identifier: string,
         query: string,
@@ -172,10 +173,13 @@ export class KnowledgeBaseService {
         return { base, evidence }
     }
 
-    /** A grounded natural-language answer about the codebase. */
-    async ask(identifier: string, question: string): Promise<{ base: ResolvedKnowledgeBase; answer: QueryResult }> {
+    /** One graph hop from a file, symbol or node id. */
+    async neighbours(
+        identifier: string,
+        anchor: Pick<NeighboursInput, "nodeId" | "symbol" | "file" | "edges" | "direction" | "limit">,
+    ): Promise<{ base: ResolvedKnowledgeBase; graph: NeighboursResult }> {
         const base = await this.resolve(identifier)
-        const answer = await this.analyser.query(base.graphId, question)
-        return { base, answer }
+        const graph = await this.analyser.neighbours({ repoId: base.graphId, ...anchor })
+        return { base, graph }
     }
 }

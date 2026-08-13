@@ -27,6 +27,8 @@ import type {
     QueryResult,
     RetrieveInput,
     RetrieveResult,
+    NeighboursInput,
+    NeighboursResult,
     VerifyInput,
     VerifyReport,
 } from "../ports/AnalyserTypes"
@@ -65,20 +67,21 @@ export class HttpAnalyser implements Analyser {
         return (await res.json()) as QueryResult
     }
 
-    // ─── /retrieve — structured Evidence, no synthesis pass ───────────────────
+    // ─── /retrieve — ranked file cards, no synthesis, no source ───────────────
     async retrieve(input: RetrieveInput): Promise<RetrieveResult> {
         const res = await fetch(`${this.base()}/retrieve`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader() },
             // Omitted keys never reach the wire (JSON.stringify drops undefined),
-            // so the analyser applies its own defaults for budget/agents/pinpoint.
+            // so the analyser applies its own defaults for budget/agents/files.
+            // Note the analyser rejects UNKNOWN keys outright — don't send one.
             body: JSON.stringify({
                 repo_id: input.repoId,
                 query: input.query,
                 hints: input.hints,
                 max_budget_usd: input.maxBudgetUsd,
                 max_agents: input.maxAgents,
-                pinpoint: input.pinpoint,
+                max_files: input.maxFiles,
             }),
         })
         if (!res.ok) return this.fail(res, `retrieve failed: HTTP ${res.status}`, "retrieve_failed")
@@ -86,12 +89,35 @@ export class HttpAnalyser implements Analyser {
         // Normalise: the tools downstream map/slice these unconditionally, and a
         // null array from an older analyser build shouldn't throw at a call site.
         return {
-            heat: body.heat ?? [],
-            pinpoints: body.pinpoints ?? [],
+            files: body.files ?? [],
             symbols: body.symbols ?? [],
             notes: body.notes ?? [],
             clusters: body.clusters ?? [],
             stats: body.stats,
+        }
+    }
+
+    // ─── /neighbours — one graph hop, no model ────────────────────────────────
+    async neighbours(input: NeighboursInput): Promise<NeighboursResult> {
+        const res = await fetch(`${this.base()}/neighbours`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...this.authHeader() },
+            body: JSON.stringify({
+                repo_id: input.repoId,
+                node_id: input.nodeId,
+                symbol: input.symbol,
+                file: input.file,
+                edges: input.edges,
+                direction: input.direction,
+                limit: input.limit,
+            }),
+        })
+        if (!res.ok) return this.fail(res, `neighbours failed: HTTP ${res.status}`, "neighbours_failed")
+        const body = (await res.json()) as Partial<NeighboursResult>
+        return {
+            anchors: body.anchors ?? [],
+            neighbours: body.neighbours ?? [],
+            truncated: body.truncated,
         }
     }
 

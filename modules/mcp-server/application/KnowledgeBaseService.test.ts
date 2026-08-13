@@ -18,7 +18,7 @@ const access = { listTeams: mock(), accessibleProjectIds: mock(), canAccessProje
 const projects = { listForTeam: mock() }
 const mcpIntegration = { listEnabledProjectIds: mock() }
 const analyser = { findGraphId: mock() }
-const analyserPort = { retrieve: mock(), query: mock() }
+const analyserPort = { retrieve: mock(), neighbours: mock() }
 
 // The service takes PORTS by constructor (no DB client, no RequestContext), so
 // plain mocks are enough — no module mocking needed.
@@ -52,7 +52,7 @@ beforeEach(() => {
     mcpIntegration.listEnabledProjectIds.mockReset()
     analyser.findGraphId.mockReset()
     analyserPort.retrieve.mockReset()
-    analyserPort.query.mockReset()
+    analyserPort.neighbours.mockReset()
 
     // Default happy path: one team, admin, two projects, both indexed.
     access.listTeams.mockResolvedValue([{ id: "t1", role: "admin", is_personal: true }])
@@ -167,10 +167,10 @@ describe("resolve — the access boundary", () => {
     })
 })
 
-describe("locate / ask — delegation", () => {
+describe("locate / neighbours — delegation", () => {
     test("locate addresses the analyser by graph id, not project id", async () => {
         analyser.findGraphId.mockResolvedValue("graph-7")
-        analyserPort.retrieve.mockResolvedValue({ heat: [], pinpoints: [], symbols: [], notes: [], clusters: [] })
+        analyserPort.retrieve.mockResolvedValue({ files: [], symbols: [], notes: [], clusters: [] })
         await svc().locate("p1", "where is auth", { symbols: ["Verify"] })
         expect(analyserPort.retrieve).toHaveBeenCalledWith({
             repoId: "graph-7",
@@ -179,12 +179,16 @@ describe("locate / ask — delegation", () => {
         })
     })
 
-    test("ask passes the question through to the analyser query", async () => {
+    test("neighbours forwards the anchor under the resolved graph id", async () => {
         analyser.findGraphId.mockResolvedValue("graph-7")
-        analyserPort.query.mockResolvedValue({ markdown: "answer", cost_usd: 0, duration_ms: 1 })
-        const { answer } = await svc().ask("p1", "how does sync work?")
-        expect(analyserPort.query).toHaveBeenCalledWith("graph-7", "how does sync work?")
-        expect(answer.markdown).toBe("answer")
+        analyserPort.neighbours.mockResolvedValue({ anchors: [], neighbours: [] })
+        await svc().neighbours("p1", { symbol: "Verify", direction: "in", edges: ["CALLS"] })
+        expect(analyserPort.neighbours).toHaveBeenCalledWith({
+            repoId: "graph-7",
+            symbol: "Verify",
+            direction: "in",
+            edges: ["CALLS"],
+        })
     })
 
     test("an unresolvable project never reaches the analyser", async () => {

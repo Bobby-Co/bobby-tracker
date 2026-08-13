@@ -43,9 +43,10 @@ const SERVER_INFO = { name: "ucelot", title: "Ucelot Knowledge Base", version: "
 const INSTRUCTIONS = [
     "Ucelot exposes indexed knowledge graphs of the user's codebases.",
     "",
-    "Before exploring a repository by grepping or opening files, call locate_files with a plain-language description of what you need to change or understand. It returns the ranked files and the exact file:line snippets that matter, so you can read only those and go straight to implementing.",
-    "Use ask_codebase for 'how does this work' questions, and list_knowledge_bases when you don't know which project name to pass.",
-    "Only projects the user has explicitly enabled for MCP are visible.",
+    "Before searching a repository, call locate_files with a plain-language description of what you need to change or understand. It returns the ranked files, why each one ranked, and the module/cluster summaries written when the codebase was indexed — so you can go straight to reading the two or three files that matter.",
+    "While reading, use get_neighbours to follow the code: callers, callees, imports, importers, implementations. It is a single graph hop, so it is fast and costs nothing.",
+    "These tools replace exploratory SEARCH, not reading — they hand you coordinates and context, and you read the files yourself.",
+    "Call list_knowledge_bases when you don't know which project name to pass. Only projects the user has explicitly enabled for MCP are visible.",
 ].join("\n")
 
 export class McpServer {

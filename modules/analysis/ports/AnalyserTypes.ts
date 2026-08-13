@@ -43,10 +43,12 @@ export interface QueryResult {
 }
 
 // ─── /retrieve ───────────────────────────────────────────────────────────────
-// The goal-agnostic retrieval engine WITHOUT the synthesis pass: ranked files
-// plus grounded file:line pinpoints, and nothing written by an LLM narrator.
-// This is what the MCP `locate_files` tool serves — an external agent wants
-// coordinates to read, not prose to re-read.
+// The goal-agnostic retrieval engine WITHOUT the synthesis pass and WITHOUT any
+// source: ranked file cards — where to look, why, and the module/cluster prose
+// the graph baked at index time. This is what the MCP `locate_files` tool
+// serves. The consumer is a coding agent with its own file reader, so returning
+// code bodies would bill the same tokens twice; coordinates plus the graph's
+// judgement is what it can't get for itself.
 
 /** Optional anchors the caller already knows, to seed the walk. */
 export interface RetrieveHints {
@@ -60,25 +62,32 @@ export interface RetrieveInput {
     hints?: RetrieveHints
     maxBudgetUsd?: number
     maxAgents?: number
-    /** Read the actual function bodies (slower). Defaults to true analyser-side. */
-    pinpoint?: boolean
+    /** Cap on ranked file cards. Defaults to 12 analyser-side. */
+    maxFiles?: number
 }
 
-/** A file the swarm's attention converged on. `opens` is how many times an agent
- *  opened it — a rough confidence signal alongside `score`. */
-export interface RetrieveHeatEntry {
+/** One definition inside a ranked file. */
+export interface RetrieveFileSymbol {
+    name: string
+    kind?: string
+    signature?: string
+    line?: number
+}
+
+/** A ranked file card. `score`/`opens` are the swarm's attention signal, `why`
+ *  the human-readable reasons it ranked, and module/cluster the indexed context
+ *  around it. */
+export interface RetrieveFile {
     file: string
     score: number
     opens?: number
-}
-
-/** A citable snippet: the resolved symbol plus its line-numbered body. */
-export interface RetrievePinpoint {
-    file: string
-    symbol?: string
-    label?: string
-    line?: number
-    body?: string
+    why?: string[]
+    language?: string
+    module?: string
+    module_summary?: string
+    cluster?: string
+    cluster_summary?: string
+    symbols?: RetrieveFileSymbol[]
 }
 
 export interface RetrieveSymbol {
@@ -89,8 +98,7 @@ export interface RetrieveSymbol {
 }
 
 export interface RetrieveResult {
-    heat: RetrieveHeatEntry[]
-    pinpoints: RetrievePinpoint[]
+    files: RetrieveFile[]
     symbols: RetrieveSymbol[]
     notes: string[]
     clusters: { label: string; score?: number }[]
@@ -100,6 +108,43 @@ export interface RetrieveResult {
         cost_usd?: number
         duration_ms?: number
     }
+}
+
+// ─── /neighbours ─────────────────────────────────────────────────────────────
+// One hop through the knowledge graph, no model in the loop. Backs the MCP
+// `get_neighbours` tool: once a caller is reading code, "what calls this", "what
+// does this import", "what implements this" are single indexed hops.
+
+export interface NeighboursInput {
+    repoId: string
+    /** Exactly one anchor; most specific wins (nodeId > symbol > file). */
+    nodeId?: string
+    symbol?: string
+    file?: string
+    /** IMPORTS | CALLS | IMPLEMENTS | EXTENDS | CONTAINS | DEFINES | MEMBER_OF |
+     *  MENTIONS | DEPENDS_ON. Empty = every edge kind. */
+    edges?: string[]
+    /** "out" | "in" | "both". Defaults to "both" analyser-side. */
+    direction?: string
+    limit?: number
+}
+
+export interface NeighbourNode {
+    id: string
+    kind: string
+    name: string
+    file?: string
+    line?: number
+    signature?: string
+    summary?: string
+    language?: string
+}
+
+export interface NeighboursResult {
+    anchors: NeighbourNode[]
+    neighbours: NeighbourNode[]
+    /** At least one anchor hit the per-anchor limit — narrow by edge kind. */
+    truncated?: boolean
 }
 
 // ─── /chat (SSE) ─────────────────────────────────────────────────────────────

@@ -1,12 +1,17 @@
 // MCP server — the tool catalogue: what Claude sees in `tools/list`, and how each
 // call is executed and rendered.
 //
-// The whole point of these tools is to REPLACE exploratory file reading. A model
-// that would otherwise grep a repo and open a dozen files to find the three that
-// matter can instead ask `locate_files` once and get the coordinates. So the
-// rendering here is deliberately terse and scannable: ranked paths, then cited
-// `file:line` bodies, and hard caps on every list. Verbose output would spend the
-// tokens the tool exists to save.
+// These tools REPLACE exploratory search, not reading. The caller is a coding
+// agent that already has a file reader and a grep; what it lacks is the map. So
+// `locate_files` hands back coordinates plus the graph's indexed context —
+// ranked paths, why each ranked, the module/cluster prose, the symbols each file
+// defines — and NO source. The caller opens the two or three files that matter
+// and reads them properly, instead of paying for excerpts here and the same
+// bytes again on the read.
+//
+// `get_neighbours` covers the follow-ups that come after: what calls this, what
+// does this import, what implements this. Those are single graph hops, so they
+// come back in milliseconds with no model in the loop.
 
 import type { KnowledgeBaseService } from "./KnowledgeBaseService"
 import type { RetrieveHints } from "@/modules/analysis"
@@ -14,11 +19,13 @@ import { type McpToolDefinition, type McpToolResult, textResult } from "../domai
 
 // Output caps. Generous enough to answer the question, small enough that a call
 // stays far cheaper than reading the files it points at.
-const MAX_HEAT = 12
-const MAX_PINPOINTS = 8
-const MAX_PINPOINT_LINES = 40
+const MAX_FILES = 12
+const MAX_FILE_SYMBOLS = 8
+const MAX_WHY = 3
 const MAX_SYMBOLS = 20
 const MAX_NOTES = 6
+const MAX_NEIGHBOURS = 40
+const SUMMARY_CHARS = 240
 
 export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     {
@@ -30,7 +37,7 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     {
         name: "locate_files",
         description:
-            "Find which files implement a feature, behaviour or bug in an indexed codebase, WITHOUT reading the repository. Returns ranked files plus exact file:line snippets of the relevant functions. Use this before grepping or opening files: ask in plain language (e.g. 'where is the OAuth token refreshed?'), then read only the files it points at.",
+            "Find which files implement a feature, behaviour or bug in an indexed codebase, WITHOUT searching the repository. Returns ranked file paths with the reason each ranked, the module and cluster they belong to (with the summaries written when the codebase was indexed), and the symbols each file defines. Use it instead of grepping: ask in plain language (e.g. 'where is the OAuth token refreshed?'), then open and read the files it names.",
         inputSchema: {
             type: "object",
             properties: {
@@ -58,9 +65,9 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
         },
     },
     {
-        name: "ask_codebase",
+        name: "get_neighbours",
         description:
-            "Ask a question about how an indexed codebase works and get a grounded answer with citations. Use for architecture and 'how/why does X work' questions; use locate_files when you need the specific files to edit.",
+            "Walk one hop through the codebase graph from a file, symbol or node id: callers and callees, imports and importers, implementations of an interface, the module a file belongs to. Fast and free — no model runs. Use it while reading code to answer 'what calls this', 'what breaks if I change this', 'what implements this' without grepping the repository.",
         inputSchema: {
             type: "object",
             properties: {
@@ -68,9 +75,40 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
                     type: "string",
                     description: "Which knowledge base: 'owner/repo', the repo name, or the Ucelot project name.",
                 },
-                question: { type: "string", description: "The question to answer about the codebase." },
+                symbol: { type: "string", description: "A function, type or interface name to anchor on." },
+                file: {
+                    type: "string",
+                    description:
+                        "A repo-relative file path to anchor on. Resolves to the definitions that file contributes.",
+                },
+                node_id: { type: "string", description: "An exact graph node id from a previous get_neighbours call." },
+                edges: {
+                    type: "array",
+                    items: {
+                        type: "string",
+                        enum: [
+                            "IMPORTS",
+                            "CALLS",
+                            "IMPLEMENTS",
+                            "EXTENDS",
+                            "CONTAINS",
+                            "DEFINES",
+                            "MEMBER_OF",
+                            "MENTIONS",
+                            "DEPENDS_ON",
+                        ],
+                    },
+                    description: "Restrict to these edge types. Omit for all of them.",
+                },
+                direction: {
+                    type: "string",
+                    enum: ["out", "in", "both"],
+                    description:
+                        "'out' = what the anchor points at (callees, imports); 'in' = what points at it (callers, importers — the blast radius); 'both' is the default.",
+                },
+                limit: { type: "integer", description: "Cap on neighbours per anchor. Default 25." },
             },
-            required: ["project", "question"],
+            required: ["project"],
             additionalProperties: false,
         },
     },
@@ -81,6 +119,11 @@ function requireString(args: Record<string, unknown>, key: string): string {
     const value = args[key]
     if (typeof value !== "string" || !value.trim()) throw new Error(`"${key}" is required and must be a non-empty string`)
     return value.trim()
+}
+
+function optionalString(args: Record<string, unknown>, key: string): string | undefined {
+    const value = args[key]
+    return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
 function readHints(args: Record<string, unknown>): RetrieveHints | undefined {
@@ -95,11 +138,12 @@ function readHints(args: Record<string, unknown>): RetrieveHints | undefined {
     return { ...(symbols?.length ? { symbols } : {}), ...(files?.length ? { files } : {}) }
 }
 
-/** Trim a pinpoint body so one oversized function can't dominate the response. */
-function clampBody(body: string): string {
-    const lines = body.split("\n")
-    if (lines.length <= MAX_PINPOINT_LINES) return body
-    return [...lines.slice(0, MAX_PINPOINT_LINES), `… (${lines.length - MAX_PINPOINT_LINES} more lines)`].join("\n")
+/** Keep an indexed summary to a line or two — the caller wants orientation, not
+ *  the whole write-up, and can open the file for the rest. */
+function clampSummary(text: string | undefined): string {
+    if (!text) return ""
+    const flat = text.replace(/\s+/g, " ").trim()
+    return flat.length <= SUMMARY_CHARS ? flat : `${flat.slice(0, SUMMARY_CHARS).trimEnd()}…`
 }
 
 // ─── execution ───────────────────────────────────────────────────────────────
@@ -113,17 +157,27 @@ export async function executeTool(
             return textResult(renderList(await service.list()))
 
         case "locate_files": {
-            const { base, evidence } = await service.locate(
-                requireString(args, "project"),
-                requireString(args, "query"),
-                readHints(args),
-            )
-            return textResult(renderEvidence(base.repoFullName || base.name, requireString(args, "query"), evidence))
+            const query = requireString(args, "query")
+            const { base, evidence } = await service.locate(requireString(args, "project"), query, readHints(args))
+            return textResult(renderEvidence(base.repoFullName || base.name, query, evidence))
         }
 
-        case "ask_codebase": {
-            const { base, answer } = await service.ask(requireString(args, "project"), requireString(args, "question"))
-            return textResult(renderAnswer(base.repoFullName || base.name, answer))
+        case "get_neighbours": {
+            const nodeId = optionalString(args, "node_id")
+            const symbol = optionalString(args, "symbol")
+            const file = optionalString(args, "file")
+            if (!nodeId && !symbol && !file) {
+                throw new Error(`"symbol", "file" or "node_id" is required — one of them anchors the walk`)
+            }
+            const { base, graph } = await service.neighbours(requireString(args, "project"), {
+                nodeId,
+                symbol,
+                file,
+                edges: Array.isArray(args.edges) ? args.edges.filter((e): e is string => typeof e === "string") : undefined,
+                direction: optionalString(args, "direction"),
+                limit: typeof args.limit === "number" ? args.limit : undefined,
+            })
+            return textResult(renderNeighbours(base.repoFullName || base.name, nodeId || symbol || file || "", graph))
         }
 
         default:
@@ -142,7 +196,7 @@ function renderList(bases: Awaited<ReturnType<KnowledgeBaseService["list"]>>): s
         const desc = b.description ? `\n    ${b.description}` : ""
         return `- ${label}${state}${desc}`
     })
-    return `Available knowledge bases (${bases.length}):\n${lines.join("\n")}\n\nPass one of these to locate_files or ask_codebase as "project".`
+    return `Available knowledge bases (${bases.length}):\n${lines.join("\n")}\n\nPass one of these to locate_files or get_neighbours as "project".`
 }
 
 function renderEvidence(
@@ -152,41 +206,49 @@ function renderEvidence(
 ): string {
     const out: string[] = [`# Where "${query}" lives in ${project}`]
 
-    if (evidence.heat.length === 0 && evidence.pinpoints.length === 0) {
+    if (evidence.files.length === 0) {
         return `${out[0]}\n\nThe retriever found nothing relevant. Try rephrasing in terms of observable behaviour, or fall back to reading the repository directly.`
     }
 
-    if (evidence.heat.length > 0) {
-        const rows = evidence.heat.slice(0, MAX_HEAT).map((h, i) => {
-            const opens = h.opens ? `, ${h.opens} opens` : ""
-            return `${i + 1}. ${h.file}  (score ${h.score.toFixed(2)}${opens})`
-        })
-        const more = evidence.heat.length > MAX_HEAT ? `\n… ${evidence.heat.length - MAX_HEAT} more` : ""
-        out.push(`\n## Ranked files\n${rows.join("\n")}${more}`)
-    }
-
-    if (evidence.pinpoints.length > 0) {
-        const blocks = evidence.pinpoints.slice(0, MAX_PINPOINTS).map((p) => {
-            const where = p.line ? `${p.file}:${p.line}` : p.file
-            const what = [p.symbol, p.label].filter(Boolean).join(" — ")
-            const head = what ? `### ${where} — ${what}` : `### ${where}`
-            return p.body ? `${head}\n\`\`\`\n${clampBody(p.body)}\n\`\`\`` : head
-        })
-        const more = evidence.pinpoints.length > MAX_PINPOINTS ? `\n… ${evidence.pinpoints.length - MAX_PINPOINTS} more` : ""
-        out.push(`\n## Pinpoints\n${blocks.join("\n\n")}${more}`)
-    }
+    // One block per file: path first (it is what the caller acts on), then the
+    // reasons, then the indexed context, then what the file defines.
+    const blocks = evidence.files.slice(0, MAX_FILES).map((f, i) => {
+        const lines = [`${i + 1}. ${f.file}  (score ${f.score.toFixed(2)}${f.opens ? `, ${f.opens} opens` : ""})`]
+        for (const why of (f.why ?? []).slice(0, MAX_WHY)) lines.push(`   why: ${why}`)
+        if (f.module) {
+            const summary = clampSummary(f.module_summary)
+            lines.push(`   module ${f.module}${summary ? ` — ${summary}` : ""}`)
+        }
+        if (f.cluster) {
+            const summary = clampSummary(f.cluster_summary)
+            lines.push(`   cluster ${f.cluster}${summary ? ` — ${summary}` : ""}`)
+        }
+        if (f.symbols?.length) {
+            const symbols = f.symbols
+                .slice(0, MAX_FILE_SYMBOLS)
+                .map((s) => `${s.name}${s.line ? `:${s.line}` : ""}`)
+                .join(", ")
+            const more = f.symbols.length > MAX_FILE_SYMBOLS ? `, +${f.symbols.length - MAX_FILE_SYMBOLS} more` : ""
+            lines.push(`   defines: ${symbols}${more}`)
+        }
+        return lines.join("\n")
+    })
+    const more = evidence.files.length > MAX_FILES ? `\n… ${evidence.files.length - MAX_FILES} more` : ""
+    out.push(`\n## Ranked files\n${blocks.join("\n\n")}${more}`)
 
     if (evidence.symbols.length > 0) {
         const rows = evidence.symbols.slice(0, MAX_SYMBOLS).map((s) => {
             const where = s.line ? `${s.file}:${s.line}` : s.file
             return `- ${s.name} → ${where}${s.kind ? ` (${s.kind})` : ""}`
         })
-        out.push(`\n## Symbols\n${rows.join("\n")}`)
+        out.push(`\n## Symbols named in the query\n${rows.join("\n")}`)
     }
 
     if (evidence.notes.length > 0) {
         out.push(`\n## Notes\n${evidence.notes.slice(0, MAX_NOTES).map((n) => `- ${n}`).join("\n")}`)
     }
+
+    out.push(`\nRead the top files above. To follow the code from there — callers, imports, implementations — call get_neighbours instead of grepping.`)
 
     const s = evidence.stats
     if (s) {
@@ -202,14 +264,48 @@ function renderEvidence(
     return out.join("\n")
 }
 
-function renderAnswer(project: string, answer: Awaited<ReturnType<KnowledgeBaseService["ask"]>>["answer"]): string {
-    const out = [`# ${project}`, "", answer.markdown]
-    if (answer.code_cites?.length) {
-        const cites = answer.code_cites
-            .slice(0, MAX_SYMBOLS)
-            .map((c) => `- ${c.file}${c.line ? `:${c.line}` : ""}`)
-            .join("\n")
-        out.push(`\n## Cited code\n${cites}`)
+function renderNeighbours(
+    project: string,
+    anchor: string,
+    graph: Awaited<ReturnType<KnowledgeBaseService["neighbours"]>>["graph"],
+): string {
+    const out = [`# Graph neighbours of ${anchor} in ${project}`]
+
+    if (graph.anchors.length === 0) {
+        return `${out[0]}\n\nNothing in the graph matches that anchor. Check the path or symbol spelling, or use locate_files to find the right one.`
+    }
+
+    const anchored = graph.anchors
+        .map((a) => `- ${a.name} (${a.kind})${a.file ? ` — ${a.file}${a.line ? `:${a.line}` : ""}` : ""}`)
+        .join("\n")
+    out.push(`\n## Anchored on\n${anchored}`)
+
+    if (graph.neighbours.length === 0) {
+        out.push(`\nNo neighbours over the requested edges. Try direction "both", or drop the edge filter.`)
+        return out.join("\n")
+    }
+
+    // Grouped by kind so a long list stays scannable; the analyser already
+    // ordered by centrality, so the first of each group is the important one.
+    const groups = new Map<string, typeof graph.neighbours>()
+    for (const n of graph.neighbours.slice(0, MAX_NEIGHBOURS)) {
+        const list = groups.get(n.kind) ?? []
+        list.push(n)
+        groups.set(n.kind, list)
+    }
+    for (const [kind, nodes] of groups) {
+        const rows = nodes.map((n) => {
+            const where = n.file ? `${n.file}${n.line ? `:${n.line}` : ""}` : ""
+            const summary = clampSummary(n.summary)
+            return `- ${n.name}${where ? `  — ${where}` : ""}${summary ? `\n    ${summary}` : ""}`
+        })
+        out.push(`\n## ${kind}\n${rows.join("\n")}`)
+    }
+    if (graph.neighbours.length > MAX_NEIGHBOURS) {
+        out.push(`\n… ${graph.neighbours.length - MAX_NEIGHBOURS} more`)
+    }
+    if (graph.truncated) {
+        out.push(`\n_Hit the per-anchor limit — narrow with \`edges\` or \`direction\` for the full picture._`)
     }
     return out.join("\n")
 }
