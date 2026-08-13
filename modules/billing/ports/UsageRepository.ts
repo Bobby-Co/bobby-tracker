@@ -1,6 +1,7 @@
-// Billing module — the prowl_usage_events READ port. The metering layer writes
-// the ledger through UsageRecorder (service role); this reads it back for the
-// balance meter and the recent-activity list, RLS-scoped to the caller's team.
+// Billing module — the prowl_usage_events READ port. The ledger is written by the
+// ANALYSER (bobby-analyser records each billable call directly, service-role); this
+// reads it back for the balance meter and the recent-activity list, RLS-scoped to
+// the caller's team.
 
 /** One recorded model call, as the UI reads it. */
 export interface UsageEventRow {
@@ -22,12 +23,23 @@ export interface UsageByKind {
     calls: number
 }
 
-export interface UsageRepository {
-    /** Total Prowl Points spent by the team since `sinceIso`. THROWS
-     *  RepositoryError on failure. */
-    sumPointsSince(teamId: string, sinceIso: string): Promise<number>
+/** A team's maintained period counter (the O(1) read path — trigger-kept). */
+export interface PeriodUsage {
+    points: number
+    costUsd: number
+    calls: number
+}
 
-    /** Per-kind point + call totals since `sinceIso`, highest spend first. */
+export interface UsageRepository {
+    /** The team's spend for the billing period anchored at `periodStart`, read
+     *  from the maintained rollup (tracker.prowl_usage_period) — a single-row
+     *  lookup, NOT a scan of the event log. Returns zeros when the period has no
+     *  events yet. THROWS RepositoryError on failure. */
+    currentPeriodUsage(teamId: string, periodStart: string): Promise<PeriodUsage>
+
+    /** Per-kind point + call totals since `sinceIso`, highest spend first. Scans
+     *  the raw event log — used only on the detailed Usage page (low frequency),
+     *  not on the hot balance path. */
     breakdownSince(teamId: string, sinceIso: string): Promise<UsageByKind[]>
 
     /** The team's most recent `limit` usage events, newest first. */

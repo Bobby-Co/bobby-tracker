@@ -65,7 +65,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Pass the project uuid (scopes the "issues" action, ADR-0048) and the
         // conversation id (keys the managed-context store, ADR-0049).
         const upstream = await getAnalyser().streamChat(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId)
-        // Pipe the analyser's SSE stream straight to the browser.
+        // Pipe the analyser's SSE stream straight to the browser. (Usage is metered
+        // analyser-side — bobby-analyser records this turn's cost directly.)
         return new Response(upstream.body, {
             status: 200,
             headers: {

@@ -25,7 +25,9 @@ export async function GET() {
     const tier = sub?.tier ?? "kit"
     const periodStart = sub?.period_start ?? startOfMonthUtc()
 
-    const { data: used, error: usedErr } = await repoRead(() => ctx.usage.sumPointsSince(teamId, periodStart))
+    // Balance comes from the maintained rollup (single-row lookup), not a scan of
+    // the event log — so it stays O(1) however much usage a team accrues.
+    const { data: period, error: usedErr } = await repoRead(() => ctx.usage.currentPeriodUsage(teamId, periodStart))
     if (usedErr) return usedErr
 
     const { data: breakdown, error: bdErr } = await repoRead(() => ctx.usage.breakdownSince(teamId, periodStart))
@@ -37,7 +39,7 @@ export async function GET() {
     const balance = new Balance({
         tier,
         allowanceOverride: sub?.monthly_points ?? null,
-        used: used ?? 0,
+        used: period?.points ?? 0,
         periodStart,
     })
 

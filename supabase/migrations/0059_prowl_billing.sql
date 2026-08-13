@@ -66,18 +66,62 @@ create table if not exists tracker.prowl_usage_events (
     -- endpoint can be metered without a migration.
     kind          text        not null,
     model         text,
-    -- Prowl Points charged (the billed unit). Raw signals kept alongside for audit.
-    points        integer     not null default 0,
+    -- The raw signal the analyser records (it is the SOLE writer — see the
+    -- analyser's internal/server/usage.go). cost_usd is the billed truth; Prowl
+    -- Points are DERIVED from it at read time (modules/billing pointsFromCostUsd),
+    -- never stored — so the rate lives in one place and can't drift from schema.
     cost_usd      numeric(12, 6),
     input_tokens  integer,
     output_tokens integer,
     project_id    uuid,
     meta          jsonb       not null default '{}'::jsonb,
-    created_at    timestamptz not null default now(),
-    constraint prowl_usage_events_points_chk check (points >= 0)
+    created_at    timestamptz not null default now()
 );
 create index if not exists prowl_usage_events_team_time_idx
     on tracker.prowl_usage_events(team_id, created_at desc);
+
+-- ─── prowl_usage_period — the maintained rollup (the READ path) ──────────────
+-- prowl_usage_events is the immutable audit log; summing it on every balance read
+-- is O(rows-this-period) and the balance pill reads app-wide, so instead a trigger
+-- keeps a per-team-per-period counter. Reads become a single-row lookup, flat
+-- regardless of event volume. The rollup is DERIVED — it can be rebuilt from the
+-- events at any time (insert…select sum group by). Period = the calendar UTC month
+-- (matches how the API anchors period_start); a custom-renewal billing provider
+-- would key this to the subscription period instead.
+create table if not exists tracker.prowl_usage_period (
+    team_id      uuid        not null references tracker.teams(id) on delete cascade,
+    period_start timestamptz not null,
+    -- Summed raw cost for the period; the balance derives points from this.
+    cost_usd     numeric(14, 6) not null default 0,
+    calls        integer     not null default 0,
+    updated_at   timestamptz not null default now(),
+    primary key (team_id, period_start)
+);
+
+-- Fold each inserted usage event's raw cost into its team's current-period
+-- counter. Runs in the insert's transaction (atomic + consistent). SECURITY
+-- DEFINER so it maintains the rollup regardless of who inserted (the service-role
+-- analyser today).
+create or replace function tracker.prowl_rollup_usage()
+returns trigger language plpgsql security definer set search_path = tracker, pg_temp as $$
+begin
+    insert into tracker.prowl_usage_period(team_id, period_start, cost_usd, calls)
+    values (
+        new.team_id,
+        date_trunc('month', new.created_at at time zone 'utc'),
+        coalesce(new.cost_usd, 0),
+        1
+    )
+    on conflict (team_id, period_start) do update set
+        cost_usd   = prowl_usage_period.cost_usd + excluded.cost_usd,
+        calls      = prowl_usage_period.calls + 1,
+        updated_at = now();
+    return new;
+end $$;
+
+drop trigger if exists prowl_rollup_on_usage on tracker.prowl_usage_events;
+create trigger prowl_rollup_on_usage after insert on tracker.prowl_usage_events
+    for each row execute function tracker.prowl_rollup_usage();
 
 -- ─── auto-provision a Kit subscription for every team ────────────────────────
 -- Mirrors 0052's ensure_personal_team pattern: new teams get a free-tier row on
@@ -105,6 +149,7 @@ on conflict (team_id) do nothing;
 -- ─── RLS ─────────────────────────────────────────────────────────────────────
 alter table tracker.team_subscriptions  enable row level security;
 alter table tracker.prowl_usage_events   enable row level security;
+alter table tracker.prowl_usage_period   enable row level security;
 
 -- Subscriptions: any team member may read; only admins may change the tier from
 -- the app (the billing provider writes via the service role, which bypasses RLS).
@@ -123,8 +168,16 @@ drop policy if exists prowl_usage_events_member_select on tracker.prowl_usage_ev
 create policy prowl_usage_events_member_select on tracker.prowl_usage_events
     for select using (tracker.is_team_member(team_id));
 
+-- Usage rollup: members read their team's counter. Written only by the trigger
+-- (SECURITY DEFINER) / service role — no client write policy.
+drop policy if exists prowl_usage_period_member_select on tracker.prowl_usage_period;
+create policy prowl_usage_period_member_select on tracker.prowl_usage_period
+    for select using (tracker.is_team_member(team_id));
+
 -- ─── grants (0001's blanket grant predates these tables) ─────────────────────
 grant select, update on tracker.team_subscriptions to authenticated;
 grant all           on tracker.team_subscriptions to service_role;
 grant select         on tracker.prowl_usage_events to authenticated;
 grant all           on tracker.prowl_usage_events to service_role;
+grant select         on tracker.prowl_usage_period to authenticated;
+grant all           on tracker.prowl_usage_period to service_role;

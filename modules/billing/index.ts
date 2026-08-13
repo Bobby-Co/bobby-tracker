@@ -1,6 +1,13 @@
 // Billing bounded context — PUBLIC CONTRACT (see modules/README.md). "Prowl" is
 // Ucelot's usage-metering & credits system: every model call spends Prowl Points
 // drawn from a team's monthly, tier-based allowance. Import only from here.
+//
+// RECORDING lives in the ANALYSER, not here: bobby-analyser writes each billable
+// call straight to tracker.prowl_usage_events (its internal/server/usage.go), so
+// this module is READ-ONLY over the ledger — it owns the tiers, the Prowl-Points
+// vocabulary, the balance maths, and the read repositories the UI/API consume.
+// Prowl Points themselves are a generated column on the ledger (derived from
+// cost_usd; POINTS_PER_USD below documents the rate that column uses).
 
 // ─── domain: the tier ladder, the currency, the per-period balance ───────────
 export { Tier, TIER_IDS } from "./domain/Tier"
@@ -22,12 +29,5 @@ export type { SubscriptionsRepository, SubscriptionRow } from "./ports/Subscript
 export { createSupabaseSubscriptionsRepository } from "./infrastructure/SupabaseSubscriptionsRepository"
 
 // ─── usage ledger reads (prowl_usage_events) ─────────────────────────────────
-export type { UsageRepository, UsageEventRow, UsageByKind } from "./ports/UsageRepository"
+export type { UsageRepository, UsageEventRow, UsageByKind, PeriodUsage } from "./ports/UsageRepository"
 export { createSupabaseUsageRepository } from "./infrastructure/SupabaseUsageRepository"
-
-// ─── usage writes + the billing subject ──────────────────────────────────────
-export type { UsageRecorder, UsageEventInput, BillingSubject } from "./ports/UsageRecorder"
-export { createServiceUsageRecorder } from "./infrastructure/ServiceUsageRecorder"
-
-// ─── the metering seam — a billed Analyser (drop-in for getAnalyser) ─────────
-export { getMeteredAnalyser } from "./Composition"
