@@ -154,6 +154,14 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
                 // it, so name it rather than reporting a generic duplicate. The
                 // constraint name appears in the message; details carries it on
                 // some PostgREST versions, so check both.
+                //
+                // These three are the INSTALLATION-WIDE names. 0070 replaces them
+                // with per-team indexes under new names, which fall through to
+                // duplicate_in_team — correct, because that is what a per-team
+                // collision is. They are kept rather than deleted so the
+                // classification stays right against a database where 0070 has
+                // not been applied yet; once it has everywhere, this branch and
+                // the repo_linked_elsewhere reason become dead.
                 const where = `${error.message} ${error.details ?? ""}`
                 const globalHit =
                     where.includes("projects_github_repo_id_uniq") ||

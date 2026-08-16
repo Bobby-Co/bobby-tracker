@@ -138,6 +138,25 @@ check "realtime tables KEEP their policies" \
     "select count(distinct tablename) from pg_policies where schemaname='tracker' and tablename in ('project_analyser','issue_suggestions','notifications')" \
     "3"
 
+# 0070 widened repo uniqueness from installation-wide to per-team. Asserted by
+# KEY rather than by name: the point is which columns are covered, and an index
+# renamed but left on the old columns would still pass a name-only check while
+# blocking two teams from sharing a repo.
+check "linked repos are unique PER TEAM (github)" \
+    "select count(*) from pg_index i join pg_class c on c.oid=i.indexrelid join pg_class t on t.oid=i.indrelid join pg_namespace n on n.oid=t.relnamespace where n.nspname='tracker' and t.relname='projects' and i.indisunique and pg_get_indexdef(i.indexrelid) like '%(team_id, github_repo_id)%'" \
+    "1"
+
+check "linked repos are unique PER TEAM (gitlab)" \
+    "select count(*) from pg_index i join pg_class c on c.oid=i.indexrelid join pg_class t on t.oid=i.indrelid join pg_namespace n on n.oid=t.relnamespace where n.nspname='tracker' and t.relname='projects' and i.indisunique and pg_get_indexdef(i.indexrelid) like '%(team_id, gitlab_host, gitlab_project_id)%'" \
+    "1"
+
+# The old installation-wide indexes must be GONE, not merely superseded. Leaving
+# either in place keeps the exact bug 0070 exists to fix: the second team to
+# link a shared repo still collides, and the per-team index above hides why.
+check "no installation-wide repo index survives" \
+    "select count(*) from pg_index i join pg_class t on t.oid=i.indrelid join pg_namespace n on n.oid=t.relnamespace where n.nspname='tracker' and t.relname='projects' and i.indisunique and (pg_get_indexdef(i.indexrelid) like '%(github_repo_id)%' or pg_get_indexdef(i.indexrelid) like '%(gitlab_host, gitlab_project_id)%')" \
+    "0"
+
 # Re-applying must be safe. This is the path a HOSTED database takes: it already
 # has the partitioned table, so 0063 has to detect that and return rather than
 # rebuild. Getting this wrong would drop live embeddings, so it is checked here
