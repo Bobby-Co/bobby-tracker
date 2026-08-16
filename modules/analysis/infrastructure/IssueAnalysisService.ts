@@ -14,6 +14,7 @@ import type { IssueAnalysis } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
+import { analysisIsAbandoned } from "../domain/AnalysisRun"
 
 /** Resolves the app/bot VcsAppService for a project, or null when it isn't linked
  *  to a VCS. Injected so the service stays provider-agnostic. */
@@ -44,7 +45,15 @@ export class IssueAnalysisService {
         if (!issue) return "no_issue"
 
         // Idempotent / one-shot: don't start a second run.
-        if (issue.analysis_status === "analysing") return "in_flight"
+        //
+        // ...unless the one we're deferring to was abandoned. This branch used to
+        // be unconditional, which meant a single lost callback wedged the issue
+        // permanently: the status is written before dispatch and only the
+        // callback clears it, so nothing could ever set it back. Every retry
+        // returned in_flight and never reached an analyser again.
+        if (issue.analysis_status === "analysing" && !analysisIsAbandoned(issue.analysis_started_at)) {
+            return "in_flight"
+        }
         if ((await this.issues.countSuggestions(issueId)) > 0) return "done"
 
         // Fail-safe: a query error folds to null → treated as not-ready.
@@ -59,7 +68,13 @@ export class IssueAnalysisService {
         const cell = await this.projects.findCell(issue.project_id)
         if (!cell) return "not_ready"
 
-        const update: IssueSyncPatch = { analysis_status: "analysing" }
+        // Stamped with the status, and the reason they must be written together:
+        // the status alone cannot distinguish a run in progress from one that
+        // died, and that ambiguity is what made a lost callback permanent.
+        const update: IssueSyncPatch = {
+            analysis_status: "analysing",
+            analysis_started_at: new Date().toISOString(),
+        }
 
         // Post the "analysing…" placeholder only when the issue is linked + sync is
         // on. The vcs module owns owner/repo/token; we hand it the issue number and

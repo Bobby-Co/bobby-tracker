@@ -157,6 +157,14 @@ check "no installation-wide repo index survives" \
     "select count(*) from pg_index i join pg_class t on t.oid=i.indrelid join pg_namespace n on n.oid=t.relnamespace where n.nspname='tracker' and t.relname='projects' and i.indisunique and (pg_get_indexdef(i.indexrelid) like '%(github_repo_id)%' or pg_get_indexdef(i.indexrelid) like '%(gitlab_host, gitlab_project_id)%')" \
     "0"
 
+# 0071: an in-flight analysis must be datable, or a lost callback wedges the
+# issue forever (the status is written before dispatch and only the callback
+# clears it). Nullable on purpose — null reads as stale so already-wedged rows
+# recover without a repair script.
+check "issues.analysis_started_at exists" \
+    "select count(*) from information_schema.columns where table_schema='tracker' and table_name='issues' and column_name='analysis_started_at' and is_nullable='YES'" \
+    "1"
+
 # Re-applying must be safe. This is the path a HOSTED database takes: it already
 # has the partitioned table, so 0063 has to detect that and return rather than
 # rebuild. Getting this wrong would drop live embeddings, so it is checked here

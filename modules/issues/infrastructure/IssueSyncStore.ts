@@ -35,13 +35,17 @@ export type IssueAnalysisRow = {
     github_issue_number: number | null
     github_analysis_comment_id: number | null
     analysis_status: string | null
+    /** When the current run was dispatched (0071). Null = unknown, which the
+     *  staleness guard reads as abandoned. */
+    analysis_started_at: string | null
 }
 
 const ANALYSIS_ISSUE_COLS =
-    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status"
+    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status,analysis_started_at"
 
 /** GitHub-integration / analysis columns on an issue row. */
 export interface IssueSyncPatch {
+    analysis_started_at?: string | null
     sync_source?: string
     last_synced_hash?: string
     github_synced_at?: string

@@ -97,10 +97,48 @@ describe("ensure — one-shot idempotency + gates", () => {
         expect(await svc().ensure("iss-1", "https://app")).toBe("no_issue")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
-    test("already analysing → 'in_flight', never starts a second run", async () => {
-        store.findAnalysisRow.mockResolvedValue({ ...analysisRow, analysis_status: "analysing" })
+    test("a RECENT run in flight → 'in_flight', never starts a second run", async () => {
+        store.findAnalysisRow.mockResolvedValue({
+            ...analysisRow,
+            analysis_status: "analysing",
+            analysis_started_at: new Date(Date.now() - 60_000).toISOString(),
+        })
         expect(await svc().ensure("iss-1", "https://app")).toBe("in_flight")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    // The wedge this exists to break: the status is written before dispatch and
+    // only the callback clears it, so a lost callback used to mean the issue
+    // could never be analysed again.
+    test("an ABANDONED run does not block a retry", async () => {
+        store.findAnalysisRow.mockResolvedValue({
+            ...analysisRow,
+            analysis_status: "analysing",
+            analysis_started_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+        })
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        expect(await svc().ensure("iss-1", "https://app")).toBe("started")
+        expect(analyser.startIssueAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    test("an in-flight run with NO start time retries — pre-0071 rows self-heal", async () => {
+        store.findAnalysisRow.mockResolvedValue({
+            ...analysisRow,
+            analysis_status: "analysing",
+            analysis_started_at: null,
+        })
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        expect(await svc().ensure("iss-1", "https://app")).toBe("started")
+        expect(analyser.startIssueAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    test("dispatch stamps analysis_started_at alongside the status", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        await svc().ensure("iss-1", "https://app")
+        const [, update] = store.updateSyncFields.mock.calls[0]
+        expect(update.analysis_status).toBe("analysing")
+        expect(Date.parse(update.analysis_started_at as string)).not.toBeNaN()
     })
     test("a suggestion already cached → 'done', never re-runs", async () => {
         store.findAnalysisRow.mockResolvedValue(analysisRow)
