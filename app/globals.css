@@ -751,6 +751,14 @@ main[data-page="landing"] {
     /* Animations */
     .anim-rise { animation: rise 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
     .anim-fade { animation: fade 220ms ease-out backwards; }
+    /* The unread dot. Slower than .anim-fade and scaled up from small, because
+       this one appears on its OWN — nothing else on screen moves with it — so at
+       fade speed it reads as a glitch rather than as something arriving.
+       Deliberately NOT the expo-out curve the other entrances use: measured, that
+       curve is 97% complete at the halfway point, which is a pop followed by an
+       invisible tail. This one is near-linear early so the dot is visibly on its
+       way for most of the duration. */
+    .anim-ping-in { animation: ping-in 420ms cubic-bezier(0.4, 0, 0.2, 1) backwards; }
     .stagger > * { animation-delay: calc(var(--stagger-step, 60ms) * var(--i, 0)); }
 
     .skeleton {
@@ -767,6 +775,7 @@ main[data-page="landing"] {
 
 @keyframes rise    { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fade    { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ping-in { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
 @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 
 /* Rainbow glow — rotating conic gradient drives both a blurred flare and a crisp border ring */
@@ -914,7 +923,7 @@ main[data-page="landing"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .anim-rise, .anim-fade { animation: none; }
+    .anim-rise, .anim-fade, .anim-ping-in { animation: none; }
     .skeleton::after        { animation: none; }
     .rainbow-glow::before, .rainbow-glow::after { animation: none; }
     .graph-scan .gnode, .graph-scan .gsonar, .graph-scan .gedge-flow { animation: none; }

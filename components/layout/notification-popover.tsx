@@ -240,7 +240,12 @@ export function NotificationPopover() {
                 // without this baseline the bell renders as a hard-cornered, shadowless
                 // square for the first moments of every page. Once loaded, motion's
                 // inline style takes over and these are overridden.
-                className="absolute right-0 top-0 z-50 origin-top-right overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-[0_1px_1px_rgba(17,24,39,0.04)]"
+                // anim-fade eases the bell in on mount. The shell reserves its
+                // footprint but draws nothing there (no session yet to open a
+                // realtime channel for), so without this the bell simply appeared
+                // in that gap. Safe alongside motion here: motion animates
+                // borderRadius and boxShadow on this element, never opacity.
+                className="anim-fade absolute right-0 top-0 z-50 origin-top-right overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-[0_1px_1px_rgba(17,24,39,0.04)]"
                 initial={false}
                 whileTap={{ scale: 0.9 }}
                 // width/height are the CLAMPED springs (bounce both ways, never
@@ -287,7 +292,13 @@ export function NotificationPopover() {
                         <BellIcon />
                     </m.span>
                     {unread > 0 && (
-                        <span className="absolute right-[9px] top-[8px] h-2 w-2 rounded-full bg-[color:var(--c-primary)] ring-2 ring-[color:var(--c-surface)]" />
+                        // CSS, not motion: motion's features load after first
+                        // paint, so a motion-driven entrance would not run for the
+                        // very appearance that matters — the dot arriving when the
+                        // first fetch resolves. The animation is tied to the
+                        // element mounting, so it plays when the dot appears and
+                        // not when the count merely changes.
+                        <span className="anim-ping-in absolute right-[9px] top-[8px] h-2 w-2 rounded-full bg-[color:var(--c-primary)] ring-2 ring-[color:var(--c-surface)]" />
                     )}
                 </button>
 
