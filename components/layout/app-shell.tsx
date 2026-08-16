@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/components/ui/cn"
-import { Sidebar } from "@/components/layout/sidebar"
+import { Sidebar, SidebarBrand } from "@/components/layout/sidebar"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { NotificationPopover } from "@/components/layout/notification-popover"
 import { isImmersiveMind } from "@/components/layout/immersive"
@@ -53,17 +53,7 @@ export function AppShell({
                     <MobileSidebar projects={projects} />
                     <TopBreadcrumb projects={projects} />
                     <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
-                        <label className="relative flex items-center">
-                            <span className="pointer-events-none absolute left-3 grid place-items-center text-[color:var(--c-text-dim)]">
-                                <SearchIcon />
-                            </span>
-                            <input
-                                type="search"
-                                aria-label="Search"
-                                placeholder="Search…"
-                                className="h-9 w-[160px] rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-9 pr-3 text-[13px] text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,background-color,border-color] duration-200 hover:border-[color:var(--c-border-strong)] focus:w-[220px] focus:border-[color:var(--c-primary)] focus:outline-none focus:ring-[3px] focus:ring-[color:var(--c-ring)] sm:w-[200px] sm:focus:w-[260px]"
-                            />
-                        </label>
+                        <TopbarSearch />
                         <NotificationPopover />
                     </div>
                 </header>
@@ -158,26 +148,71 @@ function TopBreadcrumb({ projects }: { projects: Project[] }) {
     )
 }
 
-// Shell skeleton shown while the session resolves or a redirect is
-// pending — mirrors the floating-panel chrome so there's no layout jump
-// when the real content swaps in.
+/** The topbar search field. Static — no session, no props, nothing to wait for.
+ *  Shared with ShellSkeleton so the two cannot render different widths. */
+function TopbarSearch() {
+    return (
+        <label className="relative flex items-center">
+            <span className="pointer-events-none absolute left-3 grid place-items-center text-[color:var(--c-text-dim)]">
+                <SearchIcon />
+            </span>
+            <input
+                type="search"
+                aria-label="Search"
+                placeholder="Search…"
+                className="h-9 w-[160px] rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] pl-9 pr-3 text-[13px] text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,background-color,border-color] duration-200 hover:border-[color:var(--c-border-strong)] focus:w-[220px] focus:border-[color:var(--c-primary)] focus:outline-none focus:ring-[3px] focus:ring-[color:var(--c-ring)] sm:w-[200px] sm:focus:w-[260px]"
+            />
+        </label>
+    )
+}
+
+// Shown while the session resolves or a redirect is pending.
+//
+// It renders the REAL chrome, not an impression of it. Everything here — the
+// brand, the search field, the bell's footprint, the sidebar's width and
+// breakpoint — is known before the session is, so drawing grey rectangles in
+// their place invented a loading state for things already decided, and every
+// hard navigation (a team switch is one) flickered through it.
+//
+// The two mismatches that actually moved the page: the search + bell were one
+// 200px bar where the real header has a 200px field AND a 36px bell beside it,
+// and this aside appeared at `sm` while the real sidebar appears at `md` — so
+// between 640 and 768px the skeleton showed a whole sidebar the real shell does
+// not, and the entire page slid sideways when it swapped.
+//
+// What stays grey is only what genuinely is not known yet: the team selector,
+// the balance, the project list.
 export function ShellSkeleton() {
     return (
-        <div className="flex h-screen w-full bg-[color:var(--c-shell)]">
-            <aside aria-busy className="hidden w-64 shrink-0 flex-col sm:flex">
-                <div className="flex h-14 items-center gap-2.5 px-3.5">
-                    <div className="skeleton h-8 w-8 rounded-[9px]" />
-                    <div className="skeleton h-3.5 w-20 rounded" />
-                </div>
-                <div className="flex flex-col gap-1.5 px-2.5 py-3">
-                    {[0, 1, 2, 3].map((i) => (
-                        <div key={i} className="skeleton h-8 w-full rounded-[9px]" />
-                    ))}
+        <div className="flex h-screen w-full bg-[color:var(--c-shell)] text-[color:var(--c-text)]">
+            <aside aria-busy className="hidden h-full w-64 shrink-0 overflow-hidden bg-[color:var(--c-shell)] md:block">
+                <div className="h-full w-64">
+                    <nav className="relative flex h-full flex-col pt-2 pl-2">
+                        <SidebarBrand />
+                        <div className="px-2.5 pt-1.5 pb-1">
+                            <div className="mb-1 px-0.5 text-[11.5px] font-semibold tracking-wide text-[color:var(--c-text-muted)]">
+                                Team
+                            </div>
+                            <div className="skeleton h-7 w-full rounded-[10px]" />
+                        </div>
+                        <div className="flex flex-col gap-[4px] px-2.5 pt-3">
+                            {[0, 1, 2, 3].map((i) => (
+                                <div key={i} className="skeleton h-8 w-full rounded-[9px]" />
+                            ))}
+                        </div>
+                    </nav>
                 </div>
             </aside>
-            <div className="flex min-w-0 flex-1 flex-col">
-                <header className="flex h-14 items-center justify-end px-3 sm:px-5">
-                    <div className="skeleton h-9 w-[200px] rounded-[10px]" />
+            <div className="flex min-w-0 flex-1 flex-col pt-2">
+                <header className="relative z-30 flex h-14 shrink-0 items-center gap-2.5 px-3 sm:gap-3 sm:px-5">
+                    <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-2.5">
+                        <TopbarSearch />
+                        {/* The bell's own footprint (NotificationPopover renders the
+                            same h-9 w-9 spacer). Not the live popover: it opens a
+                            realtime channel, and there is no session yet to open it
+                            for. */}
+                        <span aria-hidden className="block h-9 w-9" />
+                    </div>
                 </header>
                 <main className="min-h-0 flex-1">
                     <div className="app-panel" />

@@ -100,29 +100,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
             </div>
             {/* Content sits above the decorative ember layers (logo + blooms). */}
             <div className="relative flex min-h-0 flex-1 flex-col">
-            {/* Workspace header */}
-            <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-                <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[var(--c-secondary-deep)] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]">
-                    {/* Brand ember — the same dark-ember pixel gradient as the login panel,
-                        glowing from the top-left corner behind the mark. */}
-                    <PixelGradient stops={DARK_EMBER_STOPS} variant="linear" tiltDeg={45} tilePx={8} tileAspect={1} />
-                    <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
-                        <BobbyMark />
-                    </span>
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[14px] font-bold tracking-[-0.01em]">
-                    Ucelot
-                </span>
-                {/* Panel toggle — matches the reference; visual affordance for now. */}
-                <button
-                    type="button"
-                    aria-label="Toggle sidebar"
-                    title="Toggle sidebar"
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-[color:var(--c-border)] text-[color:var(--c-text-dim)] transition-colors hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)]"
-                >
-                    <PanelIcon />
-                </button>
-            </div>
+            <SidebarBrand />
 
             {/* Team switcher — the active workspace. Sits above the scroll body so
                 its dropdown isn't clipped by the nav's overflow. */}
@@ -432,3 +410,37 @@ const BobbyMark = () => (
         />
     </svg>
 )
+
+/** The workspace header: brand mark, product name, panel toggle.
+ *
+ *  Exported because ShellSkeleton renders it too. None of it depends on the
+ *  session, so showing a grey square here instead — as the skeleton used to —
+ *  was inventing a loading state for something already known, and the swap to
+ *  the real mark was a visible flicker on every hard navigation (which is what a
+ *  team switch is). */
+export function SidebarBrand() {
+    return (
+        <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
+            <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[var(--c-secondary-deep)] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]">
+                {/* Brand ember — the same dark-ember pixel gradient as the login panel,
+                    glowing from the top-left corner behind the mark. */}
+                <PixelGradient stops={DARK_EMBER_STOPS} variant="linear" tiltDeg={45} tilePx={8} tileAspect={1} />
+                <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+                    <BobbyMark />
+                </span>
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[14px] font-bold tracking-[-0.01em]">
+                Ucelot
+            </span>
+            {/* Panel toggle — matches the reference; visual affordance for now. */}
+            <button
+                type="button"
+                aria-label="Toggle sidebar"
+                title="Toggle sidebar"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-[color:var(--c-border)] text-[color:var(--c-text-dim)] transition-colors hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)]"
+            >
+                <PanelIcon />
+            </button>
+        </div>
+    )
+}
