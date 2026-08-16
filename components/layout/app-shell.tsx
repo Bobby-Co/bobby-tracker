@@ -3,7 +3,8 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/components/ui/cn"
-import { Sidebar, SidebarBrand } from "@/components/layout/sidebar"
+import { Sidebar, SidebarBrand, SidebarPrimaryNav } from "@/components/layout/sidebar"
+import { BalancePillSkeleton } from "@/components/layout/balance-pill"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { NotificationPopover } from "@/components/layout/notification-popover"
 import { isImmersiveMind } from "@/components/layout/immersive"
@@ -193,12 +194,18 @@ export function ShellSkeleton() {
                             <div className="mb-1 px-0.5 text-[11.5px] font-semibold tracking-wide text-[color:var(--c-text-muted)]">
                                 Team
                             </div>
+                            {/* The team name is the one thing here that genuinely
+                                is not known yet. */}
                             <div className="skeleton h-7 w-full rounded-[10px]" />
+                            {/* The credits box was MISSING entirely, so the real
+                                shell added 57px below the selector on mount and
+                                shoved the nav down — the jump in the screenshot.
+                                Same component the pill falls back to, so the two
+                                cannot disagree about its height. */}
+                            <BalancePillSkeleton />
                         </div>
-                        <div className="flex flex-col gap-[4px] px-2.5 pt-3">
-                            {[0, 1, 2, 3].map((i) => (
-                                <div key={i} className="skeleton h-8 w-full rounded-[9px]" />
-                            ))}
+                        <div className="px-2.5 pt-3">
+                            <SidebarPrimaryNav />
                         </div>
                     </nav>
                 </div>

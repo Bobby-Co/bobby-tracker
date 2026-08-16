@@ -117,7 +117,7 @@ export function BalancePill() {
 // font metrics and padding then resolve identically by construction, and the two
 // cannot drift apart when the pill is restyled — anything that changes its height
 // changes this the same way.
-function BalancePillSkeleton() {
+export function BalancePillSkeleton() {
     return (
         <div
             aria-hidden

@@ -55,11 +55,6 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
     const [projectsOpen, setProjectsOpen] = useState(true)
     const [groupsOpen, setGroupsOpen] = useState(true)
     const [signingOut, setSigningOut] = useState(false)
-
-    const isInbox = pathname === "/projects"
-    const isGroups = pathname === "/groups" || pathname.startsWith("/groups/")
-    const isSessions = pathname === "/sessions" || pathname.startsWith("/sessions/")
-    const isWorkers = pathname === "/workers" || pathname.startsWith("/workers")
     const isSettings = pathname === "/settings" || pathname.startsWith("/settings")
 
     const urlMatch = pathname.match(/^\/projects\/([^/]+)/)
@@ -115,12 +110,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
 
             {/* Scrollable nav body */}
             <div className="flex-1 overflow-y-auto px-2.5 pb-3 pt-3">
-                <div className="flex flex-col gap-[4px]">
-                    <NavItem href="/projects" active={isInbox} onNavigate={onNavigate} icon={<RepoIcon />} label="Projects" />
-                    <NavItem href="/groups" active={isGroups} onNavigate={onNavigate} icon={<GroupsIcon />} label="Collections" />
-                    <NavItem href="/sessions" active={isSessions} onNavigate={onNavigate} icon={<SessionsIcon />} label="Public sessions" />
-                    <NavItem href="/workers" active={isWorkers} onNavigate={onNavigate} icon={<WorkersIcon />} label="Local models" />
-                </div>
+                <SidebarPrimaryNav onNavigate={onNavigate} />
 
                 {/* Featured — the most recently active projects (up to 5). The
                     full list lives on the Projects page. */}
@@ -441,6 +431,24 @@ export function SidebarBrand() {
             >
                 <PanelIcon />
             </button>
+        </div>
+    )
+}
+
+/** The four fixed destinations. Their labels, icons, order and hrefs are all
+ *  known at build time and the active one comes from the URL, so nothing here
+ *  waits on a session.
+ *
+ *  Exported because ShellSkeleton renders it too. It used to draw four grey
+ *  rectangles in this spot — a loading state for a list that cannot load. */
+export function SidebarPrimaryNav({ onNavigate }: { onNavigate?: () => void }) {
+    const pathname = usePathname()
+    return (
+        <div className="flex flex-col gap-[4px]">
+            <NavItem href="/projects" active={pathname === "/projects"} onNavigate={onNavigate} icon={<RepoIcon />} label="Projects" />
+            <NavItem href="/groups" active={pathname === "/groups" || pathname.startsWith("/groups/")} onNavigate={onNavigate} icon={<GroupsIcon />} label="Collections" />
+            <NavItem href="/sessions" active={pathname === "/sessions" || pathname.startsWith("/sessions/")} onNavigate={onNavigate} icon={<SessionsIcon />} label="Public sessions" />
+            <NavItem href="/workers" active={pathname.startsWith("/workers")} onNavigate={onNavigate} icon={<WorkersIcon />} label="Local models" />
         </div>
     )
 }
