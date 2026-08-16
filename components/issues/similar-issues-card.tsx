@@ -97,11 +97,12 @@ export function SimilarIssuesCard({
                     missing?: boolean
                     duplicateThreshold?: number
                 }
-                // Only matches that clear the project's duplicate sensitivity
-                // are shown. The endpoint also returns weaker "related" matches
-                // above a fixed floor, but presenting those here put a
-                // "Duplicate of" button next to issues the project had
-                // explicitly said were not similar enough to count.
+                // A BACKSTOP, not the gate. The server now filters to the
+                // project's threshold before responding — the decision belongs
+                // there, because the public twin of this endpoint serves
+                // anonymous submitters and a rule enforced in the browser is not
+                // enforced. This line only catches a stale server still sending
+                // weaker matches.
                 const all = Array.isArray(data.similar) ? data.similar : []
                 const list = all.filter((s) => s.isDuplicate !== false)
                 // Server-decided "missing": the issue is old enough

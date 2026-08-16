@@ -53,9 +53,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         // its related-issues list, which is not what anyone asked for.
         const project = await tryOrNull(() => ctx.projects.findFull(projectId))
         const dupThreshold = duplicateThreshold(project?.duplicate_sensitivity)
+        // Filtered on the SERVER, not in the card. The card used to do this,
+        // which meant every response carried issues it was about to hide — waste
+        // here, and on the public twin of this route, titles handed to an
+        // anonymous submitter that the project had said were not close enough to
+        // show them. A visibility rule decided by a component is not a rule.
+        //
+        // MIN_SIMILARITY stays as the floor beneath every level: it is what stops
+        // the top-K RPC (which has no threshold of its own) from returning
+        // same-domain noise if a level is ever tuned below it.
+        const bar = Math.max(MIN_SIMILARITY, dupThreshold)
         const filtered = state.similar
-            .filter((r) => r.similarity >= MIN_SIMILARITY)
-            .map((r) => ({ ...r, isDuplicate: r.similarity >= dupThreshold }))
+            .filter((r) => r.similarity >= bar)
+            .map((r) => ({ ...r, isDuplicate: true }))
         return Response.json({
             similar: filtered,
             pending: false,

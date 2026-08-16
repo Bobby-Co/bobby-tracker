@@ -133,10 +133,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .eq("id", issue.project_id)
         .maybeSingle<{ duplicate_sensitivity: string | null }>()
     const dupThreshold = duplicateThreshold(proj?.duplicate_sensitivity)
+    // Server-side, and here it is not merely tidiness: this route answers
+    // ANONYMOUS submitters, so anything below the project's threshold that we
+    // send is an issue title disclosed to someone the project chose not to show
+    // it to. Filtering in the card would leave that decision in the browser.
+    const bar = Math.max(MIN_SIMILARITY, dupThreshold)
     const top = ranked
-        .filter((r) => r.similarity >= MIN_SIMILARITY)
+        .filter((r) => r.similarity >= bar)
         .slice(0, 5)
-        .map((r) => ({ ...r, isDuplicate: r.similarity >= dupThreshold }))
+        .map((r) => ({ ...r, isDuplicate: true }))
 
     return Response.json({ similar: top, pending: false, missing: false, duplicateThreshold: dupThreshold })
 }
