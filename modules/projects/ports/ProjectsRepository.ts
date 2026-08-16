@@ -57,6 +57,11 @@ export interface NewProject {
     provider?: string
     gitlab_project_id?: number | null
     gitlab_host?: string | null
+    // GitHub's numeric repo id, captured at create from the picker. Set WITHOUT
+    // github_installation_id or github_sync_enabled — this records which repo
+    // the project is for, not that webhooks may flow. Sync still needs the App
+    // install (linkGithub), and Project.isSyncReady() requires both.
+    github_repo_id?: number | null
 }
 
 /** The GitHub-sync settings projection the sync-settings route returns. */

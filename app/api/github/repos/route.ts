@@ -21,6 +21,7 @@ const PER_PAGE = 100
 const MAX_PAGES = 5
 
 interface RawGithubRepo {
+    id: number
     full_name: string
     name: string
     private: boolean
@@ -100,6 +101,7 @@ export async function GET() {
         const page_repos = (await resp.json()) as RawGithubRepo[]
         for (const r of page_repos) {
             repos.push({
+                id: r.id,
                 full_name: r.full_name,
                 name: r.name,
                 private: r.private,

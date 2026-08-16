@@ -346,6 +346,10 @@ export interface PrAnalysis {
  *  shows a lock icon and whether the analyser kickoff needs to attach
  *  git_auth. */
 export interface GithubRepoSummary {
+    /** GitHub's numeric repo id — stable across renames and transfers, and the
+     *  join key inbound webhooks arrive with. Captured at create so a repo the
+     *  team already tracks is rejected up front rather than at App-install. */
+    id: number
     full_name: string       // "owner/repo"
     name: string
     private: boolean

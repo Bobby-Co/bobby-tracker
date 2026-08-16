@@ -91,6 +91,18 @@ export async function POST(request: Request) {
         }
     }
 
+    // GitHub's numeric repo id, sent by the picker. It was always in the
+    // /user/repos payload and was being discarded, which left github_repo_id
+    // null until the App-install callback ran — so the duplicate check below
+    // had only the URL and the full name to go on, and a repo added twice under
+    // two different URL spellings slipped through until install time.
+    //
+    // Recording it does NOT enable sync: github_installation_id stays null, so
+    // isSyncReady() is false and the webhook receivers (which filter on
+    // github_sync_enabled) ignore the project until the App is connected.
+    const github_repo_id =
+        provider === "github" && typeof body?.github_repo_id === "number" ? body.github_repo_id : null
+
     // Reject a repo the TEAM already has. The DB's unique(team_id, repo_url)
     // constraint (0052) only catches an EXACT string match, so we also compare by
     // canonical URL and by repo_full_name case-insensitively (a repo's real
@@ -114,7 +126,7 @@ export async function POST(request: Request) {
             repo_full_name,
             description,
             provider,
-            ...(provider === "gitlab" ? { gitlab_project_id, gitlab_host } : {}),
+            ...(provider === "gitlab" ? { gitlab_project_id, gitlab_host } : { github_repo_id }),
         }),
     )
     if (dbErr) return dbErr

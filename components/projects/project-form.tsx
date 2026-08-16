@@ -19,7 +19,9 @@ interface PickerRepo {
     description: string | null
     private: boolean
     html_url: string
-    external_id: number | null // GitLab project id; null for GitHub
+    // The provider's own numeric repo id: GitLab's project id, GitHub's repo
+    // id. Null only if the provider didn't supply one.
+    external_id: number | null
 }
 
 
@@ -75,7 +77,7 @@ async function fetchRepoListState(): Promise<LoadState> {
                     description: r.description,
                     private: r.private,
                     html_url: r.html_url,
-                    external_id: null,
+                    external_id: r.id,
                 })
             }
         }
@@ -164,7 +166,7 @@ export function ProjectForm() {
                         provider: selected.provider,
                         ...(selected.provider === "gitlab"
                             ? { gitlab_project_id: selected.external_id }
-                            : {}),
+                            : { github_repo_id: selected.external_id }),
                     },
                 })
                 router.push(`/projects/${project.id}/setup`)
