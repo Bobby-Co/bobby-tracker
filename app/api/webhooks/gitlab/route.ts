@@ -159,15 +159,15 @@ async function handleIssue(svc: Svc, project: GlProjectRow, payload: Record<stri
 
     if (existing) {
         await regional.from("issues").update(syncFields).eq("id", existing.id)
-        if (action === "close") after(() => createIssueAnalysisService().cancel(existing.id))
+        if (action === "close") after(() => createIssueAnalysisService(regional).cancel(existing.id))
     } else {
         const { data: inserted } = await regional
             .from("issues")
             .insert({ project_id: project.id, user_id: project.user_id, ...syncFields })
             .select("id")
             .single<Pick<Issue, "id">>()
-        if (action === "open" && inserted) after(() => createIssueAnalysisService().ensure(inserted.id, origin))
-        if (inserted) after(() => createIssueEmbedder().embedIssue({ id: inserted.id, project_id: project.id, title, body }))
+        if (action === "open" && inserted) after(() => createIssueAnalysisService(regional).ensure(inserted.id, origin))
+        if (inserted) after(() => createIssueEmbedder(regional).embedIssue({ id: inserted.id, project_id: project.id, title, body }))
     }
     return ack()
 }
@@ -267,7 +267,7 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
     })
 
     if (a?.action === "close" || a?.action === "merge") {
-        after(() => createPullRequestAnalysisService().cancel(project.id, number))
+        after(async () => createPullRequestAnalysisService(await dataClientForProject(project.id)).cancel(project.id, number))
         return ack()
     }
     if (a?.draft || a?.work_in_progress) return ack()
@@ -284,8 +284,8 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
         provider: "gitlab" as const,
         gitlab_project_id: project.gitlab_project_id,
     }
-    after(() =>
-        createPullRequestAnalysisService().start(
+    after(async () =>
+        createPullRequestAnalysisService(await dataClientForProject(project.id)).start(
             prProject,
             { number, title: a?.title ?? "", body: a?.description ?? null, baseSha: null, headSha: a?.last_commit?.id ?? null },
             origin,

@@ -151,6 +151,14 @@ export class RequestContext {
         this.dataClient = this.controlDb
     }
 
+    /** The bound data-plane client, for handing to a service that this context
+     *  does not construct (the analysis services, which are composed elsewhere).
+     *  Throws when unbound, exactly like the private accessor — a route that
+     *  reaches for this before its guard has bound a region has the same bug. */
+    get dataPlaneClient(): SupabaseRlsClient {
+        return this.dataDb
+    }
+
     private get dataDb(): SupabaseRlsClient {
         if (!this.dataClient) {
             throw new Error(

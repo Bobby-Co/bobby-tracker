@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     // abandoned the instant the response returns, so the embed fetch
     // gets cancelled and the issue is never indexed. after() registers
     // the work with the runtime's waitUntil so it runs to completion.
-    after(() => createIssueEmbedder().embedIssue(issue))
+    after(() => createIssueEmbedder(ctx.dataPlaneClient).embedIssue(issue))
 
     // If the project is linked to GitHub with two-way sync on, mirror the new
     // issue to GitHub and post the auto-analysis comment. Fire-and-forget via
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
             // Push first so the issue has its github_issue_number, then start
             // the placeholder-comment + detached analysis run.
             await getVcsAppService(project, await dataClientForProject(project.id))?.syncIssueCreated(issue, project)
-            await createIssueAnalysisService().ensure(issue.id, origin)
+            await createIssueAnalysisService(ctx.dataPlaneClient).ensure(issue.id, origin)
         })
     }
 

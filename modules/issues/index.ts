@@ -37,7 +37,8 @@ export { createSupabaseIssueCommentsReadRepository } from "./infrastructure/Supa
 export type { EmbeddingIndex, EmbeddingUpsert, UnembeddedIssue } from "./ports/EmbeddingIndex"
 export { createServiceEmbeddingIndex } from "./infrastructure/SupabaseEmbeddingIndex"
 export type { EmbeddableIssue } from "./application/IssueEmbedder"
-export { IssueEmbedder, createIssueEmbedder } from "./application/IssueEmbedder"
+export { IssueEmbedder } from "./application/IssueEmbedder"
+export { createIssueEmbedder } from "./Composition"
 
 // ─── issue fix-prompt builder (renders a coding-agent prompt from an issue) ───
 export type { IssuePromptInput } from "./infrastructure/IssuePrompt"

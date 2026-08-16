@@ -8,9 +8,7 @@
 // the composition seam below injects the concrete, service-role-backed adapters.
 
 import type { Analyser } from "@/modules/analysis"
-import { getAnalyser } from "@/modules/analysis"
 import type { EmbeddingIndex } from "../ports/EmbeddingIndex"
-import { createServiceEmbeddingIndex } from "../infrastructure/SupabaseEmbeddingIndex"
 import { EmbeddingText } from "../domain/EmbeddingText"
 
 /** The minimal issue shape the embedder needs. Structural, so a freshly-inserted
@@ -86,10 +84,4 @@ export class IssueEmbedder {
         }
         return filled
     }
-}
-
-/** Composition seam: the app-wide IssueEmbedder — the HTTP analyser + the
- *  service-role embedding index. */
-export function createIssueEmbedder(): IssueEmbedder {
-    return new IssueEmbedder(getAnalyser(), createServiceEmbeddingIndex())
 }

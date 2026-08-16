@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const ownedProjectId = await tryOrNull(() => issues.findProjectId(id))
     if (!ownedProjectId) return jsonError("not_found", "issue not found", 404)
 
-    const status = await createIssueAnalysisService().ensure(id, new URL(request.url).origin)
+    const status = await createIssueAnalysisService(ctx.dataPlaneClient).ensure(id, new URL(request.url).origin)
     if (status === "not_ready") {
         return jsonError(
             "needs_indexing",

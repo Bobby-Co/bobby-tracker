@@ -123,3 +123,51 @@ describe("the regional table list is meaningful", () => {
         expect(src).toMatch(/data plane accessed before a region was bound/)
     })
 })
+
+// The miss that the table check above CANNOT see, and that shipped a real bug:
+// the region-sensitive factories all take their data client as an OPTIONAL
+// parameter, so a bare call compiles, type-checks, and quietly reads the central
+// database. That is how /api/issues/[id]/analyse came to find an issue on one
+// line (via a correctly-bound ctx) and report "issue not found" on the next.
+//
+// Optional was the right shape — the stores genuinely have a central-only mode —
+// so the enforcement belongs here rather than in the type.
+const REGION_SENSITIVE_FACTORIES = [
+    "createIssueAnalysisService",
+    "createPullRequestAnalysisService",
+    "createIssueEmbedder",
+    "createServiceIssueSyncStore",
+    "createServicePullRequestStore",
+    "createServiceEmbeddingIndex",
+    "createServicePullRequestAnalysisStore",
+]
+
+describe("region-sensitive factories are never called bare", () => {
+    const bare: { file: string; factory: string }[] = []
+
+    for (const root of ROOTS) {
+        for (const file of sourceFiles(root)) {
+            const rel = file.slice(ROOT.length + 1)
+            // Strip comments first: these factory names appear in prose in their
+            // own doc blocks, and a doc comment is not a call site.
+            const src = readFileSync(file, "utf8")
+                .replace(/\/\*[\s\S]*?\*\//g, "")
+                .replace(/^\s*\/\/.*$/gm, "")
+            for (const factory of REGION_SENSITIVE_FACTORIES) {
+                // The definition itself, and re-exports, are not calls.
+                const called = new RegExp(`(?<!function\\s)\\b${factory}\\(\\)`)
+                if (called.test(src)) bare.push({ file: rel, factory })
+            }
+        }
+    }
+
+    test("every call passes a data client", () => {
+        const detail = bare.map((b) => `  ${b.file} → ${b.factory}()`).join("\n")
+        expect(
+            bare.length === 0 ? "" : `\nRegion-sensitive factories called with no data client:\n${detail}\n\n` +
+                `Pass ctx.dataPlaneClient (inside a guarded route) or\n` +
+                `await dataClientForProject(projectId) (webhooks, callbacks, public paths).\n` +
+                `A bare call reads the CENTRAL database regardless of the team's region.\n`,
+        ).toBe("")
+    })
+})

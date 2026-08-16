@@ -83,7 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         // Await it: the analyser run is detached, so what we're waiting on is the
         // diff fetch + loading-comment post + the tracking-row upsert. When this
         // resolves the row is 'analysing' (or the kickoff genuinely failed).
-        await createPullRequestAnalysisService().start(
+        await createPullRequestAnalysisService(ctx.dataPlaneClient).start(
             project,
             {
                 number: prNumber,

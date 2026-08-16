@@ -11,6 +11,7 @@ import { EmailTransport } from "@/lib/server/email/EmailTransport"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { Supabase } from "@/lib/server/supabase"
 import type { NotificationKind, PrAnalysis } from "@/lib/shared/types"
+import { dataClientForProject } from "@/lib/server/regional"
 
 type Svc = ReturnType<typeof Supabase.service>
 
@@ -94,7 +95,7 @@ export class NotificationEmail {
         const m = href.match(/\/pulls\/(\d+)/)
         if (!m) return null
         const prNumber = Number(m[1])
-        const result = await createServicePullRequestStore().findAnalysisResult(projectId, prNumber)
+        const result = await createServicePullRequestStore(await dataClientForProject(projectId)).findAnalysisResult(projectId, prNumber)
         return result ? { prNumber, result } : null
     }
 

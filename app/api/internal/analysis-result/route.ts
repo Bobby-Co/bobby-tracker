@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/server/http/api"
+import { dataClientByProbe } from "@/lib/server/regional"
 import { createIssueAnalysisService } from "@/modules/analysis"
 import type { IssueAnalysis } from "@/modules/analysis"
 
@@ -36,7 +37,14 @@ export async function POST(request: Request) {
     if (!taskId || !status) return jsonError("bad_request", "task_id and a valid status are required", 400)
 
     try {
-        await createIssueAnalysisService().applyResult(taskId, status, result, new URL(request.url).origin)
+        // Which region holds this issue? The analyser stamps X-Bobby-Cell; absent
+        // that we probe. `issues` is regional and the task id IS the issue id.
+        const id = taskId
+        const regional = await dataClientByProbe(request, async (db) => {
+            const { data } = await db.from("issues").select("id").eq("id", id).maybeSingle<{ id: string }>()
+            return !!data
+        })
+        await createIssueAnalysisService(regional).applyResult(taskId, status, result, new URL(request.url).origin)
     } catch (err) {
         const e = err as { message?: string }
         return jsonError("apply_failed", e?.message ?? "apply failed", 500)

@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     // Index the new issue for similarity search alongside owner-filed
     // ones. after() (not a bare `void`) so the Worker isn't frozen
     // before the embed completes — see POST /api/issues for why.
-    after(() => createIssueEmbedder().embedIssue({ id: issue.id, project_id: project.id, title: issue.title, body: finalBody }))
+    after(() => createIssueEmbedder(regional).embedIssue({ id: issue.id, project_id: project.id, title: issue.title, body: finalBody }))
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).

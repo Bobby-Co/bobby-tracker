@@ -15,7 +15,7 @@
 // reconcile them.
 
 import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
-import { getRegionRegistry, type CellId } from "@/modules/regions"
+import { getRegionRegistry, parseCellId, type CellId } from "@/modules/regions"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 
 /** The data-plane client for a cell. Falls back to the CONTROL client when the
@@ -28,6 +28,55 @@ export function dataClientForCell(cell: CellId | null): SupabaseRlsClient {
     if (!registry.hasDatabase(cell)) return control
     const cfg = registry.cell(cell)
     return Supabase.forRegion(cfg.supabaseUrl, cfg.supabaseServiceKey, cell) as SupabaseRlsClient
+}
+
+/** The header the analyser stamps on its callbacks, naming the cell it ran in.
+ *  Same constant as bobby-analyser's `CellHeader`. */
+export const CELL_HEADER = "x-bobby-cell"
+
+/** The data-plane client holding a row that is only identifiable by id.
+ *
+ *  This is the analyser-callback problem: the request carries a task id and
+ *  nothing else, and the row that id refers to is itself regional — so the
+ *  lookup needs the answer it is trying to find. There is no user here whose
+ *  teams could narrow it, either.
+ *
+ *  Two ways out, tried in order:
+ *
+ *  1. The analyser knows which cell it is and stamps X-Bobby-Cell on the
+ *     callback. One hop, no guessing. This is the path that should normally win.
+ *  2. Otherwise, PROBE the configured cells until the row turns up. Bounded by
+ *     the number of cells (one, today) and self-correcting — unlike a central
+ *     id → cell index, which is a second copy of the truth with nothing in this
+ *     stack to repair it when it drifts.
+ *
+ *  Falls back to the control client when nothing matches, which is both the
+ *  pre-split answer and the right one for a row that genuinely lives centrally. */
+export async function dataClientByProbe(
+    request: Request,
+    probe: (db: SupabaseRlsClient) => Promise<boolean>,
+): Promise<SupabaseRlsClient> {
+    const registry = getRegionRegistry()
+
+    const stamped = parseCellId(request.headers.get(CELL_HEADER) ?? undefined)
+    if (stamped) return dataClientForCell(stamped)
+
+    // Home first: it is where everything lives until it is moved, so the common
+    // case costs one probe.
+    const home = registry.homeCell()
+    const candidates = [home, ...registry.configuredCells().map((c) => c.id).filter((id) => id !== home)]
+
+    for (const cell of candidates) {
+        if (!registry.hasDatabase(cell) && cell !== home) continue
+        const db = dataClientForCell(cell)
+        try {
+            if (await probe(db)) return db
+        } catch {
+            // A region that is unreachable must not abort the search — the row
+            // may well be in the next one.
+        }
+    }
+    return Supabase.service() as SupabaseRlsClient
 }
 
 /** The data-plane client holding a project's regional rows.

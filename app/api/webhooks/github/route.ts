@@ -295,7 +295,7 @@ async function applyIssueToProject(
         // Closing the issue cancels any in-flight analysis — the analyser then
         // reports 'cancelled' via the callback and the placeholder is updated.
         if (action === "closed") {
-            after(() => createIssueAnalysisService().cancel(existing.id))
+            after(() => createIssueAnalysisService(regional).cancel(existing.id))
         }
     } else {
         // First time we see this GitHub issue — insert under the project
@@ -316,7 +316,7 @@ async function applyIssueToProject(
         // "analysing…" placeholder + start the detached analyser run (no-ops
         // silently when the graph isn't indexed). Off the 202 ack path.
         if (action === "opened" && inserted) {
-            after(() => createIssueAnalysisService().ensure(inserted.id, origin))
+            after(() => createIssueAnalysisService(regional).ensure(inserted.id, origin))
         }
 
         // (8b) …and gets embedded, so it joins the similarity corpus like an
@@ -331,7 +331,7 @@ async function applyIssueToProject(
         // Fire-and-forget off the ack path, same as the analyser call. If it
         // fails, the embedder's ensureEmbeddings() sweep picks the row up later.
         if (inserted) {
-            after(() => createIssueEmbedder().embedIssue({ id: inserted.id, project_id: project.id, title, body }))
+            after(() => createIssueEmbedder(regional).embedIssue({ id: inserted.id, project_id: project.id, title, body }))
         }
     }
 
@@ -433,14 +433,14 @@ async function applyPullRequestToProject(
 
     // Closing a PR cancels any in-flight review (state already mirrored above).
     if (action === "closed") {
-        after(() => createPullRequestAnalysisService().cancel(project.id, number))
+        after(async () => createPullRequestAnalysisService(await dataClientForProject(project.id)).cancel(project.id, number))
         return ack()
     }
 
     // opened | reopened | synchronize → review. Skip drafts (still mirrored).
     if (pr?.draft) return ack()
-    after(() =>
-        createPullRequestAnalysisService().start(
+    after(async () =>
+        createPullRequestAnalysisService(await dataClientForProject(project.id)).start(
             project,
             {
                 number,

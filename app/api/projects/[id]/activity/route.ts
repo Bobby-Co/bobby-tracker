@@ -49,7 +49,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { data: analyser, error: aErr } = await repoRead(() => ctx.analyser.findByProjectId(id))
     if (aErr) return aErr
 
-    const embedder = createIssueEmbedder()
+    const embedder = createIssueEmbedder(ctx.dataPlaneClient)
     const unembedded = await embedder.countUnembedded(id)
 
     if (unembedded > 0) {
