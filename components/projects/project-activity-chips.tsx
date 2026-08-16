@@ -6,7 +6,7 @@ import type { ProjectActivity } from "@/app/api/projects/[id]/activity/route"
 
 // Ambient "something is running in the background" chips for the project
 // header. Deliberately small and text-only: this is peripheral status, not a
-// panel. The Knowledge tab's AnalyserPanel remains the place to actually watch
+// panel. The Intelligence tab's AnalyserPanel remains the place to actually watch
 // an index run (phase, cost, elapsed, module progress) — these chips only tell
 // you it's happening while you're on some other tab.
 //

@@ -67,7 +67,7 @@ export function GroupNewIssueButton({ members }: { members: MemberInfo[] }) {
                         />
                         {members.length !== ready.length && (
                             <p className="rounded-[10px] bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-                                {members.length - ready.length} project{members.length - ready.length === 1 ? "" : "s"} {members.length - ready.length === 1 ? "is" : "are"} missing from this list because the analyser hasn&apos;t finished its first index yet. Index them on each project&apos;s Knowledge tab to make them selectable here.
+                                {members.length - ready.length} project{members.length - ready.length === 1 ? "" : "s"} {members.length - ready.length === 1 ? "is" : "are"} missing from this list because the analyser hasn&apos;t finished its first index yet. Index them on each project&apos;s Intelligence tab to make them selectable here.
                             </p>
                         )}
                         <div className="mt-1 flex justify-end gap-2">

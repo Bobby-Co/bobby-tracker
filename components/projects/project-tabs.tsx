@@ -10,7 +10,10 @@ export function ProjectTabs({ projectId }: { projectId: string }) {
         { href: `/projects/${projectId}/issues`, label: "Issues" },
         { href: `/projects/${projectId}/pulls`, label: "Pull requests" },
         { href: `/projects/${projectId}/mind`, label: "Mind" },
-        { href: `/projects/${projectId}/knowledge`, label: "Knowledge" },
+        // Label only — the /knowledge path is unchanged, so existing links and
+        // bookmarks keep working. Renaming the route would be a redirect to
+        // maintain forever in exchange for a tidier URL nobody reads.
+        { href: `/projects/${projectId}/knowledge`, label: "Intelligence" },
         { href: `/projects/${projectId}/integrations`, label: "Integrations" },
         { href: `/projects/${projectId}/settings`, label: "Settings" },
     ]

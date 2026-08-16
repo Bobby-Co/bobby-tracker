@@ -572,7 +572,7 @@ function RankingPanel({
                                         {!r.has_summary && (
                                             <span
                                                 className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-800"
-                                                title="No summary embedding yet — re-index on the project's Knowledge tab."
+                                                title="No summary embedding yet — re-index on the project's Intelligence tab."
                                             >
                                                 no summary
                                             </span>

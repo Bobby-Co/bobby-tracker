@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     if (!ProjectAnalyser.from(analyser).isReady()) {
         return jsonError(
             "needs_indexing",
-            "Enable the analyser and run the first index on the Knowledge tab before creating issues.",
+            "Enable the analyser and run the first index on the Intelligence tab before creating issues.",
             409,
         )
     }

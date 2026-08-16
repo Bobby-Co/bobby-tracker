@@ -63,7 +63,7 @@ export default function IssuesPage() {
     // pending/indexing/failed and no graph_id. Until the first index
     // completes, "issues" without graph context aren't useful — the
     // suggestion / ask flows can't cite anything. Block creation;
-    // direct the user to the Knowledge tab.
+    // direct the user to the Intelligence tab.
     const ready = ProjectAnalyserModel.from(analyser).isReady()
 
     if (loading) {
@@ -136,12 +136,12 @@ export default function IssuesPage() {
                     <AiComposeButton
                         projectId={id}
                         disabled={!ready}
-                        disabledReason="Enable the analyser and run the first index on the Knowledge tab before creating issues."
+                        disabledReason="Enable the analyser and run the first index on the Intelligence tab before creating issues."
                     />
                     <NewIssueButton
                         projectId={id}
                         disabled={!ready}
-                        disabledReason="Enable the analyser and run the first index on the Knowledge tab before creating issues."
+                        disabledReason="Enable the analyser and run the first index on the Intelligence tab before creating issues."
                     />
                 </div>
             </div>
@@ -177,9 +177,9 @@ function KnowledgeRequiredBanner({
     if (ProjectAnalyserModel.of({ status }).isIndexing()) {
         message = "Indexing is in progress — issues will unlock when the first graph is ready."
     } else if (ProjectAnalyserModel.of({ status }).hasFailed()) {
-        message = "The last indexing run failed. Re-index from the Knowledge tab to unlock issues."
+        message = "The last indexing run failed. Re-index from the Intelligence tab to unlock issues."
     } else if (state?.enabled && !state?.graph_id) {
-        message = "Run the first index on the Knowledge tab before creating issues."
+        message = "Run the first index on the Intelligence tab before creating issues."
     }
     return (
         <div className="anim-rise rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
