@@ -213,6 +213,10 @@ export class IssueAnalysisService {
                 }
                 await this.issues.insertSuggestion({
                     issue_id: issue.id,
+                    // From the issue we already read out of its own region. The
+                    // trigger that used to derive this cannot reach across the
+                    // plane split.
+                    user_id: issue.user_id,
                     data: dataWithPrompt,
                     markdown: result.markdown ?? result.summary ?? "",
                     code_cites: (result.suggestions ?? []).map((s) => ({ file: s.file, line: s.line })),

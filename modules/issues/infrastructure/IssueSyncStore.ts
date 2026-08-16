@@ -27,6 +27,9 @@ import { RepositoryError } from "@/lib/shared/kernel"
 export type IssueAnalysisRow = {
     id: string
     project_id: string
+    /** The issue's owner. Carried because issue_suggestions.user_id is NOT NULL
+     *  and its filling trigger can no longer derive it — see IssueSuggestionInsert. */
+    user_id: string
     issue_number: number
     title: string
     body: string | null
@@ -42,7 +45,7 @@ export type IssueAnalysisRow = {
 }
 
 const ANALYSIS_ISSUE_COLS =
-    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status,analysis_started_at"
+    "id,project_id,user_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status,analysis_started_at"
 
 /** GitHub-integration / analysis columns on an issue row. */
 export interface IssueSyncPatch {
@@ -71,6 +74,16 @@ export type ImportedIssueInsert = {
 
 export type IssueSuggestionInsert = {
     issue_id: string
+    /** REQUIRED, and the app must supply it.
+     *
+     *  The column is NOT NULL with a BEFORE INSERT trigger (0005) that fills it
+     *  by joining tracker.issues → tracker.projects. issue_suggestions is
+     *  CONTROL plane and issues is now REGIONAL, so in the control database that
+     *  join finds nothing, user_id stays null, and the insert is rejected. 0068
+     *  dropped this table's FK to issues for the same reason and missed the
+     *  trigger. Passing it explicitly makes the trigger a no-op — it only fills
+     *  when null — so this works whether or not the two tables share a database. */
+    user_id: string
     data: unknown
     markdown: string
     code_cites: { file: string; line?: number }[]

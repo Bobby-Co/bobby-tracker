@@ -69,6 +69,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             .from("issue_suggestions")
             .insert({
                 issue_id:    issue.id,
+                // Same reason as the analysis path: issue_suggestions is CONTROL
+                // plane, its NOT NULL user_id is filled by a trigger that joins
+                // tracker.issues, and issues are REGIONAL — so in the control
+                // database that join finds nothing. `issue` is the full row, so
+                // the owner is already here.
+                user_id:     issue.user_id,
                 data:        result,
                 markdown:    result.markdown ?? result.summary ?? "",
                 code_cites:  (result.suggestions ?? []).map((s) => ({ file: s.file, line: s.line })),
