@@ -201,25 +201,30 @@ export class HttpAnalyser implements Analyser {
         return (await res.json()) as IssueAnalysis
     }
 
-    /** Refuse to dispatch work whose result can never come back.
+    /** Warn when the result probably cannot come back.
      *
-     *  A loopback callback with a remote analyser is not a maybe — it is a
-     *  guaranteed dead drop, and the analysis still runs, still costs money, and
-     *  fails only in the ANALYSER's log where the developer is not looking.
-     *  Better to refuse up front and say what to set. */
-    private assertCallbackReachable(callback: AnalyserRunCallback): void {
+     *  A loopback callback with a remote analyser usually means the analyser will
+     *  dial itself — the analysis runs, costs money, and fails 20s later in the
+     *  ANALYSER's log where nobody watching the tracker sees it.
+     *
+     *  Deliberately a WARNING, not a refusal. "Loopback" is a statement about
+     *  this process's view of the address, not about the analyser's: a reverse
+     *  tunnel or port-forward on the analyser host makes localhost:3000 resolve
+     *  back here, and that is a legitimate, working development setup. Refusing
+     *  it would break a configuration that works today in order to prevent one
+     *  that does not. The log line is enough to find this when it does bite. */
+    private warnIfCallbackUnreachable(callback: AnalyserRunCallback): void {
         if (!callback?.url || !callbackIsUnreachable(callback.url, this.endpoint.baseUrl)) return
-        throw new AnalyserError(
-            `analyser at ${this.endpoint.baseUrl} cannot reach the callback ${callback.url} — ` +
-                `set BOBBY_CALLBACK_ORIGIN to a hostname this analyser can resolve ` +
-                `(a tunnel URL in local development), or run against a local analyser`,
-            "callback_unreachable",
+        console.warn(
+            `[analyser] callback ${callback.url} is a loopback address but the analyser is remote ` +
+                `(${this.endpoint.baseUrl}). This works only if that host forwards the port back here. ` +
+                `If results never arrive, set BOBBY_CALLBACK_ORIGIN to a hostname the analyser can reach.`,
         )
     }
 
     // ─── /issues/analyse/run (detached, cancellable) ──────────────────────────
     async startIssueAnalysis(input: IssueAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
-        this.assertCallbackReachable(callback)
+        this.warnIfCallbackUnreachable(callback)
         const res = await fetch(`${this.base()}/issues/analyse/run`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
@@ -249,7 +254,7 @@ export class HttpAnalyser implements Analyser {
 
     // ─── /pr/analyse/run (detached, cancellable) ──────────────────────────────
     async startPRAnalysis(input: PrAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
-        this.assertCallbackReachable(callback)
+        this.warnIfCallbackUnreachable(callback)
         const res = await fetch(`${this.base()}/pr/analyse/run`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },

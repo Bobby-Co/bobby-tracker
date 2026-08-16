@@ -34,9 +34,13 @@ export function callbackOrigin(requestOrigin: string): string {
     return (configured || requestOrigin).replace(/\/+$/, "")
 }
 
-/** True when this pairing cannot possibly work: a loopback callback handed to an
- *  analyser that is not on this host. Worth detecting at dispatch, because the
- *  alternative is a warning in someone else's log after the work is finished. */
+/** True when a loopback callback is paired with a remote analyser.
+ *
+ *  SUSPICIOUS, not impossible. It is the signature of the common mistake — a
+ *  local dev server telling a remote container to call back to itself — but a
+ *  reverse tunnel or port-forward on the analyser host makes exactly this
+ *  arrangement work. Callers must treat it as a warning, never as grounds to
+ *  refuse the dispatch. */
 export function callbackIsUnreachable(callbackUrl: string, analyserBaseUrl: string): boolean {
     return isLoopbackOrigin(callbackUrl) && !isLoopbackOrigin(analyserBaseUrl)
 }
