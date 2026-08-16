@@ -10,7 +10,6 @@ import { useApi } from "@/lib/client/hooks/use-api"
 import { TeamSelector } from "@/components/layout/team-selector"
 import { BalancePill } from "@/components/layout/balance-pill"
 import { MiniIcon, toneFromString } from "@/components/ui/field-card"
-import PixelGradient, { DARK_EMBER_STOPS } from "@/components/ui/pixel-gradient"
 import PixelScatter from "@/components/ui/pixel-scatter"
 import type { AccessGroup, Project } from "@/lib/shared/types"
 // `m`, not `motion` — the sidebar is on every authed page, so it must not drag
@@ -401,6 +400,12 @@ const BobbyMark = () => (
     </svg>
 )
 
+/** The brand mark's ember, as the 8×8 pixels PixelGradient would paint with
+ *  DARK_EMBER_STOPS, variant="linear", tiltDeg={45}, tilePx={8}. Upscaled with
+ *  image-rendering: pixelated, so it is identical to the canvas output. */
+const BRAND_EMBER_8X8 =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAkUlEQVR4AXzOvQqCYBTG8YezRZfQ1NDSDdTYEDU0RENL0N4lNHUfXUc30BqNToLgJIIiCOIXvr6POggi6vzj/M8j/D7ovff8PA983c+8HG/cbq5crU9cLHcU37TwswV/ZwbDm8MNCwRRgiSNkWUxZAqVyiFjlw1SK8hQtkXqEtL/2UWyLnQH9VE3hXbtEFIrVAAAAP//fjrJVAAAAAZJREFUAwBfaKlwTAiYngAAAABJRU5ErkJggg=="
+
 /** The workspace header: brand mark, product name, panel toggle.
  *
  *  Exported because ShellSkeleton renders it too. None of it depends on the
@@ -411,10 +416,32 @@ const BobbyMark = () => (
 export function SidebarBrand() {
     return (
         <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-            <span className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-[var(--c-secondary-deep)] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]">
-                {/* Brand ember — the same dark-ember pixel gradient as the login panel,
-                    glowing from the top-left corner behind the mark. */}
-                <PixelGradient stops={DARK_EMBER_STOPS} variant="linear" tiltDeg={45} tilePx={8} tileAspect={1} />
+            <span
+                className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]"
+                /* Brand ember — the exact 8×8 image <PixelGradient> paints, baked
+                   to a data URI and upscaled with the same `pixelated` rendering.
+
+                   PixelGradient draws a <canvas> inside useEffect, so it is blank
+                   through SSR and first paint and fills in after hydration. On the
+                   login panel that is invisible; on a 32px mark it is the logo
+                   flashing on every load.
+
+                   An 8×8 PNG rather than a CSS gradient. In linear mode at 45° the
+                   colour depends only on x+y, which tempts you to express it as 15
+                   diagonal hard stops — but the canvas draws SQUARE TILES, and
+                   equal-width diagonal stops render as stripes, not a staircase of
+                   squares. Side by side the difference is obvious. Only an image
+                   keeps the grid.
+
+                   318 bytes, no request, no JS. To regenerate after changing the
+                   stops or tile size: render <PixelGradient> at this size and call
+                   canvas.toDataURL(). */
+                style={{
+                    backgroundImage: `url("${BRAND_EMBER_8X8}")`,
+                    backgroundSize: "100% 100%",
+                    imageRendering: "pixelated",
+                }}
+            >
                 <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
                     <BobbyMark />
                 </span>
