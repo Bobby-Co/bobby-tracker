@@ -1,43 +1,45 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/client/supabase"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { Modal } from "@/components/ui/modal"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // DangerZonePanel — irreversible project teardown. Delete removes the project,
 // its analyser knowledge graph, and every tracked issue/PR/review/comment (see
 // DELETE /api/projects/[id]). Guarded by a type-the-name confirmation so it
 // can't be triggered by a stray click.
+//
+// The name comes from GET /api/projects/[id], not from a browser Supabase read.
+// It used to read `projects` directly with the anon key, which stopped returning
+// anything the moment 0067 retired the tenant RLS policies — and because the
+// confirmation requires `name.length > 0`, the delete button then stayed
+// disabled no matter what was typed. Silent, and it looked like the typing was
+// wrong rather than the read.
 export function DangerZonePanel({ projectId }: { projectId: string }) {
     const router = useRouter()
-    const [name, setName] = useState("")
-    const [armed, setArmed] = useState(false)
+    const { data } = useApi<{ project: { name: string } | null }>(`/api/projects/${projectId}`)
+    const name = data?.project?.name ?? ""
+
+    const [confirming, setConfirming] = useState(false)
     const [confirm, setConfirm] = useState("")
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState<string | null>(null)
 
-    useEffect(() => {
-        let cancelled = false
-        void (async () => {
-            const supabase = createClient()
-            const { data } = await supabase
-                .from("projects")
-                .select("name")
-                .eq("id", projectId)
-                .maybeSingle<{ name: string }>()
-            if (!cancelled) setName(data?.name ?? "")
-        })()
-        return () => {
-            cancelled = true
-        }
-    }, [projectId])
+    // Both sides trimmed: a trailing space picked up from a copy-paste of the
+    // project name should not read as a mismatch.
+    const armed = name.length > 0 && confirm.trim() === name.trim() && !busy
 
-    const match = confirm.trim() === name.trim() && name.length > 0
-    const canDelete = armed && match && !busy
+    function close() {
+        if (busy) return
+        setConfirming(false)
+        setConfirm("")
+        setErr(null)
+    }
 
-    async function del() {
-        if (!canDelete) return
+    async function destroy() {
+        if (!armed) return
         setErr(null)
         setBusy(true)
         try {
@@ -46,81 +48,99 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
             router.push("/projects")
             router.refresh()
         } catch (e) {
-            if (e instanceof ApiError) setErr(e.message || `Failed (${e.status})`)
-            else setErr("Network error")
+            setErr(e instanceof ApiError ? (e.message ?? "Couldn't delete project") : "Network error")
             setBusy(false)
         }
     }
 
     return (
-        <div className="rounded-[16px] border border-rose-200 bg-rose-50/50 p-5">
+        <section className="rounded-[16px] border border-rose-300 bg-rose-50/40 p-5 dark:border-rose-900/60 dark:bg-rose-950/20">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-rose-100 text-rose-700">
+                    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">
                         <WarnIcon />
                     </span>
                     <div>
-                        <div className="text-[14px] font-bold text-rose-900">Delete project</div>
-                        <p className="mt-1 max-w-prose text-[13px] text-rose-800/80">
+                        <div className="text-[14px] font-bold text-rose-700 dark:text-rose-400">Delete project</div>
+                        <p className="mt-1 max-w-prose text-[13px] text-[color:var(--c-text-muted)]">
                             Permanently deletes this project, its knowledge graph on the analyser, and every
                             issue, pull request, review, and comment tracked here. This cannot be undone.
                         </p>
                     </div>
                 </div>
 
-                {!armed && (
-                    <button
-                        type="button"
-                        onClick={() => setArmed(true)}
-                        className="shrink-0 rounded-[10px] border border-rose-300 bg-[color:var(--c-surface)] px-3.5 py-2 text-[12.5px] font-semibold text-rose-700 transition-colors hover:bg-rose-100"
-                    >
-                        Delete project
-                    </button>
-                )}
+                <button
+                    type="button"
+                    onClick={() => setConfirming(true)}
+                    className="h-8 shrink-0 rounded-[8px] border border-rose-400 px-3 text-[12.5px] font-semibold text-rose-700 transition-colors hover:bg-rose-600 hover:text-white dark:border-rose-800 dark:text-rose-400 dark:hover:text-white"
+                >
+                    Delete project
+                </button>
             </div>
 
-            {armed && (
-                <div className="mt-4 rounded-[12px] border border-rose-200 bg-[color:var(--c-surface)] p-4">
-                    <label className="flex flex-col gap-1.5">
-                        <span className="text-[12.5px] text-[color:var(--c-text)]">
-                            Type <span className="font-mono font-semibold">{name || "the project name"}</span> to confirm
+            {/* The confirmation lives in its own modal rather than inline, to
+                match team deletion: a type-to-confirm field sitting permanently
+                in the page invites someone to fill it in while reading, and the
+                consequences deserve a deliberate step that takes over the
+                screen. */}
+            <Modal
+                open={confirming}
+                onClose={close}
+                title={name ? `Delete ${name}?` : "Delete project?"}
+                description="This cannot be undone."
+                size="sm"
+            >
+                <div className="flex flex-col gap-3">
+                    <p className="text-[12.5px] leading-relaxed text-[color:var(--c-text-muted)]">
+                        Deletes this project along with its issues, pull requests, reviews and comments, and
+                        tears down its knowledge graph on the analyser.
+                    </p>
+
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[11.5px] text-[color:var(--c-text-muted)]">
+                            Type <strong className="text-[color:var(--c-text)]">{name || "the project name"}</strong>{" "}
+                            to confirm
                         </span>
                         <input
+                            autoFocus
                             value={confirm}
                             onChange={(e) => setConfirm(e.target.value)}
-                            autoFocus
+                            disabled={busy || !name}
                             placeholder={name}
-                            className="w-full max-w-sm rounded-[10px] border border-rose-200 bg-[color:var(--c-surface)] px-3 py-2 text-[13px] outline-none focus:border-rose-400"
+                            autoComplete="off"
+                            className="input"
                         />
                     </label>
 
-                    <div className="mt-3 flex items-center gap-2">
+                    {/* Say so rather than presenting a field that can never arm.
+                        Without this the modal looks ready and simply refuses. */}
+                    {!name && (
+                        <p className="text-[12px] text-[color:var(--c-text-muted)]">Loading the project name…</p>
+                    )}
+
+                    {err && <p className="text-[12.5px] text-rose-700 dark:text-rose-400">{err}</p>}
+
+                    <div className="flex justify-end gap-2 pt-1">
                         <button
                             type="button"
-                            onClick={del}
-                            disabled={!canDelete}
-                            className="rounded-[10px] bg-rose-600 px-3.5 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            {busy ? "Deleting…" : "Delete permanently"}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setArmed(false)
-                                setConfirm("")
-                                setErr(null)
-                            }}
+                            onClick={close}
                             disabled={busy}
-                            className="rounded-[10px] px-3.5 py-2 text-[12.5px] font-semibold text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)] disabled:opacity-50"
+                            className="h-8 rounded-[8px] border border-[color:var(--c-border)] px-3 text-[12.5px]"
                         >
                             Cancel
                         </button>
+                        <button
+                            type="button"
+                            onClick={destroy}
+                            disabled={!armed}
+                            className="h-8 rounded-[8px] bg-rose-600 px-3 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
+                        >
+                            {busy ? "Deleting…" : "Delete project"}
+                        </button>
                     </div>
-
-                    {err && <p className="mt-3 text-[12px] text-rose-700">{err}</p>}
                 </div>
-            )}
-        </div>
+            </Modal>
+        </section>
     )
 }
 

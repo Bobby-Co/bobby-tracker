@@ -1,51 +1,42 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { createClient } from "@/lib/client/supabase"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // AutoUpdatePanel — the setup toggle for auto-indexing on push. When on, a push
 // to the repo's default branch triggers an incremental graph update through the
-// analyser's coalescing queue (ADR-0058). Reads/writes projects.auto_index_on_push
-// (RLS-scoped, owner-only). Independent of GitHub issue/PR sync.
+// analyser's coalescing queue (ADR-0058). Reads/writes projects.auto_index_on_push.
+// Independent of GitHub issue/PR sync.
+//
+// Read via the API, not a browser Supabase query: 0067 retired the tenant RLS
+// policies, so the anon client sees nothing on `projects` and the toggle would
+// silently fall back to its default instead of showing the stored value.
 export function AutoUpdatePanel({ projectId }: { projectId: string }) {
-    const [on, setOn] = useState<boolean | null>(null) // null = loading
+    const { data } = useApi<{ project: { auto_index_on_push: boolean } | null }>(
+        `/api/projects/${projectId}`,
+    )
+    // null = loading. Once loaded, default to on for older rows the migration
+    // hasn't backfilled.
+    const [override, setOverride] = useState<boolean | null>(null)
+    const on = override ?? (data ? (data.project?.auto_index_on_push ?? true) : null)
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState<string | null>(null)
-
-    const load = useCallback(async () => {
-        const supabase = createClient()
-        const { data } = await supabase
-            .from("projects")
-            .select("auto_index_on_push")
-            .eq("id", projectId)
-            .maybeSingle<{ auto_index_on_push: boolean }>()
-        // Default to on for older rows the migration hasn't backfilled in this session.
-        setOn(data?.auto_index_on_push ?? true)
-    }, [projectId])
-
-    useEffect(() => {
-        // Wrapped in an async IIFE so state is only set after the awaited fetch,
-        // never synchronously in the effect body (mirrors github-sync-panel).
-        void (async () => {
-            await load()
-        })()
-    }, [load])
 
     async function toggle() {
         if (on === null || busy) return
         const next = !on
         setErr(null)
         setBusy(true)
-        setOn(next) // optimistic
+        setOverride(next) // optimistic
         try {
             await apiMutate(`/api/projects/${projectId}`, {
                 method: "PATCH",
                 body: { auto_index_on_push: next },
             })
         } catch (e) {
-            setOn(!next) // revert
+            setOverride(!next) // revert
             if (e instanceof ApiError) setErr(e.message || `Failed (${e.status})`)
             else setErr("Network error")
         } finally {
@@ -69,7 +60,9 @@ export function AutoUpdatePanel({ projectId }: { projectId: string }) {
                                 <span
                                     className={cn(
                                         "rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.08em]",
-                                        on ? "bg-emerald-100 text-emerald-800" : "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",
+                                        on
+                                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400"
+                                            : "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]",
                                     )}
                                 >
                                     {on ? "On" : "Off"}

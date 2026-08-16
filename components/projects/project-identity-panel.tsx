@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { IconPicker } from "@/components/icons/icon-picker"
-import { createClient } from "@/lib/client/supabase"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 
 // ProjectIdentityPanel — rename a project, edit its description, and give it an
@@ -30,39 +29,33 @@ export function ProjectIdentityPanel({ projectId }: { projectId: string }) {
     const [savingIcon, setSavingIcon] = useState(false)
     const [err, setErr] = useState<string | null>(null)
 
-    // Load current name + description + icon straight from the row (same
-    // browser-client read DangerZonePanel uses). Selecting icon_name would error
-    // if 0050 hasn't been applied yet, so fall back to a name+description read —
-    // rename/description still work, the icon just shows unset until it lands.
+    // Load current name + description + icon from the API. This was a browser
+    // Supabase read until 0067 retired the tenant RLS policies, after which it
+    // returned nothing and the fields hydrated empty. The old two-step fallback
+    // (retry without icon_name in case 0050 hadn't been applied) is gone with
+    // it: the route selects *, so a column that does not exist yet is simply
+    // absent from the payload rather than an error to recover from.
     useEffect(() => {
         let cancelled = false
-        const hydrate = (nm: string | undefined, desc: string | null | undefined, icon: string | null) => {
-            setName(nm ?? "")
-            setSavedName(nm ?? "")
-            setDescription(desc ?? "")
-            setSavedDescription(desc ?? "")
-            setIconName(icon)
-            setLoaded(true)
-        }
         void (async () => {
-            const supabase = createClient()
-            const withIcon = await supabase
-                .from("projects")
-                .select("name, description, icon_name")
-                .eq("id", projectId)
-                .maybeSingle<{ name: string; description: string | null; icon_name: string | null }>()
+            const res = await fetch(`/api/projects/${projectId}`, {
+                credentials: "same-origin",
+                headers: { Accept: "application/json" },
+            })
             if (cancelled) return
-            if (!withIcon.error) {
-                hydrate(withIcon.data?.name, withIcon.data?.description, withIcon.data?.icon_name ?? null)
-                return
-            }
-            const legacy = await supabase
-                .from("projects")
-                .select("name, description")
-                .eq("id", projectId)
-                .maybeSingle<{ name: string; description: string | null }>()
+            const body = res.ok
+                ? ((await res.json().catch(() => null)) as {
+                      project: { name?: string; description?: string | null; icon_name?: string | null } | null
+                  } | null)
+                : null
             if (cancelled) return
-            hydrate(legacy.data?.name, legacy.data?.description, null)
+            const p = body?.project
+            setName(p?.name ?? "")
+            setSavedName(p?.name ?? "")
+            setDescription(p?.description ?? "")
+            setSavedDescription(p?.description ?? "")
+            setIconName(p?.icon_name ?? null)
+            setLoaded(true)
         })()
         return () => {
             cancelled = true

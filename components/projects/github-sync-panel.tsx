@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { createClient } from "@/lib/client/supabase"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { GithubSyncDirection } from "@/lib/shared/types"
 
@@ -19,7 +18,7 @@ const DIRECTIONS: { val: GithubSyncDirection; label: string }[] = [
 
 // GithubSyncPanel is the Integrations-tab control for two-way GitHub issue
 // sync: connect the App, toggle sync, choose direction, opt into delete
-// propagation, and hard-sync existing issues. Reads state directly (RLS-scoped).
+// propagation, and hard-sync existing issues.
 export function GithubSyncPanel({ projectId }: { projectId: string }) {
     const [installed, setInstalled] = useState<boolean | null>(null) // null = loading
     const [enabled, setEnabled] = useState(false)
@@ -30,20 +29,26 @@ export function GithubSyncPanel({ projectId }: { projectId: string }) {
     const [importMsg, setImportMsg] = useState<string | null>(null)
     const [err, setErr] = useState<string | null>(null)
 
-    // Load current sync state. RLS scopes this to the owner, so a plain
-    // client-side select is safe.
+    // Load current sync state through the API. This used to select from
+    // `projects` in the browser on the strength of RLS scoping it to the owner
+    // — but 0067 retired those policies, so the anon client now reads nothing
+    // and every field fell back to its default: "Connect the GitHub App" for an
+    // App that is already connected.
     const load = useCallback(async () => {
-        const supabase = createClient()
-        const { data } = await supabase
-            .from("projects")
-            .select("github_installation_id,github_sync_enabled,github_sync_direction,github_sync_deletes")
-            .eq("id", projectId)
-            .maybeSingle<{
+        const res = await fetch(`/api/projects/${projectId}`, {
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+        })
+        if (!res.ok) return
+        const body = (await res.json().catch(() => null)) as {
+            project: {
                 github_installation_id: number | null
                 github_sync_enabled: boolean
                 github_sync_direction: GithubSyncDirection
                 github_sync_deletes: boolean
-            }>()
+            } | null
+        } | null
+        const data = body?.project
         setInstalled(!!data?.github_installation_id)
         setEnabled(!!data?.github_sync_enabled)
         setDirection(data?.github_sync_direction ?? "both")
