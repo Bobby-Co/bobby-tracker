@@ -51,6 +51,10 @@ export interface Project {
      *  an incremental graph update (ADR-0058). Independent of github_sync_enabled;
      *  the webhook no-ops unless the App is installed and a graph exists. */
     auto_index_on_push: boolean
+    /** How eagerly to flag likely duplicates (0072). A NAME — the cosine
+     *  threshold lives in modules/issues DuplicateSensitivity. Note the
+     *  inversion: 'low' is a high threshold and flags less. */
+    duplicate_sensitivity: string
     /** User-chosen icon: a canonical Iconly slug (same value space as
      *  ProjectLabelIcon.icon_name), set from the settings page. Null → the app
      *  falls back to a stable hash-derived glyph on the tile and header. */

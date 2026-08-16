@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation"
 import { DangerZonePanel } from "@/components/projects/danger-zone-panel"
+import { DuplicateSensitivityPanel } from "@/components/projects/duplicate-sensitivity-panel"
 import { ProjectIdentityPanel } from "@/components/projects/project-identity-panel"
 import { ProjectPlacementPanel } from "@/components/projects/project-placement-panel"
 
@@ -24,6 +25,17 @@ export default function SettingsPage() {
 
                 <ProjectIdentityPanel projectId={id} />
                 <ProjectPlacementPanel projectId={id} />
+            </section>
+
+            <section className="flex flex-col gap-4">
+                <header>
+                    <h2 className="h-section">Issues</h2>
+                    <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
+                        How this project handles incoming issues.
+                    </p>
+                </header>
+
+                <DuplicateSensitivityPanel projectId={id} />
             </section>
 
             <section className="flex flex-col gap-4">

@@ -165,6 +165,17 @@ check "issues.analysis_started_at exists" \
     "select count(*) from information_schema.columns where table_schema='tracker' and table_name='issues' and column_name='analysis_started_at' and is_nullable='YES'" \
     "1"
 
+# 0072: the sensitivity level is a NAME with a CHECK, not a number — the cosine
+# thresholds live in code so they can be retuned without rewriting rows whose
+# stored number would silently change meaning under a new embedding model.
+check "projects.duplicate_sensitivity defaults to medium" \
+    "select column_default like '%medium%' from information_schema.columns where table_schema='tracker' and table_name='projects' and column_name='duplicate_sensitivity'" \
+    "t"
+
+check "duplicate_sensitivity is constrained to the four levels" \
+    "select count(*) from pg_constraint where conrelid='tracker.projects'::regclass and conname='projects_duplicate_sensitivity_valid'" \
+    "1"
+
 # Re-applying must be safe. This is the path a HOSTED database takes: it already
 # has the partitioned table, so 0063 has to detect that and return rather than
 # rebuild. Getting this wrong would drop live embeddings, so it is checked here

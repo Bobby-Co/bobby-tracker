@@ -6,6 +6,17 @@
 
 export { EmbeddingText } from "./domain/EmbeddingText"
 
+// Per-project duplicate sensitivity (0072). Names are stored; the cosine
+// thresholds live in the domain so they can be retuned without a migration.
+export {
+    DEFAULT_DUPLICATE_SENSITIVITY,
+    DUPLICATE_SENSITIVITIES,
+    SENSITIVITY_COPY,
+    duplicateThreshold,
+    parseDuplicateSensitivity,
+    type DuplicateSensitivity,
+} from "./domain/DuplicateSensitivity"
+
 // ─── Issue aggregate — status lifecycle + GitHub-state mapping ───────────────
 export type { IssueStatusValue, IssueState } from "./domain/Issue"
 export { Issue } from "./domain/Issue"

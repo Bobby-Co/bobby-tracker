@@ -2,6 +2,7 @@ import { Supabase } from "@/lib/server/supabase"
 import { getPublicSessionService } from "@/modules/public"
 import type { Issue, IssueEmbedding } from "@/lib/shared/types"
 import { dataClientForProject } from "@/lib/server/regional"
+import { duplicateThreshold } from "@/modules/issues"
 
 interface SimilarRow {
     id: string
@@ -123,9 +124,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // submitter — confusing in a public-facing UI. See
     // app/api/issues/[id]/similar/route.ts for the threshold rationale.
     const MIN_SIMILARITY = 0.40
-    const top = ranked.filter((r) => r.similarity >= MIN_SIMILARITY).slice(0, 5)
+    // The project's own duplicate sensitivity decides which of these count as
+    // likely duplicates. Read from the CONTROL client — the setting lives on
+    // `projects`, which is control-plane, while the issues above are regional.
+    const { data: proj } = await svc
+        .from("projects")
+        .select("duplicate_sensitivity")
+        .eq("id", issue.project_id)
+        .maybeSingle<{ duplicate_sensitivity: string | null }>()
+    const dupThreshold = duplicateThreshold(proj?.duplicate_sensitivity)
+    const top = ranked
+        .filter((r) => r.similarity >= MIN_SIMILARITY)
+        .slice(0, 5)
+        .map((r) => ({ ...r, isDuplicate: r.similarity >= dupThreshold }))
 
-    return Response.json({ similar: top, pending: false, missing: false })
+    return Response.json({ similar: top, pending: false, missing: false, duplicateThreshold: dupThreshold })
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {

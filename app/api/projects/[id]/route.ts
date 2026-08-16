@@ -3,6 +3,7 @@ import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/ap
 import { tryOrNull } from "@/lib/shared/kernel"
 import { Role } from "@/modules/access"
 import type { ProjectPatch } from "@/modules/projects"
+import { DUPLICATE_SENSITIVITIES } from "@/modules/issues"
 import { findIcon } from "@/lib/shared/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
 import { Supabase } from "@/lib/server/supabase"
@@ -46,6 +47,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.repo_url === "string") allowed.repo_url = body.repo_url.trim()
     // Project settings (setup page). Add new toggles here as settings grow.
     if (typeof body.auto_index_on_push === "boolean") allowed.auto_index_on_push = body.auto_index_on_push
+    // Duplicate sensitivity: reject an unknown level rather than silently
+    // coercing it to the default. The parser degrades for READS (a column this
+    // code doesn't recognise shouldn't 500 every lookup), but a write is someone
+    // asking for something specific, and quietly storing 'medium' instead would
+    // read as the setting not sticking.
+    if ("duplicate_sensitivity" in body) {
+        const level = body.duplicate_sensitivity
+        if (typeof level !== "string" || !(DUPLICATE_SENSITIVITIES as readonly string[]).includes(level)) {
+            return jsonError("bad_request", `duplicate_sensitivity must be one of ${DUPLICATE_SENSITIVITIES.join(", ")}`, 400)
+        }
+        allowed.duplicate_sensitivity = level
+    }
     // Icon: a canonical Iconly slug, or null to reset to the hash-derived glyph.
     if ("icon_name" in body) {
         if (body.icon_name === null) allowed.icon_name = null

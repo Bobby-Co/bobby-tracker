@@ -1,4 +1,6 @@
 import { ApiContext, repoRead } from "@/lib/server/http/api"
+import { duplicateThreshold } from "@/modules/issues"
+import { tryOrNull } from "@/lib/shared/kernel"
 
 // GET /api/issues/[id]/similar
 //
@@ -36,7 +38,7 @@ const MIN_SIMILARITY = 0.40
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, projectId, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     const issues = ctx.issues
@@ -44,8 +46,22 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (dbErr) return dbErr
 
     if (state.hasEmbedding) {
-        const filtered = state.similar.filter((r) => r.similarity >= MIN_SIMILARITY)
-        return Response.json({ similar: filtered, pending: false, missing: false })
+        // Two different bars, deliberately. MIN_SIMILARITY decides what is worth
+        // SHOWING as related at all; the project's duplicate sensitivity decides
+        // which of those we are willing to call a likely DUPLICATE. Collapsing
+        // them would mean a project that wants fewer duplicate flags also loses
+        // its related-issues list, which is not what anyone asked for.
+        const project = await tryOrNull(() => ctx.projects.findFull(projectId))
+        const dupThreshold = duplicateThreshold(project?.duplicate_sensitivity)
+        const filtered = state.similar
+            .filter((r) => r.similarity >= MIN_SIMILARITY)
+            .map((r) => ({ ...r, isDuplicate: r.similarity >= dupThreshold }))
+        return Response.json({
+            similar: filtered,
+            pending: false,
+            missing: false,
+            duplicateThreshold: dupThreshold,
+        })
     }
     // No embedding row. Decide pending vs missing based on age.
     // Treat unknown issue (RLS dropped it) as missing too — the

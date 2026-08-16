@@ -40,7 +40,9 @@ export type AnalysisProjectContext = Pick<
 >
 
 /** The mutable fields of a project (the settings PATCH). */
-export type ProjectPatch = Partial<Pick<Project, "name" | "description" | "repo_url" | "auto_index_on_push" | "icon_name">>
+export type ProjectPatch = Partial<
+    Pick<Project, "name" | "description" | "repo_url" | "auto_index_on_push" | "icon_name" | "duplicate_sensitivity">
+>
 
 /** The fields to create a project. */
 export interface NewProject {
