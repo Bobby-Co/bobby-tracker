@@ -8,9 +8,19 @@ import { useTeam } from "@/lib/client/auth/team-context"
 // The always-visible credits balance pill — docked under the team selector
 // in the sidebar (balance is team-scoped, so it belongs next to the team switch).
 // One click to the full Usage & Billing page. Reads the lean /api/billing/balance
-// (a single-row rollup lookup), so it's cheap to mount app-wide; it refetches when
-// the active team changes. Recolours by state: ember (healthy) → amber (low) →
-// red (empty), or "Unlimited" for uncapped (Apex).
+// (a single-row rollup lookup), so it's cheap to mount app-wide. Recolours by
+// state: ember (healthy) → amber (low) → red (empty), or "Unlimited" for
+// uncapped (Apex).
+//
+// Refreshes on an interval because credits are spent by work happening ELSEWHERE
+// — an analyser run finishing, a review completing — with nothing to tell this
+// tab about it. A number that silently goes stale is worse than no number: it
+// reads as authoritative.
+//
+// It ALWAYS occupies its full height, even before a team is known. Returning null
+// while loading is what made the sidebar jump twice on every team switch (which
+// is a hard navigation, so the whole tree remounts): teams resolve, then the
+// balance resolves, and the nav below is shoved down at each step.
 
 interface BalanceJSON {
     tierName: string
@@ -32,10 +42,12 @@ function fmt(n: number): string {
 export function BalancePill() {
     const { activeTeam } = useTeam()
     const path = activeTeam ? `/api/billing/balance?t=${activeTeam.id}` : null
-    const { data, loading } = useApi<{ balance: BalanceJSON }>(path)
+    const { data } = useApi<{ balance: BalanceJSON }>(path, { refreshMs: 30_000 })
 
-    // Nothing to show until we have a team + first response (avoid a flash/jump).
-    if (!path || (loading && !data) || !data) return null
+    // Reserve the space unconditionally. `data` is deliberately NOT cleared while
+    // a refresh is in flight, so a poll never blanks the pill — the previous
+    // number stays until the next one lands.
+    if (!data) return <BalancePillSkeleton />
     const b = data.balance
 
     const state: "ember" | "warn" | "error" = b.isExhausted ? "error" : b.fraction >= 0.85 ? "warn" : "ember"
@@ -90,6 +102,31 @@ export function BalancePill() {
                 <div className="mt-1 text-[10px] text-[color:var(--c-text-dim)]">Uncapped · {fmt(b.used)} spent</div>
             )}
         </Link>
+    )
+}
+
+// Same box, same height, no content. Mirrors the loaded pill's structure rather
+// than being a single grey bar, so the swap when data lands moves nothing: outer
+// box, icon + label row, meter + percent row.
+function BalancePillSkeleton() {
+    return (
+        <div
+            aria-hidden
+            className="mt-1.5 block rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2.5 py-2"
+        >
+            <div className="flex items-center gap-1.5">
+                <span className="skeleton h-[14px] w-[14px] shrink-0 rounded-[3px]" />
+                <span className="skeleton h-[12px] w-20 rounded-[3px]" />
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+                <span className="flex items-center gap-[3px]">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                        <span key={i} className="h-[8px] w-[5px] shrink-0 rounded-[2px] bg-[color:var(--c-border-strong)]" />
+                    ))}
+                </span>
+                <span className="skeleton ml-auto h-[10px] w-6 shrink-0 rounded-[3px]" />
+            </div>
+        </div>
     )
 }
 

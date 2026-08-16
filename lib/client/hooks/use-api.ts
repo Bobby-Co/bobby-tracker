@@ -23,10 +23,18 @@ interface ApiState<T> {
 interface Options {
     /** Pass null/false to skip fetching (e.g. until an id is known). */
     enabled?: boolean
+    /** Re-fetch on this interval, in ms. Omit for a one-shot read.
+     *
+     *  Polling PAUSES while the tab is hidden and fires once on return. A
+     *  background tab left open for hours would otherwise keep a request going
+     *  every interval forever, and every one of those answers is discarded —
+     *  nobody is looking at it. Coming back triggers a single immediate refresh,
+     *  which is the moment the value actually matters. */
+    refreshMs?: number
 }
 
 export function useApi<T>(path: string | null, opts: Options = {}): ApiState<T> {
-    const { enabled = true } = opts
+    const { enabled = true, refreshMs } = opts
     const [data, setData] = useState<T | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState<boolean>(Boolean(path) && enabled)
@@ -80,6 +88,28 @@ export function useApi<T>(path: string | null, opts: Options = {}): ApiState<T> 
 
         return () => controller.abort()
     }, [path, enabled, nonce])
+
+    // Polling. Separate from the fetching effect so a re-fetch does not reset the
+    // interval — otherwise a slow response would keep pushing the next poll out.
+    useEffect(() => {
+        if (!path || !enabled || !refreshMs) return
+
+        const tick = () => {
+            // A hidden tab's answer is discarded, so don't ask.
+            if (typeof document !== "undefined" && document.hidden) return
+            refetch()
+        }
+        const id = setInterval(tick, refreshMs)
+
+        const onVisible = () => {
+            if (typeof document !== "undefined" && !document.hidden) refetch()
+        }
+        document.addEventListener("visibilitychange", onVisible)
+        return () => {
+            clearInterval(id)
+            document.removeEventListener("visibilitychange", onVisible)
+        }
+    }, [path, enabled, refreshMs, refetch])
 
     return { data, error, loading, refetch }
 }

@@ -12,7 +12,7 @@ import { NewTeamModal } from "@/components/teams/new-team-modal"
 // Top-bar workspace switcher. Shows the active team and, on open, the full list
 // (switch), a link to manage the current team, and an inline create-team form.
 export function TeamSelector() {
-    const { teams, activeTeam, loading, setActiveTeam, refetch } = useTeam()
+    const { teams, activeTeam, setActiveTeam, refetch } = useTeam()
     const [open, setOpen] = useState(false)
     // Creation moved to a modal: picking a region is a decision for the life of
     // the team, and a 200px popover is the wrong place to make it.
@@ -29,10 +29,12 @@ export function TeamSelector() {
     }, [open])
 
 
-    if (loading && !activeTeam) {
+    // Both no-team states render the SAME reserved box. Returning null here
+    // collapsed the row and shoved the whole nav up, which is what made a team
+    // switch (a hard navigation, so everything remounts) visibly jump.
+    if (!activeTeam) {
         return <div className="skeleton h-7 w-full rounded-[10px]" aria-hidden />
     }
-    if (!activeTeam) return null
 
     return (
         <div ref={ref} className="relative">
@@ -41,7 +43,7 @@ export function TeamSelector() {
                 onClick={() => setOpen((o) => !o)}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className="flex w-full items-center gap-2 rounded-sq-l bg-[color:var(--c-surface)] pl-2.5 pr-4 py-[4.5px] text-[12.5px] font-semibold text-[color:var(--c-text)] ring-1 ring-[color:var(--c-border)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] hover:ring-[color:var(--c-border-strong)]"
+                className="flex h-7 w-full items-center gap-2 rounded-sq-l bg-[color:var(--c-surface)] pl-2.5 pr-4 text-[12.5px] font-semibold text-[color:var(--c-text)] ring-1 ring-[color:var(--c-border)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] hover:ring-[color:var(--c-border-strong)]"
             >
                 <TeamAvatar name={activeTeam.name} personal={activeTeam.is_personal} size={18} />
                 <span className="min-w-0 flex-1 truncate text-left">{activeTeam.name}</span>
