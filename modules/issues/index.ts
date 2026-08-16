@@ -17,11 +17,14 @@ export type {
     IssuePatch,
     IssueSuggestContext,
     IssueDuplicateGuardRow,
-    NewIssueSuggestion,
     SimilarIssue,
     IssueSimilarityState,
 } from "./ports/IssuesRepository"
 export { createSupabaseIssuesRepository } from "./infrastructure/SupabaseIssuesRepository"
+
+// ─── issue_suggestions (realtime table → control plane; see the port) ────────
+export type { IssueSuggestionsRepository, NewIssueSuggestion } from "./ports/IssueSuggestionsRepository"
+export { createSupabaseIssueSuggestionsRepository } from "./infrastructure/SupabaseIssueSuggestionsRepository"
 
 // ─── RLS-scoped read side of the issue-comment mirror (issue_comments) ───────
 export type { IssueCommentsReadRepository, IssueCommentOwnership } from "./ports/IssueCommentsReadRepository"

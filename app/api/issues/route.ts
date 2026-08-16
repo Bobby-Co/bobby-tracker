@@ -8,15 +8,9 @@ import { createIssueEmbedder } from "@/modules/issues"
 import { getVcsAppService } from "@/modules/vcs"
 
 export async function POST(request: Request) {
-    const { ctx, user, error } = await new ApiContext().requireUser()
-    if (error) return error
-
-    // Bind the request's RLS-scoped client to each repository once, up front,
-    // and reuse the instances throughout the handler.
-    const analyserRepo = ctx.analyser
-    const issues = ctx.issues
-    const projects = ctx.projects
-
+    // The project id arrives in the BODY, not the path, so it has to be parsed
+    // before the access check rather than after — which is why this route needs
+    // its own two-step guard instead of the usual one-liner.
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
@@ -24,6 +18,20 @@ export async function POST(request: Request) {
     const title = String(body?.title ?? "").trim()
     if (!project_id) return jsonError("bad_request", "project_id required", 400)
     if (!title) return jsonError("bad_request", "title required", 400)
+
+    // Explicit project authorization, matching every other project-scoped route.
+    // Previously this ran on requireUser alone and leaned on RLS to reject a
+    // write into a project the caller cannot see — which held only while issues
+    // shared a database with the caller's RLS scope. AccessService also applies
+    // the group-level gate RLS deliberately doesn't.
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(project_id)
+    if (error) return error
+
+    // Bind the request's client to each repository once, up front, and reuse the
+    // instances throughout the handler.
+    const analyserRepo = ctx.analyser
+    const issues = ctx.issues
+    const projects = ctx.projects
 
     // Issues without a knowledge graph are low-value (no suggestions,
     // no Ask citations). Block creation until the project has been

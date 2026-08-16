@@ -31,8 +31,14 @@ export async function GET(request: Request) {
         return NextResponse.redirect(u)
     }
 
+    // No state → nothing to link. Bail before the guard, which needs a project.
+    if (!projectId) return back("error")
+
     try {
-        const { ctx, user, error } = await new ApiContext().requireUser()
+        // projectId arrives in the OAuth `state`, i.e. from the caller. Without an
+        // explicit check, a user could point an installation they control at
+        // someone else's project; RLS was silently refusing the write.
+        const { ctx, user, error } = await new ApiContext().requireProjectAccess(projectId)
         // No session (e.g. the cookie wasn't sent on the return): send the user
         // through login and back here (mirrors the /login?next= convention).
         if (error || !user) {

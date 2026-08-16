@@ -7,6 +7,7 @@ import { cn } from "@/components/ui/cn"
 import { useTeam } from "@/lib/client/auth/team-context"
 import { MembersTab } from "@/components/teams/members-tab"
 import { GroupsTab } from "@/components/teams/groups-tab"
+import { SettingsTab } from "@/components/teams/settings-tab"
 
 // Team management: the Members tab (roster, roles, email invites) and the Groups
 // tab (people-groups + which projects each may access). Acts on the ACTIVE team
@@ -23,7 +24,8 @@ export default function TeamPage() {
 function TeamPageInner() {
     const { activeTeam, loading } = useTeam()
     const params = useSearchParams()
-    const tab = params.get("tab") === "groups" ? "groups" : "members"
+    const raw = params.get("tab")
+    const tab = raw === "groups" || raw === "settings" ? raw : "members"
 
     if (loading && !activeTeam) {
         return (
@@ -64,14 +66,13 @@ function TeamPageInner() {
             <nav className="mt-5 flex items-center gap-1 border-b border-[color:var(--c-border)]">
                 <TabLink href="/team?tab=members" active={tab === "members"} label="Members" />
                 <TabLink href="/team?tab=groups" active={tab === "groups"} label="Groups" />
+                <TabLink href="/team?tab=settings" active={tab === "settings"} label="Settings" />
             </nav>
 
             <div className="mt-6">
-                {tab === "members" ? (
-                    <MembersTab team={activeTeam} isAdmin={isAdmin} />
-                ) : (
-                    <GroupsTab team={activeTeam} isAdmin={isAdmin} />
-                )}
+                {tab === "members" && <MembersTab team={activeTeam} isAdmin={isAdmin} />}
+                {tab === "groups" && <GroupsTab team={activeTeam} isAdmin={isAdmin} />}
+                {tab === "settings" && <SettingsTab team={activeTeam} />}
             </div>
         </div>
     )

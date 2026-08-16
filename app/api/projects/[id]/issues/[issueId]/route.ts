@@ -32,7 +32,7 @@ export async function GET(
         repoRead(() => ctx.issues.findByIdInProject(issueId, id)),
         repoRead(() => ctx.projects.findFull(id)),
         repoRead(() => ctx.analyser.findByProjectId(id)),
-        repoRead(() => ctx.issues.findLatestSuggestion(issueId)),
+        repoRead(() => ctx.issueSuggestions.findLatest(issueId)),
         repoRead(() => ctx.issues.listScheduled(id)),
         repoRead(() => ctx.projectDisplay.listLabelIcons(id)),
         repoRead(() => ctx.projectDisplay.listStatusColors(id)),

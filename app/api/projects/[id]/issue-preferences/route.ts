@@ -18,7 +18,13 @@ async function resolveGraphId(projectId: string) {
         ctx.analyser.findGraphId(projectId),
     )
     if (dbErr) return { error: dbErr } as const
-    return { graphId: data } as const
+    // Both verbs address the analyser by graph id, so both need the cell that
+    // holds it. Resolved here so neither call site can forget to route.
+    const cell = await ctx.projects.findCell(projectId)
+    if (!cell) {
+        return { error: jsonError("placement_unavailable", "This project's data location is unavailable.", 503) } as const
+    }
+    return { graphId: data, cell } as const
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,7 +37,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (!resolved.graphId) return Response.json({ effort: "", indexed: false })
 
     try {
-        const prefs = await getAnalyser().getIssuePreferences(resolved.graphId)
+        const prefs = await getAnalyser(resolved.cell).getIssuePreferences(resolved.graphId)
         return Response.json({ effort: prefs.effort ?? "", indexed: true })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"
@@ -60,7 +66,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     try {
-        const prefs = await getAnalyser().setIssuePreferences(resolved.graphId, effort)
+        const prefs = await getAnalyser(resolved.cell).setIssuePreferences(resolved.graphId, effort)
         return Response.json({ effort: prefs.effort ?? "", indexed: true })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"

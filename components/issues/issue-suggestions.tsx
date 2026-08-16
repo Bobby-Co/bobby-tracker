@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { EffortControl, EFFORT_LABEL } from "@/components/ui/effort-control"
-import { createClient } from "@/lib/client/supabase"
+import { Analysing, SmallSpinner } from "@/components/issues/analysing-graph"
+import { useInvestigation } from "@/lib/client/hooks/use-investigation"
 import { RepoRef, type RepoRefFields } from "@/modules/vcs/domain/RepoRef"
-import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { AnalyseEffort } from "@/modules/analysis"
 import type { IssueAnalysisData, IssueFinding, IssueSuggestion } from "@/lib/shared/types"
 
@@ -27,22 +27,17 @@ interface Props {
 }
 
 export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial, analyserReady, issueEffort, autoInvestigate = true }: Props) {
-    const [suggestion, setSuggestion] = useState<IssueSuggestion | null>(initial)
-    const [error, setError] = useState<string | null>(null)
-    const [errorCode, setErrorCode] = useState<string | null>(null)
-    // Plain loading flag — deliberately NOT useTransition. The /suggest
-    // POST blocks for the full analyser run (~30s); wrapping it in a
-    // transition keeps React's root in a pending transition, and since
-    // App Router navigation is itself a transition, clicking a link /
-    // closing the issue would queue behind it and the page would feel
-    // frozen until the run finished. A regular boolean keeps the fetch
-    // off the transition lane so navigation stays instant.
-    const [pending, setPending] = useState(false)
+    // The run lifecycle — starting a run, and knowing when THIS run's result
+    // (never the previous one still cached on the server) has landed — lives in
+    // the shared hook. Plain state, deliberately NOT useTransition: the /suggest
+    // POST blocks for the full analyser run (~30s), and since App Router
+    // navigation is itself a transition, a pending transition would freeze
+    // navigation until the run finished.
+    const { suggestion, pending, error, errorCode, investigate, regenerate } = useInvestigation({
+        issueId,
+        initial,
+    })
     const autoFiredRef = useRef(false)
-    // Guard against state writes after the user navigates away mid-run
-    // (now the expected case — the fetch keeps going in the background).
-    const aliveRef = useRef(true)
-    useEffect(() => () => { aliveRef.current = false }, [])
 
     // Effort the popover shows + sends. `effort` is the user's explicit pick
     // this session (null until they touch the slider). The control displays
@@ -79,78 +74,12 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
         return () => ro.disconnect()
     }, [])
 
-    function regenerate() {
-        setError(null)
-        setErrorCode(null)
+    // Regenerate replaces the cached result with a fresh run; the popover
+    // closes so the analysing animation isn't hidden behind it.
+    function startRegenerate() {
         setEffortOpen(false)
-        setPending(true)
-        void (async () => {
-            try {
-                const { suggestion: next } = await apiMutate<{ suggestion: IssueSuggestion | null }>(
-                    `/api/issues/${issueId}/suggest`,
-                    { method: "POST", body: effort ? { effort } : {} },
-                )
-                if (!aliveRef.current) return
-                setSuggestion(next)
-            } catch (e) {
-                if (!aliveRef.current) return
-                if (e instanceof ApiError) {
-                    setError(e.message || `Failed (${e.status})`)
-                    setErrorCode(e.code || "unknown")
-                } else {
-                    setError(e instanceof Error ? e.message : "Network error")
-                    setErrorCode("network_error")
-                }
-            } finally {
-                if (aliveRef.current) setPending(false)
-            }
-        })()
+        regenerate(effort)
     }
-
-    // ensureInvestigation kicks off (or joins) the SINGLE analysis run for this
-    // issue via /analyse — the same run that feeds the GitHub comment — instead
-    // of starting a separate /suggest run. If a result is already cached it
-    // returns inline; otherwise it arrives via the realtime subscription below,
-    // so we keep `pending` until then.
-    function ensureInvestigation() {
-        setError(null)
-        setErrorCode(null)
-        setPending(true)
-        void (async () => {
-            try {
-                const body = await apiMutate<{ status?: string; suggestion?: IssueSuggestion | null }>(
-                    `/api/issues/${issueId}/analyse`,
-                    { method: "POST" },
-                )
-                if (!aliveRef.current) return
-                if (body?.suggestion) {
-                    setSuggestion(body.suggestion)
-                    setPending(false)
-                }
-                // started / in_flight → the result lands via the realtime
-                // INSERT subscription below; stay pending until then.
-            } catch (e) {
-                if (!aliveRef.current) return
-                if (e instanceof ApiError) {
-                    setError(e.message || `Failed (${e.status})`)
-                    setErrorCode(e.code || "unknown")
-                } else {
-                    setError(e instanceof Error ? e.message : "Network error")
-                    setErrorCode("network_error")
-                }
-                setPending(false)
-            }
-        })()
-    }
-
-    // Sync the server-rendered prop into local state on changes. Without
-    // this, a router.refresh that surfaces a freshly-inserted suggestion
-    // (from another tab, cron, etc.) would be ignored because useState
-    // only honours the initial value.
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional prop→state sync: mirror a newly-surfaced server suggestion into local state
-        setSuggestion(initial)
-    }, [initial])
 
     // Fetch the project's saved default effort so the slider pre-selects it.
     // Display-only: it never forces an effort onto a request (see `effort`).
@@ -189,72 +118,17 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
     // Auto-trigger when the issue lands on this page with no cached
     // suggestion AND the analyser is ready. Fires once per mount so a user
     // revisiting an unanswered issue gets investigation started without an
-    // extra click. Uses ensureInvestigation() (the shared, idempotent run)
-    // rather than regenerate() so it never duplicates the GitHub-comment run.
+    // extra click. Uses investigate() (the shared, idempotent run) rather
+    // than regenerate() so it never duplicates the GitHub-comment run.
     useEffect(() => {
         if (autoFiredRef.current) return
         if (!autoInvestigate) return
         if (!analyserReady) return
         if (suggestion) return
         autoFiredRef.current = true
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- ensureInvestigation() sets state after an awaited fetch, not synchronously
-        ensureInvestigation()
+        investigate()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [analyserReady, suggestion?.id])
-
-    // Realtime: pick up new suggestion rows even when this tab didn't
-    // start the investigation (background regeneration, parallel tab,
-    // etc.). RLS on tracker.issue_suggestions ensures only authorised
-    // rows arrive.
-    useEffect(() => {
-        const supabase = createClient()
-        const channel = supabase
-            .channel(`issue-suggestions-${issueId}`)
-            .on(
-                "postgres_changes",
-                {
-                    event: "INSERT",
-                    schema: "tracker",
-                    table: "issue_suggestions",
-                    filter: `issue_id=eq.${issueId}`,
-                },
-                (payload) => {
-                    setSuggestion(payload.new as IssueSuggestion)
-                    setPending(false)
-                },
-            )
-            .subscribe()
-        return () => {
-            void supabase.removeChannel(channel)
-        }
-    }, [issueId])
-
-    // Polling fallback while an investigation is in flight. The /suggest
-    // POST blocks for the full analyser run (~30s), which is long enough
-    // for proxies / fetch idle timeouts to drop the response even after
-    // the row has been inserted. Realtime should pick it up, but if WAL
-    // events are being dropped the user would otherwise sit on the
-    // spinner until they reload. Bounded to `pending` so it stops the
-    // moment any path delivers the row.
-    useEffect(() => {
-        if (!pending) return
-        let cancelled = false
-        const tick = async () => {
-            try {
-                const res = await fetch(`/api/issues/${issueId}/suggestions`, { cache: "no-store" })
-                if (!res.ok || cancelled) return
-                const { suggestion: latest } = (await res.json()) as { suggestion: IssueSuggestion | null }
-                if (!latest || cancelled) return
-                setSuggestion(latest)
-                setPending(false)
-            } catch {}
-        }
-        const id = setInterval(tick, 3000)
-        return () => {
-            cancelled = true
-            clearInterval(id)
-        }
-    }, [pending, issueId])
 
     // Rainbow glow blooms in only once a suggestion is ready — while the
     // analyser is still running we keep the card calm (no glow), so the glow
@@ -373,7 +247,7 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                         </div>
                     </div>
                     <button
-                        onClick={suggestion ? regenerate : ensureInvestigation}
+                        onClick={suggestion ? startRegenerate : investigate}
                         disabled={pending || !analyserReady}
                         className="btn-primary group relative overflow-hidden"
                         title={!analyserReady ? "Enable and index the project first" : undefined}
@@ -611,145 +485,6 @@ function MetaRow({
     )
 }
 
-// The phases the analyser walks through, surfaced as a ticker so the wait
-// reads as visible progress rather than a dead spinner. The analyser POST is
-// synchronous (no streamed progress events), so these are time-paced rather
-// than wired to real telemetry — hence the last phase deliberately LINGERS
-// until the row actually lands, so we never claim "done" ahead of the result.
-const ANALYSING_PHASES = [
-    "Reading the codebase graph",
-    "Locating relevant files",
-    "Tracing call paths & symbols",
-    "Ranking the likeliest suspects",
-    "Composing the fix prompt",
-]
-
-function Analysing() {
-    const [phase, setPhase] = useState(0)
-
-    useEffect(() => {
-        // Stop on the final phase — it holds until the real suggestion arrives
-        // and this whole component unmounts. Each step is a touch slower than
-        // the last so early steps feel snappy and the tail doesn't outrun a
-        // fast response.
-        if (phase >= ANALYSING_PHASES.length - 1) return
-        const id = setTimeout(() => setPhase((p) => p + 1), 3000 + phase * 700)
-        return () => clearTimeout(id)
-    }, [phase])
-
-    return (
-        <div className="mt-4 anim-fade flex flex-col items-center gap-4 py-6">
-            <GraphScan />
-            <div className="flex items-center gap-2 text-[13px] font-medium text-[color:var(--c-text-muted)]">
-                <SmallSpinner />
-                {/* keyed so anim-fade replays on every phase change → soft crossfade */}
-                <span key={phase} className="anim-fade">{ANALYSING_PHASES[phase]}…</span>
-            </div>
-        </div>
-    )
-}
-
-// Static graph layout for the scan visual. A connected graph stands in for
-// "the codebase graph being read"; ALL motion lives in CSS (see .graph-scan in
-// globals.css): nodes pulse, sonar rings expand, glints run along edges, and a
-// two-layer camera rig flies over the whole thing — zoom → pan → tilt → zoom
-// out. Coordinates are tuned to the 400×200 viewBox; the camera keyframes are
-// derived from these node positions, so retuning the layout means retuning the
-// pan keyframes too (t = scale × (centre − focal point)).
-const GRAPH_NODES = [
-    { x: 45, y: 95 },
-    { x: 95, y: 52 },
-    { x: 90, y: 145 },
-    { x: 135, y: 100 },
-    { x: 175, y: 65 },
-    { x: 205, y: 120 },
-    { x: 235, y: 42 },
-    { x: 225, y: 165 },
-    { x: 270, y: 105 },
-    { x: 305, y: 70 },
-    { x: 350, y: 115 },
-    { x: 320, y: 165 },
-    { x: 368, y: 52 },
-]
-const GRAPH_EDGES: [number, number][] = [
-    [0, 1], [0, 2], [1, 3], [2, 3], [3, 4], [3, 5], [4, 6], [5, 7], [5, 8],
-    [7, 8], [8, 9], [8, 10], [9, 12], [10, 11], [10, 12], [6, 9],
-]
-
-function GraphScan() {
-    return (
-        <svg
-            className="graph-scan w-full max-w-[360px]"
-            viewBox="0 0 400 200"
-            fill="none"
-            role="img"
-            aria-label="Analysing the codebase graph"
-        >
-            <defs>
-                <linearGradient id="graph-accent" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#d946ef" />
-                    <stop offset="50%" stopColor="#0ea5e9" />
-                    <stop offset="100%" stopColor="#10b981" />
-                </linearGradient>
-                {/* Vignette: keeps the centre crisp and fades the edges out so the
-                    camera framing reads as a viewport and blends into the card on
-                    any background. Lives OUTSIDE the animated groups, so it stays
-                    fixed to the frame while the graph flies behind it. */}
-                <radialGradient id="graph-fade" cx="50%" cy="50%" r="60%">
-                    <stop offset="52%" stopColor="#fff" />
-                    <stop offset="100%" stopColor="#000" />
-                </radialGradient>
-                <mask id="graph-mask">
-                    <rect width="400" height="200" fill="url(#graph-fade)" />
-                </mask>
-            </defs>
-
-            <g mask="url(#graph-mask)">
-                {/* Outer = tilt (rotates the scene around centre); inner = pan/zoom
-                    (centres a focal point and scales in). Splitting them keeps each
-                    motion's maths independent and lets the two run on out-of-sync
-                    periods so the tour never settles into an obvious loop. */}
-                <g className="graph-tilt">
-                    <g className="graph-pan">
-                        {/* Faint static skeleton of the graph */}
-                        {GRAPH_EDGES.map(([a, b], i) => (
-                            <line
-                                key={`base-${i}`}
-                                x1={GRAPH_NODES[a].x} y1={GRAPH_NODES[a].y}
-                                x2={GRAPH_NODES[b].x} y2={GRAPH_NODES[b].y}
-                                className="stroke-zinc-200"
-                                strokeWidth={1.5}
-                            />
-                        ))}
-
-                        {/* Glints travelling along each edge — staggered via --i */}
-                        {GRAPH_EDGES.map(([a, b], i) => (
-                            <line
-                                key={`flow-${i}`}
-                                x1={GRAPH_NODES[a].x} y1={GRAPH_NODES[a].y}
-                                x2={GRAPH_NODES[b].x} y2={GRAPH_NODES[b].y}
-                                className="gedge-flow"
-                                stroke="url(#graph-accent)"
-                                strokeWidth={1.75}
-                                strokeLinecap="round"
-                                style={{ ["--i" as string]: i } as React.CSSProperties}
-                            />
-                        ))}
-
-                        {/* Nodes: a pulsing dot wrapped in an expanding sonar ring */}
-                        {GRAPH_NODES.map((n, i) => (
-                            <g key={`node-${i}`} style={{ ["--i" as string]: i } as React.CSSProperties}>
-                                <circle className="gsonar" cx={n.x} cy={n.y} r={5} fill="none" stroke="url(#graph-accent)" strokeWidth={1.25} />
-                                <circle className="gnode" cx={n.x} cy={n.y} r={4} fill="url(#graph-accent)" />
-                            </g>
-                        ))}
-                    </g>
-                </g>
-            </g>
-        </svg>
-    )
-}
-
 function NeedsIndexing() {
     return (
         <p className="mt-3 anim-fade rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
@@ -846,14 +581,6 @@ function CloseIcon() {
     return (
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
             <path d="M6 6l12 12M18 6L6 18" />
-        </svg>
-    )
-}
-function SmallSpinner() {
-    return (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden>
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-            <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
         </svg>
     )
 }

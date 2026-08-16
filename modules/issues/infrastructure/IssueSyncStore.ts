@@ -1,10 +1,18 @@
-// Issues infrastructure — the service-role issues store. ONE class over the
-// service-role client, owning all tracker.issues + issue_suggestions +
-// issue_comments access the GitHub-sync / analysis flows need (they run in
-// webhook / fire-and-forget contexts that bypass RLS, so they can't use the
-// request-scoped IssuesRepository). Cross-module orchestrators depend on the
-// IssueSyncStore PORT and obtain an instance from createServiceIssueSyncStore(),
-// so their application layer never holds a Supabase client.
+// Issues infrastructure — the service-role issues store. ONE class owning all
+// tracker.issues + issue_suggestions + issue_comments access the GitHub-sync /
+// analysis flows need (they run in webhook / fire-and-forget contexts that bypass
+// RLS, so they can't use the request-scoped IssuesRepository). Cross-module
+// orchestrators depend on the IssueSyncStore PORT and obtain an instance from
+// createServiceIssueSyncStore(), so their application layer never holds a
+// Supabase client.
+//
+// TWO HANDLES, one client today — mirroring RequestContext. `issues` and
+// `issue_comments` are DATA plane; `issue_suggestions` is CONTROL plane, because
+// it is in the supabase_realtime publication and the browser subscribes to it
+// directly (see ports/IssueSuggestionsRepository.ts for the full reasoning).
+// This class is the service-role counterpart of that split: without it, the two
+// suggestion methods below would keep writing to whichever database `issues`
+// happens to live in, and would start missing the moment the planes separate.
 //
 // NOTE: several columns written here (github_issue_number, github_node_id,
 // sync_source, last_synced_hash, github_synced_at, github_analysis_comment_id,
@@ -106,9 +114,16 @@ export interface IssueSyncStore {
     deleteComment(projectId: string, commentId: number): Promise<void>
 }
 
-/** The Supabase service-role implementation. Construct via the factory below. */
+type ServiceDb = ReturnType<typeof Supabase.service>
+
+/** The Supabase service-role implementation. Construct via the factory below.
+ *
+ *  `controlDb` defaults to `dataDb` so a single-database host is unchanged. */
 export class ServiceIssueSyncStore implements IssueSyncStore {
-    private readonly svc = Supabase.service()
+    constructor(
+        private readonly svc: ServiceDb,
+        private readonly controlDb: ServiceDb = svc,
+    ) {}
 
     async findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null> {
         const { data } = await this.svc
@@ -137,8 +152,10 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
         return !error
     }
 
+    // ── control plane: issue_suggestions (realtime) ──────────────────────────
+
     async countSuggestions(issueId: string): Promise<number> {
-        const { count } = await this.svc
+        const { count } = await this.controlDb
             .from("issue_suggestions")
             .select("id", { count: "exact", head: true })
             .eq("issue_id", issueId)
@@ -146,7 +163,7 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
     }
 
     async insertSuggestion(row: IssueSuggestionInsert): Promise<void> {
-        await this.svc.from("issue_suggestions").insert(row)
+        await this.controlDb.from("issue_suggestions").insert(row)
     }
 
     async upsertComment(projectId: string, comment: IssueCommentUpsert): Promise<void> {
@@ -160,8 +177,13 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
     }
 }
 
-/** Composition seam: an IssueSyncStore bound to a fresh service-role client. Call
- *  from a composition root (fire-and-forget / webhook contexts that bypass RLS). */
+/** Composition seam: an IssueSyncStore bound to service-role clients. Call from a
+ *  composition root (fire-and-forget / webhook contexts that bypass RLS).
+ *
+ *  Both planes are the same client today. Splitting them means resolving the
+ *  project's region here and passing that region's service client as `dataDb`,
+ *  leaving the control client pointed at the central database. */
 export function createServiceIssueSyncStore(): IssueSyncStore {
-    return new ServiceIssueSyncStore()
+    const svc = Supabase.service()
+    return new ServiceIssueSyncStore(svc, svc)
 }

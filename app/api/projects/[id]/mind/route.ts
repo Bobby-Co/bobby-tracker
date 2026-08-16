@@ -61,10 +61,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
 
+    const cell = await ctx.projects.findCell(id)
+    if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
     try {
         // Pass the project uuid (scopes the "issues" action, ADR-0048) and the
         // conversation id (keys the managed-context store, ADR-0049).
-        const upstream = await getAnalyser().streamChat(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId)
+        const upstream = await getAnalyser(cell).streamChat(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId)
         // Pipe the analyser's SSE stream straight to the browser. (Usage is metered
         // analyser-side — bobby-analyser records this turn's cost directly.)
         return new Response(upstream.body, {

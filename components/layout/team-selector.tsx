@@ -2,20 +2,21 @@
 
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
+// `m`, not `motion` — this sits in the sidebar, i.e. on every authed page.
+// See components/ui/lazy-motion.tsx.
+import { AnimatePresence, m } from "framer-motion"
 import { cn } from "@/components/ui/cn"
 import { useTeam } from "@/lib/client/auth/team-context"
-import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import { NewTeamModal } from "@/components/teams/new-team-modal"
 
 // Top-bar workspace switcher. Shows the active team and, on open, the full list
 // (switch), a link to manage the current team, and an inline create-team form.
 export function TeamSelector() {
     const { teams, activeTeam, loading, setActiveTeam, refetch } = useTeam()
     const [open, setOpen] = useState(false)
+    // Creation moved to a modal: picking a region is a decision for the life of
+    // the team, and a 200px popover is the wrong place to make it.
     const [creating, setCreating] = useState(false)
-    const [name, setName] = useState("")
-    const [busy, setBusy] = useState(false)
-    const [err, setErr] = useState<string | null>(null)
     const ref = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -27,26 +28,6 @@ export function TeamSelector() {
         return () => document.removeEventListener("mousedown", onDoc)
     }, [open])
 
-    async function createTeam(e: React.FormEvent) {
-        e.preventDefault()
-        const trimmed = name.trim()
-        if (!trimmed) return
-        setBusy(true)
-        setErr(null)
-        try {
-            const body = await apiMutate<{ team?: { id?: string } }>("/api/teams", {
-                method: "POST",
-                body: { name: trimmed },
-            })
-            refetch()
-            if (body?.team?.id) setActiveTeam(body.team.id) // switches + reloads
-        } catch (e) {
-            if (e instanceof ApiError) setErr(e.message ?? "Couldn't create team")
-            else setErr("Network error")
-        } finally {
-            setBusy(false)
-        }
-    }
 
     if (loading && !activeTeam) {
         return <div className="skeleton h-7 w-full rounded-[10px]" aria-hidden />
@@ -69,7 +50,7 @@ export function TeamSelector() {
 
             <AnimatePresence>
             {open && (
-                <motion.div
+                <m.div
                     role="menu"
                     initial={{ opacity: 0, y: -6, scale: 0.97 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -117,48 +98,27 @@ export function TeamSelector() {
                         <span>Manage “{activeTeam.name}”</span>
                     </Link>
 
-                    {creating ? (
-                        <form onSubmit={createTeam} className="px-1 pb-1 pt-1">
-                            <input
-                                autoFocus
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="Team name"
-                                disabled={busy}
-                                className="mb-1.5 h-8 w-full rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2.5 text-[13px] outline-none focus:border-[color:var(--c-primary)] focus:ring-[3px] focus:ring-[color:var(--c-ring)]"
-                            />
-                            {err && <p className="mb-1 px-0.5 text-[11.5px] text-red-600">{err}</p>}
-                            <div className="flex gap-1.5">
-                                <button
-                                    type="submit"
-                                    disabled={busy || !name.trim()}
-                                    className="h-7 flex-1 rounded-[8px] bg-[color:var(--c-primary)] text-[11.5px] font-semibold text-white disabled:opacity-50"
-                                >
-                                    {busy ? "Creating…" : "Create"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setCreating(false); setName(""); setErr(null) }}
-                                    className="h-7 rounded-[8px] border border-[color:var(--c-border)] px-2.5 text-[11.5px]"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </form>
-                    ) : (
                         <button
                             type="button"
                             role="menuitem"
-                            onClick={() => setCreating(true)}
+                            onClick={() => { setOpen(false); setCreating(true) }}
                             className="flex w-full items-center gap-2 rounded-[9px] px-2 py-1.5 text-left text-[11px] text-[color:var(--c-text)] transition-colors hover:bg-[color:var(--c-overlay)]"
                         >
                             <PlusIcon />
                             <span>Create team</span>
                         </button>
-                    )}
-                </motion.div>
+                </m.div>
             )}
             </AnimatePresence>
+
+            <NewTeamModal
+                open={creating}
+                onClose={() => setCreating(false)}
+                onCreated={(teamId) => {
+                    refetch()
+                    setActiveTeam(teamId) // switches + reloads
+                }}
+            />
         </div>
     )
 }

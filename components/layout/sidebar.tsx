@@ -13,7 +13,9 @@ import { MiniIcon, toneFromString } from "@/components/ui/field-card"
 import PixelGradient, { DARK_EMBER_STOPS } from "@/components/ui/pixel-gradient"
 import PixelScatter from "@/components/ui/pixel-scatter"
 import type { AccessGroup, Project } from "@/lib/shared/types"
-import { motion } from "framer-motion"
+// `m`, not `motion` — the sidebar is on every authed page, so it must not drag
+// framer-motion's features into the shell chunk. See components/ui/lazy-motion.tsx.
+import { m } from "framer-motion"
 
 interface SidebarProps {
     projects: Project[]
@@ -145,8 +147,17 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                 {/* Featured — the most recently active projects (up to 5). The
                     full list lives on the Projects page. */}
                 <SectionHeader label="Featured" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} />
+                {/* The row fade-in is CSS (.stagger + .anim-fade), not motion: it runs
+                    on MOUNT, and the motion features load asynchronously now, so a
+                    JS-driven entrance would be skipped on a cold load — the one
+                    animation here that has to be frame-one ready. 20ms/row matches
+                    the old `delay: 0.02*i`. */}
                 {projectsOpen && (
-                    <motion.div layout="position" className="mt-0.5 flex flex-col gap-[4px] pl-3">
+                    <m.div
+                        layout="position"
+                        className="stagger mt-0.5 flex flex-col gap-[4px] pl-3"
+                        style={{ ["--stagger-step" as string]: "20ms" } as React.CSSProperties}
+                    >
                         {featured.length === 0 ? (
                             <p className="px-2 py-1.5 text-[12px] text-[color:var(--c-text-dim)]">No projects yet.</p>
                         ) : (
@@ -158,8 +169,10 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                         href={`/projects/${p.id}/issues`}
                                         prefetch={false}
                                         onClick={onNavigate}
+                                        className="anim-fade"
+                                        style={{ ["--i" as string]: i } as React.CSSProperties}
                                     >
-                                        <motion.div  initial={{ opacity: 0 }} animate={{ opacity: 1 }}  transition={{delay:0.02*i}}    className={cn(
+                                        <div className={cn(
                                             "group flex items-center w-max gap-2.5 rounded-[9px] px-2.5 py-[3px] text-[13px] transition-colors",
                                             active ? ROW_ACTIVE : ROW_IDLE,
                                         )}>
@@ -167,19 +180,19 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                                 <span className="text-[9px] font-bold uppercase">{p.name[0] ?? "?"}</span>
                                             </MiniIcon>
                                             <span className="truncate">{p.name}</span>
-                                        </motion.div>
+                                        </div>
                                     </Link>
                                 )
                             })
                         )}
-                    </motion.div>
+                    </m.div>
                 )}
 
                 {/* Groups — the active team's people-groups (repo access control).
                     Each links to the team's management page. */}
                 <SectionHeader label="Groups" open={groupsOpen} onToggle={() => setGroupsOpen((o) => !o)} />
                 {groupsOpen && (
-                    <motion.div layout="position" className="mt-0.5 flex flex-col gap-[2px] pl-3">
+                    <m.div layout="position" className="mt-0.5 flex flex-col gap-[2px] pl-3">
                         {groups.length === 0 ? (
                             <Link
                                 href="/team?tab=groups"
@@ -206,7 +219,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                 </Link>
                             ))
                         )}
-                    </motion.div>
+                    </m.div>
                 )}
             </div>
 
@@ -293,7 +306,7 @@ function NavItem({
 // the reference's "Starred" / "Teams".
 function SectionHeader({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
     return (
-        <motion.button
+        <m.button
             layout="position"
             type="button"
             onClick={onToggle}
@@ -302,7 +315,7 @@ function SectionHeader({ label, open, onToggle }: { label: string; open: boolean
         >
             <span>{label}</span>
             <Caret open={open} />
-        </motion.button>
+        </m.button>
     )
 }
 

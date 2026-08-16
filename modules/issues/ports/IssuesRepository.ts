@@ -5,7 +5,7 @@
 // ports/ may TYPE-reference the shared DB row type (no SDK/client here); the
 // Supabase implementation lives in ../infrastructure.
 
-import type { Issue, IssueSuggestion } from "@/lib/shared/types"
+import type { Issue } from "@/lib/shared/types"
 
 /** The columns a caller supplies when filing a new issue. Everything else on the
  *  row (id, issue_number, the github_* mirror fields, timestamps) is assigned by
@@ -62,19 +62,6 @@ export type IssueSuggestContext = Pick<
 /** One row of the duplicate-of same-project / no-chains guard. */
 export type IssueDuplicateGuardRow = Pick<Issue, "id" | "project_id" | "duplicate_of_issue_id">
 
-/** The columns needed to persist a fresh analyser suggestion. */
-export type NewIssueSuggestion = {
-    issue_id: string
-    data: unknown
-    markdown: string
-    code_cites: { file: string; line?: number }[]
-    graph_cites: string[]
-    confidence: string | null
-    cost_usd: number
-    duration_ms: number
-    graph_id: string | null
-}
-
 /** A nearest-neighbour match returned by find_similar_to_issue. */
 export type SimilarIssue = { id: string; issue_number: number; title: string; status: string; similarity: number }
 
@@ -115,14 +102,6 @@ export interface IssuesRepository {
 
     /** Delete an issue by id. Throws {@link RepositoryError} on failure. */
     deleteById(issueId: string): Promise<void>
-
-    /** The latest cached analyser suggestion for an issue, or null when none
-     *  exists. Throws on query failure. */
-    findLatestSuggestion(issueId: string): Promise<IssueSuggestion | null>
-
-    /** Persist a fresh analyser suggestion and return the stored row. Throws
-     *  {@link RepositoryError} on failure. */
-    insertSuggestion(row: NewIssueSuggestion): Promise<IssueSuggestion>
 
     /** The /similar read: nearest-neighbour matches + embedding presence +
      *  created_at, in one call. Throws {@link RepositoryError} on failure. */

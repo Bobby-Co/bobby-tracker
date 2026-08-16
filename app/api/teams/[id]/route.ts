@@ -1,4 +1,5 @@
 import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 import { Role } from "@/modules/access"
 import type { TeamWithRole } from "@/lib/shared/types"
 
@@ -46,6 +47,25 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (role !== "owner") return forbidden("only the team owner can delete a team")
+
+    // Deleting the team row cascades to its projects (that FK is central and
+    // intact), but a cascade cannot reach the REGIONAL content those projects
+    // own — the keys that used to carry it were dropped when the planes split.
+    // So walk each project through the full deletion path first. Doing it the
+    // other way round removes the projects and leaves their issues, comments and
+    // embeddings behind with nothing left to identify them by.
+    //
+    // Sequential rather than parallel: each delete is several round trips across
+    // two databases, and a team with many projects would otherwise open a burst
+    // of concurrent connections to both.
+    const owned = await tryOrNull(() => ctx.projects.listForTeam(id, "all"))
+    for (const project of owned ?? []) {
+        const { error: pErr } = await repoRead(() => ctx.projectDeletion.delete(project.id))
+        // Stop on the first failure. A partially-deleted team is recoverable —
+        // the team still exists, so retrying resumes. Pressing on would remove
+        // the team while some projects' content survived.
+        if (pErr) return pErr
+    }
 
     const { error: dbErr } = await repoRead(() => ctx.teams.delete(id))
     if (dbErr) return dbErr

@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
-import type { Issue, IssueSuggestion } from "@/lib/shared/types"
+import type { Issue } from "@/lib/shared/types"
 import type {
     IssuesRepository,
     IssueSuggestContext,
@@ -12,7 +12,6 @@ import type {
     IssuePatch,
     IssueSimilarityState,
     NewIssue,
-    NewIssueSuggestion,
     SimilarIssue,
 } from "../ports/IssuesRepository"
 
@@ -95,28 +94,6 @@ export class SupabaseIssuesRepository implements IssuesRepository {
     async deleteById(issueId: string): Promise<void> {
         const { error } = await this.db.from("issues").delete().eq("id", issueId)
         if (error) throw new RepositoryError(`issues delete failed: ${error.message}`, { cause: error })
-    }
-
-    async findLatestSuggestion(issueId: string): Promise<IssueSuggestion | null> {
-        const { data, error } = await this.db
-            .from("issue_suggestions")
-            .select("*")
-            .eq("issue_id", issueId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle<IssueSuggestion>()
-        if (error) throw new RepositoryError(`issue_suggestions lookup failed: ${error.message}`, { cause: error })
-        return data ?? null
-    }
-
-    async insertSuggestion(row: NewIssueSuggestion): Promise<IssueSuggestion> {
-        const { data, error } = await this.db
-            .from("issue_suggestions")
-            .insert(row)
-            .select("*")
-            .single<IssueSuggestion>()
-        if (error) throw new RepositoryError(`issue_suggestions insert failed: ${error.message}`, { cause: error })
-        return data
     }
 
     async findSimilarityState(issueId: string, limit: number): Promise<IssueSimilarityState> {

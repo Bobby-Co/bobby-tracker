@@ -118,8 +118,19 @@ export async function POST(request: Request) {
         }),
     )
     if (dbErr) return dbErr
-    // Backstop for the pre-check race — the unique(team_id, repo_url) index.
-    if (!result.ok) return jsonError("conflict", "This team already has a project for this repository.", 409)
+    if (!result.ok) {
+        // The pre-check above only sees THIS team, so it cannot catch a repo
+        // linked in a team the caller has no access to. Say which happened —
+        // "your team already has this" and "someone else's project owns this
+        // repo" need completely different actions from the user.
+        return result.reason === "repo_linked_elsewhere"
+            ? jsonError(
+                  "repo_linked_elsewhere",
+                  "That repository is already connected to another project. A linked repo can back only one project, so inbound webhooks route to the right place — disconnect or delete the existing project first.",
+                  409,
+              )
+            : jsonError("conflict", "This team already has a project for this repository.", 409)
+    }
     const project = result.project
 
     // GitLab: provision the bot credential + webhook and enable sync right away,

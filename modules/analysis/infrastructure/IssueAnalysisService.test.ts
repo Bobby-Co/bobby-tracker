@@ -17,9 +17,13 @@ const store = {
     updateSyncFields: mock(),
     insertSuggestion: mock(),
 }
-const projectsRepo = { findAnalysisContext: mock() }
+const projectsRepo = { findAnalysisContext: mock(), findCell: mock() }
 const analyserRepo = { findByProjectId: mock(), findGraphId: mock() }
 const analyser = { startIssueAnalysis: mock(), cancelIssueAnalysis: mock() }
+// Cell → Analyser resolver (0062). The service learns the cell mid-flow, so
+// it takes this rather than a fixed Analyser; returning the same mock for every
+// cell keeps these characterization tests about lifecycle, not routing.
+const analyserFor = mock(() => analyser)
 // The vcs comment service the flow posts through (VcsAppService), via the resolver.
 const vcsSvc = { postComment: mock(), updateComment: mock() }
 const vcsFor = () => vcsSvc
@@ -43,7 +47,7 @@ beforeAll(async () => {
 })
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new IssueAnalysisService(analyser as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any)
+const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any)
 
 beforeEach(() => {
     store.findAnalysisRow.mockReset().mockResolvedValue(null)
@@ -51,6 +55,8 @@ beforeEach(() => {
     store.updateSyncFields.mockReset().mockResolvedValue(undefined)
     store.insertSuggestion.mockReset().mockResolvedValue(undefined)
     projectsRepo.findAnalysisContext.mockReset().mockResolvedValue(null)
+    projectsRepo.findCell.mockReset().mockResolvedValue("ashburn-0")
+    analyserFor.mockClear()
     analyserRepo.findByProjectId.mockReset().mockResolvedValue(null)
     analyserRepo.findGraphId.mockReset().mockResolvedValue("G1")
     analyser.startIssueAnalysis.mockReset().mockResolvedValue(undefined)
@@ -161,7 +167,31 @@ describe("applyResult", () => {
 // ── cancel ────────────────────────────────────────────────────────────────────
 describe("cancel", () => {
     test("delegates to the analyser's cancel", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
         await svc().cancel("iss-1")
         expect(analyser.cancelIssueAnalysis).toHaveBeenCalledWith("iss-1")
+    })
+
+    // Since 0062 a cancel has to reach the analyser actually running the task, so
+    // it resolves the issue's project cell first. Both lookups fail closed —
+    // silently, because cancel is best-effort by contract.
+    test("routes the cancel to the project's cell", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        projectsRepo.findCell.mockResolvedValue("bangkok-0")
+        await svc().cancel("iss-1")
+        expect(analyserFor).toHaveBeenCalledWith("bangkok-0")
+    })
+
+    test("no-ops when the issue is gone", async () => {
+        store.findAnalysisRow.mockResolvedValue(null)
+        await svc().cancel("iss-1")
+        expect(analyser.cancelIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("no-ops rather than guessing when the cell is unreadable", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        projectsRepo.findCell.mockResolvedValue(null)
+        await svc().cancel("iss-1")
+        expect(analyser.cancelIssueAnalysis).not.toHaveBeenCalled()
     })
 })

@@ -3,7 +3,7 @@ import { getAnalyser, createIssueAnalysisService, createPullRequestAnalysisServi
 import { tryOrNull } from "@/lib/shared/kernel"
 import { SyncHash, timingSafeEqual, createServicePullRequestStore, getGitlabCloneAuth } from "@/modules/vcs"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
-import { Project as ProjectAggregate } from "@/modules/projects"
+import { Project as ProjectAggregate, createSupabaseProjectsRepository } from "@/modules/projects"
 import { Supabase } from "@/lib/server/supabase"
 import type { Issue, Project } from "@/lib/shared/types"
 
@@ -289,13 +289,21 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
     if (!analyser?.enabled || !analyser.graph_id) return ack()
     if (analyser.last_indexed_sha && analyser.last_indexed_sha === headSha) return ack()
 
+    // Which cell holds this graph. An unreadable cell acks rather than
+    // retrying — redelivery won't fix a routing gap, it just replays the push.
+    const cell = await tryOrNull(() => createSupabaseProjectsRepository(svc).findCell(project.id))
+    if (!cell) {
+        console.error("[gitlab webhook] unknown cell — skipping incremental index", project.id)
+        return ack()
+    }
+
     const graphId = analyser.graph_id
     after(async () => {
         try {
             // Explicit git_auth (bot token + oauth2 user) so the analyser can clone
             // a private GitLab repo — its user_id path only knows github_tokens.
             const gitAuth = await getGitlabCloneAuth(project.id)
-            await getAnalyser().startIndex({
+            await getAnalyser(cell).startIndex({
                 job_type: "incremental",
                 repo_url: project.repo_url,
                 repo_id: graphId,

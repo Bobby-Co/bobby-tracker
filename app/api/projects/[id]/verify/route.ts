@@ -33,8 +33,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
 
+    const cell = await ctx.projects.findCell(id)
+    if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
     try {
-        const report = await getAnalyser().verify({
+        const report = await getAnalyser(cell).verify({
             repoUrl: project.repo_url,
             repoId: analyser.graph_id,
             // The analyser worker fetches this user's GitHub token from

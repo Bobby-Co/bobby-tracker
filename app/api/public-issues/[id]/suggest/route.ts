@@ -4,6 +4,7 @@ import { jsonError } from "@/lib/server/http/api"
 import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
 import { Supabase } from "@/lib/server/supabase"
 import type { IssueSuggestion } from "@/lib/shared/types"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getPublicSessionService } from "@/modules/public"
 import { RateLimiter } from "@/lib/server/RateLimiter"
 
@@ -52,8 +53,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
 
+    const cell = await tryOrNull(() => createSupabaseProjectsRepository(svc).findCell(issue.project_id))
+    if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
     try {
-        const result = await getAnalyser().analyseIssue({
+        const result = await getAnalyser(cell).analyseIssue({
             repoId:   analyser.graph_id,
             title:    issue.title,
             body:     issue.body || "",

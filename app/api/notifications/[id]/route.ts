@@ -7,10 +7,10 @@ import { ApiContext, repoRead } from "@/lib/server/http/api"
 // alone rather than sliding it forward.
 export async function PATCH(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { error: dbErr } = await repoRead(() => ctx.notifications.markRead(id))
+    const { error: dbErr } = await repoRead(() => ctx.notifications.markRead(user.id, id))
     if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }
@@ -24,10 +24,10 @@ export async function PATCH(_: Request, { params }: { params: Promise<{ id: stri
 // if the user double-clicks or two tabs race.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { error: dbErr } = await repoRead(() => ctx.notifications.remove(id))
+    const { error: dbErr } = await repoRead(() => ctx.notifications.remove(user.id, id))
     if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

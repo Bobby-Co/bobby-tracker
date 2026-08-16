@@ -17,6 +17,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (error) return error
 
     const issues = ctx.issues
+    const suggestions = ctx.issueSuggestions
     const projects = ctx.projects
     const { data: issue, error: iErr } = await repoRead(() => issues.findSuggestContext(id))
     if (iErr) return iErr
@@ -24,7 +25,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const [{ data: project, error: pErr }, { data: suggestion, error: sErr }] = await Promise.all([
         repoRead(() => projects.findAnalysisContext(issue.project_id)),
-        repoRead(() => issues.findLatestSuggestion(issue.id)),
+        repoRead(() => suggestions.findLatest(issue.id)),
     ])
     if (pErr) return pErr
     if (sErr) return sErr

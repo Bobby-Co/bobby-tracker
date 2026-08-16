@@ -5,6 +5,7 @@
 // construct the adapter directly — that seam is what lets a future host inject a
 // different transport (in-proc → HTTP/RPC) when Analysis is extracted.
 
+import type { CellId } from "@/modules/regions"
 import type {
     QueryResult,
     ChatHistoryMessage,
@@ -86,3 +87,12 @@ export interface Analyser {
     /** /graphs/delete — tear down a repo's knowledge graph. Idempotent. */
     deleteGraph(graphId: string): Promise<void>
 }
+
+/** Resolves the Analyser serving a cell — `getAnalyser` itself.
+ *
+ *  Injected (rather than a fixed Analyser) into services that only learn which
+ *  cell they need partway through a flow, once they've resolved the project.
+ *  Same shape and reasoning as the VcsAppServiceResolver the vcs module injects.
+ *  Omitting the cell selects the home cell; see getAnalyser for when that is and
+ *  isn't correct. */
+export type AnalyserResolver = (cell?: CellId) => Analyser

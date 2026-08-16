@@ -26,8 +26,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const pid = await tryOrNull(() => ctx.projects.findId(id))
     if (!pid) return jsonError("not_found", "project not found", 404)
 
+    const cell = await ctx.projects.findCell(id)
+    if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
     try {
-        const { conversation_id, pr_number, pr_title } = await getAnalyser().deepDivePRInsight(insightId)
+        const { conversation_id, pr_number, pr_title } = await getAnalyser(cell).deepDivePRInsight(insightId)
         if (!conversation_id) return jsonError("deep_dive_failed", "no conversation returned", 502)
         return Response.json({ conversation_id, pr_number, pr_title })
     } catch (e) {

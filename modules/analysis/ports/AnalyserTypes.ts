@@ -13,6 +13,20 @@ export class AnalyserError extends Error {
     }
 }
 
+/** Which analyser deployment an adapter instance talks to. Injected at
+ *  construction (never read from env by the adapter) so one process can hold a
+ *  handle to several cells' analysers at once.
+ *
+ *  `baseUrl` may be empty: that is how the registry reports "this cell has no
+ *  analyser behind it". The adapter turns it into a loud not_configured error
+ *  naming the cell, rather than falling back to another cell's URL. */
+export interface AnalyserEndpoint {
+    /** The cell this endpoint serves — carried for error messages only. */
+    cell: string
+    baseUrl: string
+    token: string
+}
+
 /** Where a detached run POSTs its terminal result. `token` (when set) is sent as
  *  `Authorization: Bearer <token>` on the callback. */
 export interface AnalyserRunCallback {

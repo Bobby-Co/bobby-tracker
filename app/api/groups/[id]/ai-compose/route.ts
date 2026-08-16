@@ -24,7 +24,11 @@ import { EmbeddingText } from "@/modules/issues"
 // for the issue's layer or feature. Returns proposal + ranking[].
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    // Collection authorization. Was requireUser, relying on RLS to null out
+    // findSummary for a non-member — the same backstop the issues feed leaned on.
+    // This reads every member project's name and ranks them, so an unguarded call
+    // discloses another team's project list.
+    const { ctx, error } = await new ApiContext().requireCollectionAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>

@@ -16,7 +16,7 @@ const LIMIT = 50
 // correct even though the list is capped, and it costs a head-count, not a
 // second round-trip.
 export async function GET() {
-    const { ctx, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // Belt-and-braces drain: if the pg_net wake-up (migration 0054) was missed,
@@ -28,7 +28,7 @@ export async function GET() {
         after(() => createNotificationService(Supabase.service()).drain(10).catch(() => {}))
     }
 
-    const { data: notifications, error: dbErr } = await repoRead(() => ctx.notifications.listRecent(LIMIT))
+    const { data: notifications, error: dbErr } = await repoRead(() => ctx.notifications.listRecent(user.id, LIMIT))
     if (dbErr) return dbErr
 
     return Response.json({
@@ -42,12 +42,12 @@ export async function GET() {
 // Backs "Mark all read". Filtering on read_at is null keeps it from rewriting
 // timestamps on rows already read, so the value stays "when it was first read".
 export async function PATCH() {
-    const { ctx, error } = await new ApiContext().requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
     // The UPDATE grant is column-scoped to read_at (0049) — touching any other
     // column here would fail at the privilege layer, by design.
-    const { error: dbErr } = await repoRead(() => ctx.notifications.markAllRead())
+    const { error: dbErr } = await repoRead(() => ctx.notifications.markAllRead(user.id))
     if (dbErr) return dbErr
 
     return new Response(null, { status: 204 })

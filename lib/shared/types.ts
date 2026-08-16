@@ -719,6 +719,19 @@ export interface Team {
     is_personal: boolean
     /** Creator; null after the creator's account is deleted (FK SET NULL). */
     created_by: string | null
+    /** User-facing geography this team was placed in, e.g. 'south-east-asia'
+     *  (0064). Chosen once at team creation; every project the team owns is
+     *  served from here. */
+    region: string
+    /** The deployment unit holding this team's regional content and serving its
+     *  analyser, e.g. 'bangkok-0' (0064). Assigned by the registry, never chosen
+     *  by the user and never shown to one.
+     *
+     *  Both are plain strings rather than unions: the id space is open by design
+     *  so a new cell is a config change, and the DB validates format only. Parse
+     *  through modules/regions (parseCellId / parseRegionId) before use — the
+     *  branded types are what stop a region reaching a cell-shaped parameter. */
+    cell: string
     created_at: string
     updated_at: string
 }

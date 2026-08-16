@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { NotificationPopover } from "@/components/layout/notification-popover"
 import { isImmersiveMind } from "@/components/layout/immersive"
+import { MotionProvider } from "@/components/ui/lazy-motion"
 import type { Project } from "@/lib/shared/types"
 
 // Presentational app shell — the chrome shared by every signed-in route
@@ -28,6 +29,10 @@ export function AppShell({
     const immersive = isImmersiveMind(pathname)
 
     return (
+        // MotionProvider supplies the animation features the shell's `m` components
+        // need, from a chunk that loads after first paint. It wraps children too, so
+        // page-level `motion` components keep working unchanged.
+        <MotionProvider>
         <div className="flex h-screen w-full bg-[color:var(--c-shell)] text-[color:var(--c-text)]">
             <Sidebar projects={projects} collapsed={immersive} />
             <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-500", immersive ? "pt-0" : "pt-2")}>
@@ -67,6 +72,7 @@ export function AppShell({
                 </main>
             </div>
         </div>
+        </MotionProvider>
     )
 }
 

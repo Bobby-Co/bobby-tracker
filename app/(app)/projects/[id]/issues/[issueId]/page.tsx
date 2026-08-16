@@ -96,6 +96,11 @@ export default function IssueDetailPage() {
 
             {issue && project ? (
                 <IssueSuggestions
+                    // Keyed by issue: the card holds a run's lifecycle in refs,
+                    // so navigating to a sibling issue (same route segment, no
+                    // remount) must reset it rather than inherit the other
+                    // issue's result.
+                    key={issue.id}
                     issueId={issue.id}
                     projectId={id}
                     repo={project}

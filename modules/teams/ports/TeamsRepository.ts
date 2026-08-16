@@ -4,12 +4,18 @@
 // caller's teams.
 
 import type { Team } from "@/lib/shared/types"
+import type { CellId, RegionId } from "@/modules/regions"
 
 export interface TeamsRepository {
     /** Create a non-personal team via the create_team RPC (team row + owner
      *  membership inserted atomically) and return its id. THROWS RepositoryError
      *  on failure. */
-    createTeam(name: string): Promise<string>
+    /** Create a team at a specific placement (0065) and return its id.
+     *  `region` is what the user chose; `cell` is what the registry assigned
+     *  inside it. Both are required — the RPC rejects empty values rather than
+     *  quietly defaulting to home, so a bug in placement resolution surfaces as
+     *  an error instead of a team in the wrong hemisphere. */
+    createTeam(name: string, region: RegionId, cell: CellId, userId: string): Promise<string>
 
     /** A team by id, or null when absent / not visible. THROWS RepositoryError on
      *  a genuine query failure (so a caller can surface a 500 vs a 404). */

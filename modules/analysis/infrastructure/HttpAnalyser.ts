@@ -11,6 +11,7 @@
 import type { Analyser } from "../ports/Analyser"
 import { AnalyserError } from "../ports/AnalyserTypes"
 import type {
+    AnalyserEndpoint,
     AnalyserRunCallback,
     AnalyseEffort,
     ChatHistoryMessage,
@@ -34,18 +35,39 @@ import type {
 } from "../ports/AnalyserTypes"
 
 export class HttpAnalyser implements Analyser {
+    /** The analyser deployment this instance talks to. Injected rather than read
+     *  from env, because a single request may need two of them: the project's own
+     *  cell for graph work, the home cell for placement-agnostic calls. Obtain an
+     *  instance from getAnalyser(cell), never by newing this directly. */
+    constructor(private readonly endpoint: AnalyserEndpoint) {}
+
     // ─── transport helpers (private — the vendor detail this adapter owns) ────
     /** The configured analyser base URL (trailing slashes trimmed). Token is
      *  server-only — never shipped to the browser. */
     private base(): string {
-        const url = process.env.BOBBY_ANALYSER_URL || ""
-        if (!url) throw new AnalyserError("BOBBY_ANALYSER_URL is not set", "not_configured")
+        const url = this.endpoint.baseUrl
+        if (!url) {
+            const suffix = this.endpoint.cell.toUpperCase().replace(/-/g, "_")
+            throw new AnalyserError(
+                `no analyser configured for cell "${this.endpoint.cell}" (set BOBBY_ANALYSER_URL_${suffix})`,
+                "not_configured",
+            )
+        }
         return url.replace(/\/+$/, "")
     }
 
     private authHeader(): Record<string, string> {
-        const token = process.env.BOBBY_ANALYSER_TOKEN || ""
-        return token ? { Authorization: `Bearer ${token}` } : {}
+        const token = this.endpoint.token
+        return {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            // Name the cell we believe we are addressing. The analyser answers 421
+            // when it disagrees, which turns a misrouted request into a loud
+            // failure instead of a successful index into the wrong region's graph
+            // store — two divergent graphs for one project, with nothing to say
+            // which is authoritative. Both sides fail open while only one is
+            // deployed, so this can roll out in either order.
+            "X-Bobby-Cell": this.endpoint.cell,
+        }
     }
 
     /** Attribution for the Prowl ledger. We authenticate with a SHARED service

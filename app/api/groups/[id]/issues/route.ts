@@ -10,7 +10,12 @@ import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis"
 // Shape: { group: { id, name }, members: MemberInfo[], issues: Issue[] }
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    // Explicit collection authorization. This previously ran on requireUser and
+    // relied on RLS making findSummary return null for a non-member — a backstop
+    // that disappears the moment this content is read with anything other than
+    // the caller's own scope. The feed below spans every project in the group, so
+    // getting this wrong leaks issue content across teams.
+    const { ctx, error } = await new ApiContext().requireCollectionAccess(id)
     if (error) return error
 
     const { data: group, error: gErr } = await repoRead(() => ctx.collections.findSummary(id))

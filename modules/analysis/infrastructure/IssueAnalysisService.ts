@@ -9,7 +9,7 @@ import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { IssueAnalysisData, IssuePriority } from "@/lib/shared/types"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
-import type { Analyser } from "../ports/Analyser"
+import type { AnalyserResolver } from "../ports/Analyser"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
@@ -20,7 +20,7 @@ type VcsAppServiceResolver = (project: VcsProviderBinding) => VcsAppService | nu
 
 export class IssueAnalysisService {
     constructor(
-        private readonly analyser: Analyser,
+        private readonly analyserFor: AnalyserResolver,
         private readonly issues: IssueSyncStore,
         private readonly projects: ProjectsRepository,
         private readonly analysers: ProjectAnalyserRepository,
@@ -50,6 +50,14 @@ export class IssueAnalysisService {
         const analyser = await tryOrNull(() => this.analysers.findByProjectId(issue.project_id))
         if (!ProjectAnalyser.from(analyser).isReady()) return "not_ready"
 
+        // Route to the CELL holding this project's graph (0062) — not its region,
+        // which may contain several cells and only one has the graph. A project
+        // whose cell we can't read is not analysable: defaulting would hand the run
+        // to an analyser that has never seen this repo, producing a confidently
+        // empty result rather than an honest failure.
+        const cell = await this.projects.findCell(issue.project_id)
+        if (!cell) return "not_ready"
+
         const update: IssueSyncPatch = { analysis_status: "analysing" }
 
         // Post the "analysing…" placeholder only when the issue is linked + sync is
@@ -75,7 +83,7 @@ export class IssueAnalysisService {
 
         // Kick the single detached run; its callback caches to issue_suggestions
         // (the web box picks it up via realtime) and edits the bot comment.
-        await this.analyser.startIssueAnalysis(
+        await this.analyserFor(cell).startIssueAnalysis(
             {
                 // isReady() above guarantees a non-null analyser with a graph_id.
                 repoId: analyser!.graph_id!,
@@ -85,6 +93,10 @@ export class IssueAnalysisService {
                 priority: issue.priority || undefined,
             },
             issueId,
+            // Deliberately the UNSUFFIXED token, not the cell's. This is the
+            // tracker's inbound secret — what /api/internal/analysis-result checks
+            // when the analyser calls back — so it is shared by every cell, unlike
+            // the per-cell bearer we authenticate outbound with.
             { url: `${origin}/api/internal/analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
         )
         return "started"
@@ -183,6 +195,13 @@ export class IssueAnalysisService {
     // then reports status=cancelled via the callback, which edits the comment.
     // Best-effort — a cancel for an already-finished task is a no-op.
     async cancel(issueId: string): Promise<void> {
-        await this.analyser.cancelIssueAnalysis(issueId)
+        // Two extra reads to find the cell: a cancel must reach the analyser that
+        // actually holds the run, and no other. Both fold to a silent no-op, which
+        // matches this method's best-effort contract.
+        const issue = await this.issues.findAnalysisRow(issueId)
+        if (!issue) return
+        const cell = await this.projects.findCell(issue.project_id)
+        if (!cell) return
+        await this.analyserFor(cell).cancelIssueAnalysis(issueId)
     }
 }

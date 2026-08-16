@@ -40,9 +40,6 @@ export type SessionProjectResult = "ok" | "duplicate" | "integration_disabled"
 export interface PublicSessionAdminRepository {
     /** The team's sessions, newest first. THROWS RepositoryError. */
     listForTeam(teamId: string): Promise<PublicSession[]>
-    /** All the caller's sessions, newest first. THROWS (the overview route maps a
-     *  failure to a `pending_migration` 503, so it catches rather than repoRead). */
-    listAll(): Promise<PublicSession[]>
     /** A session by id, or null when absent. THROWS on a query failure. */
     findById(id: string): Promise<PublicSession | null>
     /** Create a session; returns the row. THROWS. */
@@ -85,5 +82,5 @@ export interface PublicSessionAdminRepository {
     // ─── eligible projects (project_public_integration!inner) ────────────────
     /** Projects with the public integration enabled — eligible for a new session.
      *  FAIL-SAFE ([] on error). */
-    listEligibleProjects(): Promise<{ id: string; name: string }[]>
+    listEligibleProjects(teamId: string): Promise<{ id: string; name: string }[]>
 }

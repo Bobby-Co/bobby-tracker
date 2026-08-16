@@ -1,12 +1,13 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // GET — list whitelisted emails for a session.
-// POST — add one or more emails. Owner-only via RLS on the table.
+// POST — add one or more emails.
 //
-// We don't re-check session ownership in the handler: the underlying
-// public_session_invites RLS policy already requires that the session
-// belongs to auth.uid(), so a non-owner's insert/select silently
-// returns no rows or errors out at the policy.
+// Both check session access in the handler. They used to rely on the
+// public_session_invites RLS policy instead — a non-owner's select simply
+// returned no rows — which held only while every read carried the caller's own
+// credentials. These are invitee email addresses, so an unguarded read is a
+// disclosure of who a team invited.
 
 // Minimal email shape mirror of the DB CHECK constraint. Stricter
 // validation would belong in a shared helper if the app gains other
@@ -21,7 +22,7 @@ function normalizeEmail(raw: unknown): string | null {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    const { ctx, error } = await new ApiContext().requireSessionAccess(id)
     if (error) return error
 
     const { data: invites, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.listInvites(id))

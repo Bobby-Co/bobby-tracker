@@ -13,7 +13,9 @@ function parseWindow(v: unknown): string | null | undefined {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    // Session access, not just identity: this returns the session, its projects
+    // and the team's eligible-project list.
+    const { ctx, teamId, error } = await new ApiContext().requireSessionAccess(id)
     if (error) return error
     const { data: session, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.findById(id))
     if (dbErr) return dbErr
@@ -21,11 +23,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     const projects = await ctx.sessionsAdmin.listProjectNames(id)
     // Projects eligible to be added — only those with the integration enabled.
-    const allProjects = await ctx.sessionsAdmin.listEligibleProjects()
+    const allProjects = await ctx.sessionsAdmin.listEligibleProjects(teamId)
     // Whitelisted invite emails (best-effort; [] on read failure, as before).
     const invites = (await tryOrNull(() => ctx.sessionsAdmin.listInvites(id))) ?? []
     // Eligible groups for the source picker — owner-only via RLS.
-    const allGroups = await ctx.collections.listNames()
+    const allGroups = await ctx.collections.listNames(teamId)
 
     return Response.json({ session, projects, allProjects, invites, allGroups })
 }

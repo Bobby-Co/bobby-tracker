@@ -63,6 +63,18 @@ export class Supabase {
  *  they `import type` this so they need no runtime dependency on the seam. */
 export type SupabaseRlsClient = Awaited<ReturnType<typeof Supabase.rls>>
 
+/** What a RequestContext holds. Service-role since the RLS-to-AccessService
+ *  migration: the server decides access before it queries, so it no longer asks
+ *  the database to re-derive it. Two invariants enforced in CI make that safe —
+ *  lib/server/http/route-authz.test.ts (every route reaching tenant data carries
+ *  a tenant guard) and repository-scoping.test.ts (every tenant query carries a
+ *  predicate; every mutation a keyed one).
+ *
+ *  This is ALSO what makes a regional split possible: a service-role client can
+ *  be pointed at another region's database, whereas an RLS client is bound to a
+ *  JWT that only its own project can validate. */
+export type SupabaseServiceClient = ReturnType<typeof Supabase.service>
+
 // Always pin path to "/" so the session cookie + PKCE verifier are visible to
 // every route. Without an explicit path, browser cookies default to the URL that
 // set them — the verifier written from /login then doesn't get sent on

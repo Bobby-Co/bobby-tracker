@@ -15,10 +15,14 @@ import { KnowledgeBaseService } from "./KnowledgeBaseService"
 import { McpToolError } from "../domain/McpTool"
 
 const access = { listTeams: mock(), accessibleProjectIds: mock(), canAccessProject: mock() }
-const projects = { listForTeam: mock() }
+const projects = { listForTeam: mock(), findCell: mock() }
 const mcpIntegration = { listEnabledProjectIds: mock() }
 const analyser = { findGraphId: mock() }
 const analyserPort = { retrieve: mock(), neighbours: mock() }
+// The service now takes a RESOLVER (cell → Analyser) rather than a fixed
+// Analyser. Recording the cell it asks for is how the tests below assert that a
+// tool call is routed to the cell actually holding the graph.
+const analyserFor = mock(() => analyserPort)
 
 // The service takes PORTS by constructor (no DB client, no RequestContext), so
 // plain mocks are enough — no module mocking needed.
@@ -33,7 +37,7 @@ const svc = () =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         analyser as any,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        analyserPort as any,
+        analyserFor as any,
         "u1",
     )
 
@@ -49,10 +53,12 @@ beforeEach(() => {
     access.accessibleProjectIds.mockReset()
     access.canAccessProject.mockReset()
     projects.listForTeam.mockReset()
+    projects.findCell.mockReset()
     mcpIntegration.listEnabledProjectIds.mockReset()
     analyser.findGraphId.mockReset()
     analyserPort.retrieve.mockReset()
     analyserPort.neighbours.mockReset()
+    analyserFor.mockClear()
 
     // Default happy path: one team, admin, two projects, both indexed.
     access.listTeams.mockResolvedValue([{ id: "t1", role: "admin", is_personal: true }])
@@ -64,6 +70,7 @@ beforeEach(() => {
     ])
     mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p1", "p2"])
     analyser.findGraphId.mockResolvedValue("graph-x")
+    projects.findCell.mockResolvedValue("ashburn-0")
 })
 
 describe("list — exposure filtering", () => {
@@ -121,6 +128,25 @@ describe("resolve — identifier matching", () => {
         expect((await svc().resolve("bobby-analyser")).projectId).toBe("p2")
     })
 
+    // The caller standing in a checkout has one identifier for free. Every
+    // spelling git hands out has to resolve, or it goes back to guessing ours.
+    test.each([
+        "git@github.com:phongpak/bobby-analyser.git",
+        "https://github.com/phongpak/bobby-analyser",
+        "https://github.com/phongpak/bobby-analyser.git",
+        "ssh://git@github.com/phongpak/bobby-analyser.git",
+        "https://github.com/phongpak/bobby-analyser/",
+        "PHONGPAK/BOBBY-ANALYSER",
+    ])("matches the git remote %s", async (remote) => {
+        expect((await svc().resolve(remote)).projectId).toBe("p2")
+    })
+
+    // A fork or a mirror has a different owner but the same repo name — the tail
+    // pass should still land it rather than sending the caller to list().
+    test("matches on repo name when the owner differs", async () => {
+        expect((await svc().resolve("git@github.com:someone-else/bobby-analyser.git")).projectId).toBe("p2")
+    })
+
     test("carries the analyser graph id through", async () => {
         analyser.findGraphId.mockResolvedValue("graph-42")
         expect((await svc().resolve("p1")).graphId).toBe("graph-42")
@@ -162,8 +188,32 @@ describe("resolve — the access boundary", () => {
         await expect(svc().resolve("p1")).rejects.toThrow(McpToolError)
     })
 
-    test("an empty identifier is rejected outright", async () => {
-        await expect(svc().resolve("   ")).rejects.toThrow(/No project given/)
+})
+
+// `project` is optional so the common case — one indexed codebase — costs no
+// round trip at all, and the uncommon case costs exactly one corrected retry
+// rather than a list_knowledge_bases call followed by a second attempt.
+describe("resolve — no identifier given", () => {
+    test("uses the only indexed knowledge base", async () => {
+        projects.listForTeam.mockResolvedValue([project("p1", "Tracker", "phongpak/bobby-tracker")])
+        mcpIntegration.listEnabledProjectIds.mockResolvedValue(["p1"])
+        expect((await svc().resolve()).projectId).toBe("p1")
+        expect((await svc().resolve("   ")).projectId).toBe("p1")
+    })
+
+    test("ignores un-indexed bases when deciding there is only one", async () => {
+        analyser.findGraphId.mockImplementation(async (id: string) => (id === "p2" ? "graph-x" : null))
+        expect((await svc().resolve()).projectId).toBe("p2")
+    })
+
+    test("names the candidates instead of guessing when there are several", async () => {
+        await expect(svc().resolve()).rejects.toThrow(/bobby-tracker.*bobby-analyser/s)
+        await expect(svc().resolve()).rejects.toThrow(/git remote get-url origin/)
+    })
+
+    test("says so when nothing has finished indexing", async () => {
+        analyser.findGraphId.mockResolvedValue(null)
+        await expect(svc().resolve()).rejects.toThrow(/finished indexing/)
     })
 })
 

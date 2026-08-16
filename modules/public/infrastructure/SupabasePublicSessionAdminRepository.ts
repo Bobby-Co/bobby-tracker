@@ -35,15 +35,6 @@ export class SupabasePublicSessionAdminRepository implements PublicSessionAdminR
         return data ?? []
     }
 
-    async listAll(): Promise<PublicSession[]> {
-        const { data, error } = await this.db
-            .from("public_sessions")
-            .select("*")
-            .order("updated_at", { ascending: false })
-            .returns<PublicSession[]>()
-        if (error) throw new RepositoryError(error.message, { cause: error })
-        return data ?? []
-    }
 
     async findById(id: string): Promise<PublicSession | null> {
         const { data, error } = await this.db.from("public_sessions").select("*").eq("id", id).maybeSingle<PublicSession>()
@@ -187,10 +178,11 @@ export class SupabasePublicSessionAdminRepository implements PublicSessionAdminR
         if (error) throw new RepositoryError(error.message, { cause: error })
     }
 
-    async listEligibleProjects(): Promise<{ id: string; name: string }[]> {
+    async listEligibleProjects(teamId: string): Promise<{ id: string; name: string }[]> {
         const { data } = await this.db
             .from("projects")
             .select("id,name,project_public_integration!inner(enabled)")
+            .eq("team_id", teamId)
             .eq("project_public_integration.enabled", true)
             .order("name", { ascending: true })
         return ((data as unknown as { id: string; name: string }[]) ?? []).map((p) => ({ id: p.id, name: p.name }))

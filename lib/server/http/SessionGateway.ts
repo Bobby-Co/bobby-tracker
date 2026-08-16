@@ -20,7 +20,22 @@ class SupabaseSessionGateway implements SessionGateway {
         return Supabase.currentUser()
     }
     async openContext(): Promise<RequestContext> {
-        return new RequestContext(await Supabase.rls())
+        // SERVICE-ROLE, not the caller's RLS client. Authorization is decided by
+        // AccessService before any query runs (see the guard + predicate tests),
+        // so the database is no longer asked to re-derive it from a JWT.
+        //
+        // Two things follow. The obvious one: RLS no longer scopes these reads,
+        // which is why every repository query must carry its own predicate. The
+        // load-bearing one: a service-role client can be pointed at ANOTHER
+        // REGION's database, while an RLS client is bound to a JWT only its own
+        // Supabase project can validate. That is the whole reason this switch is
+        // a prerequisite for the split.
+        //
+        // Handed in as both planes because they are one database today. The split
+        // resolves the active team's cell here and passes that region's client as
+        // the second argument; nothing downstream changes.
+        const db = Supabase.service()
+        return new RequestContext(db, db)
     }
 }
 

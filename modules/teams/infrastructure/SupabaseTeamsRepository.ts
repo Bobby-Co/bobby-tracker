@@ -3,6 +3,7 @@
 // RLS-scoped client, so every operation is scoped by the database.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { CellId, RegionId } from "@/modules/regions"
 import { RepositoryError } from "@/lib/shared/kernel"
 import type { Team } from "@/lib/shared/types"
 import type { TeamsRepository } from "../ports/TeamsRepository"
@@ -13,8 +14,8 @@ type AnyDb = SupabaseClient<any, any, any>
 export class SupabaseTeamsRepository implements TeamsRepository {
     constructor(private readonly db: AnyDb) {}
 
-    async createTeam(name: string): Promise<string> {
-        const { data, error } = await this.db.rpc("create_team", { p_name: name })
+    async createTeam(name: string, region: RegionId, cell: CellId, userId: string): Promise<string> {
+        const { data, error } = await this.db.rpc("create_team", { p_name: name, p_region: region, p_cell: cell, p_user: userId })
         if (error) throw new RepositoryError(error.message, { cause: error })
         return data as string
     }

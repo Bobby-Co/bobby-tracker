@@ -17,13 +17,17 @@ import { KnowledgeBaseService } from "./application/KnowledgeBaseService"
 /** Build the knowledge-base service for an already-authenticated MCP caller. The
  *  userId MUST come from a resolved OAuth token, never from the request body. */
 export function createKnowledgeBaseService(userId: string): KnowledgeBaseService {
-    const db = Supabase.service()
+    // One service-role client, named per plane. `project_analyser` is
+    // control-plane (realtime publication); projects and the MCP exposure flag are
+    // data-plane. Splitting them later is a change here and nowhere else.
+    const dataDb = Supabase.service()
+    const controlDb = dataDb
     return new KnowledgeBaseService(
-        getAccessService(db),
-        createSupabaseProjectsRepository(db),
-        createSupabaseProjectMcpIntegrationRepository(db),
-        createSupabaseProjectAnalyserRepository(db),
-        getAnalyser(),
+        getAccessService(controlDb, dataDb),
+        createSupabaseProjectsRepository(dataDb),
+        createSupabaseProjectMcpIntegrationRepository(dataDb),
+        createSupabaseProjectAnalyserRepository(controlDb),
+        getAnalyser,
         userId,
     )
 }

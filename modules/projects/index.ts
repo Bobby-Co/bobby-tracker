@@ -27,3 +27,10 @@ export { ProjectInsight } from "./domain/ProjectInsight"
 // ─── Project aggregate — the GitHub-sync invariants (sync-ready, direction) ──
 export type { ProjectSyncState, SyncDirection } from "./domain/Project"
 export { Project } from "./domain/Project"
+
+// ─── deleting a project across both planes ──────────────────────────────────
+// The database no longer cascades into the regional tables (their FKs to
+// `projects` cannot span two databases), so deletion is orchestrated in code.
+export type { ProjectContentPurge, PurgeResult } from "./ports/ProjectContentPurge"
+export { createSupabaseProjectContentPurge } from "./infrastructure/SupabaseProjectContentPurge"
+export { ProjectDeletionService } from "./application/ProjectDeletionService"

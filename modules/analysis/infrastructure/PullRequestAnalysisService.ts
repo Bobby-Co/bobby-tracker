@@ -8,7 +8,7 @@ import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { PrAnalysis } from "@/lib/shared/types"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
-import type { Analyser } from "../ports/Analyser"
+import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
@@ -41,7 +41,7 @@ type VcsAppServiceResolver = (project: VcsProviderBinding) => VcsAppService | nu
 
 export class PullRequestAnalysisService {
     constructor(
-        private readonly analyser: Analyser,
+        private readonly analyserFor: AnalyserResolver,
         private readonly projects: ProjectsRepository,
         private readonly analysers: ProjectAnalyserRepository,
         private readonly store: PullRequestAnalysisStore,
@@ -59,6 +59,12 @@ export class PullRequestAnalysisService {
 
         const analyser = await tryOrNull(() => this.analysers.findReadiness(project.id))
         if (!ProjectAnalyser.from(analyser).isReady()) return
+
+        // Resolve the cell up here, alongside the other readiness gates, rather
+        // than at the call below — bailing out later would leave an "analysing…"
+        // comment on the PR that nothing ever comes back to edit.
+        const cell = await this.projects.findCell(project.id)
+        if (!cell) return
 
         const existing = await this.store.findTracking(project.id, pr.number)
         if (existing?.status === "analysing") return
@@ -107,7 +113,7 @@ export class PullRequestAnalysisService {
         })
         if (!row) return
 
-        await this.analyser.startPRAnalysis(
+        await this.analyserFor(cell).startPRAnalysis(
             {
                 repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
                 number: pr.number,
@@ -162,6 +168,10 @@ export class PullRequestAnalysisService {
     async cancel(projectId: string, prNumber: number): Promise<void> {
         const row = await this.store.findTracking(projectId, prNumber)
         if (!row || row.status !== "analysing") return
-        await this.analyser.cancelPRAnalysis(row.id)
+        // A cancel has to reach the analyser actually running the task; an unknown
+        // cell is a silent no-op, matching this method's best-effort contract.
+        const cell = await this.projects.findCell(projectId)
+        if (!cell) return
+        await this.analyserFor(cell).cancelPRAnalysis(row.id)
     }
 }

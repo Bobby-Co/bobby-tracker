@@ -1,0 +1,71 @@
+# Snapshot of tracker.* tables in PRODUCTION, taken 2026-08-16.
+#
+# replay.sh diffs the replayed schema against this to surface two kinds of drift
+# that a clean replay alone cannot detect:
+#
+#   * a table the migrations create that production does NOT have  → a migration
+#     that was never applied (or a table dropped by hand). Code that writes to it
+#     is broken in production right now.
+#   * a table production has that no migration creates → someone else's DDL. In
+#     practice that is bobby-analyser, which writes into the `tracker` schema
+#     using its own credentials and has no entry in this repo's migrations. That
+#     is the root cause of the issue_embeddings partitioning drift too, and it
+#     will keep happening until the analyser's tracker-schema DDL is recorded
+#     somewhere both services agree on.
+#
+# Refresh with:
+#   select string_agg(c.relname, E'\n' order by c.relname)
+#   from pg_class c join pg_namespace n on n.oid = c.relnamespace
+#   where n.nspname = 'tracker' and c.relkind in ('r','p')
+#     and c.relname not like 'issue_embeddings_p%';
+
+access_group_members
+access_group_projects
+access_groups
+app_config
+github_installations
+github_tokens
+github_webhook_deliveries
+gitlab_project_links
+icon_catalog
+icon_catalog_meta
+icon_search_cache
+issue_comments
+issue_embeddings
+issue_suggestions
+issues
+mcp_oauth_clients
+mcp_oauth_codes
+mcp_oauth_tokens
+mind_context
+notification_outbox
+notifications
+pr_comments
+pr_insight
+project_analyser
+project_feature_tags
+project_group_members
+project_groups
+project_insight
+project_label_icons
+project_layer_tags
+project_mcp_integration
+project_public_integration
+project_status_colors
+projects
+provider_tokens
+prowl_usage_events
+prowl_usage_period
+public_issue_reporters
+public_session_invites
+public_session_projects
+public_sessions
+pull_request_analyses
+pull_requests
+relay_pairings
+relay_workers
+team_invites
+team_members
+team_subscriptions
+teams
+webhook_deliveries

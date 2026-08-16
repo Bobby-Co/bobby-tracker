@@ -66,9 +66,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // Order matters:
 //   1. Capture the analyser graph_id before deleting the project — the delete
 //      cascades project_analyser away, taking graph_id with it.
-//   2. Delete the project row (RLS scopes to owner). FK cascades wipe issues,
-//      PRs, comments, analyser row, sessions, tags, mind context, etc. This is
-//      the hard-fail step — if it errors we stop and touch nothing external.
+//   2. Delete the project via ProjectDeletionService. The database no longer
+//      cascades into the regional tables — issues, comments, the PR mirror,
+//      embeddings and chat context lost their FK to `projects` when the planes
+//      split — so the service clears those first, then the central suggestions
+//      pointing at the removed issues, then the row itself (whose cascade still
+//      clears every CENTRAL child). Hard-fail: if it errors we stop and touch
+//      nothing external, leaving a project you can see and retry rather than
+//      orphans you cannot find.
 //   3. Best-effort external cleanup with the captured graph_id: tear down the
 //      analyser graph and delete pr_review_index rows (keyed by repo_id text,
 //      NOT a project FK, so they don't cascade; service-role write only). A
@@ -86,15 +91,29 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     // Fail-safe: a query error folds to null → skip the (best-effort) graph
     // teardown, exactly as the old inline read (which ignored the error) did.
     const graphId = await tryOrNull(() => ctx.analyser.findGraphId(id))
+    // Read the cell BEFORE the row is deleted — afterwards there is nothing left
+    // to resolve it from, and the graph would be stranded in its cell forever.
+    const cell = await tryOrNull(() => ctx.projects.findCell(id))
 
-    const { error: dbErr } = await repoRead(() => ctx.projects.delete(id))
+    // Not ctx.projects.delete: that removes the row and its CENTRAL children,
+    // leaving every regional issue, comment and PR behind with nothing left to
+    // find them by. See ProjectDeletionService.
+    const { error: dbErr } = await repoRead(() => ctx.projectDeletion.delete(id))
     if (dbErr) return dbErr
 
     if (graphId) {
-        try {
-            await getAnalyser().deleteGraph(graphId)
-        } catch (e) {
-            console.error("[project delete] analyser graph teardown failed", id, graphId, e)
+        // Only the graph teardown is cell-bound; the pr_review_index cleanup
+        // below lives in the tracker DB and must run either way.
+        if (cell) {
+            try {
+                await getAnalyser(cell).deleteGraph(graphId)
+            } catch (e) {
+                console.error("[project delete] analyser graph teardown failed", id, graphId, e)
+            }
+        } else {
+            // Loud on purpose: the project row is already gone, so nothing will
+            // ever resolve this graph's cell again. It needs manual teardown.
+            console.error("[project delete] unknown cell — graph orphaned, delete it manually", id, graphId)
         }
         try {
             const svc = Supabase.service()

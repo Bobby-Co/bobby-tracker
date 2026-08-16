@@ -3,7 +3,9 @@ import type { CollectionPatch } from "@/modules/teams"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireUser()
+    // Collection access, not just identity: this returns the group's member
+    // projects and the full team project list for the picker.
+    const { ctx, teamId, error } = await new ApiContext().requireCollectionAccess(id)
     if (error) return error
     const { data: group, error: dbErr } = await repoRead(() => ctx.collections.findById(id))
     if (dbErr) return dbErr
@@ -18,7 +20,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
     // Full project list (id+name, alphabetical) for the settings
     // panel's "add member" picker.
-    const allProjects = await ctx.projects.listAllNames()
+    const allProjects = await ctx.projects.listAllNames(teamId)
 
     return Response.json({ group, members, allProjects })
 }

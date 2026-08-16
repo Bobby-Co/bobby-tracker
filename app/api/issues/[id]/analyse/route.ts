@@ -16,6 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (error) return error
 
     const issues = ctx.issues
+    const suggestions = ctx.issueSuggestions
 
     // Ownership (RLS): the cookie client only sees the caller's issues. A read
     // error folds to null → 404 (fail closed), matching the old inline check.
@@ -34,6 +35,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // Return the cached suggestion if the run already completed (status 'done').
     // Fail-safe: a read error folds to null, matching the old maybeSingle.
-    const suggestion = await tryOrNull(() => issues.findLatestSuggestion(id))
+    const suggestion = await tryOrNull(() => suggestions.findLatest(id))
     return Response.json({ status, suggestion: suggestion ?? null })
 }

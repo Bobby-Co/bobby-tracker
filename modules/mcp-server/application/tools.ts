@@ -27,24 +27,30 @@ const MAX_NOTES = 6
 const MAX_NEIGHBOURS = 40
 const SUMMARY_CHARS = 240
 
+/** Shared by both query tools. It leads with the identifiers the caller already
+ *  has — a git remote it can read for free, or nothing at all — rather than the
+ *  naming scheme it would otherwise have to go and look up. */
+const PROJECT_ARG = {
+    type: "string",
+    description:
+        "Which knowledge base. Accepts 'owner/repo', a bare repo name, the Ucelot project name, or the raw output of `git remote get-url origin` (ssh or https, .git suffix fine). OPTIONAL — omit it when the user has a single knowledge base and it is used automatically. A wrong or ambiguous value comes back naming the alternatives, so guess rather than calling list_knowledge_bases first.",
+} as const
+
 export const TOOL_DEFINITIONS: McpToolDefinition[] = [
     {
         name: "list_knowledge_bases",
         description:
-            "List the Ucelot knowledge bases (indexed codebases) you can query. Call this first when you don't know which project name to pass to the other tools, or to check whether the current repository has one.",
+            "List the Ucelot knowledge bases (indexed codebases) you can query. You rarely need this: the available bases are already named in this server's instructions, and locate_files/get_neighbours accept a git remote URL or no project at all. Use it to re-check after the user enables a new project or one finishes indexing mid-session.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
     },
     {
         name: "locate_files",
         description:
-            "Find which files implement a feature, behaviour or bug in an indexed codebase, WITHOUT searching the repository. Returns ranked file paths with the reason each ranked, the module and cluster they belong to (with the summaries written when the codebase was indexed), and the symbols each file defines. Use it instead of grepping: ask in plain language (e.g. 'where is the OAuth token refreshed?'), then open and read the files it names.",
+            "Find which files implement a feature, behaviour or bug in an indexed codebase, WITHOUT searching the repository. Returns ranked file paths with the reason each ranked, the module and cluster they belong to (with the summaries written when the codebase was indexed), and the symbols each file defines. Use it instead of grepping: ask in plain language (e.g. 'where is the OAuth token refreshed?'), then open and read the files it names. CALL IT REPEATEDLY — once per question, not once per session: again for each new sub-question, each unfamiliar term you hit while reading, each further subsystem the change reaches, and before concluding that something does not exist. Three to six calls over a task is normal.",
         inputSchema: {
             type: "object",
             properties: {
-                project: {
-                    type: "string",
-                    description: "Which knowledge base: 'owner/repo', the repo name, or the Ucelot project name.",
-                },
+                project: PROJECT_ARG,
                 query: {
                     type: "string",
                     description:
@@ -60,21 +66,18 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
                     additionalProperties: false,
                 },
             },
-            required: ["project", "query"],
+            required: ["query"],
             additionalProperties: false,
         },
     },
     {
         name: "get_neighbours",
         description:
-            "Walk one hop through the codebase graph from a file, symbol or node id: which modules import this one, what it imports, which module or cluster a symbol belongs to. Fast and free — no model runs. Use it while reading code to answer 'what depends on this' and 'what would a change here reach'. IMPORTANT: dependency edges are indexed at MODULE level, so a symbol anchor answers at the granularity of the module that defines it, and the tool tells you when it did that. Symbol-level call graphs (CALLS/IMPLEMENTS) are not indexed for most projects — an empty result is not proof that nothing references a symbol, and the response says so explicitly. Read the notes before concluding anything from an empty answer.",
+            "Walk one hop through the codebase graph from a file, symbol or node id: which modules import this one, what it imports, which module or cluster a symbol belongs to. Fast and free — no model runs. Use it while reading code to answer 'what depends on this' and 'what would a change here reach'. IMPORTANT: dependency edges are indexed at MODULE level, so a symbol anchor answers at the granularity of the module that defines it, and the tool tells you when it did that. Symbol-level call graphs (CALLS/IMPLEMENTS) are not indexed for most projects — an empty result is not proof that nothing references a symbol, and the response says so explicitly. Read the notes before concluding anything from an empty answer. Usable at ANY point in a session and as often as you like — it is a graph lookup, not a search.",
         inputSchema: {
             type: "object",
             properties: {
-                project: {
-                    type: "string",
-                    description: "Which knowledge base: 'owner/repo', the repo name, or the Ucelot project name.",
-                },
+                project: PROJECT_ARG,
                 symbol: { type: "string", description: "A function, type or interface name to anchor on." },
                 file: {
                     type: "string",
@@ -109,7 +112,9 @@ export const TOOL_DEFINITIONS: McpToolDefinition[] = [
                 },
                 limit: { type: "integer", description: "Cap on neighbours per anchor. Default 25." },
             },
-            required: ["project"],
+            // Nothing is required by schema: `project` is optional by design, and
+            // the anchor is one-of symbol/file/node_id, which JSON Schema cannot
+            // express here — the tool checks it and reports back to the model.
             additionalProperties: false,
         },
     },
@@ -159,7 +164,7 @@ export async function executeTool(
 
         case "locate_files": {
             const query = requireString(args, "query")
-            const { base, evidence } = await service.locate(requireString(args, "project"), query, readHints(args))
+            const { base, evidence } = await service.locate(optionalString(args, "project"), query, readHints(args))
             return textResult(renderEvidence(base.repoFullName || base.name, query, evidence))
         }
 
@@ -170,7 +175,7 @@ export async function executeTool(
             if (!nodeId && !symbol && !file) {
                 throw new Error(`"symbol", "file" or "node_id" is required — one of them anchors the walk`)
             }
-            const { base, graph } = await service.neighbours(requireString(args, "project"), {
+            const { base, graph } = await service.neighbours(optionalString(args, "project"), {
                 nodeId,
                 symbol,
                 file,
@@ -197,7 +202,7 @@ function renderList(bases: Awaited<ReturnType<KnowledgeBaseService["list"]>>): s
         const desc = b.description ? `\n    ${b.description}` : ""
         return `- ${label}${state}${desc}`
     })
-    return `Available knowledge bases (${bases.length}):\n${lines.join("\n")}\n\nPass one of these to locate_files or get_neighbours as "project".`
+    return `Available knowledge bases (${bases.length}):\n${lines.join("\n")}\n\nPass one of these to locate_files or get_neighbours as "project" — or omit "project" entirely if only one of them is indexed. A git remote URL works too.`
 }
 
 function renderEvidence(
@@ -208,7 +213,7 @@ function renderEvidence(
     const out: string[] = [`# Where "${query}" lives in ${project}`]
 
     if (evidence.files.length === 0) {
-        return `${out[0]}\n\nThe retriever found nothing relevant. Try rephrasing in terms of observable behaviour, or fall back to reading the repository directly.`
+        return `${out[0]}\n\nThe retriever found nothing relevant. Rephrase in terms of observable behaviour and call locate_files again — an empty answer usually means the query was worded as keywords rather than as a change you intend. If a second wording also comes back empty, fall back to reading the repository directly.`
     }
 
     // One block per file: path first (it is what the caller acts on), then the
@@ -249,18 +254,32 @@ function renderEvidence(
         out.push(`\n## Notes\n${evidence.notes.slice(0, MAX_NOTES).map((n) => `- ${n}`).join("\n")}`)
     }
 
-    out.push(`\nRead the top files above. To follow the code from there — callers, imports, implementations — call get_neighbours instead of grepping.`)
-
-    const s = evidence.stats
-    if (s) {
-        const parts = [
-            s.agents_run ? `${s.agents_run} agents` : null,
-            s.clusters_visited ? `${s.clusters_visited} clusters` : null,
-            typeof s.cost_usd === "number" ? `$${s.cost_usd.toFixed(3)}` : null,
-            typeof s.duration_ms === "number" ? `${(s.duration_ms / 1000).toFixed(1)}s` : null,
-        ].filter(Boolean)
-        if (parts.length) out.push(`\n_${parts.join(" · ")}_`)
+    // The closing line names what is still OPEN, not just what to do with what
+    // came back. A result that reads as complete gets treated as complete — the
+    // model reads the top files and never calls again, falling back to grep for
+    // the rest of the task. Naming the dropped tail and the next question keeps
+    // the door open, which is the whole point: this tool is worth calling several
+    // times per task and once per task is the failure mode.
+    const dropped = evidence.files.length - MAX_FILES
+    const next = [
+        `\nNext: read the top files above. Follow the code from there with get_neighbours — one graph hop, no model, no cost — rather than grepping.`,
+    ]
+    if (dropped > 0) {
+        next.push(
+            `${dropped} lower-ranked file${dropped === 1 ? "" : "s"} were not shown: if the ones above don't hold the answer, call locate_files again with a narrower query instead of falling back to search.`,
+        )
     }
+    next.push(
+        `Call locate_files again for the next question this task raises — a new sub-question, a term you can't place, or another subsystem the change touches. It is not a once-per-session step.`,
+    )
+    out.push(next.join(" "))
+
+    // Deliberately NOT rendered: the retrieval's cost and wall-clock. Printing
+    // "$0.031 · 12.4s" into the model's context taught it that the call is
+    // expensive, so it made one and then quietly reverted to grep — which merely
+    // *feels* free. The numbers belong in usage telemetry and the UI, where the
+    // person paying for them can see them, not in the reasoning of the caller
+    // we want calling more often.
 
     return out.join("\n")
 }
@@ -337,5 +356,8 @@ function renderNeighbours(
     if (graph.truncated) {
         out.push(`\n_Hit the per-anchor limit — narrow with \`edges\` or \`direction\` for the full picture._`)
     }
+    out.push(
+        `\nAnother hop costs nothing: call get_neighbours again on any row above (pass its \`node_id\` for an exact anchor) whenever you need to know what a piece of this reaches or who depends on it.`,
+    )
     return out.join("\n")
 }

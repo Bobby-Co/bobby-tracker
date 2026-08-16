@@ -20,8 +20,9 @@
 import type { AccessService } from "@/modules/access"
 import type { ProjectsRepository } from "@/modules/projects"
 import type { ProjectMcpIntegrationRepository } from "@/modules/mcp"
+import type { CellId } from "@/modules/regions"
 import type {
-    Analyser,
+    AnalyserResolver,
     ProjectAnalyserRepository,
     RetrieveHints,
     RetrieveResult,
@@ -42,9 +43,97 @@ export interface KnowledgeBase {
 }
 
 /** A knowledge base resolved for querying: guaranteed accessible, MCP-enabled and
- *  indexed, with the analyser graph id to address it by. */
+ *  indexed, with the analyser graph id to address it by and the cell that holds
+ *  it. Both are resolved together in resolve() so the two tool paths below can't
+ *  address a graph without also knowing which analyser actually has it. */
 export interface ResolvedKnowledgeBase extends KnowledgeBase {
     graphId: string
+    cell: CellId
+}
+
+/** Reduce a project reference to something comparable.
+ *
+ *  The point is that the CALLER should not have to learn our naming scheme before
+ *  it can ask a question. A coding agent standing in a checkout already has one
+ *  identifier for free — `git remote get-url origin` — so that has to resolve, in
+ *  every spelling git hands out:
+ *
+ *      git@github.com:phongpak/bobby-tracker.git   ┐
+ *      ssh://git@github.com/phongpak/bobby-tracker ├─→ phongpak/bobby-tracker
+ *      https://github.com/phongpak/bobby-tracker/  ┘
+ *
+ *  Anything that is not a URL (a bare name, a display name, a project uuid) falls
+ *  through lowercased and otherwise untouched. */
+export function normalizeRepoRef(raw: string): string {
+    let ref = raw.trim().toLowerCase()
+    ref = ref.replace(/^[a-z][a-z0-9+.-]*:\/\//, "") // scheme://
+    ref = ref.replace(/^[^/@]+@/, "") // user@ / user:pass@
+    ref = ref.replace(/^([^/:]+):(?!\/)/, "$1/") // scp-style host:owner/repo
+    ref = ref.replace(/\.git$/, "").replace(/\/+$/, "")
+
+    const segments = ref.split("/").filter(Boolean)
+    // A leading segment with a dot in it is the forge host, not the owner.
+    if (segments.length > 2 && segments[0].includes(".")) segments.shift()
+    return segments.slice(-2).join("/")
+}
+
+/** Narrowing passes, most specific first. The first pass yielding exactly one
+ *  match wins; a pass yielding several is reported as ambiguous rather than
+ *  silently picking one. */
+function matchBase(identifier: string, bases: KnowledgeBase[]): KnowledgeBase {
+    const raw = identifier.trim().toLowerCase()
+    const needle = normalizeRepoRef(identifier)
+    const repoOf = (kb: KnowledgeBase) => normalizeRepoRef(kb.repoFullName ?? "")
+    const nameOf = (kb: KnowledgeBase) => kb.name.trim().toLowerCase()
+    const tail = (ref: string) => ref.split("/").pop() ?? ""
+
+    const passes: ((kb: KnowledgeBase) => boolean)[] = [
+        (kb) => kb.projectId.toLowerCase() === raw,
+        (kb) => repoOf(kb) !== "" && repoOf(kb) === needle,
+        (kb) => nameOf(kb) === raw || nameOf(kb) === needle,
+        // `bobby-tracker` — and `git@github.com:someone-else/bobby-tracker.git` —
+        // should both find `phongpak/bobby-tracker`.
+        (kb) => repoOf(kb) !== "" && tail(repoOf(kb)) === tail(needle),
+        (kb) => nameOf(kb).includes(raw) || (repoOf(kb) !== "" && repoOf(kb).includes(needle)),
+    ]
+
+    for (const pass of passes) {
+        const matches = bases.filter(pass)
+        if (matches.length === 1) return matches[0]
+        if (matches.length > 1) {
+            throw new McpToolError(
+                `"${identifier}" matches several knowledge bases: ${matches
+                    .map((m) => m.repoFullName || m.name)
+                    .join(", ")}. Re-run with the exact one you mean.`,
+            )
+        }
+    }
+
+    throw new McpToolError(
+        `No knowledge base matches "${identifier}". Available: ${bases
+            .map((b) => b.repoFullName || b.name)
+            .join(", ")}. You can pass any of those, or the output of \`git remote get-url origin\`.`,
+    )
+}
+
+/** No `project` was given. One indexed base is unambiguous, so use it. Several is
+ *  a question only the caller can answer — and the error names them, so the retry
+ *  is a single hop instead of a list_knowledge_bases call and a second attempt. */
+function soleBase(bases: KnowledgeBase[]): KnowledgeBase {
+    const indexed = bases.filter((b) => b.indexed)
+    if (indexed.length === 1) return indexed[0]
+    if (indexed.length === 0) {
+        throw new McpToolError(
+            `None of your knowledge bases have finished indexing yet (${bases
+                .map((b) => b.repoFullName || b.name)
+                .join(", ")}). Read the repository directly for now.`,
+        )
+    }
+    throw new McpToolError(
+        `You have ${indexed.length} knowledge bases, so "project" is needed: ${indexed
+            .map((b) => b.repoFullName || b.name)
+            .join(", ")}. Pass whichever matches the repository you are working in — owner/repo, the repo name, or the output of \`git remote get-url origin\`.`,
+    )
 }
 
 export class KnowledgeBaseService {
@@ -53,7 +142,7 @@ export class KnowledgeBaseService {
         private readonly projects: ProjectsRepository,
         private readonly mcpIntegration: ProjectMcpIntegrationRepository,
         private readonly projectAnalyser: ProjectAnalyserRepository,
-        private readonly analyser: Analyser,
+        private readonly analyserFor: AnalyserResolver,
         private readonly userId: string,
     ) {}
 
@@ -95,14 +184,17 @@ export class KnowledgeBaseService {
         }))
     }
 
-    /** Resolve a user-supplied project reference to a queryable knowledge base.
-     *  Accepts a project id, `owner/repo`, a bare repo name or the project's
-     *  display name. Throws McpToolError with actionable guidance when the
-     *  reference is unknown, ambiguous, or names a project that isn't indexed. */
-    async resolve(identifier: string): Promise<ResolvedKnowledgeBase> {
-        const needle = identifier.trim().toLowerCase()
-        if (!needle) throw new McpToolError("No project given. Call list_knowledge_bases to see the available ones.")
-
+    /** Resolve a project reference to a queryable knowledge base.
+     *
+     *  Accepts a project id, `owner/repo`, a bare repo name, the project's display
+     *  name, or a raw git remote URL. The reference is also OPTIONAL: when the
+     *  caller has exactly one indexed base there is nothing to disambiguate, and
+     *  requiring the argument anyway bought nothing but a list_knowledge_bases
+     *  round trip in front of every first question.
+     *
+     *  Throws McpToolError with actionable guidance when the reference is unknown,
+     *  ambiguous, or names a project that isn't indexed. */
+    async resolve(identifier?: string): Promise<ResolvedKnowledgeBase> {
         const bases = await this.list()
         if (bases.length === 0) {
             throw new McpToolError(
@@ -110,45 +202,14 @@ export class KnowledgeBaseService {
             )
         }
 
-        // Narrowing passes, most specific first. The first pass that yields exactly
-        // one match wins; a pass yielding several is reported as ambiguous rather
-        // than silently picking one.
-        const passes: ((kb: KnowledgeBase) => boolean)[] = [
-            (kb) => kb.projectId.toLowerCase() === needle,
-            (kb) => (kb.repoFullName ?? "").toLowerCase() === needle,
-            (kb) => kb.name.toLowerCase() === needle,
-            // `bobby-tracker` should find `phongpak/bobby-tracker`.
-            (kb) => (kb.repoFullName ?? "").toLowerCase().split("/").pop() === needle,
-            (kb) => kb.name.toLowerCase().includes(needle) || (kb.repoFullName ?? "").toLowerCase().includes(needle),
-        ]
-
-        let matches: KnowledgeBase[] = []
-        for (const pass of passes) {
-            matches = bases.filter(pass)
-            if (matches.length === 1) break
-            if (matches.length > 1) {
-                throw new McpToolError(
-                    `"${identifier}" matches several knowledge bases: ${matches
-                        .map((m) => m.repoFullName || m.name)
-                        .join(", ")}. Re-run with the exact one you mean.`,
-                )
-            }
-        }
-
-        const hit = matches[0]
-        if (!hit) {
-            throw new McpToolError(
-                `No knowledge base matches "${identifier}". Available: ${bases
-                    .map((b) => b.repoFullName || b.name)
-                    .join(", ")}.`,
-            )
-        }
+        const given = identifier?.trim() ?? ""
+        const hit = given ? matchBase(given, bases) : soleBase(bases)
 
         // Defence in depth. `list()` already applied both gates, so this cannot
         // fail today — but it keeps the authorization decision local and obvious
         // at the point a project id is about to be handed to the analyser.
         const access = await this.access.canAccessProject(this.userId, hit.projectId)
-        if (!access.ok) throw new McpToolError(`No knowledge base matches "${identifier}".`)
+        if (!access.ok) throw new McpToolError(`No knowledge base matches "${given || hit.name}".`)
 
         if (!hit.indexed) {
             throw new McpToolError(
@@ -159,12 +220,19 @@ export class KnowledgeBaseService {
         const graphId = await this.projectAnalyser.findGraphId(hit.projectId)
         if (!graphId) throw new McpToolError(`"${hit.repoFullName || hit.name}" is not indexed yet.`)
 
-        return { ...hit, graphId }
+        // The graph lives in exactly one cell (0062). An unreadable cell means we
+        // cannot say which analyser holds it, and guessing would query a backend
+        // that has never indexed this repo — which returns a confidently empty
+        // result rather than an error, the worst outcome for an agent to act on.
+        const cell = await this.projects.findCell(hit.projectId)
+        if (!cell) throw new McpToolError(`"${hit.repoFullName || hit.name}" is not available right now.`)
+
+        return { ...hit, graphId, cell }
     }
 
     /** Ranked file cards for a natural-language goal. */
     async locate(
-        identifier: string,
+        identifier: string | undefined,
         query: string,
         hints?: RetrieveHints,
     ): Promise<{ base: ResolvedKnowledgeBase; evidence: RetrieveResult }> {
@@ -173,17 +241,17 @@ export class KnowledgeBaseService {
         // access was already decided by resolve() above. Without it the analyser
         // sees only the shared service token and the usage event lands
         // unattributed.
-        const evidence = await this.analyser.retrieve({ repoId: base.graphId, query, hints, userId: this.userId })
+        const evidence = await this.analyserFor(base.cell).retrieve({ repoId: base.graphId, query, hints, userId: this.userId })
         return { base, evidence }
     }
 
     /** One graph hop from a file, symbol or node id. */
     async neighbours(
-        identifier: string,
+        identifier: string | undefined,
         anchor: Pick<NeighboursInput, "nodeId" | "symbol" | "file" | "edges" | "direction" | "limit">,
     ): Promise<{ base: ResolvedKnowledgeBase; graph: NeighboursResult }> {
         const base = await this.resolve(identifier)
-        const graph = await this.analyser.neighbours({ repoId: base.graphId, ...anchor, userId: this.userId })
+        const graph = await this.analyserFor(base.cell).neighbours({ repoId: base.graphId, ...anchor, userId: this.userId })
         return { base, graph }
     }
 }

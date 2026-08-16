@@ -60,8 +60,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Null for GitHub / public / unprovisioned → the user_id path is used as before.
     const gitAuth = await getGitlabCloneAuth(id)
 
+    const cell = await ctx.projects.findCell(id)
+    if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
     try {
-        const result = await getAnalyser().startIndex({
+        const result = await getAnalyser(cell).startIndex({
             job_type: jobType,
             repo_url: project.repo_url,
             // Effort scales grouper aggressiveness + per-cluster turn budget on

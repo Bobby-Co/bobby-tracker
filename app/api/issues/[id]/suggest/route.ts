@@ -31,6 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const overrideEffort = ProjectAnalyser.isValidEffort(body?.effort) ? body.effort : undefined
 
     const issues = ctx.issues
+    const suggestions = ctx.issueSuggestions
     const projects = ctx.projects
     const analyserRepo = ctx.analyser
     const { data: issue, error: iErr } = await repoRead(() => issues.findSuggestContext(id))
@@ -55,8 +56,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (pErr) return pErr
     if (!project) return jsonError("not_found", "project not found", 404)
 
+    const cell = await projects.findCell(issue.project_id)
+    if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
     try {
-        const result = await getAnalyser().analyseIssue({
+        const result = await getAnalyser(cell).analyseIssue({
             repoId:   analyser.graph_id,
             title:    issue.title,
             body:     issue.body || "",
@@ -91,7 +95,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
 
         const { data: row, error: insErr } = await repoRead(() =>
-            issues.insertSuggestion({
+            suggestions.insert({
                 issue_id:    issue.id,
                 data:        dataWithPrompt,
                 markdown:    result.markdown ?? result.summary ?? "",

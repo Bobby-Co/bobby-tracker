@@ -14,10 +14,18 @@ import { AccessService } from "./application/AccessService"
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = SupabaseClient<any, any, any>
 
-/** Bind an AccessService to a specific Supabase client. */
-export function getAccessService(db: AnyDb): AccessService {
+/** Bind an AccessService to Supabase clients.
+ *
+ *  Two handles because this service is the one place authorization spans both
+ *  planes: it reads `projects.team_id` on the DATA side and `team_members` on the
+ *  CONTROL side. They are separate single-table reads — never a join — which is
+ *  what makes the split survivable; see lib/server/http/RequestContext.ts.
+ *
+ *  `dataDb` defaults to `controlDb`, so every existing single-client call site
+ *  (service-role contexts, MCP, tests) keeps working unchanged. */
+export function getAccessService(controlDb: AnyDb, dataDb: AnyDb = controlDb): AccessService {
     return new AccessService(
-        createSupabaseProjectsRepository(db),
-        createSupabaseTeamMembershipRepository(db),
+        createSupabaseProjectsRepository(dataDb),
+        createSupabaseTeamMembershipRepository(controlDb),
     )
 }

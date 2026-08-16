@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
-import { motion, useAnimationControls, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion"
+// `m`, not `motion` — this sits in the topbar, i.e. on every authed page.
+// The motion-value hooks below are core and load eagerly regardless.
+// See components/ui/lazy-motion.tsx.
+import { m, useAnimationControls, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion"
 import { MiniIcon, type Tone } from "@/components/ui/field-card"
 import { timeAgo } from "@/components/issues/issue-meta"
 import { createClient } from "@/lib/client/supabase"
@@ -230,8 +233,14 @@ export function NotificationPopover() {
 
             {/* The morphing surface — anchored to the bell's top-right corner so
                 it grows down + left into a dropdown. */}
-            <motion.div
-                className="absolute right-0 top-0 z-50 origin-top-right overflow-hidden border border-[color:var(--c-border)] bg-[color:var(--c-surface)]"
+            <m.div
+                // The rounding + resting shadow are ALSO set in CSS here, matching the
+                // closed values in `animate` below. `initial={false}` means motion only
+                // applies them once its features have loaded (now asynchronous), so
+                // without this baseline the bell renders as a hard-cornered, shadowless
+                // square for the first moments of every page. Once loaded, motion's
+                // inline style takes over and these are overridden.
+                className="absolute right-0 top-0 z-50 origin-top-right overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] shadow-[0_1px_1px_rgba(17,24,39,0.04)]"
                 initial={false}
                 whileTap={{ scale: 0.9 }}
                 // width/height are the CLAMPED springs (bounce both ways, never
@@ -270,13 +279,13 @@ export function NotificationPopover() {
                     {/* Only the glyph swings — the button itself is the hit area and
                         must stay put. Pivot at the bell's crown so it pendulums from
                         its mount instead of spinning about its middle. */}
-                    <motion.span
+                    <m.span
                         animate={swing}
                         style={{ transformOrigin: "50% 18%" }}
                         className="grid place-items-center"
                     >
                         <BellIcon />
-                    </motion.span>
+                    </m.span>
                     {unread > 0 && (
                         <span className="absolute right-[9px] top-[8px] h-2 w-2 rounded-full bg-[color:var(--c-primary)] ring-2 ring-[color:var(--c-surface)]" />
                     )}
@@ -383,7 +392,7 @@ export function NotificationPopover() {
                         )}
                     </div>
                 </div>
-            </motion.div>
+            </m.div>
         </div>
     )
 }

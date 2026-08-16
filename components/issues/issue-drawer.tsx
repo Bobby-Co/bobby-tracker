@@ -7,7 +7,9 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
+import { Analysing } from "@/components/issues/analysing-graph"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import { useInvestigation } from "@/lib/client/hooks/use-investigation"
 import { defaultLabelColor, softLabelChipStyle } from "@/lib/client/timeline/labels"
 import { DEFAULT_STATUS_COLORS, isDarkColor } from "@/lib/client/timeline/colors"
 import type {
@@ -196,11 +198,6 @@ function DrawerBody({
         }
     }
 
-    const data: IssueAnalysisData | null = suggestion?.data ?? null
-    const findings: IssueFinding[] = data?.suggestions ?? []
-    const cachedAt = suggestion ? timeAgo(suggestion.created_at) : null
-    const cost = suggestion?.cost_usd != null ? `$${suggestion.cost_usd.toFixed(4)}` : null
-
     return (
         <>
             <header className="flex items-start justify-between gap-3 px-7 pt-7">
@@ -251,14 +248,14 @@ function DrawerBody({
 
                 <SimilarityCard issue={issue} />
 
+                {/* Keyed by issue: the card owns a run's lifecycle in refs, so it
+                    must remount when the drawer moves to another tile rather than
+                    carry the previous issue's result across. */}
                 <AnalyserCard
+                    key={issue.id}
                     issueId={issue.id}
-                    suggestion={suggestion}
+                    initial={suggestion}
                     loading={loadingSuggestion}
-                    findings={findings}
-                    summary={data?.summary ?? null}
-                    cachedAt={cachedAt}
-                    cost={cost}
                 />
             </div>
 
@@ -297,21 +294,29 @@ function SimilarityCard({ issue }: { issue: Issue }) {
 
 function AnalyserCard({
     issueId,
-    suggestion,
+    initial,
     loading,
-    findings,
-    summary,
-    cachedAt,
-    cost,
 }: {
     issueId: string
-    suggestion: IssueSuggestion | null
+    initial: IssueSuggestion | null
     loading: boolean
-    findings: IssueFinding[]
-    summary: string | null
-    cachedAt: string | null
-    cost: string | null
 }) {
+    // Same run lifecycle as the issue-detail card. The card used to fire the
+    // run and then keep rendering the CACHED result the whole time, so a
+    // re-run looked like it had returned the old findings instantly; `pending`
+    // now holds the analysing animation until this run's own row lands.
+    const { suggestion, pending, error, investigate, regenerate } = useInvestigation({ issueId, initial })
+
+    const data: IssueAnalysisData | null = suggestion?.data ?? null
+    const findings: IssueFinding[] = data?.suggestions ?? []
+    const summary = data?.summary ?? null
+    const cachedAt = suggestion ? timeAgo(suggestion.created_at) : null
+    const cost = suggestion?.cost_usd != null ? `$${suggestion.cost_usd.toFixed(4)}` : null
+    // While a run is in flight the cached findings below are stale by
+    // definition — hide them behind the animation instead of passing them off
+    // as this run's answer.
+    const showResult = !pending && !!suggestion
+
     return (
         <section className="mt-5 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4">
             <div className="flex items-start justify-between gap-3">
@@ -319,28 +324,44 @@ function AnalyserCard({
                     <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
                         <SparkIcon /> Investigate with analyser
                     </div>
-                    {(cachedAt || cost) && (
+                    {pending ? (
                         <div className="mt-0.5 text-[11px] text-[color:var(--c-text-muted)]">
-                            {cachedAt && <>Cached {cachedAt}</>}
-                            {cachedAt && cost && <span> · </span>}
-                            {cost && <>{cost}</>}
+                            Reading the graph and source — typically 10–30s.
                         </div>
+                    ) : (
+                        (cachedAt || cost) && (
+                            <div className="mt-0.5 text-[11px] text-[color:var(--c-text-muted)]">
+                                {cachedAt && <>Cached {cachedAt}</>}
+                                {cachedAt && cost && <span> · </span>}
+                                {cost && <>{cost}</>}
+                            </div>
+                        )
                     )}
                 </div>
-                <RegenerateButton issueId={issueId} />
+                <RunButton
+                    label={suggestion ? "Regenerate" : "Investigate"}
+                    busy={pending}
+                    onRun={() => (suggestion ? regenerate() : investigate())}
+                />
             </div>
 
-            {loading && !suggestion && (
+            {pending && <Analysing compact />}
+
+            {error && !pending && (
+                <p className="mt-3 rounded-[10px] bg-red-50 px-3 py-2.5 text-[12px] text-red-800">{error}</p>
+            )}
+
+            {loading && !suggestion && !pending && (
                 <p className="mt-3 text-[12px] text-[color:var(--c-text-muted)]">Loading…</p>
             )}
 
-            {!loading && !suggestion && (
+            {!loading && !suggestion && !pending && !error && (
                 <p className="mt-3 rounded-[10px] border border-dashed border-[color:var(--c-border)] px-3 py-3 text-[12px] text-[color:var(--c-text-muted)]">
-                    No analyser run yet. Open the issue to generate one.
+                    No analyser run yet. Hit Investigate to start one.
                 </p>
             )}
 
-            {suggestion && summary && (
+            {showResult && summary && (
                 <>
                     <div className="mt-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
                         Summary
@@ -349,7 +370,7 @@ function AnalyserCard({
                 </>
             )}
 
-            {findings.length > 0 && (
+            {showResult && findings.length > 0 && (
                 <>
                     <div className="mt-3 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)]">
                         Files to investigate
@@ -376,7 +397,7 @@ function AnalyserCard({
                 </>
             )}
 
-            {suggestion && (
+            {showResult && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-[10.5px] font-medium text-[color:var(--c-text-muted)]">
                     {suggestion.confidence && (
                         <span className={cn(
@@ -397,10 +418,12 @@ function AnalyserCard({
                 </div>
             )}
 
+            {/* Mid-run the baked prompt belongs to the previous analysis, so it
+                is withheld along with the findings it was composed from. */}
             <CopyFixPromptButton
                 issueId={issueId}
-                prompt={suggestion?.data?.fix_prompt ?? null}
-                hasAnalysis={!!suggestion}
+                prompt={showResult ? (data?.fix_prompt ?? null) : null}
+                hasAnalysis={showResult}
             />
         </section>
     )
@@ -587,27 +610,18 @@ function CopyStateIcon({ state }: { state: CopyState }) {
     )
 }
 
-function RegenerateButton({ issueId }: { issueId: string }) {
-    const [busy, setBusy] = useState(false)
-    async function trigger() {
-        setBusy(true)
-        try {
-            await apiMutate(`/api/issues/${issueId}/suggest`, { method: "POST" })
-        } catch (e) {
-            if (!(e instanceof ApiError)) throw e // network: propagate as before
-            // server error: ignore (the original ignored non-2xx)
-        } finally {
-            setBusy(false)
-        }
-    }
+// The run trigger. `busy` is the CARD's pending flag, not a local one: the
+// button has to stay disabled for as long as the run is actually outstanding,
+// which is until the new suggestion row lands — not until the POST returns.
+function RunButton({ label, busy, onRun }: { label: string; busy: boolean; onRun: () => void }) {
     return (
         <button
             type="button"
-            onClick={trigger}
+            onClick={onRun}
             disabled={busy}
-            className="rounded-full bg-[color:var(--c-inverse)] px-3 py-1.5 text-[11.5px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)] disabled:opacity-60"
+            className="shrink-0 rounded-full bg-[color:var(--c-inverse)] px-3 py-1.5 text-[11.5px] font-semibold text-[color:var(--c-inverse-ink)] hover:bg-[color:var(--c-inverse)] disabled:opacity-60"
         >
-            {busy ? "Running…" : "Regenerate"}
+            {busy ? "Analysing…" : label}
         </button>
     )
 }

@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
 import type { Project, ProjectInsight, ProjectWithInsight } from "@/lib/shared/types"
+import { parseCellId, type CellId } from "@/modules/regions"
 import type {
     AnalysisProjectContext,
     GithubLink,
@@ -53,6 +54,26 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
             .eq("id", projectId)
             .maybeSingle<{ team_id: string | null }>()
         return data?.team_id ?? null
+    }
+
+    /** Resolved through the owning TEAM (0064): placement is per team, so a
+     *  project is served by whatever cell its team lives in. Both tables are
+     *  control-plane, so this stays a single embedded read rather than a
+     *  cross-database join.
+     *
+     *  Narrows through parseCellId rather than casting — the column is text
+     *  validated only for format, so a malformed value must read as "unknown" and
+     *  fail routing loudly instead of being handed to a fetch. */
+    async findCell(projectId: string): Promise<CellId | null> {
+        const { data } = await this.db
+            .from("projects")
+            .select("teams(cell)")
+            .eq("id", projectId)
+            .maybeSingle<{ teams: { cell: string | null } | { cell: string | null }[] | null }>()
+        // PostgREST returns an embedded to-one as an object, but as an array when
+        // it can't prove the relationship is singular — accept both.
+        const team = Array.isArray(data?.teams) ? data.teams[0] : data?.teams
+        return parseCellId(team?.cell)
     }
 
     async findName(projectId: string): Promise<string | null> {
@@ -128,7 +149,18 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
     async create(input: NewProject): Promise<ProjectCreateResult> {
         const { data, error } = await this.db.from("projects").insert(input).select("*").single<Project>()
         if (error) {
-            if (error.code === "23505") return { ok: false, reason: "duplicate" }
+            if (error.code === "23505") {
+                // Which unique constraint fired decides what the user can do about
+                // it, so name it rather than reporting a generic duplicate. The
+                // constraint name appears in the message; details carries it on
+                // some PostgREST versions, so check both.
+                const where = `${error.message} ${error.details ?? ""}`
+                const globalHit =
+                    where.includes("projects_github_repo_id_uniq") ||
+                    where.includes("projects_gitlab_instance_project_uniq") ||
+                    where.includes("projects_gitlab_project_id_uniq") // pre-0057 name
+                return { ok: false, reason: globalHit ? "repo_linked_elsewhere" : "duplicate_in_team" }
+            }
             throw new RepositoryError(error.message, { cause: error })
         }
         return { ok: true, project: data }
@@ -186,9 +218,13 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
         return data ?? null
     }
 
-    async listAllNames(): Promise<{ id: string; name: string }[]> {
+    async listAllNames(teamId: string): Promise<{ id: string; name: string }[]> {
         // Best-effort ([] on error), matching the collection route's inline read.
-        const { data } = await this.db.from("projects").select("id,name").order("name", { ascending: true })
+        const { data } = await this.db
+            .from("projects")
+            .select("id,name")
+            .eq("team_id", teamId)
+            .order("name", { ascending: true })
         return ((data ?? []) as { id: string; name: string }[]).map((p) => ({ id: p.id, name: p.name }))
     }
 

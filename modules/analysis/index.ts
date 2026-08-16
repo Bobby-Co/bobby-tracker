@@ -26,7 +26,7 @@ export { createIssueAnalysisService, createPullRequestAnalysisService } from "./
 // ─── the analyser port + its composition seam ───────────────────────────────
 // Callers depend on the Analyser interface and obtain an implementation via
 // getAnalyser(); they must NOT import the HTTP adapter directly.
-export type { Analyser } from "./ports/Analyser"
+export type { Analyser, AnalyserResolver } from "./ports/Analyser"
 export { getAnalyser } from "./Composition"
 
 // ─── the analyser wire contract (DTOs + error + callback shapes) ─────────────

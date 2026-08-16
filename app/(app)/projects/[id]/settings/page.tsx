@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation"
 import { DangerZonePanel } from "@/components/projects/danger-zone-panel"
 import { ProjectIdentityPanel } from "@/components/projects/project-identity-panel"
+import { ProjectPlacementPanel } from "@/components/projects/project-placement-panel"
 
 // Project settings. Most per-project configuration lives with the thing it
 // controls — GitHub sync on Integrations, indexing + auto-update + effort on
@@ -22,6 +23,7 @@ export default function SettingsPage() {
                 </header>
 
                 <ProjectIdentityPanel projectId={id} />
+                <ProjectPlacementPanel projectId={id} />
             </section>
 
             <section className="flex flex-col gap-4">

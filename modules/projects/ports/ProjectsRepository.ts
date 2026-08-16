@@ -7,6 +7,7 @@
 // imported here; concrete persistence stays in infrastructure.
 
 import type { Project, ProjectWithInsight } from "@/lib/shared/types"
+import type { CellId } from "@/modules/regions"
 
 /** Which projects a team list is scoped to: every team project ("all") or a
  *  specific set of ids (the member's group-granted projects). */
@@ -74,9 +75,21 @@ export interface GithubSyncPatch {
 /** The link projection the connect/link routes return. */
 export type GithubLink = Pick<Project, "id" | "github_installation_id" | "github_repo_id" | "github_sync_enabled">
 
-/** Create outcome: the created project, or "duplicate" when the team already has
- *  the repo (unique(team_id, repo_url) 23505) — the route maps that to a 409. */
-export type ProjectCreateResult = { ok: true; project: Project } | { ok: false; reason: "duplicate" }
+/** Create outcome. THREE unique constraints can reject an insert, and they mean
+ *  very different things — collapsing them into one "duplicate" produced a 409
+ *  reading "this team already has this repository" when the actual collision was
+ *  a project in someone ELSE's team, which is impossible to act on.
+ *
+ *    duplicate_in_team     unique(team_id, repo_url) — this team already has it.
+ *                          The caller can see it and open it.
+ *    repo_linked_elsewhere github_repo_id / (gitlab_host, gitlab_project_id) —
+ *                          installation-wide. A linked repo may back only ONE
+ *                          project so an inbound webhook routes unambiguously
+ *                          (0037), and the offending project may be in a team
+ *                          the caller cannot see. */
+export type ProjectCreateResult =
+    | { ok: true; project: Project }
+    | { ok: false; reason: "duplicate_in_team" | "repo_linked_elsewhere" }
 
 /** One row of the find_similar_projects routing RPC (AI compose ranking). */
 export interface ProjectSimilarity {
@@ -97,6 +110,18 @@ export interface ProjectsRepository {
      *  Used by cross-context reactions (e.g. notification fan-out) that must
      *  resolve recipients without querying the projects table directly. */
     findTeamId(projectId: string): Promise<string | null>
+
+    /** The CELL serving this project — its owning team's placement (0064) — or
+     *  null when the project is absent / not visible / the team carries a
+     *  malformed cell.
+     *
+     *  Null means "don't know", and a caller must treat it as a failure to route
+     *  rather than substituting the home cell — an analyser that has never
+     *  indexed the repo answers with a confident empty result, not an error.
+     *
+     *  The cell is the routing key; the team's `region` beside it is the
+     *  user-facing label and the residency answer, and nothing dispatches on it. */
+    findCell(projectId: string): Promise<CellId | null>
 
     /** The project's display name, or null when absent / not visible. */
     findName(projectId: string): Promise<string | null>
@@ -123,7 +148,8 @@ export interface ProjectsRepository {
      *  duplicate check. THROWS on a query failure. */
     listRepoRefsForTeam(teamId: string): Promise<Pick<Project, "repo_url" | "repo_full_name">[]>
 
-    /** Insert a project ("duplicate" when the team already has the repo, 23505).
+    /** Insert a project. Returns a typed refusal on 23505 — see
+     *  {@link ProjectCreateResult} for why the two cases are distinguished.
      *  THROWS RepositoryError on any other failure. */
     create(input: NewProject): Promise<ProjectCreateResult>
 
@@ -150,9 +176,14 @@ export interface ProjectsRepository {
      *  Returns null only for a genuinely absent row. */
     findRepoRef(projectId: string): Promise<Pick<Project, "repo_url" | "repo_full_name"> | null>
 
-    /** id+name of every project the caller can see, alphabetical — the collection
-     *  settings "add member" picker. FAIL-SAFE ([] on error). */
-    listAllNames(): Promise<{ id: string; name: string }[]>
+    /** id+name of a TEAM's projects, alphabetical — the collection settings
+     *  "add member" picker. FAIL-SAFE ([] on error).
+     *
+     *  Takes the team explicitly rather than leaning on RLS to narrow it. The
+     *  predicate used to be the caller's row-level scope alone, which meant the
+     *  query was `select id,name from projects` with nothing else — correct only
+     *  while every read carried the caller's own credentials. */
+    listAllNames(teamId: string): Promise<{ id: string; name: string }[]>
 
     /** Weighted project-similarity ranking (find_similar_projects RPC) for AI
      *  routing over a fixed set of candidate projects. THROWS RepositoryError. */

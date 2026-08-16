@@ -7,7 +7,7 @@
 //     protocol error — otherwise the model never sees the message telling it how
 //     to correct the call.
 
-import { test, expect, describe, mock } from "bun:test"
+import { test, expect, describe, mock, beforeEach } from "bun:test"
 import { McpServer } from "./McpServer"
 import { McpToolError } from "../domain/McpTool"
 import { RpcError } from "../domain/JsonRpc"
@@ -15,6 +15,22 @@ import { RpcError } from "../domain/JsonRpc"
 const service = { list: mock(), resolve: mock(), locate: mock(), neighbours: mock() }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const server = () => new McpServer(service as any)
+
+const base = (over: Partial<{ projectId: string; name: string; repoFullName: string | null; indexed: boolean }> = {}) => ({
+    projectId: "p1",
+    name: "Tracker",
+    repoFullName: "phongpak/bobby-tracker",
+    description: null,
+    indexed: true,
+    ...over,
+})
+
+beforeEach(() => {
+    service.list.mockReset()
+    service.locate.mockReset()
+    service.neighbours.mockReset()
+    service.list.mockResolvedValue([base()])
+})
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ok = (r: any) => r.result
@@ -48,6 +64,36 @@ describe("initialize", () => {
         // starts opening files — the whole point of the integration.
         expect(ok(res).instructions).toContain("locate_files")
     })
+
+    // The roster is why initialize does I/O at all: the client learns at session
+    // start whether the checkout in front of it is indexed, with no tool call.
+    test("names the caller's knowledge bases in the instructions", async () => {
+        service.list.mockResolvedValue([
+            base(),
+            base({ projectId: "p2", name: "Analyser", repoFullName: "phongpak/bobby-analyser", indexed: false }),
+        ])
+        const text = ok(await server().handle({ jsonrpc: "2.0", id: 1, method: "initialize" })).instructions
+        expect(text).toContain("phongpak/bobby-tracker")
+        expect(text).toContain("INDEXED AND QUERYABLE RIGHT NOW")
+        // An un-indexed base is listed, but never as queryable.
+        expect(text).toContain("Still indexing")
+        expect(text.indexOf("bobby-analyser")).toBeGreaterThan(text.indexOf("Still indexing"))
+    })
+
+    test("tells a caller with no knowledge bases not to call the tools at all", async () => {
+        service.list.mockResolvedValue([])
+        const text = ok(await server().handle({ jsonrpc: "2.0", id: 1, method: "initialize" })).instructions
+        expect(text).toContain("YOU HAVE NO KNOWLEDGE BASES")
+    })
+
+    // A handshake that fails looks to the user like a dead server, and sends them
+    // back through OAuth for nothing. A missing roster is the acceptable loss.
+    test("still initializes when the catalogue lookup fails", async () => {
+        service.list.mockRejectedValue(new Error("db unreachable"))
+        const res = await server().handle({ jsonrpc: "2.0", id: 1, method: "initialize" })
+        expect(err(res)).toBeUndefined()
+        expect(ok(res).instructions).toContain("list_knowledge_bases")
+    })
 })
 
 describe("notifications", () => {
@@ -70,16 +116,18 @@ describe("tools/list", () => {
 
     // get_neighbours takes ONE of symbol/file/node_id, so the anchor cannot be
     // required by schema — the tool checks it and reports back to the model.
-    test("get_neighbours requires only the project by schema", async () => {
+    test("get_neighbours requires nothing by schema", async () => {
         const res = await server().handle({ jsonrpc: "2.0", id: 2, method: "tools/list" })
         const tool = ok(res).tools.find((t: { name: string }) => t.name === "get_neighbours")
-        expect(tool.inputSchema.required).toEqual(["project"])
+        expect(tool.inputSchema.required).toBeUndefined()
     })
 
-    test("locate_files requires project and query", async () => {
+    // `project` is deliberately NOT required: demanding it put a
+    // list_knowledge_bases round trip in front of every first question.
+    test("locate_files requires only the query", async () => {
         const res = await server().handle({ jsonrpc: "2.0", id: 2, method: "tools/list" })
         const locate = ok(res).tools.find((t: { name: string }) => t.name === "locate_files")
-        expect(locate.inputSchema.required).toEqual(["project", "query"])
+        expect(locate.inputSchema.required).toEqual(["query"])
     })
 })
 
@@ -94,6 +142,42 @@ describe("tools/call", () => {
         })
         expect(ok(res).content[0].type).toBe("text")
         expect(ok(res).content[0].text).toContain("acme/tracker")
+    })
+
+    test("locate_files without a project hands the service undefined, rather than refusing", async () => {
+        service.locate.mockResolvedValue({
+            base: base(),
+            evidence: { files: [{ file: "modules/mcp-server/application/tools.ts", score: 0.9 }], symbols: [], notes: [] },
+        })
+        const res = await server().handle({
+            jsonrpc: "2.0", id: 20, method: "tools/call",
+            params: { name: "locate_files", arguments: { query: "where do the tools live" } },
+        })
+        expect(ok(res).isError).toBeUndefined()
+        expect(service.locate).toHaveBeenCalledWith(undefined, "where do the tools live", undefined)
+    })
+
+    // Printing "$0.031 · 12.4s" taught the caller the tool was expensive, so it
+    // called once and reverted to grep. The numbers go to telemetry, not here.
+    test("never renders retrieval cost or duration into the result", async () => {
+        service.locate.mockResolvedValue({
+            base: base(),
+            evidence: {
+                files: [{ file: "lib/a.ts", score: 0.9 }],
+                symbols: [],
+                notes: [],
+                stats: { agents_run: 4, clusters_visited: 9, cost_usd: 0.031, duration_ms: 12_400 },
+            },
+        })
+        const res = await server().handle({
+            jsonrpc: "2.0", id: 21, method: "tools/call",
+            params: { name: "locate_files", arguments: { project: "p1", query: "q" } },
+        })
+        const text = ok(res).content[0].text
+        expect(text).not.toContain("$0.03")
+        expect(text).not.toContain("12.4s")
+        // …and it closes by asking for the next call rather than reading as done.
+        expect(text).toContain("not a once-per-session step")
     })
 
     test("a user-correctable tool failure comes back as isError, NOT a protocol error", async () => {

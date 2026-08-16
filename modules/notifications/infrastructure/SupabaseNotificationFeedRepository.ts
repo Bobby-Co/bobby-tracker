@@ -14,35 +14,38 @@ type AnyDb = SupabaseClient<any, any, any>
 export class SupabaseNotificationFeedRepository implements NotificationFeedRepository {
     constructor(private readonly db: AnyDb) {}
 
-    async listRecent(limit: number): Promise<Notification[]> {
+    async listRecent(userId: string, limit: number): Promise<Notification[]> {
         const { data, error } = await this.db
             .from("notifications")
             .select("*")
+            .eq("user_id", userId)
             .order("created_at", { ascending: false })
             .limit(limit)
         if (error) throw new RepositoryError(error.message, { cause: error })
         return (data ?? []) as Notification[]
     }
 
-    async markAllRead(): Promise<void> {
+    async markAllRead(userId: string): Promise<void> {
         const { error } = await this.db
             .from("notifications")
             .update({ read_at: new Date().toISOString() })
+            .eq("user_id", userId)
             .is("read_at", null)
         if (error) throw new RepositoryError(error.message, { cause: error })
     }
 
-    async markRead(id: string): Promise<void> {
+    async markRead(userId: string, id: string): Promise<void> {
         const { error } = await this.db
             .from("notifications")
             .update({ read_at: new Date().toISOString() })
+            .eq("user_id", userId)
             .eq("id", id)
             .is("read_at", null)
         if (error) throw new RepositoryError(error.message, { cause: error })
     }
 
-    async remove(id: string): Promise<void> {
-        const { error } = await this.db.from("notifications").delete().eq("id", id)
+    async remove(userId: string, id: string): Promise<void> {
+        const { error } = await this.db.from("notifications").delete().eq("user_id", userId).eq("id", id)
         if (error) throw new RepositoryError(error.message, { cause: error })
     }
 }

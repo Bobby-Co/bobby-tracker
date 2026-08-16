@@ -4,7 +4,7 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { getWebhookVerifier, SyncHash } from "@/modules/vcs"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
-import { Project as ProjectAggregate } from "@/modules/projects"
+import { Project as ProjectAggregate, createSupabaseProjectsRepository } from "@/modules/projects"
 import { createServicePullRequestStore } from "@/modules/vcs"
 import { Supabase } from "@/lib/server/supabase"
 import type { Issue, Project } from "@/lib/shared/types"
@@ -463,10 +463,18 @@ async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<R
     // no-op too, but skipping saves a clone + a queue round-trip).
     if (analyser.last_indexed_sha && analyser.last_indexed_sha === headSha) return ack()
 
+    // Which cell holds this graph. An unreadable cell acks rather than
+    // retrying — redelivery won't fix a routing gap, it just replays the push.
+    const cell = await tryOrNull(() => createSupabaseProjectsRepository(svc).findCell(project.id))
+    if (!cell) {
+        console.error("[github webhook] unknown cell — skipping incremental index", project.id)
+        return ack()
+    }
+
     const graphId = analyser.graph_id
     after(async () => {
         try {
-            await getAnalyser().startIndex({
+            await getAnalyser(cell).startIndex({
                 job_type: "incremental",
                 repo_url: project.repo_url,
                 repo_id: graphId,
