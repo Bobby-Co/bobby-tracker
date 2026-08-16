@@ -24,8 +24,28 @@ export function dbRef(url: string | undefined | null): string {
     }
 }
 
+/** OFF unless BOBBY_TRACE is set to something truthy.
+ *
+ *  Default-off because this is genuinely loud: a single page load binds a region
+ *  once per request and emits a line each time, which is dozens of lines for one
+ *  navigation. That volume is exactly what you want while chasing a result that
+ *  vanishes between two services, and exactly what you do not want running
+ *  permanently.
+ *
+ *  Read per call rather than hoisted to a module const: a module-level read is
+ *  frozen into the Workers isolate at first import, so toggling the secret would
+ *  not take effect until the isolate recycled.
+ *
+ *  Enable with `wrangler secret put BOBBY_TRACE` (value `1`), or BOBBY_TRACE=1 in
+ *  .env for local. Disable by removing it. */
+function enabled(): boolean {
+    const v = process.env.BOBBY_TRACE
+    return !!v && v !== "0" && v.toLowerCase() !== "false"
+}
+
 /** One traced decision. Keep `event` stable — these are grep targets. */
 export function trace(event: string, fields: Record<string, unknown> = {}): void {
+    if (!enabled()) return
     try {
         console.log(JSON.stringify({ tag: "bobby.trace", event, ...fields }))
     } catch {
