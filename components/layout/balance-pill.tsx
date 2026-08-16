@@ -105,9 +105,18 @@ export function BalancePill() {
     )
 }
 
-// Same box, same height, no content. Mirrors the loaded pill's structure rather
-// than being a single grey bar, so the swap when data lands moves nothing: outer
-// box, icon + label row, meter + percent row.
+// The loaded pill's markup with the values blanked — NOT an approximation of it.
+//
+// The first version used fixed-height bars (h-[12px]) where the real pill has
+// text, and a text node's line box is taller than the bar someone picks to stand
+// in for it. That reserved 48px against a real 57px and left a 9px jump: a
+// skeleton that is only roughly the right size is a layout shift with extra
+// steps.
+//
+// So this reuses the same classes and REAL glyphs, made transparent. Line-height,
+// font metrics and padding then resolve identically by construction, and the two
+// cannot drift apart when the pill is restyled — anything that changes its height
+// changes this the same way.
 function BalancePillSkeleton() {
     return (
         <div
@@ -116,15 +125,20 @@ function BalancePillSkeleton() {
         >
             <div className="flex items-center gap-1.5">
                 <span className="skeleton h-[14px] w-[14px] shrink-0 rounded-[3px]" />
-                <span className="skeleton h-[12px] w-20 rounded-[3px]" />
+                <span className="flex-1 truncate text-[12px] font-semibold text-transparent">
+                    <span className="skeleton rounded-[3px]">0,000 credits</span>
+                </span>
             </div>
             <div className="mt-1.5 flex items-center gap-2">
+                {/* The real meter, all ticks off — same element, same height. */}
                 <span className="flex items-center gap-[3px]">
                     {Array.from({ length: 12 }).map((_, i) => (
                         <span key={i} className="h-[8px] w-[5px] shrink-0 rounded-[2px] bg-[color:var(--c-border-strong)]" />
                     ))}
                 </span>
-                <span className="skeleton ml-auto h-[10px] w-6 shrink-0 rounded-[3px]" />
+                <span className="ml-auto shrink-0 text-[10px] font-semibold tabular-nums text-transparent">
+                    <span className="skeleton rounded-[3px]">00%</span>
+                </span>
             </div>
         </div>
     )
