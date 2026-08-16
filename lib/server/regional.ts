@@ -17,16 +17,24 @@
 import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import { getRegionRegistry, parseCellId, type CellId } from "@/modules/regions"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { dbRef, trace } from "@/lib/server/trace"
 
 /** The data-plane client for a cell. Falls back to the CONTROL client when the
  *  cell has no database of its own — which is every cell before its rows are
  *  moved, and is the honest answer rather than a guess. */
 export function dataClientForCell(cell: CellId | null): SupabaseRlsClient {
     const control = Supabase.service() as SupabaseRlsClient
-    if (!cell) return control
+    if (!cell) {
+        trace("data.client", { cell: null, resolved: "control", why: "no cell" })
+        return control
+    }
     const registry = getRegionRegistry()
-    if (!registry.hasDatabase(cell)) return control
+    if (!registry.hasDatabase(cell)) {
+        trace("data.client", { cell, resolved: "control", why: "cell has no database configured" })
+        return control
+    }
     const cfg = registry.cell(cell)
+    trace("data.client", { cell, resolved: "regional", db: dbRef(cfg.supabaseUrl) })
     return Supabase.forRegion(cfg.supabaseUrl, cfg.supabaseServiceKey, cell) as SupabaseRlsClient
 }
 
@@ -58,24 +66,39 @@ export async function dataClientByProbe(
 ): Promise<SupabaseRlsClient> {
     const registry = getRegionRegistry()
 
-    const stamped = parseCellId(request.headers.get(CELL_HEADER) ?? undefined)
-    if (stamped) return dataClientForCell(stamped)
+    const rawHeader = request.headers.get(CELL_HEADER)
+    const stamped = parseCellId(rawHeader ?? undefined)
+    if (stamped) {
+        trace("probe.header", { header: rawHeader, cell: stamped })
+        return dataClientForCell(stamped)
+    }
 
     // Home first: it is where everything lives until it is moved, so the common
     // case costs one probe.
     const home = registry.homeCell()
     const candidates = [home, ...registry.configuredCells().map((c) => c.id).filter((id) => id !== home)]
 
+    trace("probe.start", { header: rawHeader ?? null, home, candidates })
+
     for (const cell of candidates) {
-        if (!registry.hasDatabase(cell) && cell !== home) continue
+        if (!registry.hasDatabase(cell) && cell !== home) {
+            trace("probe.skip", { cell, why: "no database configured" })
+            continue
+        }
         const db = dataClientForCell(cell)
         try {
-            if (await probe(db)) return db
-        } catch {
+            const hit = await probe(db)
+            trace("probe.try", { cell, hit })
+            if (hit) return db
+        } catch (e) {
             // A region that is unreachable must not abort the search — the row
-            // may well be in the next one.
+            // may well be in the next one. But it must not be invisible either:
+            // a probe that THROWS looks identical to one that finds nothing, and
+            // that is how a broken region reads as "the row is elsewhere".
+            trace("probe.error", { cell, error: e instanceof Error ? e.message : String(e) })
         }
     }
+    trace("probe.exhausted", { fellBackTo: "control" })
     return Supabase.service() as SupabaseRlsClient
 }
 
@@ -88,5 +111,6 @@ export async function dataClientByProbe(
 export async function dataClientForProject(projectId: string): Promise<SupabaseRlsClient> {
     const control = Supabase.service() as SupabaseRlsClient
     const cell = await createSupabaseProjectsRepository(control).findCell(projectId)
+    trace("data.forProject", { projectId, cell })
     return dataClientForCell(cell)
 }

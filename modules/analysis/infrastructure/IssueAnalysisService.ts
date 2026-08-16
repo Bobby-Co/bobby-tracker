@@ -15,6 +15,7 @@ import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserReposito
 import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
 import { analysisIsAbandoned } from "../domain/AnalysisRun"
+import { trace } from "@/lib/server/trace"
 
 /** Resolves the app/bot VcsAppService for a project, or null when it isn't linked
  *  to a VCS. Injected so the service stays provider-agnostic. */
@@ -42,6 +43,12 @@ export class IssueAnalysisService {
         origin: string,
     ): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue"> {
         const issue = await this.issues.findAnalysisRow(issueId)
+        trace("ensure.lookup", {
+            issueId,
+            found: !!issue,
+            status: issue?.analysis_status ?? null,
+            startedAt: issue?.analysis_started_at ?? null,
+        })
         if (!issue) return "no_issue"
 
         // Idempotent / one-shot: don't start a second run.
@@ -52,9 +59,12 @@ export class IssueAnalysisService {
         // callback clears it, so nothing could ever set it back. Every retry
         // returned in_flight and never reached an analyser again.
         if (issue.analysis_status === "analysing" && !analysisIsAbandoned(issue.analysis_started_at)) {
+            trace("ensure.inFlight", { issueId, startedAt: issue.analysis_started_at })
             return "in_flight"
         }
-        if ((await this.issues.countSuggestions(issueId)) > 0) return "done"
+        const cached = await this.issues.countSuggestions(issueId)
+        trace("ensure.suggestions", { issueId, cached })
+        if (cached > 0) return "done"
 
         // Fail-safe: a query error folds to null → treated as not-ready.
         const analyser = await tryOrNull(() => this.analysers.findByProjectId(issue.project_id))
@@ -66,6 +76,7 @@ export class IssueAnalysisService {
         // to an analyser that has never seen this repo, producing a confidently
         // empty result rather than an honest failure.
         const cell = await this.projects.findCell(issue.project_id)
+        trace("ensure.cell", { issueId, projectId: issue.project_id, cell })
         if (!cell) return "not_ready"
 
         // Stamped with the status, and the reason they must be written together:
@@ -96,6 +107,7 @@ export class IssueAnalysisService {
         }
 
         await this.issues.updateSyncFields(issueId, update)
+        trace("ensure.marked", { issueId, startedAt: update.analysis_started_at })
 
         // Kick the single detached run; its callback caches to issue_suggestions
         // (the web box picks it up via realtime) and edits the bot comment.
@@ -115,6 +127,7 @@ export class IssueAnalysisService {
             // the per-cell bearer we authenticate outbound with.
             { url: `${callbackOrigin(origin)}/api/internal/analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
         )
+        trace("ensure.dispatched", { issueId, cell, callback: `${callbackOrigin(origin)}/api/internal/analysis-result` })
         return "started"
     }
 
@@ -129,7 +142,14 @@ export class IssueAnalysisService {
         origin: string,
     ): Promise<void> {
         const issue = await this.issues.findAnalysisRow(taskId)
-        if (!issue) return
+        trace("apply.lookup", { taskId, status, found: !!issue, projectId: issue?.project_id ?? null })
+        if (!issue) {
+            // The result arrived and there is nowhere to put it. Almost always a
+            // region mismatch: the run was dispatched against one database and
+            // the callback is being handled against another.
+            trace("apply.dropped", { taskId, why: "issue not in the database this callback is bound to" })
+            return
+        }
 
         const project = await this.projects.findAnalysisContext(issue.project_id)
 
@@ -158,6 +178,7 @@ export class IssueAnalysisService {
         }
 
         await this.issues.updateSyncFields(taskId, { analysis_status: status })
+        trace("apply.status", { taskId, status })
 
         // Cache the successful analysis so the tracker UI mirrors the comment.
         if (status === "done" && result && project) {
@@ -201,8 +222,17 @@ export class IssueAnalysisService {
                     duration_ms: result.duration_ms ?? 0,
                     graph_id: graphId,
                 })
-            } catch {
-                // Cache is best-effort; the bot comment is the source of truth.
+                trace("apply.suggestionSaved", { taskId, issueId: issue.id })
+            } catch (e) {
+                // Still best-effort — the bot comment is the source of truth — but
+                // no longer silent. This catch was swallowing the one write that
+                // IS the analysis result, so a lost suggestion left no trace
+                // anywhere: the run succeeded, was billed, and the UI stayed empty.
+                trace("apply.suggestionFailed", {
+                    taskId,
+                    issueId: issue.id,
+                    error: e instanceof Error ? e.message : String(e),
+                })
             }
         }
     }

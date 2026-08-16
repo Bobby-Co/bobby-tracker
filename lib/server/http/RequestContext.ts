@@ -84,6 +84,7 @@ import { createSupabaseNotificationFeedRepository } from "@/modules/notification
 import { createSupabaseSubscriptionsRepository, createSupabaseUsageRepository } from "@/modules/billing"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
 import { Supabase } from "@/lib/server/supabase"
+import { dbRef, trace } from "@/lib/server/trace"
 
 export class RequestContext {
     /** The data plane's client, or null until a region is bound.
@@ -123,6 +124,7 @@ export class RequestContext {
      *  and switching it off again is removing that pair. */
     async bindTeam(teamId: string): Promise<void> {
         const cell = await this.teams.findCell(teamId)
+        trace("ctx.bindTeam", { teamId, cell })
         if (!cell) {
             // No placement recorded (pre-0064 rows, or a malformed column). The
             // team's data is central by definition — it was never moved.
@@ -138,8 +140,10 @@ export class RequestContext {
         if (this.boundCell === cell && this.dataClient) return
         const registry = getRegionRegistry()
         const config = registry.cell(cell)
+        const regional = registry.hasDatabase(cell)
+        trace("ctx.bindCell", { cell, regional, db: regional ? dbRef(config.supabaseUrl) : "control" })
         this.boundCell = cell
-        this.dataClient = registry.hasDatabase(cell)
+        this.dataClient = regional
             ? (Supabase.forRegion(config.supabaseUrl, config.supabaseServiceKey, cell) as SupabaseRlsClient)
             : this.controlDb
     }
@@ -147,6 +151,7 @@ export class RequestContext {
     /** Bind the data plane to the control database — the correct binding for a
      *  team whose rows have not moved. */
     bindCentral(): void {
+        trace("ctx.bindCentral", {})
         this.boundCell = getRegionRegistry().homeCell()
         this.dataClient = this.controlDb
     }
