@@ -21,6 +21,7 @@
 
 import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import type { IssueStatus } from "@/lib/shared/types"
+import { RepositoryError } from "@/lib/shared/kernel"
 
 // The subset of a tracker.issues row the analysis flow reads.
 export type IssueAnalysisRow = {
@@ -148,7 +149,22 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
     }
 
     async updateSyncFields(issueId: string, patch: IssueSyncPatch): Promise<void> {
-        await this.svc.from("issues").update(patch).eq("id", issueId)
+        // .select() so we learn how many rows this MATCHED, not just whether the
+        // statement was accepted.
+        //
+        // An UPDATE against the wrong region is the failure this exists to catch:
+        // it matches zero rows, returns no error, and looks exactly like success.
+        // That is how a lost analysis_status turned into a page that re-dispatched
+        // a paid analysis on every refresh — the write "worked" every time and
+        // changed nothing. Silence is the bug; the throw is the fix.
+        const { data, error } = await this.svc.from("issues").update(patch).eq("id", issueId).select("id")
+        if (error) throw new RepositoryError(`issue sync update failed: ${error.message}`, { cause: error })
+        if (!data || data.length === 0) {
+            throw new RepositoryError(
+                `issue ${issueId} matched no rows — it is not in the database this request is bound to ` +
+                    `(wrong region, or the issue was deleted)`,
+            )
+        }
     }
 
     async insertImportedIssue(row: ImportedIssueInsert): Promise<boolean> {
@@ -167,7 +183,11 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
     }
 
     async insertSuggestion(row: IssueSuggestionInsert): Promise<void> {
-        await this.controlDb.from("issue_suggestions").insert(row)
+        // Also formerly silent. A dropped suggestion is the analysis result
+        // itself: the work ran, was paid for, and the only copy of it vanished
+        // with no trace in any log.
+        const { error } = await this.controlDb.from("issue_suggestions").insert(row)
+        if (error) throw new RepositoryError(`suggestion insert failed: ${error.message}`, { cause: error })
     }
 
     async upsertComment(projectId: string, comment: IssueCommentUpsert): Promise<void> {

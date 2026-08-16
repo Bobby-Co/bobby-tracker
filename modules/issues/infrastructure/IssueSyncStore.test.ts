@@ -13,7 +13,10 @@ import { ServiceIssueSyncStore } from "./IssueSyncStore"
  *  awaitable at any point in the chain, which is how the real client behaves. */
 function recorder() {
     const tables: string[] = []
-    const result = { data: null, error: null, count: 0 }
+    // `data` defaults to one row: updateSyncFields now treats a zero-row match as
+    // a failure (it is the signature of a write aimed at the wrong region), so a
+    // fake that answers "nothing matched" means "this write did not land".
+    const result: { data: unknown; error: unknown; count: number } = { data: [{ id: "i1" }], error: null, count: 0 }
     const chain: Record<string, unknown> = {}
     for (const m of ["select", "eq", "not", "insert", "update", "upsert", "delete", "order", "limit"]) {
         chain[m] = () => chain
@@ -23,6 +26,10 @@ function recorder() {
     chain.then = (onFulfilled: (v: unknown) => unknown) => Promise.resolve(result).then(onFulfilled)
     return {
         tables,
+        /** Make the next statement match nothing, as a wrong-region write does. */
+        matchNothing() {
+            result.data = []
+        },
         db: {
             from: (t: string) => {
                 tables.push(t)
@@ -101,6 +108,17 @@ describe("data plane — issues and issue_comments", () => {
             expect(control.tables).toEqual([])
         })
     }
+
+    // The whole point of the row-count check. Before it, an update aimed at the
+    // wrong region matched nothing, returned no error, and read as success — so
+    // analysis_status never persisted and the page re-dispatched a paid analysis
+    // on every refresh, each one "succeeding".
+    test("updateSyncFields THROWS when the update matches no rows", async () => {
+        data.matchNothing()
+        await expect(store.updateSyncFields("i1", { analysis_status: "analysing" })).rejects.toThrow(
+            /matched no rows/,
+        )
+    })
 })
 
 // Single-argument construction must keep every method on one client, so the
