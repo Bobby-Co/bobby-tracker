@@ -58,24 +58,36 @@ export async function POST(request: Request) {
     const svc = Supabase.service()
 
     // Resolve the tracker project by (host, gitlab project id) + its webhook secret.
-    const { data: project } = await svc
+    //
+    // A repo can back a project in more than one team, so this may match several
+    // rows — `maybeSingle` used to ERROR on that. It is not a fan-out though:
+    // each project provisions its OWN webhook on the GitLab side with its own
+    // secret (provisionGitlabProject), so GitLab sends one delivery PER project
+    // and the secret is what says which one this delivery belongs to.
+    const { data: candidates } = await svc
         .from("projects")
         .select(
             "id,user_id,repo_url,repo_full_name,gitlab_project_id,gitlab_host,github_sync_enabled,github_sync_direction,github_sync_deletes,auto_index_on_push",
         )
         .eq("gitlab_project_id", projectId)
         .eq("gitlab_host", host)
-        .maybeSingle<GlProjectRow>()
-    if (!project) return ack()
+        .returns<GlProjectRow[]>()
+    if (!candidates?.length) return ack()
+    if (!token) return new Response("bad token", { status: 401 })
 
-    const { data: link } = await svc
+    const { data: links } = await svc
         .from("gitlab_project_links")
-        .select("webhook_secret")
-        .eq("project_id", project.id)
-        .maybeSingle<{ webhook_secret: string | null }>()
-    if (!link?.webhook_secret || !token || !timingSafeEqual(token, link.webhook_secret)) {
-        return new Response("bad token", { status: 401 })
-    }
+        .select("project_id,webhook_secret")
+        .in("project_id", candidates.map((p) => p.id))
+        .returns<{ project_id: string; webhook_secret: string | null }[]>()
+
+    // Compare against every candidate rather than looking one up by id: the
+    // secret is the credential, so it decides the project — not the other way
+    // round. Each comparison stays constant-time; only the NUMBER of candidates
+    // is observable, which reveals nothing about the secrets.
+    const matched = (links ?? []).find((l) => l.webhook_secret && timingSafeEqual(token, l.webhook_secret))
+    const project = matched ? candidates.find((p) => p.id === matched.project_id) : undefined
+    if (!project) return new Response("bad token", { status: 401 })
 
     // Delivery dedupe (generic ledger; GitLab's X-Gitlab-Event-UUID).
     if (deliveryId) {

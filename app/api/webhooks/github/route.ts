@@ -157,11 +157,59 @@ async function handleInstallation(svc: Svc, payload: Record<string, unknown>) {
 
 // ─── issues core path ───────────────────────────────────────────────────────
 
+
+// ── repo → projects ──────────────────────────────────────────────────────────
+//
+// A repo may back a project in more than one TEAM, and unlike GitLab (where each
+// project registers its own webhook and its own secret) the GitHub App delivers
+// ONCE per installation, signed with a single app-level secret. So one delivery
+// has to be applied to every matching project — this is a genuine fan-out, and
+// `maybeSingle` used to ERROR the moment a second team added the same repo.
+//
+// Callers loop SEQUENTIALLY: each project's work is several round trips plus a
+// detached analyser kick, and a repo shared by many teams would otherwise fan a
+// burst of concurrent writes off a single webhook.
+async function projectsForRepo<T>(svc: Svc, repoId: number, columns: string, syncEnabledOnly = true): Promise<T[]> {
+    let q = svc.from("projects").select(columns).eq("github_repo_id", repoId)
+    if (syncEnabledOnly) q = q.eq("github_sync_enabled", true)
+    const { data } = await q.returns<T[]>()
+    return data ?? []
+}
+
+type IssueSyncProject = Pick<
+    Project,
+    | "id"
+    | "user_id"
+    | "github_installation_id"
+    | "github_repo_id"
+    | "github_sync_enabled"
+    | "github_sync_direction"
+    | "github_sync_deletes"
+>
+
+const ISSUE_SYNC_COLS =
+    "id,user_id,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes"
+
 async function handleIssue(
     svc: Svc,
     payload: Record<string, unknown>,
     action: string,
     origin: string,
+): Promise<Response> {
+    const repoId = (payload.repository as { id?: number } | undefined)?.id
+    if (!repoId) return ack()
+    for (const project of await projectsForRepo<IssueSyncProject>(svc, repoId, ISSUE_SYNC_COLS)) {
+        await applyIssueToProject(svc, payload, action, origin, project)
+    }
+    return ack()
+}
+
+async function applyIssueToProject(
+    svc: Svc,
+    payload: Record<string, unknown>,
+    action: string,
+    origin: string,
+    project: IssueSyncProject,
 ): Promise<Response> {
     const repository = payload.repository as { id?: number } | undefined
     const gh = payload.issue as
@@ -177,27 +225,6 @@ async function handleIssue(
     const repoId = repository?.id
     const number = gh?.number
     if (!repoId || !number) return ack()
-
-    // (5) Map repo → project via the stable numeric repo id, gated on sync
-    // being enabled. No enabled project owns this repo → nothing to do.
-    const { data: project } = await svc
-        .from("projects")
-        .select("id,user_id,github_installation_id,github_repo_id,github_sync_enabled,github_sync_direction,github_sync_deletes")
-        .eq("github_repo_id", repoId)
-        .eq("github_sync_enabled", true)
-        .maybeSingle<
-            Pick<
-                Project,
-                | "id"
-                | "user_id"
-                | "github_installation_id"
-                | "github_repo_id"
-                | "github_sync_enabled"
-                | "github_sync_direction"
-                | "github_sync_deletes"
-            >
-        >()
-    if (!project) return ack()
 
     // Direction gate: GitHub-side changes only apply when the project pulls from
     // GitHub. An outbound-only project ignores inbound issue events.
@@ -314,11 +341,33 @@ async function handleIssue(
 // path); on closed it cancels any in-flight run. Gated on the project being
 // App-linked + sync-enabled; the graph-indexed + diff-fetch gates live in
 // startPRAnalysis.
+type PrSyncProject = Pick<
+    Project,
+    "id" | "repo_url" | "repo_full_name" | "github_installation_id" | "github_repo_id" | "github_sync_enabled"
+>
+
+const PR_SYNC_COLS = "id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled"
+
 async function handlePullRequest(
     svc: Svc,
     payload: Record<string, unknown>,
     action: string,
     origin: string,
+): Promise<Response> {
+    const prRepoId = (payload.repository as { id?: number } | undefined)?.id
+    if (!prRepoId) return ack()
+    for (const project of await projectsForRepo<PrSyncProject>(svc, prRepoId, PR_SYNC_COLS)) {
+        await applyPullRequestToProject(svc, payload, action, origin, project)
+    }
+    return ack()
+}
+
+async function applyPullRequestToProject(
+    svc: Svc,
+    payload: Record<string, unknown>,
+    action: string,
+    origin: string,
+    project: PrSyncProject,
 ): Promise<Response> {
     const repository = payload.repository as { id?: number } | undefined
     const pr = payload.pull_request as
@@ -348,23 +397,6 @@ async function handlePullRequest(
     const number = pr?.number
     if (!repoId || !number) return ack()
 
-    const { data: project } = await svc
-        .from("projects")
-        .select("id,repo_url,repo_full_name,github_installation_id,github_repo_id,github_sync_enabled")
-        .eq("github_repo_id", repoId)
-        .eq("github_sync_enabled", true)
-        .maybeSingle<
-            Pick<
-                Project,
-                | "id"
-                | "repo_url"
-                | "repo_full_name"
-                | "github_installation_id"
-                | "github_repo_id"
-                | "github_sync_enabled"
-            >
-        >()
-    if (!project) return ack()
 
     // Mirror the PR first (awaited inline — one bounded write — so the row is
     // durable before we ack, exactly like the issues path).
@@ -425,7 +457,22 @@ async function handlePullRequest(
 // The analyser's coalescing queue collapses a burst of pushes to the same repo
 // into a single re-index at the latest commit, so we forward every qualifying
 // push (even mid-update) rather than debouncing here.
+type PushProject = Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "auto_index_on_push">
+
+const PUSH_COLS = "id,user_id,repo_url,github_repo_id,auto_index_on_push"
+
 async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<Response> {
+    const pushRepoId = (payload.repository as { id?: number } | undefined)?.id
+    if (!pushRepoId) return ack()
+    // syncEnabledOnly=false: auto-index is its own toggle, independent of
+    // issue/PR sync — a project can index on push without mirroring issues.
+    for (const project of await projectsForRepo<PushProject>(svc, pushRepoId, PUSH_COLS, false)) {
+        await applyPushToProject(svc, payload, project)
+    }
+    return ack()
+}
+
+async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, project: PushProject): Promise<Response> {
     const repository = payload.repository as { id?: number; default_branch?: string } | undefined
     const ref = String((payload as { ref?: unknown }).ref ?? "")
     const headSha = String((payload as { after?: unknown }).after ?? "")
@@ -444,12 +491,7 @@ async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<R
     // Auto-index is its own toggle (setup page), independent of issue/PR sync.
     // The webhook only reaches us when the App is installed, and github_repo_id
     // was set at install — so no extra install check is needed here.
-    const { data: project } = await svc
-        .from("projects")
-        .select("id,user_id,repo_url,github_repo_id,auto_index_on_push")
-        .eq("github_repo_id", repoId)
-        .maybeSingle<Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "auto_index_on_push">>()
-    if (!project || !project.auto_index_on_push) return ack()
+    if (!project.auto_index_on_push) return ack()
 
     // Incremental needs a prior successful bootstrap: a graph_id must exist.
     // We deliberately do NOT gate on status==='ready' — a push that lands
@@ -517,14 +559,26 @@ async function handlePrComment(
     const repoId = repository?.id
     if (!repoId) return ack()
 
-    const { data: project } = await svc
-        .from("projects")
-        .select("id")
-        .eq("github_repo_id", repoId)
-        .eq("github_sync_enabled", true)
-        .maybeSingle<{ id: string }>()
-    if (!project) return ack()
+    // Fan out: the same comment mirrors into every team's copy of the repo.
+    const projects = await projectsForRepo<{ id: string }>(svc, repoId, "id")
+    if (projects.length === 0) return ack()
 
+    for (const project of projects) {
+        await applyCommentToProject(svc, event, payload, project)
+    }
+    return ack()
+}
+
+// The per-project half. The payload-level guards inside (missing issue number,
+// bodiless review) do not depend on the project, so re-evaluating them per
+// project is redundant but harmless — and keeping them here rather than hoisting
+// them keeps this function readable as one story.
+async function applyCommentToProject(
+    svc: Svc,
+    event: string,
+    payload: Record<string, unknown>,
+    project: { id: string },
+): Promise<Response> {
     const action = String((payload as { action?: unknown }).action ?? "")
 
     if (event === "issue_comment") {
