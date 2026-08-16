@@ -11,6 +11,10 @@ export interface SimilarIssue {
     title: string
     status: string
     similarity: number
+    /** Whether this match clears the PROJECT's duplicate threshold (0072).
+     *  Absent from an older server, which is treated as true so a deploy skew
+     *  degrades to the previous behaviour rather than hiding every match. */
+    isDuplicate?: boolean
 }
 
 // Variants:
@@ -91,8 +95,15 @@ export function SimilarIssuesCard({
                     similar?: SimilarIssue[]
                     pending?: boolean
                     missing?: boolean
+                    duplicateThreshold?: number
                 }
-                const list = Array.isArray(data.similar) ? data.similar : []
+                // Only matches that clear the project's duplicate sensitivity
+                // are shown. The endpoint also returns weaker "related" matches
+                // above a fixed floor, but presenting those here put a
+                // "Duplicate of" button next to issues the project had
+                // explicitly said were not similar enough to count.
+                const all = Array.isArray(data.similar) ? data.similar : []
+                const list = all.filter((s) => s.isDuplicate !== false)
                 // Server-decided "missing": the issue is old enough
                 // that no embedding will ever come. Skip the rest of
                 // the polling window — render "not available" right
@@ -102,7 +113,7 @@ export function SimilarIssuesCard({
                     setStatus("missing")
                     return
                 }
-                if (list.length > 0 || !data.pending) {
+                if (all.length > 0 || !data.pending) {
                     setSimilar(list)
                     setStatus("ready")
                     return
@@ -223,7 +234,7 @@ export function SimilarIssuesCard({
         return (
             <section className="flex items-center gap-2.5 rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-4 py-3 text-[12.5px] text-[color:var(--c-text-muted)]">
                 <CheckIcon />
-                <span>No similar issues found.</span>
+                <span>No likely duplicates found.</span>
             </section>
         )
     }
@@ -232,7 +243,7 @@ export function SimilarIssuesCard({
         <section className="rounded-[14px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 sm:p-5">
             <header className="flex items-baseline justify-between gap-2">
                 <h2 className="text-[12px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
-                    Looks similar to
+                    Possible duplicates
                 </h2>
                 <span className="text-[11.5px] tabular-nums text-[color:var(--c-text-dim)]">
                     {similar.length} match{similar.length === 1 ? "" : "es"}
