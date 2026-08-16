@@ -5,6 +5,7 @@ import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "
 import { PUBLIC_ISSUE_LABEL, CurrentVisitor, getPublicSessionService } from "@/modules/public"
 import { createIssueEmbedder } from "@/modules/issues"
 import { RateLimiter } from "@/lib/server/RateLimiter"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the
@@ -64,8 +65,11 @@ export async function POST(request: Request) {
         ? `> Submitted via public link by **${reporter.replace(/[\r\n]+/g, " ")}**\n\n`
         : `> Submitted via public link\n\n`
     const finalBody = stamp + userBody
+    // The issue row is REGIONAL — write it to the project's own database.
+    const regional = await dataClientForProject(project.id)
 
-    const { data: issue, error: dbErr } = await svc
+
+    const { data: issue, error: dbErr } = await regional
         .from("issues")
         .insert({
             project_id: project.id,

@@ -22,7 +22,9 @@ const store = {
     insertIssueSuggestion: mock(),
     listLinkedGithubNumbers: mock(),
 }
-const projectsRepo = { findGithubSyncContext: mock() }
+// findCell: importExistingIssues now resolves the project's region before it
+// writes, so the double needs the placement lookup too. null = central.
+const projectsRepo = { findGithubSyncContext: mock(), findCell: mock(() => Promise.resolve(null)) }
 
 // The remote seam: the app-authority instance the composition resolves.
 const instance = {
@@ -90,6 +92,7 @@ beforeEach(() => {
     store.insertIssueSuggestion.mockReset().mockResolvedValue(undefined)
     store.listLinkedGithubNumbers.mockReset().mockResolvedValue([])
     projectsRepo.findGithubSyncContext.mockReset().mockResolvedValue(null)
+    projectsRepo.findCell.mockReset().mockResolvedValue(null)
 })
 
 // ── fixtures ───────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 // Upserts intentionally omit `undefined` fields (supabase-js drops them and
 // PostgREST merge-duplicates only updates the columns it receives).
 
-import { Supabase } from "@/lib/server/supabase"
+import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import type { PrAnalysis } from "@/lib/shared/types"
 import type {
     PrCommentSource,
@@ -16,7 +16,11 @@ import type {
  *  factory below from a composition root (webhook / backfill / detached contexts
  *  that bypass RLS). */
 export class SupabasePullRequestStore implements PullRequestStore {
-    private readonly svc = Supabase.service()
+    /** pull_requests and pr_comments are both REGIONAL. */
+    private readonly svc: SupabaseRlsClient
+    constructor(dataDb?: SupabaseRlsClient) {
+        this.svc = dataDb ?? (Supabase.service() as SupabaseRlsClient)
+    }
 
     async upsertPullRequest(projectId: string, pr: PrUpsert): Promise<void> {
         await this.svc.from("pull_requests").upsert({ project_id: projectId, ...pr }, { onConflict: "project_id,pr_number" })
@@ -57,7 +61,9 @@ export class SupabasePullRequestStore implements PullRequestStore {
     }
 }
 
-/** Composition seam: hands back the port, bound to a fresh service-role client. */
-export function createServicePullRequestStore(): PullRequestStore {
-    return new SupabasePullRequestStore()
+/** Composition seam: hands back the port, bound to a fresh service-role client.
+ *  Pass the project's data client (dataClientForProject) to write into its
+ *  region; omitting it writes centrally. */
+export function createServicePullRequestStore(dataDb?: SupabaseRlsClient): PullRequestStore {
+    return new SupabasePullRequestStore(dataDb)
 }

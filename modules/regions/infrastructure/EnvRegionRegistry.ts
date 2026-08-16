@@ -5,6 +5,13 @@
 //     BOBBY_CELLS=ashburn-0:north-america,bangkok-0:south-east-asia
 //     BOBBY_ANALYSER_URL_ASHBURN_0     BOBBY_ANALYSER_TOKEN_ASHBURN_0
 //     BOBBY_ANALYSER_URL_BANGKOK_0     BOBBY_ANALYSER_TOKEN_BANGKOK_0
+//     BOBBY_SUPABASE_URL_BANGKOK_0     BOBBY_SUPABASE_SERVICE_ROLE_KEY_BANGKOK_0
+//
+// The analyser pair and the database pair are declared INDEPENDENTLY, because a
+// cell legitimately has one without the other: every cell serves analysis from
+// its own region long before its rows move there. A cell with an analyser and no
+// database keeps its data central, which is the state the whole topology starts
+// in.
 //
 // Adding a cell is one manifest entry plus its URL/token pair. No code change, no
 // migration, no deploy — which is the whole point of the ids being open slugs
@@ -76,6 +83,12 @@ export class EnvRegionRegistry implements RegionRegistry {
         // Legacy unsuffixed vars apply to the home cell ONLY — see rule 2 above.
         const legacyUrl = isHome ? process.env.BOBBY_ANALYSER_URL : undefined
         const legacyToken = isHome ? process.env.BOBBY_ANALYSER_TOKEN : undefined
+        // The home cell's database IS the control database. That is not a
+        // fallback — it is the definition: everything starts central, and the
+        // home cell is the name for "where central is". Rule 2 still applies to
+        // every OTHER cell, which reads empty until given its own pair.
+        const homeDbUrl = isHome ? process.env.NEXT_PUBLIC_SUPABASE_URL : undefined
+        const homeDbKey = isHome ? process.env.SUPABASE_SERVICE_ROLE_KEY : undefined
 
         const declared = this.manifest().find((p) => p.cell === id)
 
@@ -85,7 +98,18 @@ export class EnvRegionRegistry implements RegionRegistry {
             label: process.env[`BOBBY_CELL_LABEL_${suffix}`] || deriveCellLabel(id),
             analyserUrl: process.env[`BOBBY_ANALYSER_URL_${suffix}`] || legacyUrl || "",
             analyserToken: process.env[`BOBBY_ANALYSER_TOKEN_${suffix}`] || legacyToken || "",
+            supabaseUrl: process.env[`BOBBY_SUPABASE_URL_${suffix}`] || homeDbUrl || "",
+            supabaseServiceKey:
+                process.env[`BOBBY_SUPABASE_SERVICE_ROLE_KEY_${suffix}`] || homeDbKey || "",
         }
+    }
+
+    /** Both halves required. A URL without its key would authenticate as anon
+     *  against a database whose RLS is deny-all, so every read would come back
+     *  empty and look like missing data rather than a misconfiguration. */
+    hasDatabase(cell: CellId): boolean {
+        const c = this.cell(cell)
+        return c.supabaseUrl !== "" && c.supabaseServiceKey !== ""
     }
 
     isConfigured(cell: CellId): boolean {

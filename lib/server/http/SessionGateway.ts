@@ -31,11 +31,17 @@ class SupabaseSessionGateway implements SessionGateway {
         // Supabase project can validate. That is the whole reason this switch is
         // a prerequisite for the split.
         //
-        // Handed in as both planes because they are one database today. The split
-        // resolves the active team's cell here and passes that region's client as
-        // the second argument; nothing downstream changes.
-        const db = Supabase.service()
-        return new RequestContext(db, db)
+        // Only the CONTROL client is known here. The data plane stays unbound
+        // until a guard resolves which team the request acts in, because that is
+        // the earliest point at which the answer exists — the region is a
+        // property of the team, and the team comes from the path, the header or
+        // the cookie, none of which this layer sees.
+        //
+        // Deliberately not defaulting the data plane to this client. An unbound
+        // data-plane read throws (see RequestContext), which turns "a route
+        // forgot to bind" into a loud failure in development instead of a silent
+        // read of the wrong region in production.
+        return new RequestContext(Supabase.service())
     }
 }
 

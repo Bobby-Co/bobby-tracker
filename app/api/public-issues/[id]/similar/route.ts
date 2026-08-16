@@ -1,6 +1,7 @@
 import { Supabase } from "@/lib/server/supabase"
 import { getPublicSessionService } from "@/modules/public"
 import type { Issue, IssueEmbedding } from "@/lib/shared/types"
+import { dataClientForProject } from "@/lib/server/regional"
 
 interface SimilarRow {
     id: string
@@ -43,7 +44,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (found.error) return found.error
     const issue = found.issue
 
-    const { data: emb } = await svc
+    // Similarity search reads `issues` + `issue_embeddings`, both REGIONAL, and
+    // both scoped to this issue's project — so the project decides the database.
+    const regional = await dataClientForProject(issue.project_id)
+
+    const { data: emb } = await regional
         .from("issue_embeddings")
         .select("embedding")
         .eq("issue_id", id)
@@ -69,7 +74,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // mirror of the page-level fetchPublicIssue gate but for many
     // rows at once.
     type ProbeIssue = Pick<Issue, "id" | "issue_number" | "title" | "status" | "labels" | "duplicate_of_issue_id">
-    const { data: pool } = await svc
+    const { data: pool } = await regional
         .from("issues")
         .select("id,issue_number,title,status,labels,duplicate_of_issue_id")
         .eq("project_id", issue.project_id)
@@ -88,7 +93,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // realistic deployments. If/when this gets large we can swap
     // to an RPC that takes (project_id, exclude_id, labels[],
     // embedding) and uses the HNSW index.
-    const { data: vectors } = await svc
+    const { data: vectors } = await regional
         .from("issue_embeddings")
         .select("issue_id,embedding")
         .in("issue_id", candidateIds)

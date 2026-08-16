@@ -19,6 +19,14 @@ export interface CellConfig {
     label: string
     analyserUrl: string
     analyserToken: string
+    /** The cell's DATA-plane database. Empty means "this cell has no database of
+     *  its own", which is a different state from the analyser being missing — a
+     *  cell may have an analyser and still keep its rows centrally. Callers must
+     *  treat empty as fail-closed, never as "use the control database": silently
+     *  falling back would write one team's issues into another region and the
+     *  mistake would only surface as missing data much later. */
+    supabaseUrl: string
+    supabaseServiceKey: string
 }
 
 /** A user-facing geography, and the cells available inside it. */
@@ -39,6 +47,12 @@ export interface RegionRegistry {
 
     /** Whether this cell has an analyser behind it right now. */
     isConfigured(cell: CellId): boolean
+
+    /** Whether this cell has a data-plane database of its own. Independent of
+     *  isConfigured: a cell can serve analysis from its own region while its rows
+     *  still live centrally, which is every cell's state before the split is
+     *  switched on. */
+    hasDatabase(cell: CellId): boolean
 
     /** Every cell with an analyser configured, across all regions. */
     configuredCells(): CellConfig[]

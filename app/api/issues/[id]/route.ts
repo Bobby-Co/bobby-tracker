@@ -4,6 +4,7 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { getVcsAppService } from "@/modules/vcs"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePatch } from "@/modules/issues"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // GET /api/issues/[id]?project_id=... — single issue. The optional
 // project_id query param scopes the lookup to a project (matching the
@@ -54,7 +55,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (data?.github_issue_number && (changed.title || changed.body || changed.status)) {
         const project = await projects.findGithubSyncContext(data.project_id)
         if (project?.github_sync_enabled && project.github_installation_id && project.github_repo_id) {
-            after(() => getVcsAppService(project)?.syncIssueUpdated(data, project, changed))
+            after(async () => (await getVcsAppService(project, await dataClientForProject(project.id)))?.syncIssueUpdated(data, project, changed))
         }
     }
 
@@ -81,7 +82,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     // re-checks direction + the deletes flag. Fire-and-forget via after().
     if (issue && (issue.github_issue_number != null || issue.github_node_id)) {
         const project = await projects.findGithubSyncContext(issue.project_id)
-        if (project) after(() => getVcsAppService(project)?.syncIssueDeleted(issue, project))
+        if (project) after(async () => (await getVcsAppService(project, await dataClientForProject(project.id)))?.syncIssueDeleted(issue, project))
     }
 
     return new Response(null, { status: 204 })

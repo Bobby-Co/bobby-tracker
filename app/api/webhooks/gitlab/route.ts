@@ -6,6 +6,7 @@ import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncSto
 import { Project as ProjectAggregate, createSupabaseProjectsRepository } from "@/modules/projects"
 import { Supabase } from "@/lib/server/supabase"
 import type { Issue, Project } from "@/lib/shared/types"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // INBOUND GITLAB WEBHOOK — public. GitLab authenticates each delivery with a
 // PER-PROJECT secret sent in the X-Gitlab-Token header (a plaintext compare, not
@@ -112,6 +113,11 @@ export async function POST(request: Request) {
 async function handleIssue(svc: Svc, project: GlProjectRow, payload: Record<string, unknown>, origin: string): Promise<Response> {
     if (!project.github_sync_enabled || !ProjectAggregate.of(project).allowsInbound()) return ack()
 
+    // This project's regional database. Resolved per project because the fan-out
+    // above may span teams in different regions, and an issue written to the
+    // wrong one is a silent loss — it succeeds, and nothing ever reads it back.
+    const regional = await dataClientForProject(project.id)
+
     const attrs = payload.object_attributes as
         | { iid?: number; id?: number; title?: string; description?: string | null; state?: string; action?: string; updated_at?: string }
         | undefined
@@ -122,7 +128,7 @@ async function handleIssue(svc: Svc, project: GlProjectRow, payload: Record<stri
 
     if (action === "delete") {
         if (project.github_sync_deletes) {
-            await svc.from("issues").delete().eq("project_id", project.id).eq("github_issue_number", number)
+            await regional.from("issues").delete().eq("project_id", project.id).eq("github_issue_number", number)
         }
         return ack()
     }
@@ -131,7 +137,7 @@ async function handleIssue(svc: Svc, project: GlProjectRow, payload: Record<stri
     const body = attrs?.description ?? ""
     const hash = await new SyncHash().compute(title, body, state)
 
-    const { data: existing } = await svc
+    const { data: existing } = await regional
         .from("issues")
         .select("id,updated_at,last_synced_hash")
         .eq("project_id", project.id)
@@ -152,10 +158,10 @@ async function handleIssue(svc: Svc, project: GlProjectRow, payload: Record<stri
     }
 
     if (existing) {
-        await svc.from("issues").update(syncFields).eq("id", existing.id)
+        await regional.from("issues").update(syncFields).eq("id", existing.id)
         if (action === "close") after(() => createIssueAnalysisService().cancel(existing.id))
     } else {
-        const { data: inserted } = await svc
+        const { data: inserted } = await regional
             .from("issues")
             .insert({ project_id: project.id, user_id: project.user_id, ...syncFields })
             .select("id")
@@ -178,7 +184,7 @@ async function handleNote(svc: Svc, project: GlProjectRow, payload: Record<strin
     if (attrs.noteable_type === "Issue") {
         const issue = payload.issue as { iid?: number } | undefined
         if (!issue?.iid) return ack()
-        await createServiceIssueSyncStore().upsertComment(project.id, {
+        await createServiceIssueSyncStore(await dataClientForProject(project.id)).upsertComment(project.id, {
             issue_number: issue.iid,
             github_comment_id: attrs.id,
             author_login: author?.username ?? null,
@@ -193,7 +199,7 @@ async function handleNote(svc: Svc, project: GlProjectRow, payload: Record<strin
     if (attrs.noteable_type === "MergeRequest") {
         const mr = payload.merge_request as { iid?: number } | undefined
         if (!mr?.iid) return ack()
-        await createServicePullRequestStore().upsertComment(project.id, {
+        await createServicePullRequestStore(await dataClientForProject(project.id)).upsertComment(project.id, {
             pr_number: mr.iid,
             source: "issue_comment",
             github_comment_id: attrs.id,
@@ -235,7 +241,7 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
     const author = payload.user as { username?: string; avatar_url?: string } | undefined
     const merged = a?.state === "merged"
 
-    await createServicePullRequestStore().upsertPullRequest(project.id, {
+    await createServicePullRequestStore(await dataClientForProject(project.id)).upsertPullRequest(project.id, {
         pr_number: number,
         github_node_id: a?.id != null ? String(a.id) : null,
         title: a?.title ?? "",

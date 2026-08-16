@@ -19,7 +19,7 @@
 // analysis_status) are GitHub-integration / analysis state that currently lives
 // on the issues row; a later physical split would remove the shared-table coupling.
 
-import { Supabase } from "@/lib/server/supabase"
+import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import type { IssueStatus } from "@/lib/shared/types"
 
 // The subset of a tracker.issues row the analysis flow reads.
@@ -183,7 +183,7 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
  *  Both planes are the same client today. Splitting them means resolving the
  *  project's region here and passing that region's service client as `dataDb`,
  *  leaving the control client pointed at the central database. */
-export function createServiceIssueSyncStore(): IssueSyncStore {
+export function createServiceIssueSyncStore(dataDb?: SupabaseRlsClient): IssueSyncStore {
     const svc = Supabase.service()
-    return new ServiceIssueSyncStore(svc, svc)
+    return new ServiceIssueSyncStore(dataDb ?? svc, svc)
 }

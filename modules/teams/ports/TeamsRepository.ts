@@ -25,6 +25,15 @@ export interface TeamsRepository {
      *  used best-effort when composing an invite email. */
     findName(id: string): Promise<string | null>
 
+    /** The cell this team's data lives in (0064 — placement is per team), or null
+     *  when the team is absent or its cell is unset/malformed.
+     *
+     *  NOT fail-safe by omission: the caller binds the data plane with this, and a
+     *  null must be treated as "cannot serve this request" rather than "use the
+     *  default". Narrowed through parseCellId so a malformed column reads as
+     *  unknown instead of being handed to a client factory. */
+    findCell(id: string): Promise<CellId | null>
+
     /** Whether the team is a personal team. FAIL-SAFE: false when absent / on a
      *  query error (matches the guard's original best-effort read). */
     isPersonal(id: string): Promise<boolean>

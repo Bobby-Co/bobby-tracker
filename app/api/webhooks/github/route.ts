@@ -8,6 +8,7 @@ import { Project as ProjectAggregate, createSupabaseProjectsRepository } from "@
 import { createServicePullRequestStore } from "@/modules/vcs"
 import { Supabase } from "@/lib/server/supabase"
 import type { Issue, Project } from "@/lib/shared/types"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // INBOUND WEBHOOK — public (NO requireUser). GitHub signs each delivery with
 // the app webhook secret; we prove authenticity by HMAC over the RAW body
@@ -230,11 +231,16 @@ async function applyIssueToProject(
     // GitHub. An outbound-only project ignores inbound issue events.
     if (!ProjectAggregate.of(project).allowsInbound()) return ack()
 
+    // This project's regional database. Resolved per project because the fan-out
+    // above may span teams in different regions, and an issue written to the
+    // wrong one is a silent loss — it succeeds, and nothing ever reads it back.
+    const regional = await dataClientForProject(project.id)
+
     // Deletion: drop the linked tracker issue only when delete-propagation is
     // on; otherwise leave it (an orphaned row is safer than a surprise delete).
     if (action === "deleted") {
         if (project.github_sync_deletes) {
-            await svc.from("issues").delete().eq("project_id", project.id).eq("github_issue_number", number)
+            await regional.from("issues").delete().eq("project_id", project.id).eq("github_issue_number", number)
         }
         return ack()
     }
@@ -244,7 +250,7 @@ async function applyIssueToProject(
     const state: "open" | "closed" = gh?.state === "closed" ? "closed" : "open"
 
     // Find the already-linked tracker row (if any) for this repo+issue number.
-    const { data: existing } = await svc
+    const { data: existing } = await regional
         .from("issues")
         .select("id,updated_at,last_synced_hash")
         .eq("project_id", project.id)
@@ -284,7 +290,7 @@ async function applyIssueToProject(
             return ack()
         }
 
-        await svc.from("issues").update(syncFields).eq("id", existing.id)
+        await regional.from("issues").update(syncFields).eq("id", existing.id)
 
         // Closing the issue cancels any in-flight analysis — the analyser then
         // reports 'cancelled' via the callback and the placeholder is updated.
@@ -296,7 +302,7 @@ async function applyIssueToProject(
         // owner's user_id so owner-only RLS keeps reads locked to them. We
         // SKIP the needs_indexing gate (external reporters can't bootstrap the
         // graph — same policy as app/api/public-issues).
-        const { data: inserted } = await svc
+        const { data: inserted } = await regional
             .from("issues")
             .insert({
                 project_id: project.id,
@@ -400,7 +406,7 @@ async function applyPullRequestToProject(
 
     // Mirror the PR first (awaited inline — one bounded write — so the row is
     // durable before we ack, exactly like the issues path).
-    await createServicePullRequestStore().upsertPullRequest(project.id, {
+    await createServicePullRequestStore(await dataClientForProject(project.id)).upsertPullRequest(project.id, {
         pr_number: number,
         github_node_id: pr?.node_id ?? null,
         title: pr?.title ?? "",
@@ -599,10 +605,10 @@ async function applyCommentToProject(
         if (!comment?.id) return ack()
 
         if (action === "deleted") {
-            await createServicePullRequestStore().deleteComment(project.id, "issue_comment", comment.id)
+            await createServicePullRequestStore(await dataClientForProject(project.id)).deleteComment(project.id, "issue_comment", comment.id)
             return ack()
         }
-        await createServicePullRequestStore().upsertComment(project.id, {
+        await createServicePullRequestStore(await dataClientForProject(project.id)).upsertComment(project.id, {
             pr_number: issue.number,
             source: "issue_comment",
             github_comment_id: comment.id,
@@ -630,7 +636,7 @@ async function applyCommentToProject(
         | undefined
     if (!prr?.number || !review?.id || action === "dismissed") return ack()
     if (!review.body?.trim()) return ack()
-    await createServicePullRequestStore().upsertComment(project.id, {
+    await createServicePullRequestStore(await dataClientForProject(project.id)).upsertComment(project.id, {
         pr_number: prr.number,
         source: "review",
         github_comment_id: review.id,
@@ -667,10 +673,10 @@ async function handleIssueComment(
     if (!issue?.number || !comment?.id) return ack()
 
     if (action === "deleted") {
-        await createServiceIssueSyncStore().deleteComment(projectId, comment.id)
+        await createServiceIssueSyncStore(await dataClientForProject(projectId)).deleteComment(projectId, comment.id)
         return ack()
     }
-    await createServiceIssueSyncStore().upsertComment(projectId, {
+    await createServiceIssueSyncStore(await dataClientForProject(projectId)).upsertComment(projectId, {
         issue_number: issue.number,
         github_comment_id: comment.id,
         author_login: comment.user?.login ?? null,

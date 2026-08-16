@@ -11,7 +11,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
-import { Supabase } from "@/lib/server/supabase"
+import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import type { EmbeddingIndex, EmbeddingUpsert, UnembeddedIssue } from "../ports/EmbeddingIndex"
 
 // The RLS client and the service-role client carry different schema generics;
@@ -73,7 +73,11 @@ export class SupabaseEmbeddingIndex implements EmbeddingIndex {
 }
 
 /** Composition seam: bind an EmbeddingIndex to the SERVICE-ROLE client (the
- *  embedding-maintenance path is always service-role — see the file header). */
-export function createServiceEmbeddingIndex(): EmbeddingIndex {
-    return new SupabaseEmbeddingIndex(Supabase.service())
+ *  embedding-maintenance path is always service-role — see the file header).
+ *
+ *  issue_embeddings is REGIONAL, so pass the project's data client. Without it
+ *  the embeddings are written centrally while the analyser searches the region —
+ *  a similarity search that silently returns nothing. */
+export function createServiceEmbeddingIndex(dataDb?: SupabaseRlsClient): EmbeddingIndex {
+    return new SupabaseEmbeddingIndex(dataDb ?? Supabase.service())
 }

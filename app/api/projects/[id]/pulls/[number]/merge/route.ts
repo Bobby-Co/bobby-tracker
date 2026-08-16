@@ -3,6 +3,7 @@ import type { RequestContext } from "@/lib/server/http/api"
 import { getVcsAppService, VcsMergeError, createServicePullRequestStore } from "@/modules/vcs"
 import { MergePolicy, type MergeMethod, type MergeMethods, type VcsMergeMethods } from "@/modules/vcs"
 import type { GithubSyncContext } from "@/modules/projects"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // GET  /api/projects/[id]/pulls/[number]/merge — everything the merge bar needs:
 //        our policy gate (from mirrored data), the repo's allowed merge methods,
@@ -57,7 +58,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     let methods: MergeMethods | null = null
     let mergeable: boolean | null = null
     let mergeableState: string | null = null
-    const vcs = gate.mergeable && connected(project) ? getVcsAppService(project) : null
+    const vcs = gate.mergeable && connected(project) ? getVcsAppService(project, await dataClientForProject(id)) : null
     if (vcs) {
         try {
             // Both are independent GETs — run them together.
@@ -120,7 +121,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!connected(project)) {
         return jsonError("not_connected", "Connect the GitHub App to merge from here.", 409)
     }
-    const vcs = getVcsAppService(project)
+    const vcs = getVcsAppService(project, await dataClientForProject(id))
     if (!vcs) return jsonError("not_connected", "This project has no GitHub repository.", 409)
 
     const chosen: MergeMethod = method ?? "merge"
@@ -135,7 +136,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
         // Reflect the merge immediately so the UI updates without waiting on the
         // webhook's `closed` event.
-        await createServicePullRequestStore().markMerged(id, prNumber, new Date().toISOString())
+        await createServicePullRequestStore(await dataClientForProject(id)).markMerged(id, prNumber, new Date().toISOString())
 
         return Response.json({ merged: true, sha: result.sha, method: chosen })
     } catch (e) {

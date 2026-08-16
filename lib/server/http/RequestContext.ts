@@ -82,14 +82,83 @@ import { createSupabaseProjectMcpIntegrationRepository } from "@/modules/mcp"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
 import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
 import { createSupabaseSubscriptionsRepository, createSupabaseUsageRepository } from "@/modules/billing"
+import { getRegionRegistry, type CellId } from "@/modules/regions"
+import { Supabase } from "@/lib/server/supabase"
 
 export class RequestContext {
-    /** `dataDb` defaults to `controlDb` so a single-database host constructs this
-     *  exactly as before. Pass two distinct clients to split the planes. */
+    /** The data plane's client, or null until a region is bound.
+     *
+     *  Null is the DEFAULT, and that is the whole point. The alternative —
+     *  defaulting to the control database — is a fallback that cannot fail
+     *  loudly: a route that forgets to bind would read the wrong region, succeed,
+     *  and return an empty result indistinguishable from "this team has no issues
+     *  yet". Wrong data returned confidently is worse than a 500, so an unbound
+     *  data-plane access throws. */
+    private dataClient: SupabaseRlsClient | null
+
+    /** Pass `dataDb` to pre-bind (single-database hosts and tests construct this
+     *  exactly as before). Omit it and the caller MUST bind a region before
+     *  touching the data plane. */
     constructor(
         private readonly controlDb: SupabaseRlsClient,
-        private readonly dataDb: SupabaseRlsClient = controlDb,
-    ) {}
+        dataDb?: SupabaseRlsClient,
+    ) {
+        this.dataClient = dataDb ?? null
+    }
+
+    /** Which cell this context's data plane is bound to, if any. Exposed for
+     *  diagnostics and for the guards to avoid re-resolving. */
+    private boundCell: CellId | null = null
+    get cell(): CellId | null {
+        return this.boundCell
+    }
+
+    /** Point the data plane at a TEAM's region. Idempotent per cell, so guards
+     *  that bind more than once on a request pay a single resolve.
+     *
+     *  A cell with no database of its own binds to the CONTROL client rather than
+     *  throwing: that is every cell's state before its rows are moved, and it is
+     *  the honest answer — the team's data really is central. Only an explicitly
+     *  configured cell diverts reads, so switching a region on is one env pair,
+     *  and switching it off again is removing that pair. */
+    async bindTeam(teamId: string): Promise<void> {
+        const cell = await this.teams.findCell(teamId)
+        if (!cell) {
+            // No placement recorded (pre-0064 rows, or a malformed column). The
+            // team's data is central by definition — it was never moved.
+            this.bindCentral()
+            return
+        }
+        this.bindCell(cell)
+    }
+
+    /** Bind directly when the cell is already known (project routes resolve it
+     *  from the project, avoiding a second lookup). */
+    bindCell(cell: CellId): void {
+        if (this.boundCell === cell && this.dataClient) return
+        const registry = getRegionRegistry()
+        const config = registry.cell(cell)
+        this.boundCell = cell
+        this.dataClient = registry.hasDatabase(cell)
+            ? (Supabase.forRegion(config.supabaseUrl, config.supabaseServiceKey, cell) as SupabaseRlsClient)
+            : this.controlDb
+    }
+
+    /** Bind the data plane to the control database — the correct binding for a
+     *  team whose rows have not moved. */
+    bindCentral(): void {
+        this.boundCell = getRegionRegistry().homeCell()
+        this.dataClient = this.controlDb
+    }
+
+    private get dataDb(): SupabaseRlsClient {
+        if (!this.dataClient) {
+            throw new Error(
+                "data plane accessed before a region was bound — the route's guard must call bindTeam/bindCell first",
+            )
+        }
+        return this.dataClient
+    }
 
     /** App-layer authorization: roles, project visibility, active-team resolution.
      *

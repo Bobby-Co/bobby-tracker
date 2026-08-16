@@ -56,6 +56,26 @@ export class Supabase {
             { db: { schema: "tracker" }, auth: { persistSession: false } },
         )
     }
+
+    /** Service-role client for ANOTHER REGION's database — the data plane.
+     *
+     *  Takes the credentials rather than a cell id so this stays a dumb factory:
+     *  the regions module owns the topology, and this file owns how a client is
+     *  built. Callers get the pair from RegionRegistry.cell().
+     *
+     *  Throws on missing credentials instead of falling back to the control
+     *  database. A fallback here would be silent and wrong in the worst way: the
+     *  request would succeed, read the wrong region, and return an empty result
+     *  that is indistinguishable from "this team has no issues yet". */
+    static forRegion(supabaseUrl: string, serviceKey: string, cellLabel: string) {
+        if (!supabaseUrl || !serviceKey) {
+            throw new Error(`cell ${cellLabel} has no data-plane database configured`)
+        }
+        return createSupabaseClient(supabaseUrl, serviceKey, {
+            db: { schema: "tracker" },
+            auth: { persistSession: false },
+        })
+    }
 }
 
 /** The request-scoped RLS server client type (what Supabase.rls() resolves to).

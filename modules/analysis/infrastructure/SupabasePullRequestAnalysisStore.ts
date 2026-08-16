@@ -4,7 +4,7 @@
 // signed-in user). Swapping persistence means replacing this file.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { Supabase } from "@/lib/server/supabase"
+import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import type { PrAnalysis } from "@/lib/shared/types"
 import type {
     PullRequestAnalysisResultRow,
@@ -65,7 +65,8 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     }
 }
 
-/** Composition seam: bind the store to the SERVICE-ROLE client. */
-export function createServicePullRequestAnalysisStore(): PullRequestAnalysisStore {
-    return new SupabasePullRequestAnalysisStore(Supabase.service())
+/** Composition seam: bind the store to the SERVICE-ROLE client. pull_request_analyses
+ *  is REGIONAL — pass the project's data client where the project is known. */
+export function createServicePullRequestAnalysisStore(dataDb?: SupabaseRlsClient): PullRequestAnalysisStore {
+    return new SupabasePullRequestAnalysisStore(dataDb ?? Supabase.service())
 }

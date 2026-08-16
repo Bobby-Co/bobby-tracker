@@ -3,6 +3,7 @@ import { CommentActions, VcsReauthError } from "@/modules/vcs"
 import { createServiceIssueSyncStore } from "@/modules/issues"
 import type { IssueCommentOwnership } from "@/modules/issues"
 import type { RequestContext } from "@/lib/server/http/api"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // Edit / delete an issue comment the user authored from here. `commentId` is the
 // GitHub comment id. Only tracker-provenance comments owned by the caller are
@@ -56,7 +57,7 @@ export async function PATCH(
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    await createServiceIssueSyncStore().upsertComment(id, {
+    await createServiceIssueSyncStore(await dataClientForProject(id)).upsertComment(id, {
         issue_number: owned.row.issue_number,
         github_comment_id: ghId,
         body: updated.body ?? "",
@@ -90,6 +91,6 @@ export async function DELETE(
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    await createServiceIssueSyncStore().deleteComment(id, ghId)
+    await createServiceIssueSyncStore(await dataClientForProject(id)).deleteComment(id, ghId)
     return Response.json({ ok: true })
 }

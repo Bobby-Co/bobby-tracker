@@ -7,7 +7,8 @@
 
 import { createServiceIssueSyncStore } from "@/modules/issues"
 import { createSupabaseProjectsRepository, Project } from "@/modules/projects"
-import { Supabase } from "@/lib/server/supabase"
+import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
+import { dataClientForProject } from "@/lib/server/regional"
 import { RepoRef } from "./domain/RepoRef"
 import { VcsAppService } from "./application/VcsAppService"
 import { VcsUserService } from "./application/VcsUserService"
@@ -100,10 +101,16 @@ export function getWebhookVerifier(): WebhookVerifier {
  *  isn't linked to any VCS (a web-only project has no remote to sync). Binds the
  *  resolved app instance to a fresh service-role IssueSyncStore for the sync
  *  bookkeeping. Callers do `const vcs = getVcsAppService(project); if (vcs) …`. */
-export function getVcsAppService(project: VcsProviderBinding): VcsAppService | null {
+export function getVcsAppService(
+    project: VcsProviderBinding,
+    dataDb?: SupabaseRlsClient,
+): VcsAppService | null {
     const instance = resolveVcsAppInstance(project)
     if (!instance) return null
-    return new VcsAppService(instance, createServiceIssueSyncStore())
+    // The sync bookkeeping writes back to `issues`, which is REGIONAL. Callers in
+    // an async context pass the project's data client; omitting it writes
+    // centrally, correct only while the project's team has not been moved.
+    return new VcsAppService(instance, createServiceIssueSyncStore(dataDb))
 }
 
 /** The user-authority orchestrator for a project + the caller's already-resolved
@@ -117,11 +124,14 @@ export function getVcsUserService(binding: VcsUserBinding, token: string): VcsUs
 /** The PR-mirror orchestrator for a project, or null when it isn't linked to any
  *  VCS. Binds the resolved app instance to a service-role PR store + the issues
  *  context's comment sink (issue-comment backfill writes that table). */
-export function getPullRequestService(project: VcsProviderBinding): PullRequestService | null {
+export function getPullRequestService(
+    project: VcsProviderBinding,
+    dataDb?: SupabaseRlsClient,
+): PullRequestService | null {
     const instance = resolveVcsAppInstance(project)
     if (!instance) return null
-    const issues = createServiceIssueSyncStore()
-    return new PullRequestService(instance, createServicePullRequestStore(), (projectId, comment) =>
+    const issues = createServiceIssueSyncStore(dataDb)
+    return new PullRequestService(instance, createServicePullRequestStore(dataDb), (projectId, comment) =>
         issues.upsertComment(projectId, comment),
     )
 }
@@ -132,7 +142,7 @@ export function getPullRequestService(project: VcsProviderBinding): PullRequestS
 export async function getPullRequestServiceForProject(projectId: string): Promise<PullRequestService | null> {
     const project = await createSupabaseProjectsRepository(Supabase.service()).findGithubSyncContext(projectId)
     if (!project || !Project.of(project).isSyncReady()) return null
-    return getPullRequestService(project)
+    return getPullRequestService(project, await dataClientForProject(projectId))
 }
 
 /** Hard-sync a project's existing remote issues into the tracker (the "import"
@@ -143,7 +153,7 @@ export async function importExistingIssues(
 ): Promise<{ imported: number; total: number; skipped: number }> {
     const project = await createSupabaseProjectsRepository(Supabase.service()).findGithubSyncContext(projectId)
     if (!project) return { imported: 0, total: 0, skipped: 0 }
-    const vcs = getVcsAppService(project)
+    const vcs = getVcsAppService(project, await dataClientForProject(projectId))
     if (!vcs) return { imported: 0, total: 0, skipped: 0 }
     return vcs.importIssues({ projectId, userId: project.user_id }, project)
 }

@@ -16,6 +16,7 @@ import { cookies } from "next/headers"
 import type { User } from "@supabase/supabase-js"
 import { Role } from "@/modules/access"
 import { tryOrNull } from "@/lib/shared/kernel"
+import { parseCellId } from "@/modules/regions"
 import { jsonError, forbidden } from "./responses"
 import { getSessionGateway } from "./SessionGateway"
 import type { RequestContext } from "./RequestContext"
@@ -68,6 +69,17 @@ export type IssueFailure = { ctx: RequestContext; user: null; projectId: null; t
 export type TeamRowSuccess = { ctx: RequestContext; user: User; teamId: string; role: TeamRole; isCreator: boolean; error: null }
 export type TeamRowFailure = { ctx: RequestContext; user: null; teamId: null; role: null; isCreator: false; error: Response }
 
+/** Bind a context's data plane from a team's `cell` column.
+ *
+ *  An unset or malformed cell binds CENTRAL rather than throwing. Placement is
+ *  only as old as 0064, so a team predating it legitimately has no cell — and its
+ *  data really is central, which is exactly what binding central says. */
+function bindTeamCell(ctx: RequestContext, cell: string | null | undefined): void {
+    const parsed = parseCellId(cell ?? undefined)
+    if (parsed) ctx.bindCell(parsed)
+    else ctx.bindCentral()
+}
+
 export class ApiContext {
     private readonly session = getSessionGateway()
 
@@ -115,6 +127,9 @@ export class ApiContext {
                 error: jsonError("no_team", "no accessible team", 500),
             }
         }
+        // The data plane follows the ACTIVE team. `listUserTeams` selects teams(*),
+        // so the cell arrives with the team — no second lookup.
+        bindTeamCell(ctx, team.cell)
         return { ctx, user, team, teamId: team.id, role: team.role, error: null }
     }
 
@@ -136,6 +151,10 @@ export class ApiContext {
         if (!access.ok || !access.teamId || !access.role) {
             return { ctx, user: null, teamId: null, role: null, error: jsonError("not_found", "project not found", 404) }
         }
+        // Bind to the PROJECT's team, not the caller's active team. They differ
+        // whenever someone opens a project while switched to another team, and
+        // the project's own placement is the only correct answer.
+        await ctx.bindTeam(access.teamId)
         return { ctx, user, teamId: access.teamId, role: access.role, error: null }
     }
 
@@ -149,12 +168,36 @@ export class ApiContext {
         if (base.error) return { ctx: base.ctx, user: null, projectId: null, teamId: null, role: null, error: base.error }
         const { ctx, user } = base
 
-        // Coarse RLS lets a team member read the issue row; we still resolve its
-        // project to apply the finer group gate. null when the issue is
-        // invisible/absent, which we render as 404 (same as no-access). Fail-safe:
-        // a query error also folds to null → 404 (fail closed), as before.
-        const projectId = await tryOrNull(() => ctx.issues.findProjectId(issueId))
         const notFound: IssueFailure = { ctx, user: null, projectId: null, teamId: null, role: null, error: jsonError("not_found", "issue not found", 404) }
+
+        // The chicken-and-egg of the regional split: resolving the issue's project
+        // is a DATA-plane read, but which database to read it from depends on the
+        // team, which is what that read was going to tell us.
+        //
+        // Solved by searching, not by indexing. The candidates are the distinct
+        // cells of the teams this user belongs to — in practice one, at most a
+        // handful — and the caller's ACTIVE team is tried first because it is
+        // nearly always the right one. A central issue → cell index would answer
+        // in one hop, but it is a second copy of the truth with no scheduler here
+        // to repair it when it drifts; a search cannot drift.
+        //
+        // This leaks nothing: finding the row only gets us a project id, which
+        // still has to clear canAccessProject below.
+        const teams = await tryOrNull(() => ctx.access.listTeams(user.id))
+        const cells: (string | null)[] = []
+        const activeCell = this.request?.headers.get(TEAM_HEADER)
+            ? (teams ?? []).find((t) => t.id === this.request?.headers.get(TEAM_HEADER))?.cell
+            : undefined
+        if (activeCell) cells.push(activeCell)
+        for (const t of teams ?? []) if (!cells.includes(t.cell)) cells.push(t.cell)
+        if (cells.length === 0) cells.push(null) // no teams resolved → central
+
+        let projectId: string | null = null
+        for (const cell of cells) {
+            bindTeamCell(ctx, cell)
+            projectId = await tryOrNull(() => ctx.issues.findProjectId(issueId))
+            if (projectId) break
+        }
         if (!projectId) return notFound
 
         const access = await ctx.access.canAccessProject(user.id, projectId)
@@ -206,6 +249,9 @@ export class ApiContext {
         if (opts?.write && !isCreator && !Role.of(role).atLeast("admin")) {
             return { ctx, user: null, teamId: null, role: null, isCreator: false, error: forbidden("only the creator or a team admin can change this") }
         }
+        // Collections list ISSUES (a data-plane read), so this guard binds too —
+        // the row carries its team, which is the placement key.
+        await ctx.bindTeam(row.team_id)
         return { ctx, user, teamId: row.team_id, role, isCreator, error: null }
     }
 }

@@ -5,7 +5,7 @@
 // service extraction swaps ONLY this file — callers depend on getAnalyser() /
 // the service factories, never on the transport or the concrete collaborators.
 
-import { Supabase } from "@/lib/server/supabase"
+import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
@@ -34,23 +34,25 @@ export function getAnalyser(cell?: CellId): Analyser {
     return new HttpAnalyser({ cell: cfg.id, baseUrl: cfg.analyserUrl, token: cfg.analyserToken })
 }
 
-/** Service-role clients, one per plane. The same client today — naming them
- *  apart is what turns the eventual split into a one-line change here rather
- *  than an audit of which repository reads which table. `project_analyser` is
- *  control-plane (it is in the supabase_realtime publication); `projects` and the
- *  PR mirror are data-plane. */
-function servicePlanes() {
-    const dataDb = Supabase.service()
-    return { dataDb, controlDb: dataDb }
+/** Service-role clients, one per plane. `project_analyser` and `projects` are
+ *  CONTROL-plane; the PR mirror, `issues` and `pull_request_analyses` are DATA.
+ *
+ *  `dataDb` is supplied by callers that know the project (resolve it with
+ *  dataClientForProject). Omitted, both planes are central — correct for a
+ *  project whose team has not been moved to a region of its own, and the state
+ *  every project is in until it has. */
+function servicePlanes(dataDb?: SupabaseRlsClient) {
+    const controlDb = Supabase.service()
+    return { dataDb: dataDb ?? controlDb, controlDb }
 }
 
 /** The issue auto-analysis service, bound to service-role collaborators. */
-export function createIssueAnalysisService(): IssueAnalysisService {
-    const { dataDb, controlDb } = servicePlanes()
+export function createIssueAnalysisService(dataDb?: SupabaseRlsClient): IssueAnalysisService {
+    const { dataDb: data, controlDb } = servicePlanes(dataDb)
     return new IssueAnalysisService(
         getAnalyser,
-        createServiceIssueSyncStore(),
-        createSupabaseProjectsRepository(dataDb),
+        createServiceIssueSyncStore(data),
+        createSupabaseProjectsRepository(controlDb),
         createSupabaseProjectAnalyserRepository(controlDb),
         getVcsAppService,
         new IssueAnalysisComment(),
@@ -59,13 +61,13 @@ export function createIssueAnalysisService(): IssueAnalysisService {
 }
 
 /** The PR-analysis service, bound to service-role collaborators. */
-export function createPullRequestAnalysisService(): PullRequestAnalysisService {
-    const { dataDb, controlDb } = servicePlanes()
+export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): PullRequestAnalysisService {
+    const { dataDb: data, controlDb } = servicePlanes(dataDb)
     return new PullRequestAnalysisService(
         getAnalyser,
-        createSupabaseProjectsRepository(dataDb),
+        createSupabaseProjectsRepository(controlDb),
         createSupabaseProjectAnalyserRepository(controlDb),
-        createServicePullRequestAnalysisStore(),
+        createServicePullRequestAnalysisStore(data),
         getVcsAppService,
         new PullRequestAnalysisComment(),
     )

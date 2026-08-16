@@ -101,18 +101,33 @@ describe("escape hatch", () => {
     })
 })
 
-// Single-database hosts (and every existing test/service-role call site) build
-// this with one argument; both planes must then resolve to that client.
+// Constructed with ONE argument, the data plane is deliberately unbound. This is
+// the safety property of the regional split: a route that reaches regional data
+// without first resolving which region must fail, not quietly read the central
+// database and return an empty result that reads as "no issues yet".
 describe("single-handle construction", () => {
     const single = { tag: "single" } as unknown as SupabaseRlsClient
-    const one = new RequestContext(single)
 
-    test("data plane falls back to the control handle", () => {
-        expect(clientOf(one.issues)).toBe(single)
+    test("the control plane works immediately", () => {
+        const one = new RequestContext(single)
+        expect(clientOf(one.teams)).toBe(single)
         expect(one.client).toBe(single)
     })
 
-    test("control plane uses it too", () => {
-        expect(clientOf(one.teams)).toBe(single)
+    test("the data plane THROWS until a region is bound", () => {
+        const one = new RequestContext(single)
+        expect(() => one.issues).toThrow(/region was bound/)
+        expect(() => one.pullRequests).toThrow(/region was bound/)
+    })
+
+    test("bindCentral binds the data plane to the control handle", () => {
+        const one = new RequestContext(single)
+        one.bindCentral()
+        expect(clientOf(one.issues)).toBe(single)
+    })
+
+    test("an explicit second argument still pre-binds (single-database hosts)", () => {
+        const two = new RequestContext(single, single)
+        expect(clientOf(two.issues)).toBe(single)
     })
 })

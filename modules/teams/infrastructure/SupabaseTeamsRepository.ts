@@ -3,7 +3,7 @@
 // RLS-scoped client, so every operation is scoped by the database.
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { CellId, RegionId } from "@/modules/regions"
+import { parseCellId, type CellId, type RegionId } from "@/modules/regions"
 import { RepositoryError } from "@/lib/shared/kernel"
 import type { Team } from "@/lib/shared/types"
 import type { TeamsRepository } from "../ports/TeamsRepository"
@@ -30,6 +30,15 @@ export class SupabaseTeamsRepository implements TeamsRepository {
         // Best-effort (null on error), matching the invite route's inline read.
         const { data } = await this.db.from("teams").select("name").eq("id", id).maybeSingle<{ name: string }>()
         return data?.name ?? null
+    }
+
+    async findCell(id: string): Promise<CellId | null> {
+        const { data } = await this.db
+            .from("teams")
+            .select("cell")
+            .eq("id", id)
+            .maybeSingle<{ cell: string | null }>()
+        return parseCellId(data?.cell)
     }
 
     async isPersonal(id: string): Promise<boolean> {

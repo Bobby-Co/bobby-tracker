@@ -6,6 +6,7 @@ import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import { createIssueEmbedder } from "@/modules/issues"
 import { getVcsAppService } from "@/modules/vcs"
+import { dataClientForProject } from "@/lib/server/regional"
 
 export async function POST(request: Request) {
     // The project id arrives in the BODY, not the path, so it has to be parsed
@@ -109,7 +110,7 @@ export async function POST(request: Request) {
         after(async () => {
             // Push first so the issue has its github_issue_number, then start
             // the placeholder-comment + detached analysis run.
-            await getVcsAppService(project)?.syncIssueCreated(issue, project)
+            await getVcsAppService(project, await dataClientForProject(project.id))?.syncIssueCreated(issue, project)
             await createIssueAnalysisService().ensure(issue.id, origin)
         })
     }

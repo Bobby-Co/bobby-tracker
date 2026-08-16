@@ -1,5 +1,6 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { CommentActions, VcsReauthError, createServicePullRequestStore } from "@/modules/vcs"
+import { dataClientForProject } from "@/lib/server/regional"
 
 // POST /api/projects/[id]/pulls/[number]/comments
 //
@@ -38,7 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return jsonError("github_error", (e as Error).message, 502)
     }
 
-    await createServicePullRequestStore().upsertComment(id, {
+    await createServicePullRequestStore(await dataClientForProject(id)).upsertComment(id, {
         pr_number: prNumber,
         source: "issue_comment",
         github_comment_id: created.id,

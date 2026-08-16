@@ -9,6 +9,7 @@ import { PublicSessionSkeleton } from "@/components/public/public-session-skelet
 import { PublicSessionGate } from "@/components/public/public-session-gate"
 import { getPublicSessionService, CurrentVisitor } from "@/modules/public"
 import { PublicReporter, type PublicListedIssue } from "@/modules/public"
+import { dataClientForProject } from "@/lib/server/regional"
 
 export const dynamic = "force-dynamic"
 
@@ -94,8 +95,13 @@ async function PublicSessionContent({
     const projectNameById = new Map(projects.map((p) => [p.id, p.name]))
 
     type ListedIssueRow = Pick<Issue, "id" | "issue_number" | "title" | "status" | "project_id" | "duplicate_of_issue_id" | "created_at">
-    const { data: issueRows } = projectIds.length
-        ? await svc
+    // Every project on a public session belongs to that session's team, and
+    // placement is per team (0064) — so they are all in ONE region and a single
+    // client serves the whole `.in()` list. Resolved from the first id rather
+    // than the session because that is the value already in hand here.
+    const regional = projectIds.length ? await dataClientForProject(projectIds[0]) : null
+    const { data: issueRows } = projectIds.length && regional
+        ? await regional
             .from("issues")
             .select("id,issue_number,title,status,project_id,duplicate_of_issue_id,created_at")
             .in("project_id", projectIds)
