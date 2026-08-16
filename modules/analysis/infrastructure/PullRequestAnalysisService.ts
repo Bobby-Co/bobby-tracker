@@ -13,6 +13,7 @@ import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
+import { callbackOrigin } from "../domain/CallbackOrigin"
 
 /** The project fields PR analysis reads: id + the sync-readiness/provider wiring. */
 export type PrProject = {
@@ -125,7 +126,7 @@ export class PullRequestAnalysisService {
                 projectId: project.id,
             },
             row.id,
-            { url: `${origin}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
+            { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
         )
     }
 

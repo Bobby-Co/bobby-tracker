@@ -10,6 +10,7 @@
 
 import type { Analyser } from "../ports/Analyser"
 import { AnalyserError } from "../ports/AnalyserTypes"
+import { callbackIsUnreachable } from "../domain/CallbackOrigin"
 import type {
     AnalyserEndpoint,
     AnalyserRunCallback,
@@ -200,8 +201,25 @@ export class HttpAnalyser implements Analyser {
         return (await res.json()) as IssueAnalysis
     }
 
+    /** Refuse to dispatch work whose result can never come back.
+     *
+     *  A loopback callback with a remote analyser is not a maybe — it is a
+     *  guaranteed dead drop, and the analysis still runs, still costs money, and
+     *  fails only in the ANALYSER's log where the developer is not looking.
+     *  Better to refuse up front and say what to set. */
+    private assertCallbackReachable(callback: AnalyserRunCallback): void {
+        if (!callback?.url || !callbackIsUnreachable(callback.url, this.endpoint.baseUrl)) return
+        throw new AnalyserError(
+            `analyser at ${this.endpoint.baseUrl} cannot reach the callback ${callback.url} — ` +
+                `set BOBBY_CALLBACK_ORIGIN to a hostname this analyser can resolve ` +
+                `(a tunnel URL in local development), or run against a local analyser`,
+            "callback_unreachable",
+        )
+    }
+
     // ─── /issues/analyse/run (detached, cancellable) ──────────────────────────
     async startIssueAnalysis(input: IssueAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
+        this.assertCallbackReachable(callback)
         const res = await fetch(`${this.base()}/issues/analyse/run`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
@@ -231,6 +249,7 @@ export class HttpAnalyser implements Analyser {
 
     // ─── /pr/analyse/run (detached, cancellable) ──────────────────────────────
     async startPRAnalysis(input: PrAnalyseInput, taskId: string, callback: AnalyserRunCallback): Promise<void> {
+        this.assertCallbackReachable(callback)
         const res = await fetch(`${this.base()}/pr/analyse/run`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },

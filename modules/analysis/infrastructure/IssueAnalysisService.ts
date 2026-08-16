@@ -13,6 +13,7 @@ import type { AnalyserResolver } from "../ports/Analyser"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
+import { callbackOrigin } from "../domain/CallbackOrigin"
 
 /** Resolves the app/bot VcsAppService for a project, or null when it isn't linked
  *  to a VCS. Injected so the service stays provider-agnostic. */
@@ -97,7 +98,7 @@ export class IssueAnalysisService {
             // tracker's inbound secret — what /api/internal/analysis-result checks
             // when the analyser calls back — so it is shared by every cell, unlike
             // the per-cell bearer we authenticate outbound with.
-            { url: `${origin}/api/internal/analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
+            { url: `${callbackOrigin(origin)}/api/internal/analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
         )
         return "started"
     }
