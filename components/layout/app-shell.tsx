@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/components/ui/cn"
-import { Sidebar, SidebarBrand, SidebarPrimaryNav } from "@/components/layout/sidebar"
+import { Sidebar, SidebarBloom, SidebarBrand, SidebarPrimaryNav } from "@/components/layout/sidebar"
 import { BalancePillSkeleton } from "@/components/layout/balance-pill"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { NotificationPopover } from "@/components/layout/notification-popover"
@@ -189,6 +189,11 @@ export function ShellSkeleton() {
             <aside aria-busy className="hidden h-full w-64 shrink-0 overflow-hidden bg-[color:var(--c-shell)] md:block">
                 <div className="h-full w-64">
                     <nav className="relative flex h-full flex-col pt-2 pl-2">
+                        {/* The warm flare behind the rail's top. Pure CSS and
+                            session-independent — omitting it here is why it used
+                            to appear a beat after everything else. */}
+                        <SidebarBloom />
+                        <div className="relative flex min-h-0 flex-1 flex-col">
                         <SidebarBrand />
                         <div className="px-2.5 pt-1.5 pb-1">
                             <div className="mb-1 px-0.5 text-[11.5px] font-semibold tracking-wide text-[color:var(--c-text-muted)]">
@@ -206,6 +211,7 @@ export function ShellSkeleton() {
                         </div>
                         <div className="px-2.5 pt-3">
                             <SidebarPrimaryNav />
+                        </div>
                         </div>
                     </nav>
                 </div>

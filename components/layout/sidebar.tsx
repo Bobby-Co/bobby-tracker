@@ -80,12 +80,7 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
 
     return (
         <nav className="relative flex h-full flex-col pt-2 pl-2">
-            {/* Faint ember brand bloom at the top — echoes the login panel so
-                the rail reads as the same warm Ucelot identity. */}
-            <div
-                aria-hidden
-                className="pointer-events-none absolute -left-6 -top-8 h-40 w-56 bg-[radial-gradient(58%_58%_at_20%_16%,rgba(234,88,12,0.20),rgba(245,158,11,0.12)_45%,transparent_74%)] blur-[16px]"
-            />
+            <SidebarBloom />
             {/* Ember pixel bloom from the bottom-left corner — the landing's
                 scatter, anchored under the account card so the rail is
                 book-ended by the Ucelot identity (pixel logo at the top). */}
@@ -399,6 +394,23 @@ const BobbyMark = () => (
         />
     </svg>
 )
+
+/** The faint ember bloom behind the top of the rail — echoes the login panel so
+ *  the sidebar reads as the same warm Ucelot identity.
+ *
+ *  Pure CSS, so it paints with the first frame and needs no skeleton of its own.
+ *  It is exported for the opposite reason: it lived INSIDE the real sidebar, and
+ *  ShellSkeleton drew a bare rail without it — so on every refresh the flare
+ *  appeared only once the session resolved and the real sidebar mounted. Nothing
+ *  about it depends on the session. */
+export function SidebarBloom() {
+    return (
+        <div
+            aria-hidden
+            className="pointer-events-none absolute -left-6 -top-8 h-40 w-56 bg-[radial-gradient(58%_58%_at_20%_16%,rgba(234,88,12,0.20),rgba(245,158,11,0.12)_45%,transparent_74%)] blur-[16px]"
+        />
+    )
+}
 
 /** The brand mark's ember, as the 8×8 pixels PixelGradient would paint with
  *  DARK_EMBER_STOPS, variant="linear", tiltDeg={45}, tilePx={8}. Upscaled with
