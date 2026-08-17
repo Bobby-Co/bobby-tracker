@@ -6203,3 +6203,230 @@ begin
     end if;
     return case when tg_op = 'DELETE' then old else new end;
 end $$;
+
+
+-- ═══ MIGRATION: 0070_repo_uniqueness_per_team.sql ═══
+
+-- 0070_repo_uniqueness_per_team.sql — one project per repo PER TEAM, not per install.
+--
+-- 0037 made a linked repo unique across the whole installation, and said why:
+-- "One project per linked repo → unambiguous inbound routing." That was the
+-- real reason. An inbound webhook carries a repo id and nothing else, so a
+-- second project on the same repo left the receiver with no way to choose.
+--
+-- But the rule it bought is wrong for teams. Two teams tracking one repo is
+-- ordinary — a platform team and a product team on the same service — and they
+-- are separate tenants with separate members, issues and analyser graphs.
+-- Uniqueness belongs inside the team.
+--
+-- Routing no longer needs the global rule. The webhook receivers now select
+-- EVERY project matching the repo and apply the event to each (see the commit
+-- that precedes this migration). That change shipped first, on purpose: it is a
+-- no-op while one project per repo still holds, so it could be verified against
+-- live traffic before this migration made two rows possible. Applying this
+-- first would have made the first cross-team repo throw inside both receivers.
+--
+-- The bug this closes: the two indexes are both PARTIAL (`where … is not null`),
+-- but gitlab_project_id is set at CREATE while github_repo_id stays null until
+-- the App-install callback runs. So the GitLab index bit immediately and the
+-- GitHub one did not — the same repo could be added to a second team over
+-- GitHub but not over GitLab, purely as an accident of when each column gets
+-- filled. Worse, that GitHub project worked right up until the second team
+-- connected the App, at which point linking failed.
+--
+-- Widening a unique index is a RELAXATION: every row set that satisfied the
+-- global rule satisfies the per-team one, so the new indexes cannot fail to
+-- build on existing data. They are therefore created BEFORE the old ones are
+-- dropped, leaving no window in which a repo is unconstrained.
+--
+-- projects.team_id is NOT NULL (0052), which matters here: a nullable leading
+-- column would make every teamless row distinct under unique semantics and
+-- quietly reopen the duplicate it is meant to close.
+
+-- ─── GitHub ─────────────────────────────────────────────────────────────────
+create unique index if not exists projects_team_github_repo_uniq
+    on tracker.projects (team_id, github_repo_id)
+    where github_repo_id is not null;
+
+drop index if exists tracker.projects_github_repo_id_uniq;
+
+-- ─── GitLab ─────────────────────────────────────────────────────────────────
+-- Keeps gitlab_host in the key: the same numeric project id on two different
+-- instances is two different repos (0057).
+create unique index if not exists projects_team_gitlab_project_uniq
+    on tracker.projects (team_id, gitlab_host, gitlab_project_id)
+    where gitlab_project_id is not null;
+
+drop index if exists tracker.projects_gitlab_instance_project_uniq;
+
+
+-- ═══ MIGRATION: 0071_issue_analysis_started_at.sql ═══
+
+-- 0071_issue_analysis_started_at.sql — let an abandoned analysis be recognised.
+--
+-- ensure() writes analysis_status='analysing' BEFORE dispatching the run, and
+-- only the analyser's callback ever clears it. So when a callback is lost — an
+-- unroutable address, a redeploy mid-run, the analyser dying — the row stays
+-- 'analysing' forever, and every retry short-circuits on:
+--
+--     if (issue.analysis_status === 'analysing') return 'in_flight'
+--
+-- The issue becomes permanently unanalysable. There is no scheduler in this
+-- stack to reap it, so today the only cure is a manual UPDATE.
+--
+-- The guard needs to know WHEN the run started, and no existing column can say.
+-- updated_at is wrong for this: any unrelated edit refreshes it, so editing a
+-- stuck issue would extend its stuck window rather than shorten it — exactly
+-- backwards from what someone poking at a broken issue is trying to do.
+--
+-- Nullable with no backfill, deliberately. A row currently wedged in 'analysing'
+-- has no start time, and the guard treats null as STALE — so every issue stuck
+-- by this bug becomes retryable the moment this ships, with no data repair.
+--
+-- NOTE: `issues` is a REGIONAL table. Apply this to every cell's database, not
+-- just the control one.
+
+alter table tracker.issues
+    add column if not exists analysis_started_at timestamptz;
+
+comment on column tracker.issues.analysis_started_at is
+    'When the current analysis run was dispatched. Set alongside analysis_status=''analysing''; '
+    'read to decide whether an in-flight run has been abandoned. Null means unknown, which is '
+    'treated as stale so pre-0071 wedged rows recover on their own.';
+
+
+-- ═══ MIGRATION: 0072_project_duplicate_sensitivity.sql ═══
+
+-- 0072_project_duplicate_sensitivity.sql — per-project duplicate sensitivity.
+--
+-- How similar two issues must be before we call one a likely duplicate of the
+-- other. There is no correct value: a project filing terse, templated bug
+-- reports has a very different similarity distribution from one filing long
+-- prose, so the same cosine number means different things in each. It belongs to
+-- the project, not to the codebase.
+--
+-- Stored as a NAME, not a number. The names are the product surface and the
+-- numbers are a tuning detail — leaving the mapping in code means it can be
+-- retuned (a new embedding model shifts every distribution) without a migration
+-- and without rewriting rows whose stored number would silently change meaning.
+--
+-- Values, and note the inversion that makes this worth reading twice: LOW
+-- sensitivity means a HIGH threshold. Low is fussy and flags almost nothing;
+-- veryhigh is eager and will flag things that merely rhyme.
+--
+--     low      0.90    only near-identical
+--     medium   0.80    the default
+--     high     0.70    more matches, some wrong
+--     veryhigh 0.65    noticeably more false positives
+--
+-- CHECK rather than an enum: adding a level to an enum needs ALTER TYPE and a
+-- deploy ordering dance, while this is one migration and matches how the rest of
+-- the schema treats small closed sets (see the region/cell format constraints).
+
+alter table tracker.projects
+    add column if not exists duplicate_sensitivity text not null default 'medium';
+
+do $$ begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'projects_duplicate_sensitivity_valid'
+          and conrelid = 'tracker.projects'::regclass
+    ) then
+        alter table tracker.projects
+            add constraint projects_duplicate_sensitivity_valid
+            check (duplicate_sensitivity in ('low', 'medium', 'high', 'veryhigh'));
+    end if;
+end $$;
+
+comment on column tracker.projects.duplicate_sensitivity is
+    'How eagerly to flag an issue as a likely duplicate. Names, not numbers — the '
+    'cosine thresholds live in modules/issues/domain/DuplicateSensitivity.ts so they '
+    'can be retuned without a migration. NOTE the inversion: low sensitivity = high '
+    'threshold = fewer matches.';
+
+
+-- ═══ MIGRATION: 0073_grant_tables_created_after_0001.sql ═══
+
+-- 0073_grant_tables_created_after_0001.sql — repair two tables the API roles were
+-- never granted on, and stop the next one from happening.
+--
+-- ─── The bug ─────────────────────────────────────────────────────────────────
+--
+-- 0001 grants with `on ALL TABLES in schema tracker`, which is a snapshot, not a
+-- rule: it grants on the tables that exist AT THAT MOMENT and says nothing about
+-- any table created later. So every migration since has had to carry its own
+-- `grant all on tracker.<table> to authenticated, service_role`. Almost all of
+-- them did. Two did not:
+--
+--   mind_context           0035 — reasoned explicitly about RLS ("no policies, so
+--                                 only service_role, which bypasses RLS") and
+--                                 concluded no grant was needed. RLS bypass is
+--                                 not a table privilege; service_role still needs
+--                                 the GRANT, and without it every access fails
+--                                 with `permission denied for table mind_context`
+--                                 regardless of role.
+--   newsletter_subscribers 0053 — same omission, no stated reasoning.
+--
+-- Surfaced by project deletion: the regional purge clears mind_context by
+-- project_id and threw there, which — by design — aborts the delete before the
+-- project row is removed. The Mind chat's managed-context writes go through the
+-- same table from the analyser, so those have been failing since 0035 too.
+--
+-- ─── Why granting these is not a widening ────────────────────────────────────
+--
+-- 0067 made RLS the reachability fuse: enabled with no policies on every tenant
+-- table, so `anon` and `authenticated` read nothing whatever the grants say.
+-- Both tables here are in exactly that state, and stay in it. The grant restores
+-- what the schema assumes everywhere else — the API roles can address the table,
+-- RLS decides whether they get rows — and matches the 30-odd tables that already
+-- carry it.
+
+-- Guarded on existence, because the file set and the deployed database do not
+-- agree: `newsletter_subscribers` is absent from the hosted project even though
+-- 0053 creates it. (0053 is a COLLIDING number — 0053_newsletter_subscribers and
+-- 0053_notification_outbox — which is the likely reason one of the two never got
+-- applied.) A repair migration is the wrong place to discover that; it should fix
+-- what is there and say what it skipped.
+do $$
+declare
+    t text;
+begin
+    foreach t in array array['mind_context', 'newsletter_subscribers'] loop
+        if to_regclass('tracker.' || quote_ident(t)) is null then
+            raise notice '0073: tracker.% does not exist here — skipped', t;
+        else
+            execute format('grant all on tracker.%I to authenticated, service_role', t);
+            raise notice '0073: granted on tracker.%', t;
+        end if;
+    end loop;
+end $$;
+
+-- Re-run 0001's sweep to catch anything else that slipped through between then
+-- and now. Idempotent, and the audit that found the two above says it is a no-op
+-- today — it is here so this migration repairs the CLASS, not just the instance.
+grant all     on all tables    in schema tracker to authenticated, service_role;
+grant all     on all sequences in schema tracker to authenticated, service_role;
+grant execute on all functions in schema tracker to authenticated, service_role;
+
+-- And the actual fix: a RULE rather than another snapshot. Default privileges
+-- apply to objects created LATER by the role that owns them, so a future
+-- `create table tracker.x` is grantable without anyone remembering to say so.
+--
+-- Scoped to the role running this migration (the schema owner, which is also
+-- what applies every other migration). A table created by some other role still
+-- needs its own grant — but that is not how anything here is deployed.
+alter default privileges in schema tracker
+    grant all on tables to authenticated, service_role;
+alter default privileges in schema tracker
+    grant all on sequences to authenticated, service_role;
+alter default privileges in schema tracker
+    grant execute on functions to authenticated, service_role;
+
+do $$ begin
+    if to_regclass('tracker.mind_context') is not null then
+        execute 'comment on table tracker.mind_context is '
+            '''Mind chat managed context, written by the analyser with the service-role key. '
+            'RLS is enabled with NO policies, which is what keeps anon/authenticated out — '
+            'the grants in 0073 are addressability, not authorization (see 0067).''';
+    end if;
+end $$;
