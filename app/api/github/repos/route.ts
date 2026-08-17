@@ -1,5 +1,5 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { GithubRepoSummary, GithubToken } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import type { GithubRepoSummary } from "@/lib/shared/types"
 
 // GET /api/github/repos
 //
@@ -32,15 +32,11 @@ interface RawGithubRepo {
 }
 
 export async function GET() {
-    const { supabase, user, error } = await requireUser()
+    const { ctx, user, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { data: tokenRow, error: tokErr } = await supabase
-        .from("github_tokens")
-        .select("access_token,scopes")
-        .eq("user_id", user.id)
-        .maybeSingle<Pick<GithubToken, "access_token" | "scopes">>()
-    if (tokErr) return jsonError("db_error", tokErr.message, 500)
+    const { data: tokenRow, error: tokErr } = await repoRead(() => ctx.githubTokens.findAccess(user.id))
+    if (tokErr) return tokErr
     if (!tokenRow) {
         return jsonError(
             "github_reauth_required",

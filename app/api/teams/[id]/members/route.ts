@@ -1,0 +1,23 @@
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { createTeamMemberViews } from "@/modules/teams"
+import type { TeamRole } from "@/lib/shared/types"
+
+// GET /api/teams/[id]/members — team members with resolved profiles (any member
+// may view the roster). Profiles come from the service-role admin API since
+// auth.users isn't readable by `authenticated`.
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
+    const { ctx, user, error } = await new ApiContext().requireUser()
+    if (error) return error
+    const role = await ctx.access.teamRole(id, user.id)
+    if (!role) return jsonError("not_found", "team not found", 404)
+
+    const { data: rows, error: dbErr } = await repoRead(() => ctx.teamMembership.listDetailed(id))
+    if (dbErr) return dbErr
+
+    const members = await createTeamMemberViews().build(rows)
+    // owners first, then admins, then members; stable within a rank by join time
+    const rank: Record<TeamRole, number> = { owner: 0, admin: 1, member: 2 }
+    members.sort((a, b) => rank[a.role] - rank[b.role] || a.created_at.localeCompare(b.created_at))
+    return Response.json({ members })
+}

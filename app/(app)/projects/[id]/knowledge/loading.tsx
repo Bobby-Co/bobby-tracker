@@ -1,4 +1,4 @@
-import { KnowledgeSkeleton } from "@/components/knowledge-skeleton"
+import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
 
 // Route-level loading. Fires on hard navigations (initial visit,
 // reload). Soft client navigations between project tabs hit the

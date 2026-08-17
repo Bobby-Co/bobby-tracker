@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { getCurrentUser } from "@/lib/supabase/server"
-import PixelGradient, { EMBER_STOPS } from "@/components/pixel-gradient"
+import { Supabase } from "@/lib/server/supabase"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
+import PixelGradient, { EMBER_STOPS } from "@/components/ui/pixel-gradient"
 
 const BobbyMark = () => (
   <svg viewBox="0 0 106 102" xmlns="http://www.w3.org/2000/svg" aria-hidden>
@@ -13,8 +14,11 @@ const BobbyMark = () => (
 )
 
 export default async function Home() {
-    const user = await getCurrentUser()
-    if (user) redirect("/projects")
+    // Only whitelisted users are sent into the app. Signed-in users who
+    // aren't on the beta list stay on the landing (they reach the waitlist
+    // through sign-in, not by being bounced off this page).
+    const user = await Supabase.currentUser()
+    if (user && new BetaAccess().isAllowed(user)) redirect("/projects")
 
     return (
         <section className="relative flex min-h-screen flex-col items-start justify-center overflow-hidden bg-[#fffae8] px-8 sm:px-16 lg:px-24">
@@ -30,10 +34,10 @@ export default async function Home() {
             />
             <div className="relative z-10 flex w-full max-w-xl flex-col items-start text-left">
                 <div className="anim-rise flex items-center gap-4" style={{ animationDelay: "0ms" }}>
-                    <div className="size-14 shrink-0 rounded-2xl bg-red-950 p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
+                    <div className="size-14 shrink-0 rounded-sq-2xl bg-[#383838] p-2.5 pt-3 text-white shadow-[0_18px_46px_-12px_rgba(161,98,7,0.55)]">
                         <BobbyMark />
                     </div>
-                    <div className="flex flex-col items-start text-red-950 ">
+                    <div className="flex flex-col items-start text-[#383838]">
                         <h1
                             className="text-[44px] font-extrabold leading-none tracking-[-0.035em]"
                             style={{ textShadow: "0 2px 26px rgba(255,251,235,0.75)" }}
@@ -46,7 +50,7 @@ export default async function Home() {
                     </div>
                 </div>
                 <p
-                    className="anim-rise mt-20 max-w-md font-medium text-[15.5px] leading-7 text-amber-950"
+                    className="anim-rise mt-20 max-w-md font-medium text-[15.5px] leading-7 text-[#383838]"
                     style={{ animationDelay: "120ms", textShadow: "0 1px 16px rgba(255,251,235,0.7)" }}
                 >
                     Smart issue tracker for your projects. Issues come with the files and lines worth investigating.
@@ -54,14 +58,14 @@ export default async function Home() {
                 <div className="flex items-center space-x-4">
                     <Link
                         href="/login"
-                        className="btn-primary rounded-2xl bg-red-950 font-bold anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                        className="text-white rounded-sq-xl bg-[#383838] font-bold anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                         style={{ animationDelay: "200ms" }}
                     >
                         Start Now
                     </Link>
                     <Link
                         href="/login"
-                        className="btn-primary bg-white rounded-2xl text-red-950 font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
+                        className="bg-white rounded-sq-xl text-[#383838] font-bold  anim-rise mt-7 px-6 py-2.5 text-[14px] shadow-[0_12px_36px_-8px_rgba(161,98,7,0.45)]"
                         style={{ animationDelay: "200ms" }}
                     >
                         Documentation

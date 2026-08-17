@@ -1,17 +1,13 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 
 // DELETE — remove a project from a group. Owner-only via RLS on the
 // membership table; no extra check needed here.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; projectId: string }> }) {
     const { id, projectId } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireCollectionAccess(id, { write: true })
     if (error) return error
 
-    const { error: dbErr } = await supabase
-        .from("project_group_members")
-        .delete()
-        .eq("group_id", id)
-        .eq("project_id", projectId)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.collections.removeMember(id, projectId))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

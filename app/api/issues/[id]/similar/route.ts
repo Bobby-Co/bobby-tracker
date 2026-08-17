@@ -1,5 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { Issue } from "@/lib/supabase/types"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 
 // GET /api/issues/[id]/similar
 //
@@ -35,43 +34,24 @@ const PENDING_WINDOW_MS = 30_000
 // start to be genuinely related rather than just same-domain.
 const MIN_SIMILARITY = 0.40
 
-interface SimilarRow {
-    id: string
-    issue_number: number
-    title: string
-    status: string
-    similarity: number
-}
-
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
-    const [{ data: similar, error: rpcErr }, { data: emb }, { data: issue }] = await Promise.all([
-        supabase.rpc("find_similar_to_issue", { p_issue_id: id, p_limit: 5 }),
-        supabase
-            .from("issue_embeddings")
-            .select("issue_id")
-            .eq("issue_id", id)
-            .maybeSingle<{ issue_id: string }>(),
-        supabase
-            .from("issues")
-            .select("created_at")
-            .eq("id", id)
-            .maybeSingle<Pick<Issue, "created_at">>(),
-    ])
-    if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
+    const issues = ctx.issues
+    const { data: state, error: dbErr } = await repoRead(() => issues.findSimilarityState(id, 5))
+    if (dbErr) return dbErr
 
-    if (emb) {
-        const filtered = ((similar ?? []) as SimilarRow[]).filter((r) => r.similarity >= MIN_SIMILARITY)
+    if (state.hasEmbedding) {
+        const filtered = state.similar.filter((r) => r.similarity >= MIN_SIMILARITY)
         return Response.json({ similar: filtered, pending: false, missing: false })
     }
     // No embedding row. Decide pending vs missing based on age.
     // Treat unknown issue (RLS dropped it) as missing too — the
     // client doesn't need to keep polling on a 404-equivalent.
-    const ageMs = issue?.created_at
-        ? Date.now() - Date.parse(issue.created_at)
+    const ageMs = state.createdAt
+        ? Date.now() - Date.parse(state.createdAt)
         : Number.POSITIVE_INFINITY
     const stillPending = Number.isFinite(ageMs) && ageMs < PENDING_WINDOW_MS
     return Response.json({

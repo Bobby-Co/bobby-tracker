@@ -1,4 +1,4 @@
-import { GroupsListSkeleton } from "@/components/groups-list-skeleton"
+import { GroupsListSkeleton } from "@/components/groups/groups-list-skeleton"
 
 // Route-level loading. Fires on hard navigations (initial visit,
 // reload). Soft client navigations from the sidebar hit the

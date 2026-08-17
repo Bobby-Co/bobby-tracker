@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto"
-import { jsonError, requireUser } from "@/lib/api"
-import type { PublicSession } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
 
 // GET    — list sessions owned by the current user (newest first)
 // POST   — create a new session, optionally with an initial project list
@@ -18,20 +18,16 @@ function parseWindow(v: unknown): string | null | undefined {
     return new Date(t).toISOString()
 }
 
-export async function GET() {
-    const { supabase, error } = await requireUser()
+export async function GET(request: Request) {
+    const { ctx, teamId, error } = await new ApiContext(request).requireTeam()
     if (error) return error
-    const { data, error: dbErr } = await supabase
-        .from("public_sessions")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .returns<PublicSession[]>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ sessions: data ?? [] })
+    const { data: sessions, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.listForTeam(teamId))
+    if (dbErr) return dbErr
+    return Response.json({ sessions })
 }
 
 export async function POST(request: Request) {
-    const { supabase, user, error } = await requireUser()
+    const { ctx, user, teamId, error } = await new ApiContext(request).requireTeam()
     if (error) return error
 
     let body: Record<string, unknown> = {}
@@ -54,11 +50,7 @@ export async function POST(request: Request) {
     let group_id: string | null = null
     if (group_id_raw) {
         // Verify ownership of the group before persisting the link.
-        const { data: group } = await supabase
-            .from("project_groups")
-            .select("id")
-            .eq("id", group_id_raw)
-            .maybeSingle<{ id: string }>()
+        const group = await tryOrNull(() => ctx.collections.findSummary(group_id_raw))
         if (!group) return jsonError("bad_request", "group not found or not yours", 400)
         group_id = group_id_raw
     }
@@ -67,52 +59,34 @@ export async function POST(request: Request) {
         ? body.project_ids.filter((x: unknown): x is string => typeof x === "string")
         : []
 
-    const { data: session, error: insErr } = await supabase
-        .from("public_sessions")
-        .insert({
-            user_id: user.id,
-            token: newToken(),
-            enabled: true,
-            access_mode,
-            submissions_visibility,
-            group_id,
-            name, title, description, start_at, end_at,
-        })
-        .select("*")
-        .single<PublicSession>()
-    if (insErr) return jsonError("db_error", insErr.message, 500)
+    const { data: session, error: insErr } = await repoRead(() =>
+        ctx.sessionsAdmin.create({
+            teamId, userId: user.id, token: newToken(),
+            accessMode: access_mode, submissionsVisibility: submissions_visibility, groupId: group_id,
+            name, title, description, startAt: start_at, endAt: end_at,
+        }),
+    )
+    if (insErr) return insErr
 
     // Owner is always implicitly invited. Insert their email so the
     // panel renders them in the list and the public page lets them
     // in immediately if they switched the session to invite mode.
     if (access_mode === "invite") {
         const ownerEmail = (user.email ?? "").trim().toLowerCase()
-        if (ownerEmail) {
-            await supabase
-                .from("public_session_invites")
-                .upsert(
-                    { session_id: session.id, email: ownerEmail },
-                    { onConflict: "session_id,email", ignoreDuplicates: true },
-                )
-        }
+        if (ownerEmail) await ctx.sessionsAdmin.addOwnerInvite(session.id, ownerEmail)
     }
 
     if (projectIdsIn.length > 0) {
-        const { error: linkErr } = await supabase
-            .from("public_session_projects")
-            .insert(projectIdsIn.map((project_id) => ({ session_id: session.id, project_id })))
-        if (linkErr) {
-            // Trigger raises 23514 if any project doesn't have the
-            // integration enabled. Surface that distinctly so the UI
-            // can route the user to enable it.
-            if (linkErr.code === "23514") {
-                return jsonError(
-                    "integration_disabled",
-                    "Enable the public submissions integration on each selected project first.",
-                    409,
-                )
-            }
-            return jsonError("db_error", linkErr.message, 500)
+        const { data: result, error: linkErr } = await repoRead(() => ctx.sessionsAdmin.addProjects(session.id, projectIdsIn))
+        if (linkErr) return linkErr
+        // Trigger raises 23514 if any project doesn't have the integration
+        // enabled. Surface that distinctly so the UI can route to enable it.
+        if (result === "integration_disabled") {
+            return jsonError(
+                "integration_disabled",
+                "Enable the public submissions integration on each selected project first.",
+                409,
+            )
         }
     }
 

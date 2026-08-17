@@ -1,10 +1,10 @@
 "use client"
 
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { ProjectGroup } from "@/lib/supabase/types"
-import { GroupManagePanel } from "@/components/group-manage-panel"
-import { GroupSettingsSkeleton } from "@/components/group-settings-skeleton"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { ProjectGroup } from "@/lib/shared/types"
+import { GroupManagePanel } from "@/components/groups/group-manage-panel"
+import { GroupSettingsSkeleton } from "@/components/groups/group-settings-skeleton"
 
 interface MemberInfo {
     id: string

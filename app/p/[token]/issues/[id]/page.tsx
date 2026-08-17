@@ -1,12 +1,14 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, Project, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
-import { checkInviteAccess, fetchPublicIssue, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
-import { PublicIssueView } from "@/components/public-issue-view"
-import { PublicIssueDetailSkeleton } from "@/components/public-issue-detail-skeleton"
-import { PublicSessionGate } from "@/components/public-session-gate"
-import { SimilarIssuesCard } from "@/components/similar-issues-card"
+import { Supabase } from "@/lib/server/supabase"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { IssueSuggestion, Project, PublicIssueReporter } from "@/lib/shared/types"
+import { getPublicSessionService } from "@/modules/public"
+import { PublicIssueView } from "@/components/public/public-issue-view"
+import { PublicIssueDetailSkeleton } from "@/components/public/public-issue-detail-skeleton"
+import { PublicSessionGate } from "@/components/public/public-session-gate"
+import { SimilarIssuesCard } from "@/components/issues/similar-issues-card"
 
 export const dynamic = "force-dynamic"
 
@@ -32,13 +34,14 @@ async function PublicIssueDetailContent({
     params: Promise<{ token: string; id: string }>
 }) {
     const { token, id } = await params
-    const svc = createServiceClient()
+    const svc = Supabase.service()
+    const gate = getPublicSessionService(svc)
 
-    const sess = await resolvePublicSession(svc, token, { requireOpen: false })
+    const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) notFound()
 
     if (sess.session.access_mode === "invite") {
-        const access = await checkInviteAccess(sess.session)
+        const access = await gate.checkInviteAccess(sess.session)
         if (!access.ok) {
             return (
                 <PublicSessionGate
@@ -51,10 +54,10 @@ async function PublicIssueDetailContent({
         }
     }
 
-    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    const visErr = await gate.requireOwnVisibility(sess.session, id)
     if (visErr) notFound()
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
+    const found = await gate.fetchPublicIssue(id, sess.session.project_ids)
     if (found.error) notFound()
     const issue = found.issue
 
@@ -78,11 +81,9 @@ async function PublicIssueDetailContent({
         .eq("issue_id", issue.id)
         .maybeSingle<Pick<PublicIssueReporter, "reporter_id" | "reporter_name">>()
 
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,status,graph_id,last_indexed_sha")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id" | "last_indexed_sha">>()
+    const analyser = await tryOrNull(() =>
+        createSupabaseProjectAnalyserRepository(svc).findByProjectId(issue.project_id),
+    )
     const analyserReady =
         !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
 

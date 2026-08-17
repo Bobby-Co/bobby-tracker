@@ -2,14 +2,17 @@
 
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import { NewIssueButton } from "@/components/new-issue-button"
-import { AiComposeButton } from "@/components/ai-compose-button"
-import { IssueList, type ParentRow } from "@/components/issue-list"
-import { IssueTile } from "@/components/issue-tile"
-import { IssueFolderTile } from "@/components/issue-folder-tile"
-import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
-import type { Issue, ProjectAnalyser } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { NewIssueButton } from "@/components/issues/new-issue-button"
+import { AiComposeButton } from "@/components/issues/ai-compose-button"
+import { IssueList, type ParentRow } from "@/components/issues/issue-list"
+import { IssueTile } from "@/components/issues/issue-tile"
+import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
+import { IssuesViewToggle, type IssuesView } from "@/components/issues/issues-view-toggle"
+import { SegBar } from "@/components/ui/field-card"
+import type { Issue, ProjectAnalyser } from "@/lib/shared/types"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
+import { Issue as IssueEntity } from "@/modules/issues"
 
 export default function IssuesPage() {
     const { id } = useParams<{ id: string }>()
@@ -52,7 +55,7 @@ export default function IssuesPage() {
     // bucket the parent ends up in. "Duplicated" parents shouldn't
     // exist (chain-prevention in the API), so we don't need to
     // bucket them as a separate state.
-    const isClosed = (s: Issue["status"]) => s === "done" || s === "archived" || s === "duplicated"
+    const isClosed = (s: Issue["status"]) => IssueEntity.of({ status: s }).isClosed()
     const open = parentsAll.filter(({ parent }) => !isClosed(parent.status))
     const closed = parentsAll.filter(({ parent }) => isClosed(parent.status))
 
@@ -61,8 +64,7 @@ export default function IssuesPage() {
     // completes, "issues" without graph context aren't useful — the
     // suggestion / ask flows can't cite anything. Block creation;
     // direct the user to the Knowledge tab.
-    const ready =
-        !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id
+    const ready = ProjectAnalyserModel.from(analyser).isReady()
 
     if (loading) {
         return (
@@ -104,19 +106,31 @@ export default function IssuesPage() {
                 <KnowledgeRequiredBanner projectId={id} state={analyser ?? null} />
             )}
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-[12px] text-[color:var(--c-text-muted)]">
-                    <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
-                    <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
-                    {childrenByParent.size > 0 && (
-                        <>
-                            {" · "}
-                            <span className="font-semibold text-[color:var(--c-text)]">
-                                {Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0)}
-                            </span>{" "}
-                            duplicate{Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0) === 1 ? "" : "s"}
-                        </>
-                    )}
-                </p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {/* Completion glance (reference: "12 / 32" + segmented ticks).
+                        "Closed" counts done/archived/duplicated parents. */}
+                    <div className="flex items-center gap-2.5">
+                        <span className="text-[17px] font-extrabold tabular-nums tracking-[-0.01em]">
+                            {closed.length}
+                            <span className="text-[color:var(--c-text-dim)]"> / {open.length + closed.length}</span>
+                        </span>
+                        <SegBar value={closed.length} total={Math.max(open.length + closed.length, 1)} max={14} />
+                    </div>
+                    <span className="hidden h-4 w-px bg-[color:var(--c-border)] sm:block" />
+                    <p className="text-[12px] text-[color:var(--c-text-muted)]">
+                        <span className="font-semibold text-[color:var(--c-text)]">{open.length}</span> open ·{" "}
+                        <span className="font-semibold text-[color:var(--c-text)]">{closed.length}</span> closed
+                        {childrenByParent.size > 0 && (
+                            <>
+                                {" · "}
+                                <span className="font-semibold text-[color:var(--c-text)]">
+                                    {Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0)}
+                                </span>{" "}
+                                duplicate{Array.from(childrenByParent.values()).reduce((n, a) => n + a.length, 0) === 1 ? "" : "s"}
+                            </>
+                        )}
+                    </p>
+                </div>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} projectId={id} />
                     <AiComposeButton
@@ -160,9 +174,9 @@ function KnowledgeRequiredBanner({
 }) {
     const status = state?.status ?? "disabled"
     let message = "Enable the analyser and run the first index before creating issues."
-    if (status === "indexing") {
+    if (ProjectAnalyserModel.of({ status }).isIndexing()) {
         message = "Indexing is in progress — issues will unlock when the first graph is ready."
-    } else if (status === "failed") {
+    } else if (ProjectAnalyserModel.of({ status }).hasFailed()) {
         message = "The last indexing run failed. Re-index from the Knowledge tab to unlock issues."
     } else if (state?.enabled && !state?.graph_id) {
         message = "Run the first index on the Knowledge tab before creating issues."

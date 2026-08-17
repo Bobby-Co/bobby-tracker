@@ -2,10 +2,10 @@
 
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { useAuth } from "@/lib/auth/auth-context"
-import { isAllowed } from "@/lib/auth/access"
-import { AuthShell } from "@/components/auth-shell"
+import { createClient } from "@/lib/client/supabase"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
+import { AuthShell } from "@/components/layout/auth-shell"
 
 const ROLES = [
     "Engineer",
@@ -73,12 +73,12 @@ function OnboardingInner() {
             router.replace(`/login?next=${encodeURIComponent("/onboarding")}`)
             return
         }
-        // Not on the beta whitelist → coming-soon page, not onboarding.
-        if (!isAllowed(user)) {
-            router.replace("/waitlist")
-            return
+        // Everyone onboards — even users who aren't on the beta whitelist yet.
+        // Already-onboarded users skip straight through: to the app if they're
+        // allowed, otherwise to the coming-soon waitlist.
+        if (user.user_metadata?.onboarded) {
+            router.replace(new BetaAccess().isAllowed(user) ? next : "/waitlist")
         }
-        if (user.user_metadata?.onboarded) router.replace(next)
     }, [loading, user, next, router])
 
     // Animate the panel height to the active step so the card grows/shrinks
@@ -120,7 +120,9 @@ function OnboardingInner() {
             setSaving(false)
             return
         }
-        router.replace(next)
+        // Onboarded — hand off to where they were headed if they're on the
+        // whitelist, otherwise to the coming-soon waitlist.
+        router.replace(new BetaAccess().isAllowed(user) ? next : "/waitlist")
     }
 
     // Resolving the session or mid-redirect — keep the shell, swap a skeleton

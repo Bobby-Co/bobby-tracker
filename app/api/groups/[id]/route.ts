@@ -1,63 +1,37 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import type { CollectionPatch } from "@/modules/teams"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
-    const { data, error: dbErr } = await supabase
-        .from("project_groups")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle<ProjectGroup>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    if (!data) return jsonError("not_found", "group not found", 404)
+    const { data: group, error: dbErr } = await repoRead(() => ctx.collections.findById(id))
+    if (dbErr) return dbErr
+    if (!group) return jsonError("not_found", "group not found", 404)
 
     // Hydrate members with project name + whether the project has a
     // summary embedding yet (drives the routing UI's "needs index"
     // hint per row).
-    const { data: links } = await supabase
-        .from("project_group_members")
-        .select("project_id,projects(id,name,project_analyser(summary_overview_embedding))")
-        .eq("group_id", id)
-    type Link = {
-        project_id: string
-        projects: unknown
-    }
-    const members: { id: string; name: string; has_summary: boolean }[] = []
-    for (const r of (links as Link[] | null) ?? []) {
-        const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
-        if (!proj || typeof proj !== "object") continue
-        const p = proj as { id: string; name: string; project_analyser?: unknown }
-        const analyser = Array.isArray(p.project_analyser) ? p.project_analyser[0] : p.project_analyser
-        const a = (analyser && typeof analyser === "object")
-            ? analyser as { summary_overview_embedding?: unknown }
-            : null
-        const hasSummary = !!a && a.summary_overview_embedding != null
-        members.push({ id: p.id, name: p.name, has_summary: hasSummary })
-    }
-    members.sort((a, b) => a.name.localeCompare(b.name))
+    const members = (await ctx.collections.listMembers(id))
+        .map((m) => ({ id: m.id, name: m.name, has_summary: m.has_summary }))
+        .sort((a, b) => a.name.localeCompare(b.name))
 
     // Full project list (id+name, alphabetical) for the settings
     // panel's "add member" picker.
-    const { data: projects } = await supabase
-        .from("projects")
-        .select("id,name")
-        .order("name", { ascending: true })
-    const allProjects = (projects ?? []).map((p) => ({ id: p.id, name: p.name }))
+    const allProjects = await ctx.projects.listAllNames()
 
-    return Response.json({ group: data, members, allProjects })
+    return Response.json({ group, members, allProjects })
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireCollectionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const patch: Record<string, unknown> = {}
+    const patch: CollectionPatch = {}
     if (typeof body.name === "string") {
         const v = body.name.trim()
         if (!v) return jsonError("bad_request", "name cannot be empty", 400)
@@ -66,21 +40,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.description === "string") patch.description = body.description.trim() || null
     if (Object.keys(patch).length === 0) return jsonError("bad_request", "no fields to update", 400)
 
-    const { data, error: dbErr } = await supabase
-        .from("project_groups")
-        .update(patch)
-        .eq("id", id)
-        .select("*")
-        .single<ProjectGroup>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.collections.update(id, patch))
+    if (dbErr) return dbErr
     return Response.json({ group: data })
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireCollectionAccess(id, { write: true })
     if (error) return error
-    const { error: dbErr } = await supabase.from("project_groups").delete().eq("id", id)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.collections.delete(id))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

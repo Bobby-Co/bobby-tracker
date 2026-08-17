@@ -1,5 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { IssueSuggestion } from "@/lib/supabase/types"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 
 // GET /api/issues/[id]/suggestions
 //
@@ -7,16 +6,11 @@ import type { IssueSuggestion } from "@/lib/supabase/types"
 // issue detail panel for instant display without re-running the analyser.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
-    const { data, error: dbErr } = await supabase
-        .from("issue_suggestions")
-        .select("*")
-        .eq("issue_id", id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<IssueSuggestion>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const issues = ctx.issues
+    const { data, error: dbErr } = await repoRead(() => issues.findLatestSuggestion(id))
+    if (dbErr) return dbErr
     return Response.json({ suggestion: data })
 }

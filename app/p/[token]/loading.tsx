@@ -1,4 +1,4 @@
-import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
+import { PublicSessionSkeleton } from "@/components/public/public-session-skeleton"
 
 // Route-level loading. Fires on hard navigations (initial visit,
 // reload). Soft client navigations (back from issue detail) hit the

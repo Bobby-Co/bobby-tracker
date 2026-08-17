@@ -1,4 +1,4 @@
-import { GroupIssuesSkeleton } from "@/components/group-issues-skeleton"
+import { GroupIssuesSkeleton } from "@/components/groups/group-issues-skeleton"
 
 // Route-level loading. Fires on hard navigations (initial visit,
 // reload). Soft tab switches inside the group hit the Suspense

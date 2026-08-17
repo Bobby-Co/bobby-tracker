@@ -1,7 +1,9 @@
-import { jsonError } from "@/lib/api"
-import { createServiceClient } from "@/lib/supabase/server"
-import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
-import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
+import { jsonError } from "@/lib/server/http/api"
+import { Supabase } from "@/lib/server/supabase"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { EmbeddingText } from "@/modules/issues"
+import { getPublicSessionService } from "@/modules/public"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // POST /api/public-issues/ai-compose
 //
@@ -24,6 +26,12 @@ import { requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
 // session resolution + invite-mode access before paying for any
 // upstream call so a stranger can't burn quota.
 export async function POST(request: Request) {
+    // Each call pays for upstream LLM inference — rate limit per IP to cap
+    // "denial of wallet" abuse from anyone holding a public link.
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "public-compose"))
+    if (limited) return limited
+
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
@@ -39,11 +47,12 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "Provide a paragraph or at least one image.", 400)
     }
 
-    const svc = createServiceClient()
-    const sess = await resolvePublicSession(svc, token, { requireOpen: true })
+    const svc = Supabase.service()
+    const gate = getPublicSessionService(svc)
+    const sess = await gate.resolve(token, { requireOpen: true })
     if (sess.error) return sess.error
 
-    const inviteErr = await requireInviteAccess(sess.session)
+    const inviteErr = await gate.requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
 
     const isGroupBacked = !!sess.session.group_id
@@ -55,7 +64,7 @@ export async function POST(request: Request) {
             return jsonError("bad_request", "this project isn't part of the session", 400)
         }
         try {
-            const proposal = await composeIssue({ paragraph, images })
+            const proposal = await getAnalyser().compose({ paragraph, images })
             return Response.json({ proposal, ranking: null })
         } catch (e) {
             if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
@@ -73,16 +82,16 @@ export async function POST(request: Request) {
 
     let proposal
     try {
-        proposal = await composeIssue({ paragraph, images })
+        proposal = await getAnalyser().compose({ paragraph, images })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
     }
 
-    const routingQuery = routingEmbeddingText(proposal)
+    const routingQuery = new EmbeddingText().forRouting(proposal)
     let queryVec: number[]
     try {
-        const embed = await embedText(routingQuery)
+        const embed = await getAnalyser().embed(routingQuery)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

@@ -1,5 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { ProjectPublicIntegration } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // Per-project toggle for the public-submissions integration.
 // Disabling also removes the project from any sessions that cover it,
@@ -8,13 +7,9 @@ import type { ProjectPublicIntegration } from "@/lib/supabase/types"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
-    const { data } = await supabase
-        .from("project_public_integration")
-        .select("*")
-        .eq("project_id", id)
-        .maybeSingle<ProjectPublicIntegration>()
+    const data = await ctx.publicIntegration.findIntegration(id)
     return Response.json({
         integration: data ?? { project_id: id, enabled: false, created_at: null, updated_at: null },
     })
@@ -22,7 +17,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
@@ -30,22 +25,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.enabled !== "boolean") return jsonError("bad_request", "enabled (boolean) required", 400)
     const enabled = body.enabled
 
-    const { data, error: dbErr } = await supabase
-        .from("project_public_integration")
-        .upsert({ project_id: id, enabled }, { onConflict: "project_id" })
-        .select("*")
-        .single<ProjectPublicIntegration>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.publicIntegration.setIntegration(id, enabled))
+    if (dbErr) return dbErr
 
     if (!enabled) {
         // Drop the project from any sessions covering it. Submissions
         // through the link will then 400 because the project_id is no
         // longer in the session's coverage list.
-        const { error: unlinkErr } = await supabase
-            .from("public_session_projects")
-            .delete()
-            .eq("project_id", id)
-        if (unlinkErr) return jsonError("db_error", unlinkErr.message, 500)
+        const { error: unlinkErr } = await repoRead(() => ctx.sessionsAdmin.removeProjectFromAllSessions(id))
+        if (unlinkErr) return unlinkErr
     }
 
     return Response.json({ integration: data })

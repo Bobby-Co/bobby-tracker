@@ -2,7 +2,7 @@
 
 import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { RelayPairApprove } from "@/components/relay-pair-approve"
+import { RelayPairApprove } from "@/components/relay/relay-pair-approve"
 
 // The page the Bobby Relay app opens (pairUrl = /link?code=XXXX). It
 // lives under (app) so the layout's auth gate sends a logged-out user

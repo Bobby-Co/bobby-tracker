@@ -1,6 +1,5 @@
-import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, composeIssue } from "@/lib/analyser"
-import type { Project } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
 
 // POST /api/issues/ai-compose
 //
@@ -16,7 +15,7 @@ import type { Project } from "@/lib/supabase/types"
 // The tracker just enforces project ownership and forwards the
 // already-compressed images.
 export async function POST(request: Request) {
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -34,15 +33,15 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "Provide a paragraph or at least one image.", 400)
     }
 
-    const { data: project } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("id", project_id)
-        .maybeSingle<Pick<Project, "id">>()
-    if (!project) return jsonError("not_found", "project not found", 404)
+    // Existence + visibility check (RLS-scoped): findName returns null when the
+    // project is absent or not visible to the caller.
+    const projects = ctx.projects
+    const { data: projectName, error: pErr } = await repoRead(() => projects.findName(project_id))
+    if (pErr) return pErr
+    if (!projectName) return jsonError("not_found", "project not found", 404)
 
     try {
-        const proposal = await composeIssue({ paragraph, images })
+        const proposal = await getAnalyser().compose({ paragraph, images })
         return Response.json({ proposal })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

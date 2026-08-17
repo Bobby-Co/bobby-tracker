@@ -1,5 +1,5 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { Issue } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { type IssuePatch } from "@/modules/issues"
 
 // PATCH /api/issues/[id]/schedule — update timeline placement.
 // Accepts any subset of { starts_at, ends_at, lane_y, color }. Pass
@@ -8,13 +8,13 @@ import type { Issue } from "@/lib/supabase/types"
 // ends_at >= starts_at and 0 <= lane_y <= 1.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const patch: Record<string, unknown> = {}
+    const patch: IssuePatch = {}
 
     if ("starts_at" in body) {
         const v = body.starts_at
@@ -43,12 +43,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (Object.keys(patch).length === 0) return jsonError("bad_request", "no valid fields", 400)
 
-    const { data, error: dbErr } = await supabase
-        .from("issues")
-        .update(patch)
-        .eq("id", id)
-        .select("*")
-        .single<Issue>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const issues = ctx.issues
+    const { data, error: dbErr } = await repoRead(() => issues.update(id, patch))
+    if (dbErr) return dbErr
     return Response.json({ issue: data })
 }

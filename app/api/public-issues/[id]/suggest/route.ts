@@ -1,9 +1,11 @@
-import { analyseIssue, AnalyserError } from "@/lib/analyser"
-import { jsonError } from "@/lib/api"
-import { publicIssueSuggestionChannel } from "@/lib/realtime-channels"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, ProjectAnalyser } from "@/lib/supabase/types"
-import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
+import { AnalyserError, createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/shared/kernel"
+import { jsonError } from "@/lib/server/http/api"
+import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
+import { Supabase } from "@/lib/server/supabase"
+import type { IssueSuggestion } from "@/lib/shared/types"
+import { getPublicSessionService } from "@/modules/public"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // POST /api/public-issues/[id]/suggest
 //
@@ -15,31 +17,33 @@ import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePub
 // `needs_indexing` if the project's graph isn't ready — the public
 // detail page renders that as a "still preparing" state.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    // Triggers analyser inference — rate limit per IP to cap LLM spend.
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "public-suggest"))
+    if (limited) return limited
+
     const { id } = await params
 
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch { /* allow empty */ }
     const token = String(body?.token ?? "").trim()
 
-    const svc = createServiceClient()
-    const sess = await resolvePublicSession(svc, token, { requireOpen: false })
+    const svc = Supabase.service()
+    const gate = getPublicSessionService(svc)
+    const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) return sess.error
 
-    const inviteErr = await requireInviteAccess(sess.session)
+    const inviteErr = await gate.requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
 
-    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    const visErr = await gate.requireOwnVisibility(sess.session, id)
     if (visErr) return visErr
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
+    const found = await gate.fetchPublicIssue(id, sess.session.project_ids)
     if (found.error) return found.error
     const issue = found.issue
 
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,status,graph_id")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id">>()
+    const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(svc).findReadiness(issue.project_id))
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",
@@ -49,7 +53,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-        const result = await analyseIssue({
+        const result = await getAnalyser().analyseIssue({
             repoId:   analyser.graph_id,
             title:    issue.title,
             body:     issue.body || "",

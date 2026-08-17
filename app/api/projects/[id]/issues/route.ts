@@ -1,5 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { Issue } from "@/lib/supabase/types"
+import { ApiContext, repoRead } from "@/lib/server/http/api"
 
 // GET /api/projects/[id]/issues — all issues for a project, newest first.
 // Mirrors the read previously done server-side by the issues page (and the
@@ -7,19 +6,12 @@ import type { Issue } from "@/lib/supabase/types"
 // client-side). Shape: { issues: Issue[] }.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
-    const { data, error: dbErr } = await supabase
-        .from("issues")
-        .select("*")
-        .eq("project_id", id)
-        .order("updated_at", { ascending: false })
-        // Safety cap — realistic projects are far under this; prevents a
-        // pathological project from shipping a huge payload (CPU on
-        // serialization + memory) in a single Worker request.
-        .limit(1000)
-        .returns<Issue[]>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ issues: data ?? [] })
+    // Safety cap (1000) — realistic projects are far under this; prevents a
+    // pathological project from shipping a huge payload in one Worker request.
+    const { data: issues, error: dbErr } = await repoRead(() => ctx.issues.listForProject(id, 1000))
+    if (dbErr) return dbErr
+    return Response.json({ issues })
 }

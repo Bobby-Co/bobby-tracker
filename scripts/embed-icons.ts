@@ -22,9 +22,9 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
-import { ICONLY_CATALOG, type IconlyTag } from "../lib/iconly-catalog"
+import { ICONLY_CATALOG, type IconlyTag } from "../lib/shared/icons/iconly-catalog"
 
-const TAGS_FILE = join(__dirname, "..", "lib", "iconly-tags.json")
+const TAGS_FILE = join(__dirname, "..", "lib", "icons", "iconly-tags.json")
 
 interface RawLabelEntry {
     description: string

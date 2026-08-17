@@ -2,9 +2,10 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { ProjectPublicIntegration, PublicSession } from "@/lib/supabase/types"
-import { PublicIntegrationPanel } from "@/components/public-integration-panel"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { ProjectPublicIntegration, PublicSession } from "@/lib/shared/types"
+import { PublicIntegrationPanel } from "@/components/public/public-integration-panel"
+import { GithubSyncPanel } from "@/components/projects/github-sync-panel"
 import IntegrationsLoading from "./loading"
 
 // Integrations tab — external-service syncs and the per-project
@@ -115,10 +116,7 @@ export default function IntegrationsPage() {
                     </>
                 )}
 
-                <div className="rounded-[16px] border border-dashed border-[color:var(--c-border)] bg-white p-5 text-[13px] text-[color:var(--c-text-muted)]">
-                    <div className="text-[14px] font-bold text-[color:var(--c-text)]">GitHub Issues sync</div>
-                    <p className="mt-1">Two-way sync of issues with the linked GitHub repo.</p>
-                </div>
+                <GithubSyncPanel projectId={id} />
             </div>
         </div>
     )

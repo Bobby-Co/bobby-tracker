@@ -2,10 +2,10 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import { useAuth } from "@/lib/auth/auth-context"
-import type { PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
-import { SessionManagePanel } from "@/components/session-manage-panel"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import type { PublicSession, PublicSessionInvite } from "@/lib/shared/types"
+import { SessionManagePanel } from "@/components/sessions/session-manage-panel"
 
 interface ProjectOption {
     id: string
@@ -31,7 +31,7 @@ export default function SessionDetailPage() {
     }>(`/api/sessions/${id}`)
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
             <Link
                 href="/sessions"
                 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--c-text-muted)] hover:text-[color:var(--c-text)]"

@@ -1,14 +1,14 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import { createServiceClient } from "@/lib/supabase/server"
-import type { Issue, PublicSession, PublicSessionAccessMode } from "@/lib/supabase/types"
-import { PublicIssueForm } from "@/components/public-issue-form"
-import { PublicProfileBadge } from "@/components/public-profile-badge"
-import { PublicSessionSubmissions } from "@/components/public-session-submissions"
-import { PublicSessionSkeleton } from "@/components/public-session-skeleton"
-import { PublicSessionGate } from "@/components/public-session-gate"
-import { checkInviteAccess, getCurrentPublicUser } from "@/lib/public-session"
-import { groupByParent, groupParentsByReporter, type PublicListedIssue } from "@/lib/public-reporter"
+import { Supabase } from "@/lib/server/supabase"
+import type { Issue, PublicSession, PublicSessionAccessMode } from "@/lib/shared/types"
+import { PublicIssueForm } from "@/components/public/public-issue-form"
+import { PublicProfileBadge } from "@/components/public/public-profile-badge"
+import { PublicSessionSubmissions } from "@/components/public/public-session-submissions"
+import { PublicSessionSkeleton } from "@/components/public/public-session-skeleton"
+import { PublicSessionGate } from "@/components/public/public-session-gate"
+import { getPublicSessionService, CurrentVisitor } from "@/modules/public"
+import { PublicReporter, type PublicListedIssue } from "@/modules/public"
 
 export const dynamic = "force-dynamic"
 
@@ -47,7 +47,7 @@ async function PublicSessionContent({
     params: Promise<{ token: string }>
 }) {
     const { token } = await params
-    const svc = createServiceClient()
+    const svc = Supabase.service()
 
     const { data: session } = await svc
         .from("public_sessions")
@@ -61,7 +61,7 @@ async function PublicSessionContent({
     // data. We still render the public heading so the visitor knows
     // which session they're being invited into.
     if (session.enabled && session.access_mode === "invite") {
-        const access = await checkInviteAccess({
+        const access = await getPublicSessionService(svc).checkInviteAccess({
             id: session.id,
             access_mode: session.access_mode as PublicSessionAccessMode,
         })
@@ -128,7 +128,7 @@ async function PublicSessionContent({
     //     the client component which filters by localStorage reporter
     //     id. Soft preference, not a security boundary.
     const restrictToOwn = session.submissions_visibility === "own"
-    const visitor = restrictToOwn ? await getCurrentPublicUser() : null
+    const visitor = restrictToOwn ? await new CurrentVisitor().current() : null
     const filteredIssueRows = restrictToOwn && visitor
         ? (issueRows ?? []).filter((r) => reporterByIssue.get(r.id)?.auth_user_id === visitor.id)
         : (issueRows ?? [])
@@ -147,8 +147,9 @@ async function PublicSessionContent({
             created_at: r.created_at,
         }
     })
-    const parentRows = groupByParent(listedIssues)
-    const reporterGroups = groupParentsByReporter(parentRows)
+    const reporter = new PublicReporter()
+    const parentRows = reporter.groupByParent(listedIssues)
+    const reporterGroups = reporter.groupParentsByReporter(parentRows)
 
     const win = session.enabled ? windowState(session) : "closed"
     const heading = session.title || session.name

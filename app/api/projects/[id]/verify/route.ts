@@ -1,6 +1,6 @@
-import { verifyGraph, AnalyserError } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { RepositoryError, tryOrNull } from "@/lib/shared/kernel"
 
 // POST /api/projects/[id]/verify
 //
@@ -13,26 +13,18 @@ import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
 // isn't ready.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch {}
     const gitToken = typeof body?.git_token === "string" && body.git_token ? body.git_token : undefined
 
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .single<Project>()
-    if (pErr || !project) return jsonError("not_found", "project not found", 404)
+    const project = await tryOrNull(() => ctx.projects.findFull(id))
+    if (!project) return jsonError("not_found", "project not found", 404)
 
-    const { data: analyser, error: aErr } = await supabase
-        .from("project_analyser")
-        .select("*")
-        .eq("project_id", id)
-        .maybeSingle<ProjectAnalyser>()
-    if (aErr) return jsonError("db_error", aErr.message, 500)
+    const { data: analyser, error: aErr } = await repoRead(() => ctx.analyser.findByProjectId(id))
+    if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
         return jsonError(
             "needs_indexing",
@@ -42,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     try {
-        const report = await verifyGraph({
+        const report = await getAnalyser().verify({
             repoUrl: project.repo_url,
             repoId: analyser.graph_id,
             // The analyser worker fetches this user's GitHub token from
@@ -59,15 +51,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         //     up the change.
         // Best-effort: a Supabase failure here doesn't fail the response
         // (the report is still returned to the client this round-trip).
-        const { error: upErr } = await supabase
-            .from("project_analyser")
-            .update({
-                last_health_report: report,
-                last_health_check_at: new Date().toISOString(),
-            })
-            .eq("project_id", id)
-        if (upErr) {
-            console.warn("verify: persist failed:", upErr.message)
+        try {
+            await ctx.analyser.saveHealthReport(id, report, new Date().toISOString())
+        } catch (e) {
+            if (!(e instanceof RepositoryError)) throw e
+            console.warn("verify: persist failed:", e.message)
         }
         return Response.json(report)
     } catch (e) {

@@ -1,11 +1,5 @@
-import {
-    AnalyserError,
-    getIssuePreferences,
-    isAnalyseEffort,
-    setIssuePreferences,
-} from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
-import type { ProjectAnalyser } from "@/lib/supabase/types"
+import { AnalyserError, getAnalyser, ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // GET/PUT /api/projects/[id]/issue-preferences
 //
@@ -18,15 +12,13 @@ import type { ProjectAnalyser } from "@/lib/supabase/types"
 // analyser knows about: GET reports an empty default, PUT returns 409.
 
 async function resolveGraphId(projectId: string) {
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(projectId)
     if (error) return { error } as const
-    const { data, error: dbErr } = await supabase
-        .from("project_analyser")
-        .select("graph_id")
-        .eq("project_id", projectId)
-        .maybeSingle<Pick<ProjectAnalyser, "graph_id">>()
-    if (dbErr) return { error: jsonError("db_error", dbErr.message, 500) } as const
-    return { graphId: data?.graph_id ?? null } as const
+    const { data, error: dbErr } = await repoRead(() =>
+        ctx.analyser.findGraphId(projectId),
+    )
+    if (dbErr) return { error: dbErr } as const
+    return { graphId: data } as const
 }
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     if (!resolved.graphId) return Response.json({ effort: "", indexed: false })
 
     try {
-        const prefs = await getIssuePreferences(resolved.graphId)
+        const prefs = await getAnalyser().getIssuePreferences(resolved.graphId)
         return Response.json({ effort: prefs.effort ?? "", indexed: true })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"
@@ -56,10 +48,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     // "" clears the default; otherwise it must be a known effort level.
     const raw = body?.effort
-    if (raw !== "" && !isAnalyseEffort(raw)) {
+    if (raw !== "" && !ProjectAnalyser.isValidEffort(raw)) {
         return jsonError("bad_request", "effort must be one of fast, medium, high, veryhigh (or \"\" to clear)", 400)
     }
-    const effort = raw as Parameters<typeof setIssuePreferences>[1]
+    const effort = raw as AnalyseEffort | ""
 
     const resolved = await resolveGraphId(id)
     if ("error" in resolved) return resolved.error
@@ -68,7 +60,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
 
     try {
-        const prefs = await setIssuePreferences(resolved.graphId, effort)
+        const prefs = await getAnalyser().setIssuePreferences(resolved.graphId, effort)
         return Response.json({ effort: prefs.effort ?? "", indexed: true })
     } catch (e) {
         const code = e instanceof AnalyserError ? e.code : "analyser_failed"

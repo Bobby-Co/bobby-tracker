@@ -1,0 +1,70 @@
+"use client"
+
+import Link from "next/link"
+import { notFound, useParams } from "next/navigation"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { PrDetail } from "@/components/pulls/pr-detail"
+import { PrMergeBar } from "@/components/pulls/pr-merge-bar"
+import { PrReview } from "@/components/pulls/pr-review"
+import { PrComments } from "@/components/pulls/pr-comments"
+import type { PrComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
+
+interface PullView {
+    pull: PullRequest | null
+    project: Pick<Project, "id" | "name" | "repo_url" | "repo_full_name"> | null
+    analysis: PullRequestAnalysis | null
+    comments: PrComment[]
+}
+
+export default function PullDetailPage() {
+    const { id, number } = useParams<{ id: string; number: string }>()
+    const { user } = useAuth()
+    const { data, loading, error, refetch } = useApi<PullView>(`/api/projects/${id}/pulls/${number}`)
+
+    const pull = data?.pull ?? null
+    if (!loading && data && !pull) notFound()
+
+    if (error) {
+        return (
+            <div className="flex flex-col gap-4 px-4">
+                <div className="rounded-[12px] border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800">{error}</div>
+            </div>
+        )
+    }
+
+    return (
+        <div className="flex flex-col gap-4 px-4">
+            <Link href={`/projects/${id}/pulls`} className="text-xs text-zinc-500 hover:underline">
+                ← Pull requests
+            </Link>
+
+            {pull ? (
+                <>
+                    <PrDetail pr={pull} reviewStatus={data?.analysis?.status ?? null} />
+                    <PrMergeBar
+                        projectId={id}
+                        pull={pull}
+                        analysis={data?.analysis ?? null}
+                        onMerged={refetch}
+                    />
+                    <div id="pr-review" className="scroll-mt-20">
+                        <PrReview analysis={data?.analysis ?? null} />
+                    </div>
+                    <PrComments
+                        comments={data?.comments ?? []}
+                        projectId={id}
+                        prNumber={pull.pr_number}
+                        currentUserId={user?.id ?? null}
+                        onChanged={refetch}
+                    />
+                </>
+            ) : (
+                <>
+                    <div className="skeleton h-40 w-full rounded-[16px]" />
+                    <div className="skeleton h-48 w-full rounded-[16px]" />
+                </>
+            )}
+        </div>
+    )
+}

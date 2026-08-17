@@ -1,0 +1,167 @@
+// Issues infrastructure — the service-role issues store. ONE class over the
+// service-role client, owning all tracker.issues + issue_suggestions +
+// issue_comments access the GitHub-sync / analysis flows need (they run in
+// webhook / fire-and-forget contexts that bypass RLS, so they can't use the
+// request-scoped IssuesRepository). Cross-module orchestrators depend on the
+// IssueSyncStore PORT and obtain an instance from createServiceIssueSyncStore(),
+// so their application layer never holds a Supabase client.
+//
+// NOTE: several columns written here (github_issue_number, github_node_id,
+// sync_source, last_synced_hash, github_synced_at, github_analysis_comment_id,
+// analysis_status) are GitHub-integration / analysis state that currently lives
+// on the issues row; a later physical split would remove the shared-table coupling.
+
+import { Supabase } from "@/lib/server/supabase"
+import type { IssueStatus } from "@/lib/shared/types"
+
+// The subset of a tracker.issues row the analysis flow reads.
+export type IssueAnalysisRow = {
+    id: string
+    project_id: string
+    issue_number: number
+    title: string
+    body: string | null
+    status: IssueStatus
+    priority: string | null
+    labels: string[] | null
+    github_issue_number: number | null
+    github_analysis_comment_id: number | null
+    analysis_status: string | null
+}
+
+const ANALYSIS_ISSUE_COLS =
+    "id,project_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status"
+
+/** GitHub-integration / analysis columns on an issue row. */
+export interface IssueSyncPatch {
+    sync_source?: string
+    last_synced_hash?: string
+    github_synced_at?: string
+    github_issue_number?: number | null
+    github_node_id?: string | null
+    github_analysis_comment_id?: number | null
+    analysis_status?: string
+}
+
+export type ImportedIssueInsert = {
+    project_id: string
+    user_id: string
+    title: string
+    body: string
+    status: string
+    github_issue_number: number
+    github_node_id: string | null
+    sync_source: string
+    last_synced_hash: string
+    github_synced_at: string
+}
+
+export type IssueSuggestionInsert = {
+    issue_id: string
+    data: unknown
+    markdown: string
+    code_cites: { file: string; line?: number }[]
+    graph_cites: string[]
+    confidence: string | null
+    cost_usd: number
+    duration_ms: number
+    graph_id: string | null
+}
+
+/** The issue-comment mirror row (tracker.issue_comments) — written by the webhook
+ *  + backfill (provenance 'github') and the authoring routes (provenance
+ *  'tracker'). Undefined fields are dropped so a sparse source never clobbers a
+ *  richer one. */
+export type IssueCommentUpsert = {
+    issue_number: number
+    github_comment_id: number
+    provenance?: "github" | "tracker"
+    author_user_id?: string | null
+    author_login?: string | null
+    author_avatar_url?: string | null
+    body?: string | null
+    html_url?: string | null
+    gh_created_at?: string | null
+    gh_updated_at?: string | null
+}
+
+/** The service-role issues store — the injectable PORT the cross-module
+ *  orchestrators (vcs' VcsAppService, the analysis flow) depend on. */
+export interface IssueSyncStore {
+    /** The analysis-flow view of an issue by id (or task id, which is the id). */
+    findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null>
+    /** GitHub issue numbers already linked in a project (import de-dupe). */
+    listLinkedGithubNumbers(projectId: string): Promise<(number | null)[]>
+    /** Patch the GitHub-integration / analysis columns on an issue row. */
+    updateSyncFields(issueId: string, patch: IssueSyncPatch): Promise<void>
+    /** Insert an issue imported from GitHub. True on success. */
+    insertImportedIssue(row: ImportedIssueInsert): Promise<boolean>
+    /** How many cached suggestions an issue has. */
+    countSuggestions(issueId: string): Promise<number>
+    /** Cache an analyser suggestion. */
+    insertSuggestion(row: IssueSuggestionInsert): Promise<void>
+    /** Upsert an issue-comment mirror row. */
+    upsertComment(projectId: string, comment: IssueCommentUpsert): Promise<void>
+    /** Delete an issue-comment mirror row. */
+    deleteComment(projectId: string, commentId: number): Promise<void>
+}
+
+/** The Supabase service-role implementation. Construct via the factory below. */
+export class ServiceIssueSyncStore implements IssueSyncStore {
+    private readonly svc = Supabase.service()
+
+    async findAnalysisRow(issueId: string): Promise<IssueAnalysisRow | null> {
+        const { data } = await this.svc
+            .from("issues")
+            .select(ANALYSIS_ISSUE_COLS)
+            .eq("id", issueId)
+            .maybeSingle<IssueAnalysisRow>()
+        return data ?? null
+    }
+
+    async listLinkedGithubNumbers(projectId: string): Promise<(number | null)[]> {
+        const { data } = await this.svc
+            .from("issues")
+            .select("github_issue_number")
+            .eq("project_id", projectId)
+            .not("github_issue_number", "is", null)
+        return ((data ?? []) as { github_issue_number: number | null }[]).map((r) => r.github_issue_number)
+    }
+
+    async updateSyncFields(issueId: string, patch: IssueSyncPatch): Promise<void> {
+        await this.svc.from("issues").update(patch).eq("id", issueId)
+    }
+
+    async insertImportedIssue(row: ImportedIssueInsert): Promise<boolean> {
+        const { error } = await this.svc.from("issues").insert(row)
+        return !error
+    }
+
+    async countSuggestions(issueId: string): Promise<number> {
+        const { count } = await this.svc
+            .from("issue_suggestions")
+            .select("id", { count: "exact", head: true })
+            .eq("issue_id", issueId)
+        return count ?? 0
+    }
+
+    async insertSuggestion(row: IssueSuggestionInsert): Promise<void> {
+        await this.svc.from("issue_suggestions").insert(row)
+    }
+
+    async upsertComment(projectId: string, comment: IssueCommentUpsert): Promise<void> {
+        await this.svc
+            .from("issue_comments")
+            .upsert({ project_id: projectId, ...comment }, { onConflict: "project_id,github_comment_id" })
+    }
+
+    async deleteComment(projectId: string, commentId: number): Promise<void> {
+        await this.svc.from("issue_comments").delete().eq("project_id", projectId).eq("github_comment_id", commentId)
+    }
+}
+
+/** Composition seam: an IssueSyncStore bound to a fresh service-role client. Call
+ *  from a composition root (fire-and-forget / webhook contexts that bypass RLS). */
+export function createServiceIssueSyncStore(): IssueSyncStore {
+    return new ServiceIssueSyncStore()
+}

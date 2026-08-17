@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { Supabase } from "@/lib/server/supabase"
 
 // Honors an optional `next` form field so callers (e.g. the
 // invite-only public page's "use a different account" button) can
@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 // they started. Falls back to /login when `next` is missing or
 // off-domain (open-redirect guard).
 export async function POST(request: Request) {
-    const supabase = await createClient()
+    const supabase = await Supabase.rls()
     await supabase.auth.signOut()
 
     let target = "/login"

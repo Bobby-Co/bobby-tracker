@@ -1,6 +1,7 @@
-import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, composeIssue, embedText, routingEmbeddingText } from "@/lib/analyser"
-import type { ProjectGroup } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
+import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
+import { EmbeddingText } from "@/modules/issues"
 
 // POST /api/groups/[id]/ai-compose
 //
@@ -23,7 +24,7 @@ import type { ProjectGroup } from "@/lib/supabase/types"
 // for the issue's layer or feature. Returns proposal + ranking[].
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -40,34 +41,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // Confirm group exists + is owned by the caller (RLS does the
     // owner-only filter; not-found means either missing or not theirs).
-    const { data: group } = await supabase
-        .from("project_groups")
-        .select("id,name")
-        .eq("id", id)
-        .maybeSingle<Pick<ProjectGroup, "id" | "name">>()
+    const group = await tryOrNull(() => ctx.collections.findSummary(id))
     if (!group) return jsonError("not_found", "group not found", 404)
 
     // Membership lookup — same shape as the detail handler so the
     // routing UI can render names + ready-state without a second
     // round-trip.
-    const { data: links } = await supabase
-        .from("project_group_members")
-        .select("project_id,projects(id,name,project_analyser(status,enabled,graph_id))")
-        .eq("group_id", id)
-    type Link = { project_id: string; projects: unknown }
-    interface MemberInfo { id: string; name: string; analyser_ready: boolean }
-    const members: MemberInfo[] = []
-    for (const r of (links as Link[] | null) ?? []) {
-        const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
-        if (!proj || typeof proj !== "object") continue
-        const p = proj as { id: string; name: string; project_analyser?: unknown }
-        const analyser = Array.isArray(p.project_analyser) ? p.project_analyser[0] : p.project_analyser
-        const a = (analyser && typeof analyser === "object")
-            ? analyser as { status?: string; enabled?: boolean; graph_id?: string | null }
-            : null
-        const ready = !!a && a.enabled === true && a.status === "ready" && !!a.graph_id
-        members.push({ id: p.id, name: p.name, analyser_ready: ready })
-    }
+    const members = (await ctx.collections.listMembers(id)).map((m) => ({
+        id: m.id,
+        name: m.name,
+        analyser_ready: ProjectAnalyser.from({ status: m.status, enabled: m.enabled, graph_id: m.graph_id }).isReady(),
+    }))
     const projectIds = members.map((m) => m.id)
     if (projectIds.length === 0) {
         return jsonError("bad_request", "this group has no projects yet", 400)
@@ -76,7 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Step 1: compose the draft.
     let proposal
     try {
-        proposal = await composeIssue({ paragraph, images })
+        proposal = await getAnalyser().compose({ paragraph, images })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
@@ -88,10 +72,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // contextualised tag pool entries. We surface the same string
     // in the response so the UI can show "this is what we matched
     // against" for debugging routing decisions.
-    const routingQuery = routingEmbeddingText(proposal)
+    const routingQuery = new EmbeddingText().forRouting(proposal)
     let queryVec: number[]
     try {
-        const embed = await embedText(routingQuery)
+        const embed = await getAnalyser().embed(routingQuery)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
@@ -100,25 +84,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // Step 3: weighted similarity. Defaults match migration 0025:
     // main 40% + layer 30% + feature 30%, additive.
-    interface RankRow {
-        project_id:  string
-        similarity:  number
-        main_sim:    number | null
-        layer_sim:   number | null
-        feature_sim: number | null
-    }
-    const { data: ranked, error: rpcErr } = await supabase
-        .rpc("find_similar_projects", {
-            p_query_embedding: queryVec,
-            p_project_ids:     projectIds,
-            p_limit:           projectIds.length,
-        })
-    if (rpcErr) return jsonError("db_error", rpcErr.message, 500)
+    const { data: ranked, error: rpcErr } = await repoRead(() =>
+        ctx.projects.findSimilarProjects(queryVec, projectIds, projectIds.length),
+    )
+    if (rpcErr) return rpcErr
 
-    const rankByProject = new Map<string, RankRow>()
-    for (const r of (ranked as RankRow[] | null) ?? []) {
-        rankByProject.set(r.project_id, r)
-    }
+    const rankByProject = new Map(ranked.map((r) => [r.project_id, r]))
     const ranking = members
         .map((m) => {
             const score = rankByProject.get(m.id)

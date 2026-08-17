@@ -1,6 +1,7 @@
-import { kickoffJob, AnalyserError } from "@/lib/analyser"
-import { jsonError, requireUser } from "@/lib/api"
-import type { AnalyserProgress, Project } from "@/lib/supabase/types"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { AnalyserProgress } from "@/lib/shared/types"
 
 // POST /api/projects/[id]/analyser/index
 //
@@ -29,50 +30,38 @@ import type { AnalyserProgress, Project } from "@/lib/supabase/types"
 //   4. Return 202
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { ctx, user, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown> = {}
     try { body = await request.json() } catch {}
     const jobType: "bootstrap" | "incremental" =
         body?.job_type === "incremental" ? "incremental" : "bootstrap"
+    // Indexing depth for a bootstrap. The setup wizard passes the user's choice
+    // (medium recommended); the manual re-index button omits it → "low" default
+    // to keep spend predictable. Ignored by the analyser on incremental jobs.
+    const effort: "low" | "medium" | "high" =
+        body?.effort === "medium" || body?.effort === "high" ? body.effort : "low"
 
-    const { data: project, error: pErr } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("id", id)
-        .single<Project>()
-    if (pErr || !project) return jsonError("not_found", "project not found", 404)
+    const project = await tryOrNull(() => ctx.projects.findFull(id))
+    if (!project) return jsonError("not_found", "project not found", 404)
 
     // Flip the UI to "Indexing…" right away. Realtime delivers this
     // to subscribers instantly; the analyser will overwrite progress
     // updates as the job runs.
     const initialPhase = jobType === "incremental" ? "Update — starting…" : "Starting…"
     const initial: AnalyserProgress = { phase: initialPhase, started_at: new Date().toISOString() }
-    const { error: upErr } = await supabase
-        .from("project_analyser")
-        .upsert(
-            {
-                project_id: id,
-                enabled: true,
-                status: "indexing",
-                last_error: null,
-                progress: initial,
-            },
-            { onConflict: "project_id" },
-        )
-    if (upErr) return jsonError("db_error", upErr.message, 500)
+    const { error: upErr } = await repoRead(() => ctx.analyser.markIndexing(id, initial))
+    if (upErr) return upErr
 
     try {
-        const result = await kickoffJob({
+        const result = await getAnalyser().startIndex({
             job_type: jobType,
             repo_url: project.repo_url,
-            // Default to "low" effort to keep token spend predictable.
-            // Effort scales grouper aggressiveness + per-cluster turn budget
-            // on the analyser side; the smart-update agent fills in detail
-            // on subsequent commits, so a sparser first-pass graph is fine.
-            // Ignored by the analyser when job_type === "incremental".
-            effort: "low",
+            // Effort scales grouper aggressiveness + per-cluster turn budget on
+            // the analyser side. From the wizard this is the user's pick; the
+            // manual re-index button leaves it "low". Ignored on incremental.
+            effort,
             // The analyser worker fetches this user's GitHub token from
             // tracker.github_tokens (keyed by user_id) to clone private
             // repos — no credential crosses the wire from here.
@@ -91,12 +80,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         const code = e instanceof AnalyserError ? e.code : "kickoff_failed"
         // Roll back the optimistic 'indexing' upsert so the UI doesn't
         // get stuck at "Starting…" if the analyser was unreachable.
-        await supabase
-            .from("project_analyser")
-            .upsert(
-                { project_id: id, enabled: true, status: "failed", last_error: message, progress: {} },
-                { onConflict: "project_id" },
-            )
+        // Best-effort: a failed rollback must not mask the real 502.
+        await ctx.analyser.markFailed(id, message).catch(() => {})
         return jsonError(code, message, 502)
     }
 }

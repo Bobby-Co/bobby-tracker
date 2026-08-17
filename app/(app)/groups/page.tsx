@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useApi } from "@/lib/hooks/use-api"
-import type { Project, ProjectGroup } from "@/lib/supabase/types"
-import { NewGroupButton } from "@/components/new-group-button"
-import { GroupsListSkeleton } from "@/components/groups-list-skeleton"
-import { MiniCard, toneFromString } from "@/components/field-card"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { Project, ProjectGroup } from "@/lib/shared/types"
+import { NewGroupButton } from "@/components/groups/new-group-button"
+import { GroupsListSkeleton } from "@/components/groups/groups-list-skeleton"
+import { MiniCard, toneFromString } from "@/components/ui/field-card"
 
 type GroupWithMembers = ProjectGroup & { member_count: number; member_names: string[] }
 
@@ -24,12 +24,12 @@ export default function GroupsPage() {
     const allProjects = (projectsQ.data?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="w-full px-5 py-6 sm:px-7 sm:py-7">
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h1 className="text-[22px] font-bold tracking-[-0.012em]">Groups</h1>
+                    <h1 className="text-[22px] font-bold tracking-[-0.012em]">Collections</h1>
                     <p className="mt-1 text-[13px] text-[color:var(--c-text-muted)]">
-                        Collections of related projects. AI compose inside a group routes the issue to the project that matches best — modules, overview, features, and stack are all weighed.
+                        Collections of related projects. AI compose inside a collection routes the issue to the project that matches best — modules, overview, features, and stack are all weighed. (Not the same as a team’s people <strong>Groups</strong>.)
                     </p>
                 </div>
                 <NewGroupButton projects={allProjects} />

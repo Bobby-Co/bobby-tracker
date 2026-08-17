@@ -1,5 +1,6 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { ProjectGroup, PublicSession, PublicSessionInvite } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { PublicSessionPatch } from "@/modules/public"
 
 function parseWindow(v: unknown): string | null | undefined {
     if (v === undefined) return undefined
@@ -12,71 +13,32 @@ function parseWindow(v: unknown): string | null | undefined {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
-    const { data, error: dbErr } = await supabase
-        .from("public_sessions")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle<PublicSession>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    if (!data) return jsonError("not_found", "session not found", 404)
+    const { data: session, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.findById(id))
+    if (dbErr) return dbErr
+    if (!session) return jsonError("not_found", "session not found", 404)
 
-    const { data: links } = await supabase
-        .from("public_session_projects")
-        .select("project_id,projects(name)")
-        .eq("session_id", id)
-    const projects = (links ?? [])
-        .map((r: { project_id: string; projects: unknown }) => {
-            const proj = Array.isArray(r.projects) ? r.projects[0] : r.projects
-            const name = (proj && typeof proj === "object" && "name" in proj) ? (proj as { name: string }).name : ""
-            return { id: r.project_id, name }
-        })
-
-    // Projects eligible to be added to a session — only those with the
-    // public submissions integration enabled.
-    const { data: enabledProjects } = await supabase
-        .from("projects")
-        .select("id,name,project_public_integration!inner(enabled)")
-        .eq("project_public_integration.enabled", true)
-        .order("name", { ascending: true })
-    const allProjects = ((enabledProjects as unknown as { id: string; name: string }[]) ?? [])
-        .map((p) => ({ id: p.id, name: p.name }))
-
-    // Whitelisted invite emails for this session.
-    const { data: invites } = await supabase
-        .from("public_session_invites")
-        .select("session_id,email,created_at")
-        .eq("session_id", id)
-        .order("created_at", { ascending: true })
-        .returns<PublicSessionInvite[]>()
-
+    const projects = await ctx.sessionsAdmin.listProjectNames(id)
+    // Projects eligible to be added — only those with the integration enabled.
+    const allProjects = await ctx.sessionsAdmin.listEligibleProjects()
+    // Whitelisted invite emails (best-effort; [] on read failure, as before).
+    const invites = (await tryOrNull(() => ctx.sessionsAdmin.listInvites(id))) ?? []
     // Eligible groups for the source picker — owner-only via RLS.
-    const { data: groups } = await supabase
-        .from("project_groups")
-        .select("id,name")
-        .order("name", { ascending: true })
-        .returns<Pick<ProjectGroup, "id" | "name">[]>()
-    const allGroups = (groups ?? []).map((g) => ({ id: g.id, name: g.name }))
+    const allGroups = await ctx.collections.listNames()
 
-    return Response.json({
-        session: data,
-        projects,
-        allProjects,
-        invites: invites ?? [],
-        allGroups,
-    })
+    return Response.json({ session, projects, allProjects, invites, allGroups })
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, user, error } = await requireUser()
+    const { ctx, user, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const patch: Record<string, unknown> = {}
+    const patch: PublicSessionPatch = {}
     if (typeof body.enabled === "boolean") patch.enabled = body.enabled
     if (body.access_mode === "link" || body.access_mode === "invite") {
         patch.access_mode = body.access_mode
@@ -93,15 +55,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     } else if (typeof body.group_id === "string" && body.group_id.length > 0) {
         // Confirm the group belongs to the caller before persisting
         // — clearer than letting the FK error bubble up.
-        const { data: group } = await supabase
-            .from("project_groups")
-            .select("id")
-            .eq("id", body.group_id)
-            .maybeSingle<{ id: string }>()
+        const gid = body.group_id
+        const group = await tryOrNull(() => ctx.collections.findSummary(gid))
         if (!group) {
             return jsonError("bad_request", "group not found or not yours", 400)
         }
-        patch.group_id = body.group_id
+        patch.group_id = gid
     }
     if (typeof body.name === "string") {
         const v = body.name.trim()
@@ -119,27 +78,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     if (Object.keys(patch).length === 0) return jsonError("bad_request", "no fields to update", 400)
 
-    const { data, error: dbErr } = await supabase
-        .from("public_sessions")
-        .update(patch)
-        .eq("id", id)
-        .select("*")
-        .single<PublicSession>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.update(id, patch))
+    if (dbErr) return dbErr
 
     // When the session flips into invite mode, ensure the owner is on
     // the whitelist so they don't lock themselves out the moment they
     // toggle. Idempotent — no-op if it's already there.
     if (patch.access_mode === "invite") {
         const ownerEmail = (user.email ?? "").trim().toLowerCase()
-        if (ownerEmail) {
-            await supabase
-                .from("public_session_invites")
-                .upsert(
-                    { session_id: id, email: ownerEmail },
-                    { onConflict: "session_id,email", ignoreDuplicates: true },
-                )
-        }
+        if (ownerEmail) await ctx.sessionsAdmin.addOwnerInvite(id, ownerEmail)
     }
 
     return Response.json({ session: data })
@@ -147,9 +94,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
-    const { error: dbErr } = await supabase.from("public_sessions").delete().eq("id", id)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.sessionsAdmin.delete(id))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

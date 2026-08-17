@@ -7,6 +7,8 @@
     "dev": "next dev",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test modules lib",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
@@ -16,11 +18,13 @@
     "@opennextjs/cloudflare": "^1.19.11",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.7",
-    "framer-motion": "^12.38.0",
+    "framer-motion": "^12.40.0",
+    "hyperellipse": "^1.0.5",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.0",
     "ws": "^8.18.0"
   },
@@ -34,7 +38,6 @@
     "eslint-config-next": "16.2.4",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "wangler": "^0.0.8",
     "wrangler": "^4.103.0"
   }
 }

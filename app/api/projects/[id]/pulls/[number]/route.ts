@@ -1,0 +1,46 @@
+import { after } from "next/server"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { getPullRequestServiceForProject } from "@/modules/vcs"
+
+// GET /api/projects/[id]/pulls/[number]
+//
+// Consolidated page-data endpoint for the PR-detail page (one Worker invocation,
+// one requireUser, one Promise.all — same shape as the issue-detail route). It
+// returns the mirrored PR, its project, Bobby's persisted review, and the synced
+// comment thread. If the PR is mirrored but has no comments yet (e.g. an older PR
+// beyond the backfill cap), it kicks a detached per-PR comment backfill so a
+// refresh fills the thread.
+export async function GET(_: Request, { params }: { params: Promise<{ id: string; number: string }> }) {
+    const { id, number } = await params
+    const prNumber = Number(number)
+    if (!Number.isInteger(prNumber)) return jsonError("bad_request", "invalid PR number", 400)
+
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
+    if (error) return error
+
+    const [pullR, projectR, analysisR, commentsR] = await Promise.all([
+        repoRead(() => ctx.pullRequests.findByNumber(id, prNumber)),
+        repoRead(() => ctx.projects.findPullContext(id)),
+        repoRead(() => ctx.pullRequests.findAnalysis(id, prNumber)),
+        repoRead(() => ctx.pullRequests.listComments(id, prNumber)),
+    ])
+
+    const readErr = pullR.error || projectR.error || analysisR.error || commentsR.error
+    if (readErr) return readErr
+
+    const comments = commentsR.data
+    // A mirrored PR with an empty thread: fill it lazily so the next load shows it.
+    if (pullR.data && comments.length === 0) {
+        after(async () => {
+            const prs = await getPullRequestServiceForProject(id)
+            await prs?.backfillPullRequestComments(id, prNumber)
+        })
+    }
+
+    return Response.json({
+        pull: pullR.data,
+        project: projectR.data,
+        analysis: analysisR.data,
+        comments,
+    })
+}

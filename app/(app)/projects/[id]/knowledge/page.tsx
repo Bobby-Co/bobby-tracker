@@ -1,12 +1,14 @@
 "use client"
 
 import { useParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import { AnalyserPanel } from "@/components/analyser-panel"
-import { AnalyserDefaultEffort } from "@/components/analyser-default-effort"
-import { VerifyPanel } from "@/components/verify-panel"
-import { KnowledgeSkeleton } from "@/components/knowledge-skeleton"
-import type { Project, ProjectAnalyser } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { AnalyserPanel } from "@/components/projects/analyser-panel"
+import { AutoUpdatePanel } from "@/components/projects/auto-update-panel"
+import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-effort"
+import { VerifyPanel } from "@/components/projects/verify-panel"
+import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
+import type { Project, ProjectAnalyser } from "@/lib/shared/types"
+import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/domain/ProjectAnalyser"
 
 // Knowledge tab — single home for everything that drives the project's
 // analyser-backed knowledge graph: indexing controls (AnalyserPanel) +
@@ -38,7 +40,7 @@ export default function KnowledgePage() {
 
     const project = data?.project ?? null
     const state = data?.analyser ?? null
-    const ready = !!state?.enabled && state.status === "ready" && !!state.graph_id
+    const ready = ProjectAnalyserModel.from(state).isReady()
 
     return (
         <div className="flex flex-col gap-4">
@@ -49,6 +51,9 @@ export default function KnowledgePage() {
                 </p>
             </header>
             <AnalyserPanel projectId={id} state={state ?? null} />
+            {/* Auto-update on push keeps the graph current on every commit. An
+                indexing setting, so it lives here with the analyser controls. */}
+            <AutoUpdatePanel projectId={id} />
             {/* Default effort lives with the analyser settings. Only meaningful
                 once the project has an indexed graph the preference keys to. */}
             {state?.graph_id && <AnalyserDefaultEffort projectId={id} />}

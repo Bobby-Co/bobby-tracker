@@ -1,6 +1,8 @@
-import { createServiceClient } from "@/lib/supabase/server"
-import type { IssueSuggestion, ProjectAnalyser, PublicIssueReporter } from "@/lib/supabase/types"
-import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
+import { Supabase } from "@/lib/server/supabase"
+import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { tryOrNull } from "@/lib/shared/kernel"
+import type { IssueSuggestion, PublicIssueReporter } from "@/lib/shared/types"
+import { getPublicSessionService } from "@/modules/public"
 
 // GET /api/public-issues/[id]?token=<session_token>
 //
@@ -16,17 +18,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const url = new URL(request.url)
     const token = (url.searchParams.get("token") || "").trim()
 
-    const svc = createServiceClient()
-    const sess = await resolvePublicSession(svc, token, { requireOpen: false })
+    const svc = Supabase.service()
+    const gate = getPublicSessionService(svc)
+    const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) return sess.error
 
-    const inviteErr = await requireInviteAccess(sess.session)
+    const inviteErr = await gate.requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
 
-    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    const visErr = await gate.requireOwnVisibility(sess.session, id)
     if (visErr) return visErr
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
+    const found = await gate.fetchPublicIssue(id, sess.session.project_ids)
     if (found.error) return found.error
     const issue = found.issue
 
@@ -44,11 +47,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         .eq("issue_id", id)
         .maybeSingle<Pick<PublicIssueReporter, "reporter_id" | "reporter_name">>()
 
-    const { data: analyser } = await svc
-        .from("project_analyser")
-        .select("enabled,status,graph_id,last_indexed_sha")
-        .eq("project_id", issue.project_id)
-        .maybeSingle<Pick<ProjectAnalyser, "enabled" | "status" | "graph_id" | "last_indexed_sha">>()
+    const analyser = await tryOrNull(() =>
+        createSupabaseProjectAnalyserRepository(svc).findByProjectId(issue.project_id),
+    )
 
     const analyserReady =
         !!analyser?.enabled && analyser.status === "ready" && !!analyser.graph_id

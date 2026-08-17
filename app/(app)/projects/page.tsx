@@ -1,17 +1,18 @@
 "use client"
 
 import Link from "next/link"
-import { useApi } from "@/lib/hooks/use-api"
-import { NewProjectButton } from "@/components/new-project-button"
-import { NewGroupButton } from "@/components/new-group-button"
-import { MiniCard, FieldTable, FieldRow, toneFromString } from "@/components/field-card"
-import { shortDate, timeAgo } from "@/components/issue-meta"
-import type { Project, ProjectGroup } from "@/lib/supabase/types"
+import { useApi } from "@/lib/client/hooks/use-api"
+import { NewProjectButton } from "@/components/projects/new-project-button"
+import { NewGroupButton } from "@/components/groups/new-group-button"
+import { ProjectOrgGrid } from "@/components/projects/project-org-grid"
+import type { ProjectGroup, ProjectWithInsight } from "@/lib/shared/types"
 
 type GroupWithCount = ProjectGroup & { member_count: number }
 
 export default function ProjectsPage() {
-    const projectsQ = useApi<{ projects: Project[] }>("/api/projects")
+    // ?stats=1 embeds each project's insight row so the tile footers render
+    // from this same round-trip — no second request, no footer shimmer.
+    const projectsQ = useApi<{ projects: ProjectWithInsight[] }>("/api/projects?stats=1")
     const groupsQ = useApi<{ groups: GroupWithCount[] }>("/api/groups")
 
     const list = projectsQ.data?.projects ?? []
@@ -21,7 +22,7 @@ export default function ProjectsPage() {
     const error = projectsQ.error || groupsQ.error
 
     return (
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+        <div className="flex w-full flex-col gap-6 px-5 py-6 sm:px-7 sm:py-7">
             <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
                 <div className="min-w-0">
                     <h1 className="h-page">Projects</h1>
@@ -29,7 +30,7 @@ export default function ProjectsPage() {
                         One project per repository. Issues, integrations, and the analyser knowledge base hang off it.
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <div className="flex flex-wrap items-center justify-end gap-2 self-start sm:self-auto">
                     <NewGroupButton projects={allProjectsForPicker} />
                     <NewProjectButton />
                 </div>
@@ -111,80 +112,12 @@ export default function ProjectsPage() {
                     </div>
                 </div>
             ) : (
-                <ul
-                    className="grid gap-3 stagger"
-                    style={{
-                        gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                        ["--stagger-step" as string]: "60ms",
-                    } as React.CSSProperties}
-                >
-                    {list.map((p, i) => (
-                        <li
-                            key={p.id}
-                            className="anim-rise"
-                            style={{ ["--i" as string]: i } as React.CSSProperties}
-                        >
-                            <Link href={`/projects/${p.id}/issues`} prefetch={false} className="block">
-                                <MiniCard
-                                    tone={toneFromString(p.name)}
-                                    icon={<RepoIcon />}
-                                    title={p.name}
-                                    footer={
-                                        <span className="ml-auto inline-flex items-center gap-1">
-                                            <ClockIcon />
-                                            {timeAgo(p.updated_at)}
-                                        </span>
-                                    }
-                                >
-                                    <FieldTable>
-                                        <FieldRow icon={<RepoMiniIcon />} label="Repo">
-                                            <span className="font-mono text-[11.5px]">
-                                                {p.repo_full_name ? p.repo_full_name : p.repo_url}
-                                            </span>
-                                        </FieldRow>
-                                        <FieldRow icon={<ClockIcon />} label="Updated">
-                                            {shortDate(p.updated_at)}
-                                        </FieldRow>
-                                    </FieldTable>
-                                    {p.description && (
-                                        <p className="line-clamp-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
-                                            {p.description}
-                                        </p>
-                                    )}
-                                </MiniCard>
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                <ProjectOrgGrid projects={list} />
             )}
         </div>
     )
 }
 
-function RepoIcon() {
-    return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M4 4h12a4 4 0 014 4v12H8a4 4 0 01-4-4V4z" />
-            <path d="M4 16a4 4 0 014-4h12" />
-        </svg>
-    )
-}
-function RepoMiniIcon() {
-    return (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M4 4h12a4 4 0 014 4v12H8a4 4 0 01-4-4V4z" />
-            <path d="M4 16a4 4 0 014-4h12" />
-        </svg>
-    )
-}
-function ClockIcon() {
-    return (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-        </svg>
-    )
-}
 function FolderIcon() {
     return (
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="text-[color:var(--c-text-dim)]">

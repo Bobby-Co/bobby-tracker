@@ -1,6 +1,6 @@
-import { createServiceClient } from "@/lib/supabase/server"
-import { fetchPublicIssue, requireInviteAccess, requireOwnVisibility, resolvePublicSession } from "@/lib/public-session"
-import type { Issue, IssueEmbedding } from "@/lib/supabase/types"
+import { Supabase } from "@/lib/server/supabase"
+import { getPublicSessionService } from "@/modules/public"
+import type { Issue, IssueEmbedding } from "@/lib/shared/types"
 
 interface SimilarRow {
     id: string
@@ -28,17 +28,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const url = new URL(request.url)
     const token = (url.searchParams.get("token") || "").trim()
 
-    const svc = createServiceClient()
-    const sess = await resolvePublicSession(svc, token, { requireOpen: false })
+    const svc = Supabase.service()
+    const gate = getPublicSessionService(svc)
+    const sess = await gate.resolve(token, { requireOpen: false })
     if (sess.error) return sess.error
 
-    const inviteErr = await requireInviteAccess(sess.session)
+    const inviteErr = await gate.requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
 
-    const visErr = await requireOwnVisibility(svc, sess.session, id)
+    const visErr = await gate.requireOwnVisibility(sess.session, id)
     if (visErr) return visErr
 
-    const found = await fetchPublicIssue(svc, id, sess.session.project_ids)
+    const found = await gate.fetchPublicIssue(id, sess.session.project_ids)
     if (found.error) return found.error
     const issue = found.issue
 

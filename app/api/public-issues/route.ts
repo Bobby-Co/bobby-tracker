@@ -1,8 +1,10 @@
-import { jsonError } from "@/lib/api"
-import { createServiceClient } from "@/lib/supabase/server"
-import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/supabase/types"
-import { PUBLIC_ISSUE_LABEL, getCurrentPublicUser, requireInviteAccess, resolvePublicSession } from "@/lib/public-session"
-import { embedIssueAsync } from "@/lib/issue-embedding"
+import { after } from "next/server"
+import { jsonError } from "@/lib/server/http/api"
+import { Supabase } from "@/lib/server/supabase"
+import { ISSUE_PRIORITIES, type Issue, type IssuePriority, type Project } from "@/lib/shared/types"
+import { PUBLIC_ISSUE_LABEL, CurrentVisitor, getPublicSessionService } from "@/modules/public"
+import { createIssueEmbedder } from "@/modules/issues"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // Anonymous issue submission. The caller proves authority with the
 // session token (no Supabase auth). We resolve the token through the
@@ -16,6 +18,12 @@ import { embedIssueAsync } from "@/lib/issue-embedding"
 // triggered separately via /api/public-issues/[id]/suggest, which the
 // public detail page auto-fires on mount.
 export async function POST(request: Request) {
+    // Anonymous write — rate limit per client IP before doing any work, to
+    // cap issue-spam and the per-submission embedding pipeline.
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("PUBLIC_RL", rl.clientKey(request, "public-submit"))
+    if (limited) return limited
+
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
@@ -25,11 +33,12 @@ export async function POST(request: Request) {
     if (!title) return jsonError("bad_request", "title required", 400)
     if (!project_id) return jsonError("bad_request", "project_id required", 400)
 
-    const svc = createServiceClient()
-    const { session, error } = await resolvePublicSession(svc, token, { requireOpen: true })
+    const svc = Supabase.service()
+    const gate = getPublicSessionService(svc)
+    const { session, error } = await gate.resolve(token, { requireOpen: true })
     if (error) return error
 
-    const inviteErr = await requireInviteAccess(session)
+    const inviteErr = await gate.requireInviteAccess(session)
     if (inviteErr) return inviteErr
 
     if (!session.project_ids.includes(project_id)) {
@@ -78,7 +87,7 @@ export async function POST(request: Request) {
     // (always true in invite mode, opportunistic in link mode). That
     // gives the 'own'-visibility filter a stable identity to match
     // against on subsequent reads, even from a different browser.
-    const authUser = await getCurrentPublicUser()
+    const authUser = await new CurrentVisitor().current()
     if (reporterId || reporter || authUser) {
         await svc
             .from("public_issue_reporters")
@@ -92,8 +101,9 @@ export async function POST(request: Request) {
     }
 
     // Index the new issue for similarity search alongside owner-filed
-    // ones — same fire-and-forget treatment as POST /api/issues.
-    void embedIssueAsync({ id: issue.id, title: issue.title, body: finalBody })
+    // ones. after() (not a bare `void`) so the Worker isn't frozen
+    // before the embed completes — see POST /api/issues for why.
+    after(() => createIssueEmbedder().embedIssue({ id: issue.id, project_id: project.id, title: issue.title, body: finalBody }))
 
     // Best-effort counter bump (fetch-then-write race is fine here — this
     // is a display-only stat, not a uniqueness constraint).

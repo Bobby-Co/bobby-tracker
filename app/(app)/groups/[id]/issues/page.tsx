@@ -2,15 +2,16 @@
 
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
-import { useApi } from "@/lib/hooks/use-api"
-import type { Issue } from "@/lib/supabase/types"
-import { IssueList, type ParentRow } from "@/components/issue-list"
-import { IssueTile } from "@/components/issue-tile"
-import { IssueFolderTile } from "@/components/issue-folder-tile"
-import { IssuesViewToggle, type IssuesView } from "@/components/issues-view-toggle"
-import { GroupAiComposeButton } from "@/components/group-ai-compose-button"
-import { GroupNewIssueButton } from "@/components/group-new-issue-button"
-import { GroupIssuesSkeleton } from "@/components/group-issues-skeleton"
+import { useApi } from "@/lib/client/hooks/use-api"
+import type { Issue } from "@/lib/shared/types"
+import { Issue as IssueEntity } from "@/modules/issues"
+import { IssueList, type ParentRow } from "@/components/issues/issue-list"
+import { IssueTile } from "@/components/issues/issue-tile"
+import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
+import { IssuesViewToggle, type IssuesView } from "@/components/issues/issues-view-toggle"
+import { GroupAiComposeButton } from "@/components/groups/group-ai-compose-button"
+import { GroupNewIssueButton } from "@/components/groups/group-new-issue-button"
+import { GroupIssuesSkeleton } from "@/components/groups/group-issues-skeleton"
 
 interface MemberInfo {
     id: string
@@ -67,8 +68,7 @@ export default function GroupIssuesPage() {
         tileClosed: Issue[]
         totalCount: number
     }
-    const isClosed = (s: Issue["status"]) =>
-        s === "done" || s === "archived" || s === "duplicated"
+    const isClosed = (s: Issue["status"]) => IssueEntity.of({ status: s }).isClosed()
     const sections: ProjectSection[] = members.map((m) => {
         const list = issuesByProject.get(m.id) ?? []
         const childrenByParent = new Map<string, Issue[]>()

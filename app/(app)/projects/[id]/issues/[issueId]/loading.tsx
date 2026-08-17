@@ -38,7 +38,7 @@ export default function Loading() {
                 </aside>
             </div>
 
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <section className="rounded-xl border border-zinc-200 bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex flex-col gap-1.5">
                         <div className="skeleton h-3.5 w-44" />

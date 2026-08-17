@@ -1,6 +1,7 @@
-import { jsonError, requireUser } from "@/lib/api"
-import { AnalyserError, embedText } from "@/lib/analyser"
-import { createServiceClient } from "@/lib/supabase/server"
+import { after } from "next/server"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { AnalyserError, getAnalyser } from "@/modules/analysis"
+import { Supabase } from "@/lib/server/supabase"
 
 // POST /api/icons/search — semantic icon lookup.
 //
@@ -20,7 +21,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 // Auth: requireUser. The catalog is global but the embedding call
 // is metered, so we don't expose it to anonymous traffic.
 export async function POST(request: Request) {
-    const { error } = await requireUser()
+    const { error } = await new ApiContext().requireUser()
     if (error) return error
 
     let body: Record<string, unknown>
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     }
 
     const limit = clampLimit(body.limit)
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const version = await getActiveVersion(svc)
 
     const q = normalizeQuery(typeof body.q === "string" ? body.q : "")
@@ -50,7 +51,9 @@ export async function POST(request: Request) {
         console.error("icon_search_cache read failed:", cacheReadErr.message)
     }
     if (cached?.hits) {
-        void bumpLru(svc, q)
+        // Post-response LRU bump. after() (not bare `void`) so the write isn't
+        // cancelled when the Workers isolate is torn down after the response.
+        after(() => bumpLru(svc, q))
         return Response.json({
             icons: cached.hits.slice(0, limit),
             cached: true,
@@ -62,7 +65,7 @@ export async function POST(request: Request) {
     let vector: number[]
     let model: string
     try {
-        const result = await embedText(q)
+        const result = await getAnalyser().embed(q)
         vector = result.vector
         model = result.model
     } catch (e) {
@@ -78,15 +81,17 @@ export async function POST(request: Request) {
 
     const hits = (ranked ?? []) as SemanticHit[]
 
-    void svc
-        .from("icon_search_cache")
-        .upsert(
-            { query: q, hits, model, version },
-            { onConflict: "query" },
-        )
-        .then(({ error }) => {
-            if (error) console.error("icon_search_cache write failed:", error.message)
-        })
+    // Post-response cache write via after() — a bare `void` promise is
+    // cancelled when the Workers isolate is torn down after the response.
+    after(async () => {
+        const { error } = await svc
+            .from("icon_search_cache")
+            .upsert(
+                { query: q, hits, model, version },
+                { onConflict: "query" },
+            )
+        if (error) console.error("icon_search_cache write failed:", error.message)
+    })
 
     return Response.json({
         icons: hits.slice(0, limit),
@@ -115,7 +120,7 @@ const VERSION_TTL_MS = 30_000
 let versionCache: { value: string; expiresAt: number } | null = null
 
 async function getActiveVersion(
-    svc: ReturnType<typeof createServiceClient>,
+    svc: ReturnType<typeof Supabase.service>,
 ): Promise<string> {
     const now = Date.now()
     if (versionCache && now < versionCache.expiresAt) {
@@ -134,7 +139,7 @@ async function getActiveVersion(
 }
 
 async function bumpLru(
-    svc: ReturnType<typeof createServiceClient>,
+    svc: ReturnType<typeof Supabase.service>,
     query: string,
 ): Promise<void> {
     const { data, error } = await svc

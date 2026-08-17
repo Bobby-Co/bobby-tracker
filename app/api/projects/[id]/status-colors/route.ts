@@ -1,27 +1,22 @@
-import { jsonError, requireUser } from "@/lib/api"
-import { ISSUE_STATUSES } from "@/lib/supabase/types"
-import type { ProjectStatusColor } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { ISSUE_STATUSES } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/status-colors — overrides only. Defaults
 // live in lib/timeline/colors.ts and are merged client-side.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
-    const { data, error: dbErr } = await supabase
-        .from("project_status_colors")
-        .select("*")
-        .eq("project_id", id)
-        .returns<ProjectStatusColor[]>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ colors: data ?? [] })
+    const { data: colors, error: dbErr } = await repoRead(() => ctx.projectDisplay.listStatusColors(id))
+    if (dbErr) return dbErr
+    return Response.json({ colors })
 }
 
 // PUT /api/projects/[id]/status-colors — upsert one status entry.
 // Body: { status, color }.
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
@@ -34,11 +29,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!/^#[0-9a-fA-F]{6}$/.test(color))
         return jsonError("bad_request", "color must be #rrggbb", 400)
 
-    const { data, error: dbErr } = await supabase
-        .from("project_status_colors")
-        .upsert({ project_id: id, status, color }, { onConflict: "project_id,status" })
-        .select("*")
-        .single<ProjectStatusColor>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.projectDisplay.upsertStatusColor(id, status, color))
+    if (dbErr) return dbErr
     return Response.json({ color: data })
 }

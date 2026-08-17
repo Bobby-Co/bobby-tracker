@@ -1,0 +1,45 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { cn } from "@/components/ui/cn"
+
+export function ProjectTabs({ projectId }: { projectId: string }) {
+    const pathname = usePathname()
+    const tabs = [
+        { href: `/projects/${projectId}/issues`, label: "Issues" },
+        { href: `/projects/${projectId}/pulls`, label: "Pull requests" },
+        { href: `/projects/${projectId}/mind`, label: "Mind" },
+        { href: `/projects/${projectId}/knowledge`, label: "Knowledge" },
+        { href: `/projects/${projectId}/integrations`, label: "Integrations" },
+        { href: `/projects/${projectId}/settings`, label: "Settings" },
+    ]
+    return (
+        <div className="mt-4 flex gap-1">
+            {tabs.map((t) => {
+                const active = pathname === t.href || pathname.startsWith(t.href + "/")
+                return (
+                    <Link
+                        key={t.href}
+                        href={t.href}
+                        // No eager prefetch: these pages fetch their own data
+                        // client-side, so prefetching only buys the RSC shell
+                        // while spinning up an extra Worker invocation (cold
+                        // isolate) per tab on every project page. That fan-out
+                        // is what amplifies the cold-start CPU storm.
+                        prefetch={false}
+                        className={cn(
+                            "relative px-3 py-2 text-[13px] font-semibold transition-colors",
+                            active
+                                ? "text-zinc-900"
+                                : "text-zinc-500 hover:text-zinc-900",
+                        )}
+                    >
+                        {t.label}
+                        {active && <span className="absolute inset-x-0 -bottom-px h-[2px] rounded-full bg-[color:var(--c-primary)]" />}
+                    </Link>
+                )
+            })}
+        </div>
+    )
+}

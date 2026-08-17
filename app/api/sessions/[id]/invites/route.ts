@@ -1,5 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
-import type { PublicSessionInvite } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // GET — list whitelisted emails for a session.
 // POST — add one or more emails. Owner-only via RLS on the table.
@@ -22,22 +21,17 @@ function normalizeEmail(raw: unknown): string | null {
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireUser()
     if (error) return error
 
-    const { data, error: dbErr } = await supabase
-        .from("public_session_invites")
-        .select("session_id,email,created_at")
-        .eq("session_id", id)
-        .order("created_at", { ascending: true })
-        .returns<PublicSessionInvite[]>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ invites: data ?? [] })
+    const { data: invites, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.listInvites(id))
+    if (dbErr) return dbErr
+    return Response.json({ invites })
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
 
     let body: Record<string, unknown>
@@ -52,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const seen = new Set<string>()
     const invalid: string[] = []
-    const rows: { session_id: string; email: string }[] = []
+    const emails: string[] = []
     for (const r of raw) {
         const e = normalizeEmail(r)
         if (!e) {
@@ -61,9 +55,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         }
         if (seen.has(e)) continue
         seen.add(e)
-        rows.push({ session_id: id, email: e })
+        emails.push(e)
     }
-    if (rows.length === 0) {
+    if (emails.length === 0) {
         return jsonError(
             "bad_request",
             invalid.length
@@ -75,16 +69,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     // upsert so re-pasting an existing email is a no-op rather than a
     // 409. ignoreDuplicates skips the conflicting rows entirely.
-    const { error: dbErr, data } = await supabase
-        .from("public_session_invites")
-        .upsert(rows, { onConflict: "session_id,email", ignoreDuplicates: true })
-        .select("session_id,email,created_at")
-        .returns<PublicSessionInvite[]>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.sessionsAdmin.addInvites(id, emails))
+    if (dbErr) return dbErr
 
     return Response.json({
-        added: data ?? [],
-        added_count: rows.length,
+        added: data,
+        added_count: emails.length,
         invalid,
     })
 }

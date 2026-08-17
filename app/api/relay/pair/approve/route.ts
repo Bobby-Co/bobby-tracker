@@ -1,23 +1,36 @@
-import { jsonError, requireUser } from "@/lib/api"
-import { createServiceClient } from "@/lib/supabase/server"
-import { genToken, normalizeUserCode } from "@/lib/relay"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
+import { Supabase } from "@/lib/server/supabase"
+import { PairingCodes } from "@/modules/relay"
+import { RateLimiter } from "@/lib/server/RateLimiter"
 
 // AUTH. The signed-in user approves a pending pairing by user_code (read
 // off the relay window). We mint the worker (with its opaque token), then
 // flip the pairing to approved so the relay's next poll collects the token.
+//
+// SECURITY NOTE — the model is deliberate: the pairing row has no owner until
+// approval, so we look it up by user_code through the service role and bind it
+// to whoever approves. The user_code is the secret here (~50 bits, 10-min
+// expiry, single-use). The per-IP rate limit below is the online brute-force
+// cap; treat the displayed code as sensitive (don't log/screen-share it).
 export async function POST(request: Request) {
-    const { user, error } = await requireUser()
+    const { user, error } = await new ApiContext().requireUser()
     if (error) return error
+
+    // Attempt cap: limit guesses of user_code per client IP.
+    const rl = new RateLimiter()
+    const limited = await rl.enforce("RELAY_RL", rl.clientKey(request, "relay-approve"))
+    if (limited) return limited
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
 
-    const userCode = normalizeUserCode(String(body?.userCode ?? ""))
+    const codes = new PairingCodes()
+    const userCode = codes.normalize(String(body?.userCode ?? ""))
     if (!userCode) return jsonError("bad_request", "userCode required", 400)
 
     // The relay has no session, so the pairing row isn't owned by anyone
     // yet — look it up through the service role.
-    const svc = createServiceClient()
+    const svc = Supabase.service()
     const { data: pairing, error: pErr } = await svc
         .from("relay_pairings")
         .select("*")
@@ -32,7 +45,7 @@ export async function POST(request: Request) {
 
     const { data: worker, error: wErr } = await svc
         .from("relay_workers")
-        .insert({ user_id: user.id, name, token: genToken() })
+        .insert({ user_id: user.id, name, token: codes.token() })
         .select("id")
         .single()
     if (wErr) return jsonError("db_error", wErr.message, 500)

@@ -1,7 +1,6 @@
-import { jsonError, requireUser } from "@/lib/api"
-import { findIcon } from "@/lib/iconly"
-import { ICONLY_NAMES } from "@/lib/iconly-catalog"
-import type { ProjectLabelIcon } from "@/lib/supabase/types"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { findIcon } from "@/lib/shared/icons/iconly"
+import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
 
 function isKnownIconName(name: string): boolean {
     return ICONLY_NAMES.has(name) || !!findIcon(name)
@@ -10,15 +9,11 @@ function isKnownIconName(name: string): boolean {
 // GET /api/projects/[id]/label-icons — full map for this project.
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
-    const { data, error: dbErr } = await supabase
-        .from("project_label_icons")
-        .select("*")
-        .eq("project_id", id)
-        .returns<ProjectLabelIcon[]>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
-    return Response.json({ icons: data ?? [] })
+    const { data: icons, error: dbErr } = await repoRead(() => ctx.projectDisplay.listLabelIcons(id))
+    if (dbErr) return dbErr
+    return Response.json({ icons })
 }
 
 // PUT /api/projects/[id]/label-icons — upsert one mapping. Body:
@@ -27,7 +22,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 // the renderer can't draw.
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
 
     let body: Record<string, unknown>
@@ -45,28 +40,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         else return jsonError("bad_request", "color must be #rrggbb or null", 400)
     }
 
-    const { data, error: dbErr } = await supabase
-        .from("project_label_icons")
-        .upsert({ project_id: id, label, icon_name, color }, { onConflict: "project_id,label" })
-        .select("*")
-        .single<ProjectLabelIcon>()
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { data, error: dbErr } = await repoRead(() => ctx.projectDisplay.upsertLabelIcon(id, label, icon_name, color))
+    if (dbErr) return dbErr
     return Response.json({ icon: data })
 }
 
 // DELETE /api/projects/[id]/label-icons?label=foo — drop one mapping.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { supabase, error } = await requireUser()
+    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
     const url = new URL(request.url)
     const label = url.searchParams.get("label")?.trim()
     if (!label) return jsonError("bad_request", "label required", 400)
-    const { error: dbErr } = await supabase
-        .from("project_label_icons")
-        .delete()
-        .eq("project_id", id)
-        .eq("label", label)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.projectDisplay.deleteLabelIcon(id, label))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

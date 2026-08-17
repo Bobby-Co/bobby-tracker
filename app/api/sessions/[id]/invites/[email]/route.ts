@@ -1,4 +1,4 @@
-import { jsonError, requireUser } from "@/lib/api"
+import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 
 // DELETE /api/sessions/[id]/invites/[email] — remove a whitelisted
 // email. The email path segment is URL-encoded by the caller; we
@@ -10,7 +10,7 @@ import { jsonError, requireUser } from "@/lib/api"
 // boundary on its own.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string; email: string }> }) {
     const { id, email: rawEmail } = await params
-    const { supabase, user, error } = await requireUser()
+    const { ctx, user, error } = await new ApiContext().requireSessionAccess(id, { write: true })
     if (error) return error
 
     const email = decodeURIComponent(rawEmail).trim().toLowerCase()
@@ -25,11 +25,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         )
     }
 
-    const { error: dbErr } = await supabase
-        .from("public_session_invites")
-        .delete()
-        .eq("session_id", id)
-        .eq("email", email)
-    if (dbErr) return jsonError("db_error", dbErr.message, 500)
+    const { error: dbErr } = await repoRead(() => ctx.sessionsAdmin.removeInvite(id, email))
+    if (dbErr) return dbErr
     return new Response(null, { status: 204 })
 }

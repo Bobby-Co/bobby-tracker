@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import { Nunito } from "next/font/google"
 import "./globals.css"
-import { AuthProvider } from "@/lib/auth/auth-context"
+import { AuthProvider } from "@/lib/client/auth/auth-context"
+import {HyperellipseSetup} from "@/components/layout/hyperellipse-setup";
 
 const nunito = Nunito({
     variable: "--font-nunito",
@@ -18,7 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en" className={`${nunito.variable} h-full antialiased`}>
             <body className="min-h-full font-sans">
-                <AuthProvider>{children}</AuthProvider>
+            <HyperellipseSetup/>
+            <AuthProvider>{children}</AuthProvider>
             </body>
         </html>
     )

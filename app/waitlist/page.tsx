@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
-import { useAuth } from "@/lib/auth/auth-context"
-import { isAllowed } from "@/lib/auth/access"
-import { BrandLockup } from "@/components/auth-shell"
-import PixelScatter from "@/components/pixel-scatter"
+import { createClient } from "@/lib/client/supabase"
+import { useAuth } from "@/lib/client/auth/auth-context"
+import { BetaAccess } from "@/lib/shared/BetaAccess"
+import { BrandLockup } from "@/components/layout/brand-lockup"
+import PixelScatter from "@/components/ui/pixel-scatter"
 
 // Warm tones that read on the cream background (no white — it'd vanish).
 const PARTICLE_COLORS = ["#facc15", "#f59e0b", "#ea580c", "#dc2626", "#b45309"]
@@ -20,7 +20,7 @@ const rand = (seed: number) => {
 
 export default function WaitlistPage() {
     const router = useRouter()
-    const { user, loading } = useAuth()
+    const { user, loading, signOut } = useAuth()
     const supabase = useMemo(() => createClient(), [])
     const [status, setStatus] = useState<"idle" | "joining" | "joined">("idle")
     const [error, setError] = useState<string | null>(null)
@@ -33,7 +33,7 @@ export default function WaitlistPage() {
             router.replace("/login?next=/waitlist")
             return
         }
-        if (isAllowed(user)) router.replace("/projects")
+        if (new BetaAccess().isAllowed(user)) router.replace("/projects")
     }, [loading, user, router])
 
     // Returning visitors who already raised their hand see the joined state;
@@ -76,9 +76,16 @@ export default function WaitlistPage() {
         setStatus("joined")
     }
 
+    // Let a waitlisted user leave / switch accounts. signOut clears the
+    // session; the gate effect above then routes the now-anonymous visitor
+    // to /login (avoids racing two redirects).
+    async function handleSignOut() {
+        await signOut()
+    }
+
     // Resolving the session or mid-redirect (whitelisted users bounce to the
     // app) — hold a warm brand splash so nothing flashes.
-    if (loading || !user || isAllowed(user)) {
+    if (loading || !user || new BetaAccess().isAllowed(user)) {
         return (
             <main className="relative grid min-h-screen place-items-center overflow-hidden bg-white">
                 <div className="opacity-60">
@@ -92,17 +99,28 @@ export default function WaitlistPage() {
         <main className="relative grid min-h-screen place-items-center overflow-hidden bg-white px-6">
             <style>{WAITLIST_CSS}</style>
 
-            {/* Full-page pixel field — same cell size + palette as the landing,
-                a scattered subset of cells filled with vivid ember + twinkling. */}
-            <PixelScatter cell={48} fill={0.24} />
-            {/*<div className="fixed top-0 left-0 w-full min-h-screen backdrop-blur-[2px]"/>*/}
-            <div className="anim-rise relative z-10 rounded-full py-32 px-32 backdrop-blur-[2px] flex flex-col justify-center items-center text-center">
+            {/* Pixelated corner gradient — same cell size + palette as the
+                landing, glowing from the corners and fading to white centre. */}
+            <PixelScatter cell={48} fill={0.4} />
+
+            {/* Sign out — lets a waitlisted user leave or switch accounts. */}
+            <button
+                onClick={handleSignOut}
+                className="absolute right-5 top-5 z-20 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-amber-900/70 transition-colors hover:bg-amber-900/5 hover:text-amber-900"
+            >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <path d="M16 17l5-5-5-5M21 12H9" />
+                </svg>
+                Sign out
+            </button>
+            <div className="anim-rise relative z-10 flex flex-col items-center justify-center rounded-[40px] text-center px-4 sm:px-16 sm:py-24 lg:rounded-full lg:px-32 lg:py-32">
                 <div className="flex justify-center">
-                    <BrandLockup />
+                    <BrandLockup tone={"dark"} />
                 </div>
 
 
-                <h1 className="mt-6 text-[44px] font-extrabold leading-[1.05] tracking-[-0.035em] text-red-950 sm:text-[56px]">
+                <h1 className="mt-6 text-[34px] font-extrabold leading-[1.05] tracking-[-0.035em] text-red-950 sm:text-[48px] lg:text-[56px]">
                     Something great
                     <br />
                     is brewing.
@@ -110,7 +128,7 @@ export default function WaitlistPage() {
 
                 <p className="mt-5 max-w-md text-[15px] leading-7 text-amber-950">
                     Thank you for your interest in Ucelot. We&apos;re putting the final polish on the
-                    the product. See you very soon.
+                    product. See you very soon.
                 </p>
 
                 {/* CTA / success */}
@@ -140,7 +158,7 @@ export default function WaitlistPage() {
                     )}
 
                     {!joined ? (
-                        <button onClick={join} disabled={status === "joining"} className="wl-cta">
+                        <button onClick={join} disabled={status === "joining"} className="wl-cta rounded-sq-3xl transition-transform">
                             {status === "joining" ? (
                                 <span className="wl-spinner" aria-label="Joining" />
                             ) : (
@@ -160,7 +178,7 @@ export default function WaitlistPage() {
                         </button>
                     ) : (
                         <div className="wl-joined relative z-10 flex flex-col items-center">
-                            <div className="wl-check-badge">
+                            <div className="wl-check-badge rounded-sq-3xl">
                                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden>
                                     <path
                                         className="wl-check"
@@ -174,9 +192,6 @@ export default function WaitlistPage() {
                             </div>
                             <p className="mt-4 text-[18px] font-bold tracking-[-0.01em] text-red-950">
                                 You&apos;re on the list!
-                            </p>
-                            <p className="mt-1.5 text-[13.5px] text-amber-950/70">
-                                We&apos;ll email you the moment your spot opens.
                             </p>
                         </div>
                     )}
@@ -201,10 +216,10 @@ export default function WaitlistPage() {
 const WAITLIST_CSS = `
 .wl-cta {
     display: inline-flex; align-items: center; gap: 8px;
-    border-radius: 9999px; padding: 14px 28px;
+    padding: 14px 28px;
     font-size: 15px; font-weight: 800; letter-spacing: -0.01em;
     color: #4a1d05;
-    background: linear-gradient(135deg, #fde047 0%, #f59e0b 52%, #ea580c 100%);
+    background:  #f59e0b;
     box-shadow: 0 14px 38px -10px rgba(234,88,12,0.5), inset 0 1px 0 rgba(255,255,255,0.45);
     transition: transform 180ms cubic-bezier(0.22,1,0.36,1), box-shadow 180ms ease, filter 180ms ease;
     cursor: pointer;
@@ -246,7 +261,7 @@ const WAITLIST_CSS = `
 
 .wl-check-badge {
     display: grid; place-items: center;
-    width: 58px; height: 58px; border-radius: 9999px;
+    width: 58px; height: 58px;
     color: white;
     background: #f59e0b;
     box-shadow: 0 12px 30px -8px rgba(234,88,12,0.55);

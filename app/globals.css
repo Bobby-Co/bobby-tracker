@@ -3,6 +3,10 @@
 /* ─── tokens (light-mode-first, mirrors ci/tokens.json) ─────────────── */
 :root {
     --c-page:          #fbfbfc;
+    /* shell — the tinted "desk" the floating content panel + sidebar sit on
+       (reference: white panel floating on a soft neutral). A hair warm so the
+       Ucelot ember identity reads even in the chrome. */
+    --c-shell:         #f1efec;
     --c-surface:       #ffffff;
     --c-surface-2:     #f7f7f8;
     --c-border:        #ececef;
@@ -30,8 +34,15 @@
     --c-warn-bg:       #fffbeb;
     --c-error:         #b91c1c;
     --c-error-bg:      #fef2f2;
-    --c-accent:        #4f46e5;
-    --c-accent-2:      #4338ca;
+    /* brand — Ucelot ember (gold→orange). primary = warm CTA / active /
+       focus; accent = a readable deep ember for links + selected glyphs;
+       ring = the focus halo; tint = a soft wash for branded surfaces. */
+    --c-primary:       #e9730f;
+    --c-primary-hover: #cf6310;
+    --c-primary-tint:  #fff3e6;
+    --c-ring:          rgba(233,115,15,0.22);
+    --c-accent:        #c2410c;
+    --c-accent-2:      #9a3412;
 
     --r-sm:  8px;
     --r-md:  12px;
@@ -40,9 +51,62 @@
 
     --shadow-card: 0 1px 1px rgba(17,24,39,0.025), 0 1px 2px rgba(17,24,39,0.02);
     --shadow-pop:  0 12px 32px -8px rgba(15,23,42,0.18), 0 2px 6px rgba(15,23,42,0.06);
+    /* floating content panel — a crisp hairline ring plus a soft halo that
+       bleeds up/left onto the shell so the white panel reads as raised. */
+    --shadow-panel: 0 0 0 1px var(--c-border), -10px -8px 28px -18px rgba(17,24,39,0.16);
 
     --t-fast: 140ms cubic-bezier(0.22, 1, 0.36, 1);
     --t-mid:  220ms cubic-bezier(0.22, 1, 0.36, 1);
+
+    /* ─── app palette — colour chips (light -bg paired with a saturated tone) ─
+       Hashed onto project tiles; reusable anywhere a colour chip is needed. */
+    /* reds & pinks */
+    --app-crimson-bg: #FADFE0;  --app-crimson: #C0394A;
+    --app-rose-bg:    #FBE2E7;  --app-rose:    #CB4668;
+    --app-pink-bg:    #FBE3EF;  --app-pink:    #C84C86;
+    --app-blush-bg:   #FCE6EC;  --app-blush:   #D2698D;
+    --app-magenta-bg: #F8E0F0;  --app-magenta: #BC3F94;
+    --app-fuchsia-bg: #F7E2F5;  --app-fuchsia: #B642AC;
+    /* purples */
+    --app-orchid-bg:     #F2E4F7;  --app-orchid:     #9D4DBB;
+    --app-purple-bg:     #EEE6FA;  --app-purple:     #8A4FCE;
+    --app-violet-bg:     #EAE6FB;  --app-violet:     #7350D6;
+    --app-lavender-bg:   #EBEAFC;  --app-lavender:   #6257D4;
+    --app-periwinkle-bg: #E6E9FC;  --app-periwinkle: #5566D6;
+    /* blues */
+    --app-indigo-bg: #E2E8FB;  --app-indigo: #3F5BCC;
+    --app-blue-bg:   #E0EBFD;  --app-blue:   #3370D4;
+    --app-azure-bg:  #DEEDFC;  --app-azure:  #2484CC;
+    --app-sky-bg:    #DBF0FB;  --app-sky:    #1B91C2;
+    --app-cyan-bg:   #D8F3F4;  --app-cyan:   #0E9AA4;
+    /* greens & teals */
+    --app-teal-bg:    #D7F2EC;  --app-teal:    #10917F;
+    --app-mint-bg:    #DDF5EB;  --app-mint:    #1FA06E;
+    --app-spruce-bg:  #DBF1E6;  --app-spruce:  #1C8F66;
+    --app-emerald-bg: #DCF4E4;  --app-emerald: #1E9C58;
+    --app-green-bg:   #E0F4DC;  --app-green:   #3D9A37;
+    --app-fern-bg:    #E5F3D6;  --app-fern:    #57962A;
+    --app-sage-bg:    #E9F0DE;  --app-sage:    #6E8A4E;
+    --app-lime-bg:    #EDF5CE;  --app-lime:    #7C9011;
+    /* yellows & gold */
+    --app-olive-bg:  #F0EFD2;  --app-olive:  #8C8520;
+    --app-citron-bg: #F6F2C9;  --app-citron: #9A8C0E;
+    --app-gold-bg:   #FBF1CC;  --app-gold:   #B8930C;
+    --app-yellow-bg: #FBEFCB;  --app-yellow: #C28E0A;
+    --app-amber-bg:  #FBE9C9;  --app-amber:  #C57F0C;
+    --app-honey-bg:  #FCEAC9;  --app-honey:  #CC8A22;
+    /* oranges & earth */
+    --app-tangerine-bg: #FDE7C9;  --app-tangerine: #CE7A12;
+    --app-orange-bg:    #FCE3D0;  --app-orange:    #D26B26;
+    --app-peach-bg:     #FCE6D8;  --app-peach:     #D27C40;
+    --app-coral-bg:     #FCE3DD;  --app-coral:     #D45441;
+    --app-clay-bg:      #F4E4DA;  --app-clay:      #A86A48;
+    --app-brown-bg:     #F0E7DE;  --app-brown:     #8E6648;
+    --app-sand-bg:      #F3EEE1;  --app-sand:      #897A3D;
+    /* neutrals */
+    --app-slate-bg:    #E7ECF1;  --app-slate:    #566377;
+    --app-stone-bg:    #EEEBE6;  --app-stone:    #786F63;
+    --app-graphite-bg: #EAEAEC;  --app-graphite: #5C5C63;
 }
 
 @theme inline {
@@ -67,26 +131,149 @@ html, body {
     background-size: 22px 22px;
 }
 
+/* floating content panel — the white "page" that floats on the tinted shell.
+   Rounds only its top-left corner (the edge meeting the sidebar + topbar) and
+   bleeds off the right/bottom of the viewport, exactly like the reference.
+   overflow-y makes it the scroll container so the rounded corner cleanly clips
+   the content (incl. sub-headers) inside. Plain CSS + unlayered on purpose:
+   Tailwind v4 rejects responsive variants inside @apply, so the md treatment
+   is a hand-written media query rather than md: utilities. */
+.app-panel {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    background-color: var(--c-surface);
+    transition: border-top-left-radius 450ms ease, box-shadow 450ms ease;
+}
+@media (min-width: 768px) {
+    .app-panel {
+        border-top-left-radius: 22px;
+        box-shadow: var(--shadow-panel);
+    }
+}
+/* Immersive Mind view: the panel drops its rounded corner + shadow and becomes
+   the scroll frame for a full-window chat (see components/immersive.ts). The
+   chat manages its own internal scroll, so lock the panel itself. */
+.app-panel.is-immersive {
+    border-top-left-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+}
+
+/* Mind "thinking" indicator (components/mind-thinking.tsx): the orb is a
+   pre-rendered animated WebP; the status line shimmers via this keyframe. */
+@keyframes mind-shimmer { from { background-position-x: 120%; } to { background-position-x: -120%; } }
+
+/* ─── squircle corners ───────────────────────────────────────────────
+   Every rounded RECTANGLE gets a superellipse (squircle) corner instead of
+   the default quarter-ellipse — a softer, iOS-like shape. The existing
+   border-radius still sets the corner *size*; corner-shape only changes the
+   curve. Fully-round things (rounded-full: avatars, dots, pills) are reset to
+   true round so they stay circles/stadiums, not rounded squares. Browsers
+   without `corner-shape` simply ignore it and keep normal border-radius.
+   NOTE: component classes that get their radius via `@apply rounded-full`
+   (.mini-icon, .pill, .chip-min, .card-tag) carry no literal `rounded-full`
+   class, so they're listed explicitly alongside the utility. */
+/* ─── squircle corners (cross-browser) ───────────────────────────────
+   Driven by the hyperellipse polyfill (components/hyperellipse-setup.tsx).
+   We set the custom --corner-shape property: in Chrome the polyfill bridges
+   it to the native corner-shape; in Safari/Firefox it renders the squircle
+   with a clip-path fallback — so both browsers match. `corner-shape` is set
+   too so Chrome squircles immediately pre-hydration (no flash).
+
+   OPT-IN per element, scoped to rounded RECTANGLES + the square glyph. Capsules
+   (.pill/.chip-min/.card-tag), circles (avatars/dots), and the scroll panel are
+   intentionally left out, so they stay round in BOTH browsers. Add the
+   `.squircle` class or `data-squircle` attr to opt extra elements in. */
+
+@import "hyperellipse/css";
+
 /* ─── reusable element classes ──────────────────────────────────────── */
 @layer components {
+    /* Brand focus colours are set as plain CSS, NOT @apply: Tailwind v4
+       chokes on arbitrary var() colours under variants inside @apply (same
+       failure mode as responsive variants), which silently staled the whole
+       components layer. */
     .input {
-        @apply w-full rounded-[12px] border border-[color:var(--c-border)] bg-white px-3 py-2 text-sm
+        @apply w-full rounded-[12px] border bg-white px-3 py-2 text-sm
             text-[color:var(--c-text)] placeholder:text-[color:var(--c-text-dim)]
-            transition-colors duration-[140ms]
-            hover:border-[color:var(--c-border-strong)]
-            focus:border-zinc-900 focus:outline-none focus:ring-[3px] focus:ring-zinc-900/8;
+            transition-colors duration-[140ms];
+        border-color: var(--c-border);
     }
+
+    .squircle-card {
+        --corner-shape: squircle;
+        border-radius: calc(40px * var(--corner-scale, 1));
+    }
+
+    .rounded-sq {
+        border-radius: calc(16px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-l {
+        border-radius: calc(24px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-t-xl {
+        border-radius: calc(32px * var(--corner-scale, 1)) calc(32px * var(--corner-scale, 1)) 0 0;
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-xl {
+        border-radius: calc(32px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+    .rounded-sq-2xl {
+        border-radius: calc(120px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+    }
+
+
+    .rounded-sq-3xl {
+        border-radius: calc(200px * var(--corner-scale, 1));
+        --corner-shape: superellipse(1.5);
+    }
+
+    .rounded-sq-4xl {
+        border-radius: calc(200px * var(--corner-scale, 1));
+        --corner-shape: superellipse(1.2);
+    }
+
+    .input:hover { border-color: var(--c-border-strong); }
+    .input:focus {
+        outline: none;
+        border-color: var(--c-primary);
+        box-shadow: 0 0 0 3px var(--c-ring);
+    }
+    /* Flat brand ember — solid fill, no gradient. */
     .btn-primary {
-        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-zinc-900 px-3.5 py-2
-            text-[13px] font-semibold text-white shadow-sm transition
-            hover:bg-zinc-800 active:scale-[0.98]
-            disabled:opacity-50 disabled:hover:bg-zinc-900 disabled:active:scale-100;
+        @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-2
+            text-[13px] font-semibold text-white disabled:opacity-50;
+        /* radius via calc + --corner-scale so the squircle polyfill softens the
+           pre-hydration flash; no color transition (it glitches the fallback). */
+        border-radius: calc(16px * var(--corner-scale, 1));
+        --corner-shape: squircle;
+        background-color: var(--c-primary);
+        box-shadow: 0 1px 2px rgba(180,83,9,0.22);
     }
+
+    .btn-primary:hover { background-color: var(--c-primary-hover); }
+    .btn-primary:disabled:hover { background-color: var(--c-primary); }
+    /* GitHub provider button — brand-black. Set in CSS (not an inline style)
+       so the hyperellipse squircle fallback can read it from the stylesheet
+       and bake it into the SVG layer; inline backgrounds render grey. */
+    .btn-primary.btn-github { background-color: #18181b; }
+    .btn-primary.btn-github:hover { background-color: #000; }
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-[color:var(--c-border)]
+        @apply inline-flex items-center justify-center gap-1.5 border border-[color:var(--c-border)]
             bg-white px-3.5 py-2 text-[13px] font-medium text-[color:var(--c-text)]
-            transition hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]
+            hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]
             disabled:opacity-50;
+        border-radius: calc(16px * var(--corner-scale, 1));
+        --corner-shape: squircle;
     }
 
     /* CI workflow card — fully rounded by default. The tabbed variant
@@ -101,7 +288,7 @@ html, body {
         border-top-left-radius: 0;
     }
     .card-hover:hover {
-        @apply -translate-y-px border-[color:var(--c-border-strong)];
+        @apply border-[color:var(--c-border-strong)];
         box-shadow: 0 1px 2px rgba(17,24,39,0.03), 0 10px 24px -12px rgba(17,24,39,0.10);
     }
     /* When the hoverable card lives inside a stack with a tab, lift the
@@ -185,14 +372,17 @@ html, body {
         @apply grid shrink-0 place-items-center rounded-full;
     }
 
-    /* segmented progress — discrete ticks like the ref's "12/32" bars.
-       Empty ticks are faint; filled ticks use the warm accent. */
+    /* segmented progress — chunky vertical ticks like the ref's "12/32" bars.
+       Empty ticks are faint; filled ticks glow the warm ember accent. */
     .seg-track { @apply flex items-center gap-[3px]; }
     .seg {
-        @apply h-[6px] w-[7px] shrink-0 rounded-[2px];
+        @apply h-[13px] w-[5px] shrink-0 rounded-[2px];
         background: var(--c-border-strong);
     }
-    .seg-on { background: #f59e0b; }
+    .seg-on {
+        background: #f59e0b;
+        box-shadow: 0 0 0 0.5px rgba(180,83,9,0.18);
+    }
 
     /* minimal chip — calmer than .pill, used for inline meta + filters */
     .chip-min {
@@ -216,8 +406,8 @@ html, body {
     .pill-warn    { background: var(--c-warn-bg);    border-color: rgba(180,83,9,0.20);  color: var(--c-warn); }
     .pill-error   { background: var(--c-error-bg);   border-color: rgba(185,28,28,0.18); color: var(--c-error); }
 
-    /* Headings */
-    .h-page    { @apply text-[22px] font-bold tracking-[-0.012em]; }
+    /* Headings — see .app-panel below (defined unlayered, plain CSS). */
+    .h-page    { @apply text-[26px] font-extrabold tracking-[-0.02em]; }
     .h-section { @apply text-[13px] font-semibold uppercase tracking-[0.05em] text-[color:var(--c-text-muted)]; }
 
     /* GitHub-issue-style markdown for analyser suggestions. */
@@ -246,6 +436,41 @@ html, body {
     .prose-tracker blockquote {
         @apply my-2 border-l-2 border-[color:var(--c-border-strong)] pl-3 italic text-[color:var(--c-text-muted)];
     }
+
+    /* Syntax highlighting for fenced code blocks (rehype-highlight → hljs
+       classes), tuned to the app palette on the light surface-2 code bg. */
+    .prose-tracker .hljs-comment,
+    .prose-tracker .hljs-quote { color: #6b7280; font-style: italic; }
+    .prose-tracker .hljs-keyword,
+    .prose-tracker .hljs-selector-tag,
+    .prose-tracker .hljs-literal,
+    .prose-tracker .hljs-section,
+    .prose-tracker .hljs-doctag,
+    .prose-tracker .hljs-type,
+    .prose-tracker .hljs-built_in { color: #7c3aed; }
+    .prose-tracker .hljs-string,
+    .prose-tracker .hljs-regexp,
+    .prose-tracker .hljs-addition,
+    .prose-tracker .hljs-meta .hljs-string { color: #047857; }
+    .prose-tracker .hljs-number,
+    .prose-tracker .hljs-symbol,
+    .prose-tracker .hljs-bullet,
+    .prose-tracker .hljs-link,
+    .prose-tracker .hljs-template-variable,
+    .prose-tracker .hljs-selector-attr,
+    .prose-tracker .hljs-selector-pseudo { color: #b45309; }
+    .prose-tracker .hljs-title,
+    .prose-tracker .hljs-title.function_,
+    .prose-tracker .hljs-name { color: #1d4ed8; }
+    .prose-tracker .hljs-attr,
+    .prose-tracker .hljs-attribute,
+    .prose-tracker .hljs-variable,
+    .prose-tracker .hljs-selector-class,
+    .prose-tracker .hljs-selector-id { color: #0e7490; }
+    .prose-tracker .hljs-tag { color: var(--c-text-muted); }
+    .prose-tracker .hljs-deletion { color: #be123c; }
+    .prose-tracker .hljs-emphasis { font-style: italic; }
+    .prose-tracker .hljs-strong { font-weight: 500; }
 
     /* Animations */
     .anim-rise { animation: rise 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
@@ -296,6 +521,14 @@ html, body {
 @keyframes graph-node-pulse { 0%, 100% { opacity: 0.45; transform: scale(0.82); } 50% { opacity: 1; transform: scale(1); } }
 @keyframes graph-sonar      { 0% { opacity: 0.55; transform: scale(0.6); } 70%, 100% { opacity: 0; transform: scale(2.6); } }
 @keyframes graph-edge-flow  { to { stroke-dashoffset: -64; } }
+
+/* Setup-wizard sync flow: a parcel tossed along its offset-path. CSS (not JS) so
+   it plays on first paint — framer-motion's AnimatePresence initial=false would
+   otherwise suppress it on the first scene. -a/-b interleave the two-way toss
+   (forward in the first half, back in the second); -solo is the one-way loop. */
+@keyframes wizard-fly-a    { 0% { offset-distance: 0%; opacity: 0; } 4% { opacity: 1; } 44% { offset-distance: 100%; opacity: 1; } 50%, 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes wizard-fly-b    { 0%, 50% { offset-distance: 0%; opacity: 0; } 54% { opacity: 1; } 94% { offset-distance: 100%; opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+@keyframes wizard-fly-solo { 0% { offset-distance: 0%; opacity: 0; } 7% { opacity: 1; } 82% { offset-distance: 100%; opacity: 1; } 92%, 100% { offset-distance: 100%; opacity: 0; } }
 
 /* Camera rig. The pan layer centres a focal point and zooms in; translate is
    derived per keyframe as t = scale × (viewBox-centre − focal) so the target
