@@ -48,6 +48,11 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     if (!role) return jsonError("not_found", "team not found", 404)
     if (role !== "owner") return forbidden("only the team owner can delete a team")
 
+    // Bind before the purge below: ProjectDeletionService clears REGIONAL content,
+    // and the data plane throws until a region is bound. Every project here belongs
+    // to this team, so one binding covers the whole loop.
+    await ctx.bindTeam(id)
+
     // Deleting the team row cascades to its projects (that FK is central and
     // intact), but a cascade cannot reach the REGIONAL content those projects
     // own — the keys that used to carry it were dropped when the planes split.

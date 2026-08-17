@@ -94,19 +94,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 //      the user shouldn't be blocked by an unreachable analyser.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, user, error } = await new ApiContext().requireUser()
+    // requireProjectAccess, NOT requireUser: this route purges the project's
+    // REGIONAL content, and only a guard that binds a region may touch the data
+    // plane. The bare-requireUser version type-checked and threw on every call —
+    // an unbound data plane is fail-closed by design.
+    const { ctx, role, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
     // Deleting a project (and its knowledge graph) is an admin action.
-    const access = await ctx.access.canAccessProject(user.id, id)
-    if (!access.ok) return Response.json({ project: null })
-    if (!Role.of(access.role).atLeast("admin")) return forbidden("only team admins can delete a project")
+    if (!Role.of(role).atLeast("admin")) return forbidden("only team admins can delete a project")
 
     // Fail-safe: a query error folds to null → skip the (best-effort) graph
     // teardown, exactly as the old inline read (which ignored the error) did.
     const graphId = await tryOrNull(() => ctx.analyser.findGraphId(id))
-    // Read the cell BEFORE the row is deleted — afterwards there is nothing left
-    // to resolve it from, and the graph would be stranded in its cell forever.
-    const cell = await tryOrNull(() => ctx.projects.findCell(id))
+    // The guard already resolved the placement, so take it from the context
+    // rather than re-reading `projects` — which also has to happen BEFORE the row
+    // is deleted, or the graph is stranded in its cell forever. A team with no
+    // recorded placement binds central, so this answers "home", where the old
+    // read answered null and orphaned the graph.
+    const cell = ctx.cell
 
     // Not ctx.projects.delete: that removes the row and its CENTRAL children,
     // leaving every regional issue, comment and PR behind with nothing left to
