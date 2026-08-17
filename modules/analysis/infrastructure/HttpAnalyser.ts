@@ -12,6 +12,7 @@ import type { Analyser } from "../ports/Analyser"
 import { AnalyserError } from "../ports/AnalyserTypes"
 import { callbackIsUnreachable } from "../domain/CallbackOrigin"
 import type {
+    AnalyserBilling,
     AnalyserEndpoint,
     AnalyserRunCallback,
     AnalyseEffort,
@@ -34,6 +35,21 @@ import type {
     VerifyInput,
     VerifyReport,
 } from "../ports/AnalyserTypes"
+
+/** Snake-case the billing tenant for the analyser's wire shape, omitting anything
+ *  empty. Omission matters: the analyser decodes these bodies with
+ *  `DisallowUnknownFields`, so the fields are only tolerated by versions that
+ *  know them — and a blank string would be a tenant that resolves to nobody
+ *  rather than an honest absence. */
+function billingFields(b?: AnalyserBilling): Record<string, string> {
+    if (!b) return {}
+    const out: Record<string, string> = {}
+    if (b.teamId) out.team_id = b.teamId
+    if (b.projectId) out.project_id = b.projectId
+    if (b.userId) out.user_id = b.userId
+    if (b.usageKind) out.usage_kind = b.usageKind
+    return out
+}
 
 export class HttpAnalyser implements Analyser {
     /** The analyser deployment this instance talks to. Injected rather than read
@@ -318,18 +334,22 @@ export class HttpAnalyser implements Analyser {
         const res = await fetch(`${this.base()}/issues/compose`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader() },
-            body: JSON.stringify({ paragraph: input.paragraph, images: input.images ?? [] }),
+            body: JSON.stringify({
+                paragraph: input.paragraph,
+                images: input.images ?? [],
+                ...billingFields(input.billing),
+            }),
         })
         if (!res.ok) return this.fail(res, `compose failed: HTTP ${res.status}`, "compose_failed")
         return (await res.json()) as IssueComposeProposal
     }
 
     // ─── /embeddings ──────────────────────────────────────────────────────────
-    async embed(text: string): Promise<EmbedResult> {
+    async embed(text: string, billing?: AnalyserBilling): Promise<EmbedResult> {
         const res = await fetch(`${this.base()}/embeddings`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...this.authHeader() },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({ text, ...billingFields(billing) }),
         })
         if (!res.ok) return this.fail(res, `embed failed: HTTP ${res.status}`, "embed_failed")
         return (await res.json()) as EmbedResult

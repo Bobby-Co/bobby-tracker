@@ -32,6 +32,7 @@ export { getAnalyser } from "./Composition"
 // ─── the analyser wire contract (DTOs + error + callback shapes) ─────────────
 export { AnalyserError } from "./ports/AnalyserTypes"
 export type {
+    AnalyserBilling,
     AnalyserRunCallback,
     DeepDiveResult,
     QueryResult,

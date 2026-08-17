@@ -286,10 +286,41 @@ export interface IssueComposeProposal {
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number }
 }
 
+/** Who to bill for a one-shot AI call (`/issues/compose`, `/embeddings`).
+ *
+ *  `teamId` is the billing subject and the ONLY reliable identifier here:
+ *  compose runs before an issue has a project, and both endpoints can be called
+ *  against a project that was never indexed — which has no `project_analyser`
+ *  row for the analyser to resolve a team from. `projectId` is attribution when
+ *  the caller knows it.
+ *
+ *  Always pass the teamId the route's own guard returned, never one from the
+ *  request body — the analyser trusts this field (see UsageReport.TeamID there). */
+/** The ledger label. Defaults to the endpoint's own kind (`compose` / `embed`);
+ *  set it when the SAME endpoint serves a distinct product the bill should name
+ *  separately — today that is public issue reporting, where the spend is a
+ *  visitor's but the bill is the publishing team's, and lumping it in with a
+ *  member's own drafting would make it unexplainable on the billing page.
+ *
+ *  The analyser allowlists these, so a value it doesn't know is silently recorded
+ *  under the endpoint default rather than rejected. Keep in step with the `KIND`
+ *  map in components/settings/billing-panel.tsx, which renders the labels. */
+export type AnalyserUsageKind = "compose" | "embed" | "public_issue"
+
+type BillingCommon = { userId?: string; usageKind?: AnalyserUsageKind }
+
+export type AnalyserBilling =
+    | ({ teamId: string; projectId?: string } & BillingCommon)
+    /** projectId-only is allowed because the analyser can still resolve the team
+     *  from `project_analyser` — but ONLY for a project that has been indexed.
+     *  Prefer the teamId form wherever the guard already handed you one. */
+    | ({ teamId?: string; projectId: string } & BillingCommon)
+
 export interface IssueComposeInput {
     paragraph: string
     /** Each image must already be a `data:image/...;base64,…` URI. */
     images?: string[]
+    billing?: AnalyserBilling
 }
 
 export interface EmbedResult {

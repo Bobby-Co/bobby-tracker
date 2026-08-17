@@ -47,6 +47,10 @@ const KIND: Record<string, { label: string; color: string }> = {
     index:         { label: "KB indexing",    color: "#9A3412" },
     compose:       { label: "AI compose",     color: "#B85C1E" },
     embed:         { label: "Embedding",      color: "#D9A066" },
+    // Filed by a visitor through a public link — the spend is theirs, the bill is
+    // the publishing team's, so it gets its own line rather than hiding inside
+    // AI compose. Covers both the draft and its routing embedding.
+    public_issue:  { label: "Public issues",  color: "#A16207" },
     query:         { label: "Query",          color: "#EF9F27" },
     chat:          { label: "Chat",           color: "#F3B36A" },
     deep_dive:     { label: "Deep dive",      color: "#9A3412" },

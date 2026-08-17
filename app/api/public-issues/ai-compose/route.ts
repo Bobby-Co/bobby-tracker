@@ -55,6 +55,12 @@ export async function POST(request: Request) {
     const inviteErr = await gate.requireInviteAccess(sess.session)
     if (inviteErr) return inviteErr
 
+    // The visitor is anonymous, so the spend lands on the team that published the
+    // link. Resolved AFTER the gate above, so an invalid or closed session never
+    // costs a lookup — the same "authorize before paying" order this route's
+    // header comment already sets out.
+    const ownerTeamId = await gate.ownerTeamId(sess.session.id)
+
     const isGroupBacked = !!sess.session.group_id
     if (!isGroupBacked) {
         // Manual mode: same shape as before — caller must pick a
@@ -64,7 +70,15 @@ export async function POST(request: Request) {
             return jsonError("bad_request", "this project isn't part of the session", 400)
         }
         try {
-            const proposal = await getAnalyser().compose({ paragraph, images })
+            const proposal = await getAnalyser().compose({
+                paragraph,
+                images,
+                billing: {
+                    projectId: project_id,
+                    ...(ownerTeamId ? { teamId: ownerTeamId } : {}),
+                    usageKind: "public_issue",
+                },
+            })
             return Response.json({ proposal, ranking: null })
         } catch (e) {
             if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
@@ -80,9 +94,17 @@ export async function POST(request: Request) {
         return jsonError("bad_request", "this session's group has no eligible projects", 400)
     }
 
+    // Group-backed: no single project to attribute to (picking one is the job),
+    // so this bills the session's owning team alone. Labelled `public_issue` for
+    // both calls so the billing page shows one line for "someone filed through my
+    // public link" rather than splitting it across AI compose and Embedding.
+    const groupBilling = ownerTeamId
+        ? ({ teamId: ownerTeamId, usageKind: "public_issue" } as const)
+        : undefined
+
     let proposal
     try {
-        proposal = await getAnalyser().compose({ paragraph, images })
+        proposal = await getAnalyser().compose({ paragraph, images, billing: groupBilling })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
@@ -91,7 +113,7 @@ export async function POST(request: Request) {
     const routingQuery = new EmbeddingText().forRouting(proposal)
     let queryVec: number[]
     try {
-        const embed = await getAnalyser().embed(routingQuery)
+        const embed = await getAnalyser().embed(routingQuery, groupBilling)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

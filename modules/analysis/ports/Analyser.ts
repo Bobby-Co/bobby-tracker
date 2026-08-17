@@ -7,6 +7,7 @@
 
 import type { CellId } from "@/modules/regions"
 import type {
+    AnalyserBilling,
     QueryResult,
     ChatHistoryMessage,
     IssueAnalyseInput,
@@ -77,7 +78,9 @@ export interface Analyser {
     compose(input: IssueComposeInput): Promise<IssueComposeProposal>
 
     // ─── /embeddings ─────────────────────────────────────────────────────────
-    embed(text: string): Promise<EmbedResult>
+    /** `billing` is optional so a caller with no team in hand still works, but
+     *  omitting it means the call is spent and never recorded. Pass it. */
+    embed(text: string, billing?: AnalyserBilling): Promise<EmbedResult>
 
     // ─── /verify — no-LLM graph-health check ─────────────────────────────────
     verify(input: VerifyInput): Promise<VerifyReport>

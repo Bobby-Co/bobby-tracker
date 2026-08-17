@@ -204,6 +204,9 @@ async function topSuggestedIcon(seed: string): Promise<string | null> {
     if (!text) return null
     const local = filterIconsLocal(text)
     if (local.length > 0) return local[0].name
+    // Deliberately unbilled: this is the icon suggester, and icon work is free —
+    // same rule as /api/icons/search. Passing no billing tenant leaves the call
+    // unattributable, so the analyser records nothing.
     const { vector } = await getAnalyser().embed(text)
     const svc = Supabase.service()
     const { data } = await svc.rpc("find_similar_icons", {

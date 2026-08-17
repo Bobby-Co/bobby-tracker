@@ -33,7 +33,13 @@ export class IssueEmbedder {
      *  (never throws, so it can't break the caller's insert). */
     async embedIssue(issue: EmbeddableIssue): Promise<void> {
         try {
-            const result = await this.analyser.embed(this.text.forIssue(issue))
+            // Billed to the issue's project. No teamId here — this runs deep in
+            // the sync path with no request guard in reach — so the analyser
+            // resolves the team from project_analyser, which is sound because an
+            // issue only reaches the embedder for a project that has a KB.
+            const result = await this.analyser.embed(this.text.forIssue(issue), {
+                projectId: issue.project_id,
+            })
             await this.index.upsert({
                 issueId: issue.id,
                 projectId: issue.project_id,

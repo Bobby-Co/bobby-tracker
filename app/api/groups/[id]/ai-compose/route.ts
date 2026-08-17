@@ -28,8 +28,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // findSummary for a non-member — the same backstop the issues feed leaned on.
     // This reads every member project's name and ranks them, so an unguarded call
     // discloses another team's project list.
-    const { ctx, error } = await new ApiContext().requireCollectionAccess(id)
+    const { ctx, teamId, user, error } = await new ApiContext().requireCollectionAccess(id)
     if (error) return error
+    // Both AI calls below bill to the collection's team. There is no single
+    // project to attribute to — picking one is the whole job of this route.
+    const billing = { teamId, userId: user.id }
 
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return jsonError("bad_request", "invalid JSON", 400) }
@@ -64,7 +67,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Step 1: compose the draft.
     let proposal
     try {
-        proposal = await getAnalyser().compose({ paragraph, images })
+        proposal = await getAnalyser().compose({ paragraph, images, billing })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)
         return jsonError("ai_failed", e instanceof Error ? e.message : String(e), 502)
@@ -79,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const routingQuery = new EmbeddingText().forRouting(proposal)
     let queryVec: number[]
     try {
-        const embed = await getAnalyser().embed(routingQuery)
+        const embed = await getAnalyser().embed(routingQuery, billing)
         queryVec = embed.vector
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

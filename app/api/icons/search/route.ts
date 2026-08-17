@@ -18,8 +18,10 @@ import { Supabase } from "@/lib/server/supabase"
 //   3. Cache miss → embed via the analyser, run find_similar_icons,
 //      upsert the hits with the current version, and return.
 //
-// Auth: requireUser. The catalog is global but the embedding call
-// is metered, so we don't expose it to anonymous traffic.
+// Auth: requireUser. The catalog is global and the embedding call is NOT billed —
+// icon search is on us. So this passes no billing tenant to the analyser, which
+// makes the call unattributable and therefore unrecorded, and the guard stays at
+// requireUser because there is no billing subject to resolve.
 export async function POST(request: Request) {
     const { error } = await new ApiContext().requireUser()
     if (error) return error
@@ -65,6 +67,7 @@ export async function POST(request: Request) {
     let vector: number[]
     let model: string
     try {
+        // No billing argument on purpose — see the auth note above.
         const result = await getAnalyser().embed(q)
         vector = result.vector
         model = result.model

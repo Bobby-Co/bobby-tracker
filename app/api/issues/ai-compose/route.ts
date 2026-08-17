@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     // the same two-step shape as POST /api/issues. This was requireUser plus a
     // findName() "visibility check" that was only ever visibility-scoped because
     // RLS made it so; AccessService also applies the group-level gate.
-    const { ctx, error } = await new ApiContext().requireProjectAccess(project_id)
+    const { ctx, teamId, user, error } = await new ApiContext().requireProjectAccess(project_id)
     if (error) return error
     if (!paragraph.trim() && images.length === 0) {
         return jsonError("bad_request", "Provide a paragraph or at least one image.", 400)
@@ -45,7 +45,13 @@ export async function POST(request: Request) {
     if (!projectName) return jsonError("not_found", "project not found", 404)
 
     try {
-        const proposal = await getAnalyser().compose({ paragraph, images })
+        // Bill the draft to the project's team. teamId comes from the guard above,
+        // never from the body — the analyser trusts what we assert here.
+        const proposal = await getAnalyser().compose({
+            paragraph,
+            images,
+            billing: { teamId, projectId: project_id, userId: user.id },
+        })
         return Response.json({ proposal })
     } catch (e) {
         if (e instanceof AnalyserError) return jsonError(e.code, e.message, 502)

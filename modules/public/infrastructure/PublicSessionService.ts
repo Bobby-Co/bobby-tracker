@@ -38,6 +38,16 @@ export class PublicSessionService {
         private readonly teams: TeamMembershipRepository,
     ) {}
 
+    /** The team that owns a session — the party billed for AI a public visitor
+     *  triggers. Public reporters are unauthenticated and may not belong to any
+     *  team, so spend has to land on whoever published the link. Null when the
+     *  ownership row is missing, which leaves the call unattributed rather than
+     *  billed to the wrong team. */
+    async ownerTeamId(sessionId: string): Promise<string | null> {
+        const owner = await this.sessions.findOwnership(sessionId)
+        return owner?.team_id ?? null
+    }
+
     /** Resolve a token to a session (with covered project ids), or a pre-built
      *  error Response so callers can `if (e) return e`. */
     async resolve(
