@@ -6430,3 +6430,519 @@ do $$ begin
             'the grants in 0073 are addressability, not authorization (see 0067).''';
     end if;
 end $$;
+
+
+-- ═══ MIGRATION: 0074_beta_allowlist.sql ═══
+
+-- 0074_beta_allowlist.sql — the beta whitelist moves out of the environment.
+--
+-- ─── What it replaced ────────────────────────────────────────────────────────
+--
+-- NEXT_PUBLIC_BETA_ALLOWED_EMAILS: a comma-separated list, baked into the client
+-- bundle at build time. Three problems, all fatal to actually running a beta:
+-- enrolling someone needs a redeploy, the list is public (it ships to every
+-- visitor's browser), and there is no record of who was invited, by whom, or
+-- when they first came through.
+--
+-- The env var SURVIVES as a staff bypass — a short list of our own addresses so
+-- the team is never locked out by a bad row or an unapplied migration — and
+-- nothing else. Beta enrolment happens here.
+--
+-- ─── How the gate reads this table ───────────────────────────────────────────
+--
+-- It doesn't, directly. The gate (lib/shared/BetaAccess.ts) runs in the BROWSER
+-- as well as on the server, and since 0067 the browser reads nothing from
+-- tracker.* — so a client-side `select` here would silently return zero rows and
+-- lock everyone out. The flow instead is:
+--
+--   sign-in (or POST /api/beta/access)
+--     → server looks the address up here with the service-role key
+--     → on a hit, stamps `whitelisted: true` into the user's auth metadata
+--       and records granted_at/granted_user below
+--     → the flag now rides in the JWT, so every existing call site keeps its
+--       synchronous check
+--
+-- Enrolment therefore takes effect on the user's next session refresh, which the
+-- waitlist page triggers for itself. Removing a row does NOT evict anyone — the
+-- stamp is already in their metadata; see the revoke note in
+-- modules/beta/application/BetaEnrollmentService.ts.
+--
+-- ─── RLS ─────────────────────────────────────────────────────────────────────
+--
+-- Both tables are enabled with NO policies, per 0067: an email list is precisely
+-- the kind of table that must be unreachable with the published anon key. Every
+-- read and write below goes through the service-role client on the server.
+
+-- ─── the allowlist: who is in the beta ───────────────────────────────────────
+create table if not exists tracker.beta_allowlist (
+    -- The address as the identity provider reports it, lower-cased. Primary key
+    -- rather than a surrogate id: enrolment is BY address, an address is in the
+    -- beta exactly once, and an upsert on conflict (email) is how re-inviting
+    -- someone updates the note instead of failing.
+    email        text        primary key,
+    -- Who added them, when they were added, and a free-text note ("YC batch",
+    -- "design partner") — the audit the env var never had. `invited_by` is a
+    -- soft reference: no FK, because the enroller's account being deleted must
+    -- not cascade into revoking the beta access they granted.
+    invited_by   uuid,
+    note         text,
+    created_at   timestamptz not null default now(),
+    -- Stamped the first time the address actually signs in and is let through.
+    -- The gap between created_at and granted_at is "invited but never showed
+    -- up", which is the one question an invite list always ends up being asked.
+    granted_at   timestamptz,
+    granted_user uuid,
+
+    -- Normalisation is enforced, not assumed. The lookup is an equality match on
+    -- this column, so a row inserted by hand from the SQL editor as
+    -- "Foo@Example.com" would be a row that can never match anyone.
+    constraint beta_allowlist_email_normalised
+        check (email = lower(btrim(email)) and email like '%_@_%')
+);
+
+-- ─── the queue: who asked to be let in ───────────────────────────────────────
+--
+-- "Join the beta" on /waitlist used to write `beta_requested` into the user's
+-- auth metadata and stop there — which meant the answer to "who wants in?" lived
+-- in a place nothing can query without paging every auth user. Same list, in a
+-- table you can sort.
+create table if not exists tracker.beta_requests (
+    email        text        primary key,
+    -- The signed-in account that asked. Soft reference for the same reason as
+    -- above, and because the queue outliving a deleted account is harmless.
+    user_id      uuid,
+    display_name text,
+    requested_at timestamptz not null default now(),
+    -- Which surface the request came from, so a second entry point later doesn't
+    -- need a schema change to be told apart (same trick as newsletter_subscribers).
+    source       text        not null default 'waitlist',
+
+    constraint beta_requests_email_normalised
+        check (email = lower(btrim(email)) and email like '%_@_%')
+);
+
+-- The queue is read newest-first and, once it is more than a screenful, filtered
+-- to those not yet enrolled. Both are served by this.
+create index if not exists beta_requests_requested_at_idx
+    on tracker.beta_requests (requested_at desc);
+
+alter table tracker.beta_allowlist enable row level security;
+alter table tracker.beta_requests  enable row level security;
+
+-- 0073 made these grants automatic for tables created after it (alter default
+-- privileges), but stating them keeps the file readable on its own and costs
+-- nothing if they are already in place.
+grant all on tracker.beta_allowlist to authenticated, service_role;
+grant all on tracker.beta_requests  to authenticated, service_role;
+
+comment on table tracker.beta_allowlist is
+    'Beta enrolment list — the source of truth that replaced '
+    'NEXT_PUBLIC_BETA_ALLOWED_EMAILS. Read server-side only (service role); the '
+    'browser gate reads the `whitelisted` auth-metadata flag stamped from here '
+    'at sign-in. See modules/beta.';
+
+comment on table tracker.beta_requests is
+    'Waitlist queue — people who pressed "Join the beta". The list you enrol '
+    'FROM; tracker.beta_allowlist is the list you enrol INTO.';
+
+-- Seed: carry over the addresses that were in the env var, so applying this
+-- migration never locks out whoever is already in. Idempotent, and the staff
+-- bypass keeps working either way.
+insert into tracker.beta_allowlist (email, note)
+values ('peterphongpak@gmail.com', 'seeded from NEXT_PUBLIC_BETA_ALLOWED_EMAILS (0074)')
+on conflict (email) do nothing;
+
+
+-- ═══ MIGRATION: 0075_deleted_account_usage.sql ═══
+
+-- 0075_deleted_account_usage.sql — free credits survive an account deletion.
+--
+-- ─── The hole ────────────────────────────────────────────────────────────────
+--
+-- Prowl's free allowance is per TEAM per calendar month (0059): a team's balance
+-- is its tier allowance minus the spend recorded against (team_id, period_start).
+-- Delete the account and the team goes with it; sign up again and the new team
+-- gets a fresh Kit subscription with an untouched allowance. The whole monthly
+-- limit resets for the price of two clicks, as often as you like.
+--
+-- ─── What is kept, and what is not ───────────────────────────────────────────
+--
+-- One row per deleted address: how much that person had spent in the month they
+-- left, and nothing else. No name, no projects, no history, and NOT the address
+-- itself — only a SHA-256 of it (peppered when BOBBY_ACCOUNT_PEPPER is set). The
+-- row is write-once at deletion, read once at the next sign-up, and unreadable
+-- to anyone who does not already know the email they are looking for.
+--
+-- That is the whole point of hashing here: the table can answer "has THIS address
+-- deleted an account recently?" — which is the anti-abuse question — while being
+-- useless as a list of people who left, which is not a list we have any business
+-- keeping.
+--
+-- ─── Why it expires, and why the expiry is enforced in the query ─────────────
+--
+-- Retention is 30 days, comfortably longer than the abuse window (a calendar
+-- month) so a row cannot expire in the middle of the period it protects.
+--
+-- There is NO SCHEDULER in this stack — no cron, no pg_cron, no OpenNext
+-- scheduled handler — so nothing will come along and delete these rows for us.
+-- An `expires_at` column that only a background job honours would be a promise
+-- the deployment cannot keep. So every read filters on it (an expired row is
+-- invisible, whether or not it is still on disk) and every write sweeps the
+-- expired ones out. Retention is therefore a property of the queries, which do
+-- run, rather than of a job that does not exist.
+
+create table if not exists tracker.deleted_account_usage (
+    -- SHA-256 of the lower-cased email, hex. Primary key: one row per address,
+    -- and a later deletion by the same person REPLACES it rather than adding to
+    -- it — by then the earlier figure has already been carried into the account
+    -- being deleted, so the new snapshot includes it. Summing would double-count.
+    email_hash   text        primary key,
+
+    -- The UTC month the spend belongs to. The carry only applies when the person
+    -- comes back INSIDE this same month: past its end the allowance would have
+    -- reset for everybody, and charging them for a month they sat out would
+    -- punish a legitimate return rather than an abusive one.
+    period_start timestamptz not null,
+
+    -- Raw cost, matching prowl_usage_events.cost_usd — points are derived from it
+    -- at read time (modules/billing), never stored, so the rate can be retuned
+    -- without rewriting history. `calls` is carried for the same reason the
+    -- rollup carries it: it makes the restored row legible in the ledger.
+    cost_usd     numeric(14, 6) not null default 0,
+    calls        integer     not null default 0,
+
+    deleted_at   timestamptz not null default now(),
+    expires_at   timestamptz not null default now() + interval '30 days',
+
+    constraint deleted_account_usage_hash_chk check (email_hash ~ '^[0-9a-f]{64}$'),
+    constraint deleted_account_usage_expiry_chk check (expires_at > deleted_at)
+);
+
+-- The sweep that stands in for a cron job: every write path deletes what has
+-- expired, so this index is what keeps that cheap.
+create index if not exists deleted_account_usage_expires_idx
+    on tracker.deleted_account_usage (expires_at);
+
+alter table tracker.deleted_account_usage enable row level security;
+
+grant all on tracker.deleted_account_usage to authenticated, service_role;
+
+comment on table tracker.deleted_account_usage is
+    'Anti-abuse tombstone: this month''s Prowl spend of a deleted account, keyed by '
+    'a SHA-256 of the email, so deleting and re-registering cannot reset the free '
+    'monthly allowance. Expires after 30 days; the expiry is enforced by every '
+    'query because this stack has no scheduler to enforce it out of band. Written '
+    'by DELETE /api/account, consumed by the next team the same address creates.';
+
+
+-- ═══ MIGRATION: 0076_usage_subjects.sql ═══
+
+-- 0076_usage_subjects.sql — usage stops belonging to teams.
+--
+-- ─── The problem this fixes ──────────────────────────────────────────────────
+--
+-- Prowl's free allowance is per TEAM per month, and a team is free to create and
+-- free to delete. Both ends of that leak:
+--
+--   delete the ACCOUNT, sign up again   → new team, allowance reset
+--   delete the TEAM, create another     → new team, allowance reset
+--   just create a SECOND team           → another whole allowance, no deletion
+--
+-- 0075 patched the first case with a 30-day tombstone. It is superseded here,
+-- and dropped at the bottom of this file: patching one door while two others
+-- stand open was the wrong shape.
+--
+-- ─── The model ───────────────────────────────────────────────────────────────
+--
+-- Usage belongs to a USAGE SUBJECT — a durable billing identity keyed by the
+-- owner's email, which is never deleted. Teams BIND to a subject:
+--
+--   usage_subjects        who the spend belongs to. Permanent.
+--   usage_subject_teams   which team(s) have ever spent against that subject.
+--
+-- Deleting a team unbinds it; the subject, its ledger and its balance stay.
+-- Creating a team binds it to the SAME subject, so the balance carries straight
+-- over — automatically, with nothing to copy and nothing to expire.
+--
+-- Each email gets exactly two reserved slots:
+--
+--   personal   the personal team, bootstrapped with the account
+--   free       the one free (Kit) team they may create
+--
+-- and one subject per PAID team beyond those. That is the whole quota, and it
+-- survives every deletion, so "delete and recreate" stops being a reset and
+-- becomes what it looks like: the same billing identity, continuing.
+--
+-- ─── Why the email, and why hashed ───────────────────────────────────────────
+--
+-- The email is the only identifier that survives an account being deleted and
+-- recreated — user ids do not. It is stored as SHA-256 (peppered via
+-- BOBBY_ACCOUNT_PEPPER) because this table now keeps rows FOREVER: it must be
+-- able to answer "is this the same person?" without being a permanent list of
+-- everyone who ever signed up. The hash answers that question and nothing else.
+--
+-- ─── Suspension ──────────────────────────────────────────────────────────────
+--
+-- A subject can be suspended: its data stays, its team can be read, and no new
+-- usage may be recorded against it. Two ways in — the owner pausing a team to
+-- free their one free slot for another team, and a paid plan ending with no free
+-- slot available to fall back into. Both are the same state, so both leave by the
+-- same door (resume, or subscribe).
+
+-- ─── the durable billing identity ────────────────────────────────────────────
+create table if not exists tracker.usage_subjects (
+    id          uuid        primary key default gen_random_uuid(),
+    -- SHA-256 of the lower-cased email (+ pepper). NOT a foreign key to
+    -- auth.users, and that is the entire point: it outlives the account.
+    owner_hash  text        not null,
+    -- 'personal' and 'free' are the two reserved slots; 'paid' subjects are
+    -- created per paid team and are not limited.
+    slot        text        not null,
+    -- 'active'   usage may be recorded
+    -- 'suspended' data kept, nothing may be spent — see the header
+    status      text        not null default 'active',
+    created_at  timestamptz not null default now(),
+    updated_at  timestamptz not null default now(),
+
+    constraint usage_subjects_slot_chk   check (slot in ('personal', 'free', 'paid')),
+    constraint usage_subjects_status_chk check (status in ('active', 'suspended')),
+    constraint usage_subjects_hash_chk   check (owner_hash ~ '^[0-9a-f]{64}$')
+);
+
+-- The quota, enforced by the database rather than by remembering to check: one
+-- personal and one free subject per email, forever. Partial, so 'paid' subjects
+-- are unconstrained.
+create unique index if not exists usage_subjects_reserved_slot_key
+    on tracker.usage_subjects (owner_hash, slot)
+    where slot in ('personal', 'free');
+
+create index if not exists usage_subjects_owner_idx on tracker.usage_subjects (owner_hash);
+
+drop trigger if exists touch_usage_subjects on tracker.usage_subjects;
+create trigger touch_usage_subjects before update on tracker.usage_subjects
+    for each row execute function tracker.touch_updated_at();
+
+-- ─── which teams have spent against a subject ────────────────────────────────
+-- team_id carries NO foreign key on purpose. The row has to outlive the team —
+-- that is what makes the balance survive a deletion — and a cascade would take
+-- the mapping down with it, orphaning the very ledger rows it explains.
+create table if not exists tracker.usage_subject_teams (
+    team_id    uuid        primary key,
+    subject_id uuid        not null references tracker.usage_subjects(id) on delete cascade,
+    bound_at   timestamptz not null default now(),
+    -- Set when the team is deleted or unbound. The row stays: it is how a
+    -- subject's spend is found across every team it has ever had.
+    unbound_at timestamptz
+);
+
+create index if not exists usage_subject_teams_subject_idx
+    on tracker.usage_subject_teams (subject_id);
+
+-- ─── break the cascades that were deleting the evidence ──────────────────────
+--
+-- prowl_usage_events.team_id and prowl_usage_period.team_id referenced
+-- tracker.teams(id) ON DELETE CASCADE, so deleting a team erased its usage. Under
+-- this model the team is a label on the spend, not its owner. The columns stay
+-- (the analyser keeps writing team_id, unchanged — see internal/server/usage.go)
+-- but they become SOFT references, resolved through usage_subject_teams.
+do $$
+declare c record;
+begin
+    for c in
+        select conrelid::regclass as tbl, conname
+        from pg_constraint
+        where contype = 'f'
+          and confrelid = 'tracker.teams'::regclass
+          and conrelid in ('tracker.prowl_usage_events'::regclass, 'tracker.prowl_usage_period'::regclass)
+    loop
+        execute format('alter table %s drop constraint %I', c.tbl, c.conname);
+        raise notice '0076: dropped %.% → teams cascade', c.tbl, c.conname;
+    end loop;
+end $$;
+
+comment on column tracker.prowl_usage_events.team_id is
+    'The team the spend was recorded against. SOFT reference since 0076 — no FK, '
+    'because the row must survive the team being deleted. Ownership is '
+    'usage_subject_teams → usage_subjects.';
+comment on column tracker.prowl_usage_period.team_id is
+    'See prowl_usage_events.team_id — soft reference since 0076.';
+
+-- ─── suspension needs a status the subscription can hold too ─────────────────
+-- team_subscriptions.status was ('active','past_due','canceled'). A suspended
+-- team keeps its row and its tier history; it simply may not spend.
+do $$ begin
+    if exists (select 1 from pg_constraint where conname = 'team_subscriptions_status_chk') then
+        alter table tracker.team_subscriptions drop constraint team_subscriptions_status_chk;
+    end if;
+    alter table tracker.team_subscriptions
+        add constraint team_subscriptions_status_chk
+        check (status in ('active', 'past_due', 'canceled', 'suspended'));
+end $$;
+
+alter table tracker.usage_subjects   enable row level security;
+alter table tracker.usage_subject_teams enable row level security;
+
+grant all on tracker.usage_subjects      to authenticated, service_role;
+grant all on tracker.usage_subject_teams to authenticated, service_role;
+
+comment on table tracker.usage_subjects is
+    'Durable billing identity: who a team''s Prowl spend belongs to, keyed by a '
+    'SHA-256 of the owner''s email so it survives the account and the team being '
+    'deleted. Two reserved slots per email (personal, free) plus one per paid '
+    'team. See modules/billing/domain/TeamSlots.ts.';
+comment on table tracker.usage_subject_teams is
+    'Every team that has ever spent against a usage subject. team_id is a SOFT '
+    'reference — the row outlives the team, which is what makes a balance survive '
+    'a team deletion and reattach to its replacement.';
+
+-- ─── supersede 0075 ──────────────────────────────────────────────────────────
+-- The 30-day, hash-keyed tombstone of a deleted account's spend. Same goal,
+-- narrower mechanism: it only covered account deletion, only for a month, and it
+-- copied numbers around instead of giving them an owner. Everything it did is a
+-- consequence of the subject model above. Dropped rather than left dormant, so
+-- there is one answer to "where does usage live".
+drop table if exists tracker.deleted_account_usage;
+
+
+-- ═══ MIGRATION: 0077_review_profiles.sql ═══
+
+-- 0077_review_profiles.sql — a team can say what kind of PR reviewer it wants.
+--
+-- ─── What this stores ────────────────────────────────────────────────────────
+--
+-- A REVIEW PROFILE: the dials (how strict, what may block a merge, how much
+-- evidence a blocker needs), the lenses (security, performance, migrations…),
+-- and the team's own written instructions. The analyser compiles all of it into
+-- one ReviewPolicy per run; see its ADR-0065.
+--
+-- ─── Why the team owns it and the project points at it ───────────────────────
+--
+-- The alternative — a profile per project — is the thing teams outgrow first.
+-- A team with fifteen services has one opinion about code review, not fifteen,
+-- and the second time somebody retypes "we wrap errors with %w" into a settings
+-- box the feature has failed. So profiles are a team LIBRARY and each project
+-- names one, which also makes "what changed about our reviews last month" a
+-- question with one place to look.
+--
+-- projects.review_profile_id is NULLABLE and null means the built-in default —
+-- the reviewer exactly as it behaved before profiles existed. That is the same
+-- reason the analyser treats an absent policy as the default rather than as an
+-- empty one: no row anywhere has to be backfilled for this migration to be
+-- correct, and deleting a profile degrades its projects to the default instead
+-- of breaking them (hence ON DELETE SET NULL).
+--
+-- ─── Why the dials are a jsonb blob and the lenses are an array ──────────────
+--
+-- The dials are a closed set TODAY and will not stay closed; every one added as
+-- a column is a migration plus a deploy ordering dance for what is, to the
+-- database, an opaque value it never filters on. The domain
+-- (modules/analysis/domain/ReviewProfile.ts) owns the vocabulary and validates
+-- it, exactly as DuplicateSensitivity owns its thresholds (0072) — the database
+-- stores the choice, not the meaning.
+--
+-- Lenses are a text[] rather than jsonb because they ARE queried as a set: "how
+-- many teams turned security on" is the first question this feature will be
+-- asked, and `where 'security' = any(lenses)` beats digging through json.
+--
+-- ─── Why editing is privileged, and audited ──────────────────────────────────
+--
+-- The blocking dial decides what counts as a merge-blocking finding, and
+-- modules/vcs/domain/MergeGate.ts refuses an in-app merge while any exist. So
+-- editing a profile can loosen who is allowed to merge what. That makes it an
+-- admin action (enforced in the route via AccessService — RLS is a fuse here,
+-- not an authorization system, see 0067) and it makes updated_by worth keeping:
+-- when a review gets quieter, somebody needs to be able to find out why.
+--
+-- ─── Grants ──────────────────────────────────────────────────────────────────
+--
+-- 0001's `grant on ALL TABLES` was a snapshot, not a rule, and two later tables
+-- were missed and failed at runtime until 0073 repaired them. New table, own
+-- grant. RLS enabled with no policies keeps it unreachable with the public key.
+
+create table if not exists tracker.review_profiles (
+    id            uuid primary key default gen_random_uuid(),
+    team_id       uuid not null references tracker.teams(id) on delete cascade,
+
+    name          text not null,
+    -- The preset this profile started from ('balanced', 'gatekeeper', …), kept
+    -- for the UI ("Custom, based on Gatekeeper") and so we can tell an untouched
+    -- preset from a hand-tuned profile when asking whether presets are any good.
+    preset        text,
+
+    -- The dials, as {strictness, evidence, blocking, positivity, verbosity,
+    -- voice, depth}. Unknown or missing keys resolve to the default ANALYSER-side
+    -- as well, so a value written by a newer app never breaks an older cell.
+    dials         jsonb not null default '{}'::jsonb,
+
+    -- Enabled optional lenses. An EMPTY array is meaningful and distinct from
+    -- null: it means "every optional lens off", which the analyser honours by
+    -- running only the three that have deterministic enforcement behind them.
+    lenses        text[] not null default '{}',
+
+    -- The team's free text, and the glob-scoped kind as [{glob, text}]. Bounded
+    -- and sanitised in the domain before it ever gets here; bounded AGAIN
+    -- analyser-side, because a service does not trust its caller.
+    instructions  text not null default '',
+    path_rules    jsonb not null default '[]'::jsonb,
+
+    created_by    uuid references auth.users(id) on delete set null,
+    updated_by    uuid references auth.users(id) on delete set null,
+    created_at    timestamptz not null default now(),
+    updated_at    timestamptz not null default now(),
+
+    constraint review_profiles_name_len check (char_length(name) between 1 and 60),
+    -- The domain caps this at 2000 with a friendly error; this is the backstop
+    -- that stops a direct writer parking a novel in a prompt.
+    constraint review_profiles_instructions_len check (char_length(instructions) <= 2000),
+    constraint review_profiles_lenses_len check (array_length(lenses, 1) is null or array_length(lenses, 1) <= 32),
+    -- One name per team: the profile is chosen from a dropdown, and two
+    -- "Strict"s in it is a support ticket.
+    constraint review_profiles_name_unique unique (team_id, name)
+);
+
+create index if not exists review_profiles_team_idx on tracker.review_profiles(team_id);
+
+alter table tracker.projects
+    add column if not exists review_profile_id uuid
+        references tracker.review_profiles(id) on delete set null;
+
+create index if not exists projects_review_profile_idx
+    on tracker.projects(review_profile_id)
+    where review_profile_id is not null;
+
+comment on table tracker.review_profiles is
+    'A team''s saved PR-reviewer configuration: dials, lenses and instructions. '
+    'The vocabulary lives in modules/analysis/domain/ReviewProfile.ts so it can be '
+    'extended without a migration; this table stores the choice, not the meaning. '
+    'Projects point at one (projects.review_profile_id); null means the built-in default.';
+
+comment on column tracker.review_profiles.lenses is
+    'Enabled OPTIONAL lenses. Empty array = all optional lenses off, which is '
+    'distinct from the project having no profile at all. The three lenses with '
+    'deterministic enforcement behind them (correctness, blast radius, test gaps) '
+    'run regardless and are not listed here.';
+
+comment on column tracker.projects.review_profile_id is
+    'Which team review profile this project''s PR reviews run under. Null = the '
+    'built-in default, i.e. the reviewer as it behaved before profiles existed. '
+    'ON DELETE SET NULL so deleting a profile degrades its projects to the default '
+    'rather than breaking their reviews.';
+
+-- Keep updated_at honest without every writer remembering to.
+create or replace function tracker.touch_review_profile()
+returns trigger language plpgsql as $$
+begin
+    new.updated_at = now();
+    return new;
+end $$;
+
+drop trigger if exists review_profiles_touch on tracker.review_profiles;
+create trigger review_profiles_touch
+    before update on tracker.review_profiles
+    for each row execute function tracker.touch_review_profile();
+
+-- Reachability fuse, per 0067: enabled, no policies, so the public key reads
+-- nothing. Authorization is the app's job (AccessService), not the database's.
+alter table tracker.review_profiles enable row level security;
+
+grant all on tracker.review_profiles to authenticated, service_role;
