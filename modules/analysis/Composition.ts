@@ -10,7 +10,7 @@ import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
 import { getVcsAppService } from "@/modules/vcs"
-import { getSpendGate } from "@/modules/billing"
+import { createSupabaseSubscriptionsRepository, getSpendGate } from "@/modules/billing"
 import type { Analyser } from "./ports/Analyser"
 import { HttpAnalyser } from "./infrastructure/HttpAnalyser"
 import { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
@@ -80,5 +80,8 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         // and billing, not with the project's regional content — a team cannot
         // span regions, so its reviewer configuration has one home.
         createSupabaseReviewProfileRepository(controlDb),
+        // Read only to cap review DEPTH by plan. Control plane: a subscription
+        // belongs to a team, same as the profile it caps.
+        createSupabaseSubscriptionsRepository(controlDb),
     )
 }

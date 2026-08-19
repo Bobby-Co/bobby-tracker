@@ -342,6 +342,29 @@ export function compilePolicy(profile: ReviewProfile | null, opts: { maxDepth?: 
 
 const DEPTH_RANK: Record<Depth, number> = { quick: 0, standard: 1, deep: 2 }
 
+/** The deepest review each plan may ask for.
+ *
+ *  Keyed by a plain STRING rather than billing's `TierId` on purpose. This file
+ *  has to stay dependency-free — the settings UI imports it into the browser —
+ *  and a type import from the billing barrel would be erased at compile time
+ *  today and load `next/headers` the first time somebody made it a value import.
+ *  The vocabulary is pinned instead by a test that reads TIER_IDS from billing
+ *  and asserts every tier has an entry here, so the two can't drift apart
+ *  silently even though nothing imports across the boundary at runtime.
+ *
+ *  An unknown or missing tier folds to the FLOOR, matching `Tier.of()`, which
+ *  folds an unrecognised id to Kit. */
+const TIER_MAX_DEPTH: Record<string, Depth> = {
+    kit: "quick",
+    prowler: "standard",
+    pride: "deep",
+    apex: "deep",
+}
+
+export function maxDepthForTier(tier: string | null | undefined): Depth {
+    return (tier && TIER_MAX_DEPTH[tier]) || "quick"
+}
+
 /** Hold a profile's depth to what the team's plan allows.
  *
  *  Clamped here rather than refused, because a team that downgrades should get

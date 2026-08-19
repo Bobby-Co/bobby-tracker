@@ -9,6 +9,7 @@ import {
     clampDepth,
     compilePolicy,
     matchingPreset,
+    maxDepthForTier,
     parseDials,
     parseLenses,
     presetByKey,
@@ -194,5 +195,58 @@ describe("presets", () => {
 
     test("preset keys are unique", () => {
         expect(new Set(PRESETS.map((p) => p.key)).size).toBe(PRESETS.length)
+    })
+})
+
+describe("depth by plan", () => {
+    test("the free tier cannot ask for a deep review", () => {
+        expect(maxDepthForTier("kit")).toBe("quick")
+        const wire = compilePolicy(profile({ dials: { ...DEFAULT_DIALS, depth: "deep" } }), {
+            maxDepth: maxDepthForTier("kit"),
+        })!
+        expect(wire.depth).toBe("quick")
+    })
+
+    test("a paid tier gets what it asked for", () => {
+        const p = profile({ dials: { ...DEFAULT_DIALS, depth: "deep" } })
+        expect(compilePolicy(p, { maxDepth: maxDepthForTier("pride") })!.depth).toBe("deep")
+        expect(compilePolicy(p, { maxDepth: maxDepthForTier("apex") })!.depth).toBe("deep")
+    })
+
+    test("the cap never RAISES a shallow choice", () => {
+        // A team on Apex that chose "quick" wants quick.
+        const p = profile({ dials: { ...DEFAULT_DIALS, depth: "quick" } })
+        expect(compilePolicy(p, { maxDepth: maxDepthForTier("apex") })!.depth).toBe("quick")
+    })
+
+    test("an unknown or missing tier folds to the floor", () => {
+        // Matches Tier.of(), which folds an unrecognised id to Kit.
+        for (const junk of [null, undefined, "", "enterprise_plus"]) {
+            expect(maxDepthForTier(junk)).toBe("quick")
+        }
+    })
+})
+
+describe("the tier vocabulary cannot drift", () => {
+    test("every billing tier has a depth cap", async () => {
+        // ReviewProfile.ts keys this by plain string so it stays dependency-free
+        // for the browser. Nothing imports across the boundary at runtime, so
+        // THIS is what stops a fifth tier being added to the ladder and silently
+        // falling to the floor for every team on it.
+        const { TIER_IDS } = await import("@/modules/billing/domain/Tier")
+        const floors = TIER_IDS.map((id) => maxDepthForTier(id))
+        expect(floors).not.toContain(undefined)
+        // Kit is the only tier that should land on the floor by design; any other
+        // tier reading "quick" means it was forgotten rather than decided.
+        const onFloor = TIER_IDS.filter((id) => maxDepthForTier(id) === "quick")
+        expect(onFloor).toEqual(["kit"])
+    })
+
+    test("the ladder is monotonic — a higher plan never buys less depth", () => {
+        const rank = { quick: 0, standard: 1, deep: 2 } as const
+        const ladder = ["kit", "prowler", "pride", "apex"].map((t) => rank[maxDepthForTier(t)])
+        for (let i = 1; i < ladder.length; i++) {
+            expect(ladder[i]).toBeGreaterThanOrEqual(ladder[i - 1])
+        }
     })
 })

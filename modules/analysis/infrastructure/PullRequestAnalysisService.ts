@@ -7,14 +7,14 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { PrAnalysis } from "@/lib/shared/types"
-import type { SpendGate } from "@/modules/billing"
+import type { SpendGate, SubscriptionsRepository } from "@/modules/billing"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
 import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
-import { compilePolicy } from "../domain/ReviewProfile"
+import { compilePolicy, maxDepthForTier } from "../domain/ReviewProfile"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
 
@@ -57,6 +57,10 @@ export class PullRequestAnalysisService {
          *  existing tests and any caller predating profiles construct unchanged;
          *  absent means every review runs under the built-in default. */
         private readonly profiles?: ReviewProfileRepository,
+        /** The team's plan, read only to cap how DEEP a review may go. Optional
+         *  for the same reason as `profiles`; absent means the profile's depth is
+         *  taken at face value. */
+        private readonly subscriptions?: SubscriptionsRepository,
     ) {}
 
     /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
@@ -148,6 +152,20 @@ export class PullRequestAnalysisService {
         // and the loading comment is up — so an unreadable profile costs nothing.
         const profile = this.profiles ? await tryOrNull(() => this.profiles!.findForProject(project.id)) : null
 
+        // Depth is the one dial that costs money, so it is the only one the plan
+        // gets a say in — and it CLAMPS rather than refuses: a team that
+        // downgrades should get shallower reviews, not none.
+        //
+        // An unreadable subscription leaves the depth alone rather than dropping
+        // it to the floor. Fail-closed is the right instinct for "may this team
+        // spend at all", and the spend gate above already applies it — by the
+        // time we are here billing has been read successfully once, so a failure
+        // now is a blip. Punishing a paying team for it, on a run whose USD
+        // ceiling is already fixed upstream, would be the worse trade.
+        const tier = profile && this.subscriptions
+            ? (await tryOrNull(() => this.subscriptions!.findByTeam(payer)))?.tier
+            : undefined
+
         await this.analyserFor(cell).startPRAnalysis(
             {
                 repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
@@ -161,7 +179,7 @@ export class PullRequestAnalysisService {
                 // null (no profile, or unreadable) sends NOTHING, which every
                 // analyser build understands as the default reviewer — including
                 // the ones deployed before policies existed.
-                policy: compilePolicy(profile) ?? undefined,
+                policy: compilePolicy(profile, tier ? { maxDepth: maxDepthForTier(tier) } : {}) ?? undefined,
             },
             row.id,
             { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
