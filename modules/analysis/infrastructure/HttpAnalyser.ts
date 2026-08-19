@@ -284,6 +284,10 @@ export class HttpAnalyser implements Analyser {
                 head_sha: input.headSha,
                 files: input.files,
                 max_budget_usd: input.maxBudgetUsd,
+                // Omitted entirely when there is no profile: JSON.stringify drops
+                // an undefined value, and the analyser rejects unknown fields —
+                // so "no profile" sends a body an older cell still accepts.
+                policy: input.policy,
                 task_id: taskId,
                 callback,
             }),

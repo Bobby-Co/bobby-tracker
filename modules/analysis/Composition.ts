@@ -17,6 +17,7 @@ import { createSupabaseProjectAnalyserRepository } from "./infrastructure/Supaba
 import { createServicePullRequestAnalysisStore } from "./infrastructure/SupabasePullRequestAnalysisStore"
 import { IssueAnalysisComment } from "./infrastructure/IssueAnalysisComment"
 import { PullRequestAnalysisComment } from "./infrastructure/PullRequestAnalysisComment"
+import { createSupabaseReviewProfileRepository } from "./infrastructure/SupabaseReviewProfileRepository"
 import { IssueAnalysisService } from "./infrastructure/IssueAnalysisService"
 import { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysisService"
 
@@ -75,5 +76,9 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         getVcsAppService,
         new PullRequestAnalysisComment(),
         getSpendGate(),
+        // Profiles are TEAM-owned and live in the control plane alongside teams
+        // and billing, not with the project's regional content — a team cannot
+        // span regions, so its reviewer configuration has one home.
+        createSupabaseReviewProfileRepository(controlDb),
     )
 }

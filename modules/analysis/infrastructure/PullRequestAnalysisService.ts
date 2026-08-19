@@ -13,6 +13,8 @@ import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
+import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
+import { compilePolicy } from "../domain/ReviewProfile"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
 
@@ -51,6 +53,10 @@ export class PullRequestAnalysisService {
         private readonly comment: PullRequestAnalysisComment,
         /** The billing hard gate — see IssueAnalysisService for why it is injected. */
         private readonly spend: SpendGate,
+        /** The team's review profile, resolved per project (0077). Optional so the
+         *  existing tests and any caller predating profiles construct unchanged;
+         *  absent means every review runs under the built-in default. */
+        private readonly profiles?: ReviewProfileRepository,
     ) {}
 
     /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
@@ -135,6 +141,13 @@ export class PullRequestAnalysisService {
         })
         if (!row) return
 
+        // The team's reviewer configuration. Best-effort on purpose: a profile
+        // that can't be read must not stop the review, because the failure mode
+        // of "we couldn't load your settings" should be the DEFAULT reviewer, not
+        // silence on a pull request. Resolved late — after every gate has passed
+        // and the loading comment is up — so an unreadable profile costs nothing.
+        const profile = this.profiles ? await tryOrNull(() => this.profiles!.findForProject(project.id)) : null
+
         await this.analyserFor(cell).startPRAnalysis(
             {
                 repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
@@ -145,6 +158,10 @@ export class PullRequestAnalysisService {
                 headSha: pr.headSha || undefined,
                 files,
                 projectId: project.id,
+                // null (no profile, or unreadable) sends NOTHING, which every
+                // analyser build understands as the default reviewer — including
+                // the ones deployed before policies existed.
+                policy: compilePolicy(profile) ?? undefined,
             },
             row.id,
             { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },

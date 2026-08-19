@@ -23,6 +23,23 @@ export { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysis
 export type { PrInput, PrProject } from "./infrastructure/PullRequestAnalysisService"
 export { createIssueAnalysisService, createPullRequestAnalysisService } from "./Composition"
 
+// ─── review profiles — what kind of reviewer a team wants (0077) ─────────────
+// The DOMAIN (vocabulary, presets, sanitisation) is exported here for servers.
+// Client components must import modules/analysis/domain/ReviewProfile DIRECTLY:
+// this barrel re-exports Composition, which reaches next/headers and fails the
+// browser build. The domain files import nothing, which is what makes that safe.
+export type {
+    Dials, Depth, PathRule, Preset, ReviewProfile, ReviewPolicyWire, LensSpec, DialSpec,
+} from "./domain/ReviewProfile"
+export {
+    DEFAULT_DIALS, DEFAULT_LENSES, DIAL_SPECS, LENSES, PRESETS, PRESET_KEYS,
+    affectsMergeGate, clampDepth, compilePolicy, matchingPreset, parseDials, parseLenses, presetByKey,
+} from "./domain/ReviewProfile"
+export { LIMITS as REVIEW_INSTRUCTION_LIMITS, sanitiseInstructions } from "./domain/ReviewInstructions"
+export type { SanitisedInstructions, InstructionIssue } from "./domain/ReviewInstructions"
+export type { ReviewProfileRepository, ReviewProfileInput } from "./ports/ReviewProfileRepository"
+export { createSupabaseReviewProfileRepository } from "./infrastructure/SupabaseReviewProfileRepository"
+
 // ─── the analyser port + its composition seam ───────────────────────────────
 // Callers depend on the Analyser interface and obtain an implementation via
 // getAnalyser(); they must NOT import the HTTP adapter directly.

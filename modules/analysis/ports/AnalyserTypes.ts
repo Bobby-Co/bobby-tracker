@@ -4,6 +4,7 @@
 // transport that produces/consumes them lives in infrastructure/HttpAnalyser.
 
 import type { AnalyseEffort } from "../domain/ProjectAnalyser"
+import type { ReviewPolicyWire } from "../domain/ReviewProfile"
 export type { AnalyseEffort }
 
 /** Thrown by the Analyser adapter on any transport/protocol failure. */
@@ -353,6 +354,13 @@ export interface PrAnalyseInput {
     projectId?: string
     /** Relay routing (X-Bobby-User); ignored when no worker is connected. */
     userId?: string
+    /** The team's compiled review profile (analyser ADR-0065). OMITTED means the
+     *  default reviewer, which is what every caller sent before profiles existed
+     *  — so this is purely additive. It stays optional for a second reason worth
+     *  knowing: the analyser decodes with DisallowUnknownFields, so a cell that
+     *  predates the field REJECTS a request carrying it. Send it only once the
+     *  analyser side is deployed. */
+    policy?: ReviewPolicyWire
 }
 
 // ─── /verify ─────────────────────────────────────────────────────────────────
