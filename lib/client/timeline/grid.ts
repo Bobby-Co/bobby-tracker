@@ -1,21 +1,17 @@
-// Grid coordinate helpers for the LEGO-board planning view.
+// Grid coordinate helpers for the board planning view.
 //
-// Where the Gantt canvas (issue-timeline.tsx) works in continuous
-// "pixels per hour", the board works in DISCRETE cells: each column
-// is one day, each row is a lane. Tasks are bricks that occupy
-// whole cells — a duration is a count of columns, a lane is a row.
+// The board works in DISCRETE cells: each column is one day, each row
+// is a lane. Tasks are bricks that occupy whole cells — a duration is a
+// count of columns, a lane is a row.
 //
-// On-disk state is unchanged (starts_at / ends_at ISO strings +
-// lane_y 0..1) so a task placed on the board reads back correctly
-// on the Gantt timeline and vice-versa. These helpers are the
-// bridge between that continuous storage and the snapped grid.
+// On-disk state is continuous (starts_at / ends_at ISO strings + lane_y
+// 0..1, the shape the DB constrains) — these helpers are the bridge
+// between that storage and the snapped grid.
 
 import type { Issue } from "@/lib/shared/types"
 import { DAY_MS } from "./scale"
 
-export const MIN_ROWS = 8           // fewest lanes even on a short screen
 export const CELL = 32              // px — square baseplate cell (at 100% zoom)
-export const TILE_INSET = 3         // px gutter so bricks show studs between
 export const MIN_COLS = 56          // never render a cramped board
 export const PAST_PAD_DAYS = 3      // runway before the earliest task
 export const FUTURE_PAD_DAYS = 21   // empty slots to drag future work into
@@ -44,9 +40,9 @@ export function addDays(ms: number, days: number): number {
     return d.getTime()
 }
 
-// lane_y (0..1) <-> row index, for a board of `rows` lanes. Storage
-// is fractional so a tile keeps its relative position when the board
-// grows or shrinks (e.g. the window is resized to fit more lanes).
+// lane_y (0..1) <-> row index, for a board of `rows` lanes. Storage is
+// fractional because the column is constrained to 0..1; the board pins
+// `rows` to ABS_LANES below so a row means the same lane every time.
 export function laneToRow(laneY: number, rows: number): number {
     if (rows <= 1) return 0
     return Math.min(rows - 1, Math.max(0, Math.round(laneY * (rows - 1))))
@@ -113,4 +109,27 @@ export function cellToSchedule(
         ends_at: new Date(endMs).toISOString(),
         lane_y: rowToLane(row, rows),
     }
+}
+
+// --- Absolute lane rows (playful board) ---------------------------------
+//
+// The sticker board addresses lanes as ABSOLUTE integer rows: a row keeps
+// its identity when the window resizes, mirroring the unbounded absolute
+// day-columns. Storage is still the shared `lane_y` fraction — the column
+// is a `real` with a `0 <= lane_y <= 1` CHECK, and the Gantt view reads it
+// as "how far down the canvas" — so rows ride on a FIXED virtual board of
+// ABS_LANES lanes rather than the viewport-derived count TimelineGrid uses.
+// That keeps both writers inside the constraint and keeps the two views
+// mutually readable.
+//
+// The trade: rows outside [0, ABS_LANES-1] can't be expressed, so they
+// clamp on the way out (laneToRow / rowToLane already clamp for us).
+export const ABS_LANES = 64
+
+export function laneToRowAbs(laneY: number): number {
+    return laneToRow(laneY, ABS_LANES)
+}
+
+export function rowToLaneAbs(row: number): number {
+    return rowToLane(row, ABS_LANES)
 }

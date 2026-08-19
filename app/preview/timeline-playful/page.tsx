@@ -6,6 +6,7 @@
 
 import { useState } from "react"
 import { TimelineGridPlayful, tileCols } from "@/components/timeline/timeline-grid-playful"
+import { rowToLaneAbs } from "@/lib/client/timeline/grid"
 import type {
     Issue,
     IssueStatus,
@@ -86,7 +87,7 @@ function mk(
         duplicate_of_issue_id: null,
         starts_at: scheduled ? midnight(opts.startDay!) : null,
         ends_at: scheduled ? midnight(opts.startDay! + (opts.days ?? 1)) : null,
-        lane_y: scheduled ? (opts.lane ?? 0) : null,
+        lane_y: scheduled ? rowToLaneAbs(opts.lane ?? 0) : null,
         color: null,
         analyse_effort: null,
         created_at: new Date(Date.now() - DAY).toISOString(),
@@ -185,8 +186,8 @@ function packLanes(specs: Spec[]): (Spec & { lane: number })[] {
         for (let dc = 0; dc < width; dc++)
             for (let dl = 0; dl < span; dl++)
                 occ.add(`${lane + dl}:${s.startDay + dc}`)
-        // Absolute integer lane row — the playful board stores lane_y as the
-        // row directly (infinite vertical), not a normalized 0..1 fraction.
+        // Absolute integer lane row; mk() encodes it into the stored
+        // lane_y fraction the board decodes back (see rowToLaneAbs).
         return { ...s, lane }
     })
 }
@@ -231,6 +232,10 @@ export default function PreviewTimeline() {
                 labelIcons={labelIcons}
                 statusColors={[]}
                 onTileClick={setOpenIssue}
+                // Mock issues have no rows behind them, so a drag here must
+                // not try to PATCH them — every write would come back 4xx
+                // and the board would (rightly) report it couldn't save.
+                persist={false}
                 // Open with the rich tiles pre-expanded so the tiered
                 // content is visible without dragging first.
                 initialTileRows={initialTileRows}
