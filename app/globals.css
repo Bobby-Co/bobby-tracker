@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Tailwind's `dark:` variant defaults to `prefers-color-scheme`, but this app's
+   theme is data-theme on <html> (stored choice, else the OS preference — see
+   THEME_BOOT in app/layout.tsx). Left at the default, every `dark:` utility
+   keyed off the OS while the tokens keyed off the choice, so the two disagreed
+   for anyone whose picked theme differs from their system: rose/amber panels
+   built from `dark:` pairs stayed light on the dark app, or went dark on the
+   light one. Bind the variant to the same attribute the tokens use. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ─── tokens (light-mode-first, mirrors ci/tokens.json) ─────────────── */
 :root {
     --c-page:          #fbfbfc;

@@ -11,6 +11,11 @@ import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 // DELETE /api/projects/[id]). Guarded by a type-the-name confirmation so it
 // can't be triggered by a stray click.
 //
+// Colours come from the --c-rose token pair rather than rose-* literals with
+// `dark:` twins. The pair inverts with the theme in one place, so the panel
+// can't end up a light card on the dark app (or a dark slab on the light one)
+// the way a half-covered set of `dark:` overrides could.
+//
 // The name comes from GET /api/projects/[id], not from a browser Supabase read.
 // It used to read `projects` directly with the anon key, which stopped returning
 // anything the moment 0067 retired the tenant RLS policies — and because the
@@ -54,14 +59,14 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
     }
 
     return (
-        <section className="rounded-[16px] border border-rose-300 bg-rose-50/40 p-5 dark:border-rose-900/60 dark:bg-rose-950/20">
+        <section className="rounded-[16px] border border-[color:var(--c-rose-fg)]/30 bg-[color:var(--c-rose-bg)]/40 p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">
+                    <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]">
                         <WarnIcon />
                     </span>
                     <div>
-                        <div className="text-[14px] font-bold text-rose-700 dark:text-rose-400">Delete project</div>
+                        <div className="text-[14px] font-bold text-[color:var(--c-rose-fg)]">Delete project</div>
                         <p className="mt-1 max-w-prose text-[13px] text-[color:var(--c-text-muted)]">
                             Permanently deletes this project, its knowledge graph on the analyser, and every
                             issue, pull request, review, and comment tracked here. This cannot be undone.
@@ -72,7 +77,7 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
                 <button
                     type="button"
                     onClick={() => setConfirming(true)}
-                    className="h-8 shrink-0 rounded-[8px] border border-rose-400 px-3 text-[12.5px] font-semibold text-rose-700 transition-colors hover:bg-rose-600 hover:text-white dark:border-rose-800 dark:text-rose-400 dark:hover:text-white"
+                    className="h-8 shrink-0 rounded-[8px] border border-[color:var(--c-rose-fg)]/40 px-3 text-[12.5px] font-semibold text-[color:var(--c-rose-fg)] transition-colors hover:bg-rose-600 hover:text-white"
                 >
                     Delete project
                 </button>
@@ -118,7 +123,7 @@ export function DangerZonePanel({ projectId }: { projectId: string }) {
                         <p className="text-[12px] text-[color:var(--c-text-muted)]">Loading the project name…</p>
                     )}
 
-                    {err && <p className="text-[12.5px] text-rose-700 dark:text-rose-400">{err}</p>}
+                    {err && <p className="text-[12.5px] text-[color:var(--c-rose-fg)]">{err}</p>}
 
                     <div className="flex justify-end gap-2 pt-1">
                         <button
