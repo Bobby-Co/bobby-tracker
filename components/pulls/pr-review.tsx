@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -9,6 +9,7 @@ import { cn } from "@/components/ui/cn"
 import { severityLabel } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
+import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
 import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis } from "@/lib/shared/types"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
@@ -179,139 +180,329 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
     )
 }
 
-// Finding groups by traffic-light state, issues first. Each becomes a
-// collapsible section so a long review stays scannable.
-const GROUPS: { key: "critical" | "review" | "good"; title: string; tone: string; open: boolean }[] = [
-    { key: "critical", title: "Blockers", tone: "bg-rose-100 text-rose-700", open: true },
-    { key: "review", title: "Worth a review", tone: "bg-amber-100 text-amber-700", open: true },
-    { key: "good", title: "Looks good", tone: "bg-emerald-100 text-emerald-700", open: false },
-]
+// Finding group titles + tones by traffic-light state. The analyser sends the
+// state; how a state LOOKS is ours, which is the whole reason nothing on the
+// wire is a colour.
+const GROUP_STYLE: Record<BlockState, { title: string; tone: string; open: boolean }> = {
+    critical: { title: "Blockers", tone: "bg-rose-100 text-rose-700", open: true },
+    review: { title: "Worth a review", tone: "bg-amber-100 text-amber-700", open: true },
+    good: { title: "Looks good", tone: "bg-emerald-100 text-emerald-700", open: false },
+}
 
-function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
-    const findings = r.findings ?? []
-    const grouped = GROUPS.map((g) => ({ ...g, items: findings.filter((f) => findingState(f.severity) === g.key) }))
-    const counts = Object.fromEntries(grouped.map((g) => [g.key, g.items.length]))
+// Semantic tone → the app's token pairs. The markdown renderer maps the same
+// five words to badge tones; neither knows about the other's palette.
+const TONE_CLASSES: Record<BlockTone, string> = {
+    neutral: "border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] text-[color:var(--c-text)]",
+    info: "border-[color:var(--c-info-fg)]/25 bg-[color:var(--c-info-bg)] text-[color:var(--c-info-fg)]",
+    good: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    warn: "border-amber-200 bg-amber-50 text-amber-800",
+    critical: "border-rose-200 bg-rose-50 text-rose-800",
+}
 
-    return (
-        <div className="flex flex-col gap-3">
-            {r.verdict && (
-                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(r.verdict))}>
-                    <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
-                        <VerdictIcon v={r.verdict} />
-                        {verdictLabel(r.verdict)}
-                    </span>
-                    {r.verdict_reason && <span className="text-[12.5px] leading-5 opacity-90">— {r.verdict_reason}</span>}
-                </div>
-            )}
+/** What every block renderer gets. `r` is the canonical review — reference
+ *  blocks read it, which is what keeps them in step with the analyser's gate
+ *  rewriting `findings` after the fact. `b` is the block's own payload. */
+interface BlockProps {
+    b: ReportBlock
+    r: PrAnalysis
+    projectId: string | null
+}
 
-            {/* Merge-readiness headline: the analyser's score + bar, or a plain
-                "not ready" placeholder when it didn't send one (never faked). */}
-            {typeof r.score === "number" && r.score_max ? (
-                <ScoreBar value={r.score} max={r.score_max} />
-            ) : (
-                <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-2.5">
-                    <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">Merge readiness</span>
-                    <span className="text-[12px] text-[color:var(--c-text-muted)]">· not ready</span>
-                </div>
-            )}
+// The renderer table. Typed as a Record over BlockKind ON PURPOSE: adding a kind
+// to the registry without adding a renderer here is then a TYPE error, not a
+// blank space someone notices in production. The GitHub-comment renderer is
+// keyed the same way, so the two surfaces cannot drift apart silently.
+const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
+    verdict_banner: ({ r }) =>
+        !r.verdict ? null : (
+            <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(r.verdict))}>
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
+                    <VerdictIcon v={r.verdict} />
+                    {verdictLabel(r.verdict)}
+                </span>
+                {r.verdict_reason && <span className="text-[12.5px] leading-5 opacity-90">— {r.verdict_reason}</span>}
+            </div>
+        ),
 
-            {/* Finding tally, so the reader orients before scrolling. */}
-            {(counts.critical > 0 || counts.review > 0 || counts.good > 0) && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {counts.critical > 0 && <Tally n={counts.critical} label="blocker" tone="bg-rose-100 text-rose-700" />}
-                    {counts.review > 0 && <Tally n={counts.review} label="to review" tone="bg-amber-100 text-amber-700" />}
-                    {counts.good > 0 && <Tally n={counts.good} label="good" tone="bg-emerald-100 text-emerald-700" />}
-                </div>
-            )}
+    // Merge-readiness headline: the analyser's score + bar, or a plain "not
+    // ready" placeholder when it didn't send one (never faked).
+    score: ({ r }) =>
+        typeof r.score === "number" && r.score_max ? (
+            <ScoreBar value={r.score} max={r.score_max} />
+        ) : (
+            <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-2.5">
+                <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">Merge readiness</span>
+                <span className="text-[12px] text-[color:var(--c-text-muted)]">· not ready</span>
+            </div>
+        ),
 
-            {/* Per-dimension confidence as 3-stage meters, coloured by level. */}
-            {r.confidences ? (
-                <ConfidenceMeters c={r.confidences} />
-            ) : (
-                r.confidence && (
-                    <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
-                        confidence: {r.confidence}
-                    </span>
-                )
-            )}
+    // Finding tally, so the reader orients before scrolling.
+    tally: ({ r }) => {
+        const f = r.findings ?? []
+        const n = (s: BlockState) => f.filter((x) => findingState(x.severity) === s).length
+        const [crit, rev, good] = [n("critical"), n("review"), n("good")]
+        if (crit + rev + good === 0) return null
+        return (
+            <div className="flex flex-wrap items-center gap-1.5">
+                {crit > 0 && <Tally n={crit} label="blocker" tone="bg-rose-100 text-rose-700" />}
+                {rev > 0 && <Tally n={rev} label="to review" tone="bg-amber-100 text-amber-700" />}
+                {good > 0 && <Tally n={good} label="good" tone="bg-emerald-100 text-emerald-700" />}
+            </div>
+        )
+    },
 
-            {r.summary?.trim() && (
+    // Per-dimension confidence as 3-stage meters, coloured by level. `dims`
+    // lets a profile lead with the dimension it cares about — a security-first
+    // review shows security first — and falls back to the canonical order.
+    meters: ({ b, r }) =>
+        r.confidences ? (
+            <ConfidenceMeters c={r.confidences} dims={b.dims} />
+        ) : r.confidence ? (
+            <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
+                confidence: {r.confidence}
+            </span>
+        ) : null,
+
+    prose: ({ b, r }) => {
+        if (b.role === "summary") {
+            return !r.summary?.trim() ? null : (
                 <blockquote className="border-l-2 border-amber-300 pl-3 text-[13.5px] leading-6 text-[color:var(--c-text)]">
                     <Md>{r.summary}</Md>
                 </blockquote>
-            )}
-
-            {(r.impact?.trim() || (r.impact_files && r.impact_files.length > 0)) && (
-                <Section title="Impact">
-                    {r.impact?.trim() && <Md className="text-[13px] leading-6">{r.impact}</Md>}
-                    {r.impact_files && r.impact_files.length > 0 && (
-                        <ul className="mt-1.5 flex flex-col gap-1.5">
-                            {r.impact_files.map((f, i) => (
-                                <li key={i} className="text-[12.5px] leading-5">
-                                    <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
-                                    <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+            )
+        }
+        if (b.role === "impact") {
+            return !r.impact?.trim() ? null : (
+                <Section title={b.title || "Impact"}>
+                    <Md className="text-[13px] leading-6">{r.impact}</Md>
                 </Section>
-            )}
+            )
+        }
+        // "note" — the one prose role that carries its own text, for a lens that
+        // wants to say something no canonical field holds.
+        return !b.body?.trim() ? null : (
+            <Section title={b.title || "Note"}>
+                <Md className="text-[13px] leading-6">{b.body}</Md>
+            </Section>
+        )
+    },
 
-            {grouped.map((g) =>
-                g.items.length === 0 ? null : (
-                    <Section key={g.key} title={g.title} count={g.items.length} countTone={g.tone} defaultOpen={g.open}>
-                        <div className="flex flex-col gap-2">
-                            {g.items.map((f, i) => (
-                                <Finding key={i} f={f} />
-                            ))}
-                        </div>
-                    </Section>
-                ),
-            )}
-
-            {r.fix_claims && r.fix_claims.length > 0 && (
-                <Section title="Fix claims" count={r.fix_claims.length}>
-                    <div className="flex flex-col gap-2">
-                        {r.fix_claims.map((c, i) => (
-                            <div key={i} className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-2.5">
-                                <div className="flex items-start justify-between gap-2">
-                                    <span className="min-w-0 flex-1 text-[12.5px] font-medium">{c.claim}</span>
-                                    <span className={cn("shrink-0 rounded-full px-2 py-[1px] text-[10.5px] font-semibold", verdictClasses(c.verdict))}>
-                                        {c.verdict || "unclear"}
-                                    </span>
-                                </div>
-                                {c.reason && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{c.reason}</p>}
-                            </div>
-                        ))}
-                    </div>
-                </Section>
-            )}
-
-            {r.checklist && r.checklist.length > 0 && (
-                <Section title="Nice to check" count={r.checklist.length} defaultOpen={false}>
-                    <ul className="flex flex-col gap-1.5">
-                        {r.checklist.map((c, i) => (
-                            <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
-                                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[color:var(--c-text-dim)]" aria-hidden />
-                                <span>{c}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </Section>
-            )}
-
-            {r.checks && <ChecksFooter checks={r.checks} />}
-
-            {(r.duration_ms != null || (r.insight_id && projectId)) && (
-                <div className="flex items-center justify-between gap-3 pt-1">
-                    {r.insight_id && projectId ? <DeepDiveButton insightId={r.insight_id} projectId={projectId} /> : <span />}
-                    {r.duration_ms != null && (
-                        <p className="text-[11px] text-[color:var(--c-text-dim)]">Reviewed in {(r.duration_ms / 1000).toFixed(1)}s</p>
-                    )}
+    finding_group: ({ b, r }) => {
+        const state = b.state ?? "review"
+        const items = (r.findings ?? []).filter((f) => findingState(f.severity) === state)
+        if (items.length === 0) return null
+        const style = GROUP_STYLE[state] ?? GROUP_STYLE.review
+        return (
+            <Section title={b.title || style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
+                <div className="flex flex-col gap-2">
+                    {items.map((f, i) => (
+                        <Finding key={i} f={f} />
+                    ))}
                 </div>
-            )}
+            </Section>
+        )
+    },
 
-            {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note. */}
+    file_impact_list: ({ b, r }) => {
+        const files = r.impact_files ?? []
+        if (files.length === 0) return null
+        return (
+            <Section title={b.title || "Affected files"} count={files.length}>
+                <ul className="flex flex-col gap-1.5">
+                    {files.map((f, i) => (
+                        <li key={i} className="text-[12.5px] leading-5">
+                            <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
+                            <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    claims_table: ({ b, r }) => {
+        const claims = r.fix_claims ?? []
+        if (claims.length === 0) return null
+        return (
+            <Section title={b.title || "Fix claims"} count={claims.length}>
+                <div className="flex flex-col gap-2">
+                    {claims.map((c, i) => (
+                        <div key={i} className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                                <span className="min-w-0 flex-1 text-[12.5px] font-medium">{c.claim}</span>
+                                <span className={cn("shrink-0 rounded-full px-2 py-[1px] text-[10.5px] font-semibold", verdictClasses(c.verdict))}>
+                                    {c.verdict || "unclear"}
+                                </span>
+                            </div>
+                            {c.reason && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{c.reason}</p>}
+                        </div>
+                    ))}
+                </div>
+            </Section>
+        )
+    },
+
+    checklist: ({ b, r }) => {
+        const items = r.checklist ?? []
+        if (items.length === 0) return null
+        return (
+            <Section title={b.title || "Nice to check"} count={items.length} defaultOpen={false}>
+                <ul className="flex flex-col gap-1.5">
+                    {items.map((c, i) => (
+                        <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
+                            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[color:var(--c-text-dim)]" aria-hidden />
+                            <span>{c}</span>
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    checks_footer: ({ r }) => (r.checks ? <ChecksFooter checks={r.checks} /> : null),
+
+    deep_dive_cta: ({ r, projectId }) =>
+        r.duration_ms == null && !(r.insight_id && projectId) ? null : (
+            <div className="flex items-center justify-between gap-3 pt-1">
+                {r.insight_id && projectId ? <DeepDiveButton insightId={r.insight_id} projectId={projectId} /> : <span />}
+                {r.duration_ms != null && (
+                    <p className="text-[11px] text-[color:var(--c-text-dim)]">Reviewed in {(r.duration_ms / 1000).toFixed(1)}s</p>
+                )}
+            </div>
+        ),
+
+    // ── inline blocks: these carry their own payload, because no canonical
+    //    field holds it and the analyser's gate has no opinion about it ──
+
+    callout: ({ b }) =>
+        !b.body?.trim() && !b.title?.trim() ? null : (
+            <div className={cn("rounded-[10px] border px-3 py-2.5", TONE_CLASSES[b.tone ?? "neutral"])}>
+                {b.title && <p className="text-[12.5px] font-bold leading-5">{b.title}</p>}
+                {b.body && <div className="mt-0.5 text-[12.5px] leading-5 opacity-90"><Md>{b.body}</Md></div>}
+            </div>
+        ),
+
+    spec_table: ({ b }) => {
+        const rows = b.rows ?? []
+        if (rows.length === 0) return null
+        const cols = b.columns ?? []
+        return (
+            <Section title={b.title || "Details"} count={rows.length}>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[12px]">
+                        {cols.length > 0 && (
+                            <thead>
+                                <tr>
+                                    {cols.map((c, i) => (
+                                        <th key={i} className="whitespace-nowrap border-b border-[color:var(--c-border)] pb-1.5 pr-3 text-[10.5px] font-semibold uppercase tracking-wide text-[color:var(--c-text-muted)]">
+                                            {c}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                        )}
+                        <tbody>
+                            {rows.map((row, i) => (
+                                <tr key={i}>
+                                    {row.map((cell, j) => (
+                                        <td key={j} className="border-b border-[color:var(--c-border)] py-1.5 pr-3 align-top leading-5 text-[color:var(--c-text-muted)]">
+                                            {cell}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Section>
+        )
+    },
+
+    timeline: ({ b }) => {
+        const items = b.items ?? []
+        if (items.length === 0) return null
+        return (
+            <Section title={b.title || "History"} count={items.length} defaultOpen={false}>
+                <ul className="flex flex-col gap-2">
+                    {items.map((it, i) => (
+                        <li key={i} className="flex items-baseline gap-2 text-[12.5px] leading-5">
+                            {it.when && <code className="shrink-0 font-mono text-[10.5px] text-[color:var(--c-text-dim)]">{it.when}</code>}
+                            <span className="min-w-0">
+                                <span className="font-medium">{it.label}</span>
+                                {it.detail && <span className="text-[color:var(--c-text-muted)]"> — {it.detail}</span>}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    dependency_list: ({ b }) => {
+        const items = b.items ?? []
+        if (items.length === 0) return null
+        return (
+            <Section title={b.title || "Dependencies"} count={items.length}>
+                <ul className="flex flex-col gap-1.5">
+                    {items.map((it, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
+                            <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{it.label}</code>
+                            {(it.from || it.to) && (
+                                <span className="font-mono text-[11px] text-[color:var(--c-text-dim)]">
+                                    {it.from || "—"} → {it.to || "—"}
+                                </span>
+                            )}
+                            {it.detail && <span className="text-[color:var(--c-text-muted)]">{it.detail}</span>}
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    risk_matrix: ({ b }) => {
+        const items = b.items ?? []
+        if (items.length === 0) return null
+        const axis = (v?: string) => (v === "high" ? "text-rose-700" : v === "medium" ? "text-amber-700" : "text-emerald-700")
+        return (
+            <Section title={b.title || "Risks"} count={items.length}>
+                <ul className="flex flex-col gap-2">
+                    {items.map((it, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
+                            <span className="min-w-0 flex-1 font-medium">{it.label}</span>
+                            <span className="shrink-0 text-[11px]">
+                                <span className={axis(it.likelihood)}>{it.likelihood || "—"}</span>
+                                <span className="text-[color:var(--c-text-dim)]"> likelihood · </span>
+                                <span className={axis(it.impact)}>{it.impact || "—"}</span>
+                                <span className="text-[color:var(--c-text-dim)]"> impact</span>
+                            </span>
+                            {it.detail && <p className="w-full text-[12px] text-[color:var(--c-text-muted)]">{it.detail}</p>}
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+}
+
+// Renders the review by walking the layout the analyser sent — or the classic
+// one, for the years of stored reviews written before layouts existed. Blocks
+// whose data is empty return null and simply take up no space, so a small PR
+// doesn't render as a column of empty boxes.
+function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
+    return (
+        <div className="flex flex-col gap-3">
+            {layoutFor(r.report).map((b, i) => {
+                const render = BLOCKS[b.kind]
+                // Belt to the registry filter's braces: layoutFor already drops
+                // kinds we don't know, but this render path is the one place a
+                // newer analyser's vocabulary reaches the browser.
+                if (!render) return null
+                return <Fragment key={i}>{render({ b, r, projectId })}</Fragment>
+            })}
+
+            {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note.
+                Outside the layout on purpose: it is not the analyser's to omit. */}
             <p className="pt-1 text-[10.5px] leading-4 text-[color:var(--c-text-dim)]">
                 Ucelot is AI-assisted and can make mistakes — verify findings before acting.
             </p>
@@ -424,12 +615,29 @@ function Meter({ label, dim }: { label: string; dim: PrConfidenceDimension }) {
         </div>
     )
 }
-function ConfidenceMeters({ c }: { c: PrConfidences }) {
+// The three dimensions, and the canonical order they read in when nobody asks
+// for another. A `meters` block's `dims` both ORDERS and SUBSETS them, which is
+// how a security-first profile gets security at the top without the renderer
+// knowing anything about profiles.
+const METER_DIMS = ["correctness", "load_perf", "security"] as const
+const METER_LABEL: Record<(typeof METER_DIMS)[number], string> = {
+    correctness: "correctness",
+    load_perf: "load / perf",
+    security: "security",
+}
+
+function ConfidenceMeters({ c, dims }: { c: PrConfidences; dims?: string[] }) {
+    const wanted = dims?.length
+        ? (dims.filter((d) => (METER_DIMS as readonly string[]).includes(d)) as (typeof METER_DIMS)[number][])
+        : [...METER_DIMS]
+    // An all-unknown `dims` would otherwise render an empty box; fall back rather
+    // than silently dropping the confidence the review did calibrate.
+    const shown = wanted.length > 0 ? wanted : [...METER_DIMS]
     return (
         <div className="flex flex-col gap-1.5">
-            <Meter label="correctness" dim={c.correctness} />
-            <Meter label="load / perf" dim={c.load_perf} />
-            <Meter label="security" dim={c.security} />
+            {shown.map((d) => (
+                <Meter key={d} label={METER_LABEL[d]} dim={c[d]} />
+            ))}
         </div>
     )
 }

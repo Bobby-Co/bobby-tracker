@@ -2,6 +2,8 @@
 // in the supabase CLI codegen toolchain just for Phase 2; regenerate with
 // `supabase gen types typescript --schema tracker` once the schema settles.
 
+import type { Report } from "./report/registry"
+
 export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
@@ -343,6 +345,13 @@ export interface PrAnalysis {
     duration_ms?: number
     /** Session-insight id → powers the deep-dive chat (analyser ADR-0055). */
     insight_id?: string
+    /** The review's LAYOUT — which blocks render, in what order (analyser
+     *  ADR-0066). It ACCOMPANIES the fields above rather than replacing them:
+     *  the blocks reference this data, because the analyser's gate rewrites
+     *  `findings` after the review pass and a layout carrying its own copy would
+     *  drift from it. Absent on every row written before blocks existed, which
+     *  both renderers read as "use the classic layout". */
+    report?: Report | null
 }
 
 /** Shape returned by GET /api/github/repos — a flattened subset of the
