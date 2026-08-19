@@ -18,7 +18,8 @@ export async function GET() {
     const tier = sub?.tier ?? "kit"
     const periodStart = sub?.period_start ?? startOfMonthUtc()
 
-    const { data: period, error: usedErr } = await repoRead(() => ctx.usage.currentPeriodUsage(teamId, periodStart))
+    // Through the billing subject (0076), not the team — see PeriodUsageReader.
+    const { data: period, error: usedErr } = await repoRead(() => ctx.periodUsage.forTeam(teamId, periodStart))
     if (usedErr) return usedErr
 
     const balance = new Balance({

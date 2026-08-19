@@ -10,6 +10,7 @@ import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
 import { getVcsAppService } from "@/modules/vcs"
+import { getSpendGate } from "@/modules/billing"
 import type { Analyser } from "./ports/Analyser"
 import { HttpAnalyser } from "./infrastructure/HttpAnalyser"
 import { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
@@ -57,6 +58,9 @@ export function createIssueAnalysisService(dataDb?: SupabaseRlsClient): IssueAna
         getVcsAppService,
         new IssueAnalysisComment(),
         new IssuePrompt(),
+        // The billing hard gate: a paused team analyses nothing, including via the
+        // webhooks that reach this service with no session behind them.
+        getSpendGate(),
     )
 }
 
@@ -70,5 +74,6 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         createServicePullRequestAnalysisStore(data),
         getVcsAppService,
         new PullRequestAnalysisComment(),
+        getSpendGate(),
     )
 }

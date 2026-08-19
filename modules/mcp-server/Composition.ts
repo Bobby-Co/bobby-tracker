@@ -12,6 +12,7 @@ import { getAccessService } from "@/modules/access"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { createSupabaseProjectMcpIntegrationRepository } from "@/modules/mcp"
 import { createSupabaseProjectAnalyserRepository, getAnalyser } from "@/modules/analysis"
+import { getSpendGate } from "@/modules/billing"
 import { KnowledgeBaseService } from "./application/KnowledgeBaseService"
 
 /** Build the knowledge-base service for an already-authenticated MCP caller. The
@@ -29,5 +30,7 @@ export function createKnowledgeBaseService(userId: string): KnowledgeBaseService
         createSupabaseProjectAnalyserRepository(controlDb),
         getAnalyser,
         userId,
+        // A paused team serves no MCP traffic either (0076).
+        getSpendGate(),
     )
 }

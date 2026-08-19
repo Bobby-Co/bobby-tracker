@@ -81,6 +81,31 @@ function bindTeamCell(ctx: RequestContext, cell: string | null | undefined): voi
 }
 
 export class ApiContext {
+    /** The spend gate, as a route-shaped guard: a Response to early-return when
+     *  the team may not spend, or null when it may.
+     *
+     *  Separate from the authz guards on purpose — a paused team's members still
+     *  have full access to their data, they just can't run anything, and folding
+     *  that into requireTeam would turn a self-inflicted pause into what looks
+     *  like a permissions error. Fails CLOSED: an unreadable billing identity is
+     *  a 503, never an allow.
+     *
+     *  Every route that dispatches billable work to the analyser must call this;
+     *  spend-gate.test.ts fails the build if one doesn't. */
+    async requireSpend(ctx: RequestContext, teamId: string): Promise<Response | null> {
+        try {
+            const refusal = await ctx.spendGate.check(teamId)
+            if (!refusal) return null
+            // 402: the condition is about billing state, not identity or access,
+            // and the client routes it to the pause/plan surfaces rather than to
+            // a sign-in.
+            return jsonError(refusal.reason, refusal.message, 402)
+        } catch (e) {
+            console.error("[spend-gate] check failed:", (e as Error).message)
+            return jsonError("billing_unavailable", "couldn't confirm this team's billing status — try again", 503)
+        }
+    }
+
     private readonly session = getSessionGateway()
 
     /** Pass the Request so team-aware guards honour the x-team-id header (the

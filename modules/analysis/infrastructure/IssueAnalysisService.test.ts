@@ -17,7 +17,7 @@ const store = {
     updateSyncFields: mock(),
     insertSuggestion: mock(),
 }
-const projectsRepo = { findAnalysisContext: mock(), findCell: mock() }
+const projectsRepo = { findAnalysisContext: mock(), findCell: mock(), findTeamId: mock(async () => "team-1") }
 const analyserRepo = { findByProjectId: mock(), findGraphId: mock() }
 const analyser = { startIssueAnalysis: mock(), cancelIssueAnalysis: mock() }
 // Cell → Analyser resolver (0062). The service learns the cell mid-flow, so
@@ -46,8 +46,10 @@ beforeAll(async () => {
     ;({ IssueAnalysisService } = await import("./IssueAnalysisService"))
 })
 
+// The billing hard gate (0076): null means the team may spend.
+const spend = { check: mock(async () => null as null | { reason: string; message: string }) }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any)
+const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any, spend as any)
 
 beforeEach(() => {
     store.findAnalysisRow.mockReset().mockResolvedValue(null)
@@ -56,6 +58,8 @@ beforeEach(() => {
     store.insertSuggestion.mockReset().mockResolvedValue(undefined)
     projectsRepo.findAnalysisContext.mockReset().mockResolvedValue(null)
     projectsRepo.findCell.mockReset().mockResolvedValue("ashburn-0")
+    projectsRepo.findTeamId.mockReset().mockResolvedValue("team-1")
+    spend.check.mockReset().mockResolvedValue(null)
     analyserFor.mockClear()
     analyserRepo.findByProjectId.mockReset().mockResolvedValue(null)
     analyserRepo.findGraphId.mockReset().mockResolvedValue("G1")
@@ -119,6 +123,25 @@ describe("ensure — one-shot idempotency + gates", () => {
         analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
         expect(await svc().ensure("iss-1", "https://app")).toBe("started")
         expect(analyser.startIssueAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    test("a PAUSED team is refused and nothing is dispatched — the hard gate "
+        + "(0076), enforced here because webhooks reach this service with no "
+        + "session behind them", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        spend.check.mockResolvedValue({ reason: "suspended", message: "paused" })
+        expect(await svc().ensure("iss-1", "https://app")).toBe("paused")
+        expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("an unresolvable team fails CLOSED — billing work to nobody is worse "
+        + "than not running it", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        projectsRepo.findTeamId.mockResolvedValue(null)
+        expect(await svc().ensure("iss-1", "https://app")).toBe("paused")
+        expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
 
     test("an in-flight run with NO start time retries — pre-0071 rows self-heal", async () => {

@@ -12,7 +12,7 @@ export interface SubscriptionRow {
     tier: TierId
     monthly_points: number | null
     period_start: string
-    status: "active" | "past_due" | "canceled"
+    status: "active" | "past_due" | "canceled" | "suspended"
 }
 
 export interface SubscriptionsRepository {
@@ -20,6 +20,12 @@ export interface SubscriptionsRepository {
      *  provisioning trigger ran, or an unknown team). THROWS RepositoryError on a
      *  genuine query failure. */
     findByTeam(teamId: string): Promise<SubscriptionRow | null>
+
+    /** Pause or resume a team's subscription (0076). 'suspended' means the team
+     *  is kept but may not spend, and its free slot is released — the mirror of
+     *  usage_subjects.status, kept in step so the two billing surfaces never
+     *  disagree. THROWS RepositoryError on failure. */
+    setStatus(teamId: string, status: SubscriptionRow["status"]): Promise<void>
 
     /** Change a team's tier and return the updated row. Admin-gated by RLS; the
      *  route re-checks the role. THROWS RepositoryError on failure. */

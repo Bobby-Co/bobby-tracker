@@ -16,6 +16,7 @@ import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
 import { analysisIsAbandoned } from "../domain/AnalysisRun"
 import { trace } from "@/lib/server/trace"
+import type { SpendGate } from "@/modules/billing"
 
 /** Resolves the app/bot VcsAppService for a project, or null when it isn't linked
  *  to a VCS. Injected so the service stays provider-agnostic. */
@@ -30,6 +31,9 @@ export class IssueAnalysisService {
         private readonly vcsFor: VcsAppServiceResolver,
         private readonly comment: IssueAnalysisComment,
         private readonly prompt: IssuePrompt,
+        /** The billing hard gate. Injected rather than reached for, so a host that
+         *  meters differently swaps it at the composition root. */
+        private readonly spend: SpendGate,
     ) {}
 
     // ensure kicks off the SINGLE analysis run for an issue and is the one entry
@@ -41,7 +45,7 @@ export class IssueAnalysisService {
     async ensure(
         issueId: string,
         origin: string,
-    ): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue"> {
+    ): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue" | "paused"> {
         const issue = await this.issues.findAnalysisRow(issueId)
         trace("ensure.lookup", {
             issueId,
@@ -78,6 +82,18 @@ export class IssueAnalysisService {
         const cell = await this.projects.findCell(issue.project_id)
         trace("ensure.cell", { issueId, projectId: issue.project_id, cell })
         if (!cell) return "not_ready"
+
+        // Hard gate (0076): a paused team spends nothing. Enforced HERE, not only
+        // at the routes, because this service is also reached from the GitHub and
+        // GitLab webhooks — the paths with no session behind them, which would
+        // otherwise keep analysing every inbound issue indefinitely. An
+        // unresolvable team is refused too: fail closed, since the alternative is
+        // billing work to nobody.
+        const payer = await tryOrNull(() => this.projects.findTeamId(issue.project_id))
+        if (!payer || (await this.spend.check(payer))) {
+            trace("ensure.paused", { issueId, projectId: issue.project_id, payer })
+            return "paused"
+        }
 
         // Stamped with the status, and the reason they must be written together:
         // the status alone cannot distinguish a run in progress from one that

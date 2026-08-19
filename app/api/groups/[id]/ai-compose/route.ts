@@ -30,6 +30,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // discloses another team's project list.
     const { ctx, teamId, user, error } = await new ApiContext().requireCollectionAccess(id)
     if (error) return error
+
+    // Hard gate: a paused team may read everything and run nothing (0076). Sits
+    // after the access guard because a pause is a billing state, not a permission
+    // — the 402 tells the client to offer resume/plan, not sign-in.
+    const spendErr = await new ApiContext().requireSpend(ctx, teamId)
+    if (spendErr) return spendErr
     // Both AI calls below bill to the collection's team. There is no single
     // project to attribute to — picking one is the whole job of this route.
     const billing = { teamId, userId: user.id }

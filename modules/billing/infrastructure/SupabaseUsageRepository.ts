@@ -36,6 +36,25 @@ export class SupabaseUsageRepository implements UsageRepository {
         return { points: pointsFromCostUsd(costUsd), costUsd, calls: Number(data?.calls ?? 0) }
     }
 
+    async subjectPeriodUsage(teamIds: string[], periodStart: string): Promise<PeriodUsage> {
+        // No teams → no spend. `.in("team_id", [])` is a round trip that can only
+        // return nothing.
+        if (teamIds.length === 0) return { points: 0, costUsd: 0, calls: 0 }
+        const { data, error } = await this.db
+            .from("prowl_usage_period")
+            .select("cost_usd, calls")
+            .in("team_id", teamIds)
+            .eq("period_start", periodStart)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        // Summed here rather than in SQL: the rollup is one row per team per
+        // period, so this is a handful of rows even for a long-lived subject, and
+        // it keeps points derived in exactly one place.
+        const rows = (data as { cost_usd: number; calls: number }[] | null) ?? []
+        const costUsd = rows.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0)
+        const calls = rows.reduce((n, r) => n + Number(r.calls ?? 0), 0)
+        return { points: pointsFromCostUsd(costUsd), costUsd, calls }
+    }
+
     async breakdownSince(teamId: string, sinceIso: string): Promise<UsageByKind[]> {
         const { data, error } = await this.db
             .from("prowl_usage_events")

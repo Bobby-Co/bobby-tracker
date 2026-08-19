@@ -1,3 +1,4 @@
+import { getSpendGate } from "@/modules/billing"
 import { after } from "next/server"
 import { createSupabaseProjectAnalyserRepository, getAnalyser, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/shared/kernel"
@@ -519,6 +520,16 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
         return ack()
     }
 
+
+    // Hard gate (0076). A paused team must not spend, and a push webhook is the
+    // one billable path with nobody watching — it would keep indexing on every
+    // commit forever. ACK rather than error: GitHub/GitLab redelivery cannot fix a
+    // pause, and a failed webhook would just retry until it gave up.
+    const payer = await tryOrNull(() => createSupabaseProjectsRepository(svc).findTeamId(project.id))
+    if (!payer || (await getSpendGate().check(payer))) {
+        console.warn("[github webhook] team paused or unresolved — skipping incremental index", project.id)
+        return ack()
+    }
     const graphId = analyser.graph_id
     after(async () => {
         try {

@@ -29,6 +29,7 @@ import type {
     NeighboursInput,
     NeighboursResult,
 } from "@/modules/analysis"
+import type { SpendGate } from "@/modules/billing"
 import { McpToolError } from "../domain/McpTool"
 
 /** One project exposed over MCP, as the tools describe it. `indexed` is false
@@ -144,6 +145,8 @@ export class KnowledgeBaseService {
         private readonly projectAnalyser: ProjectAnalyserRepository,
         private readonly analyserFor: AnalyserResolver,
         private readonly userId: string,
+        /** The billing hard gate: a paused team serves no MCP requests either. */
+        private readonly spend: SpendGate,
     ) {}
 
     /** Every MCP-enabled project the caller can access, across all their teams.
@@ -226,6 +229,17 @@ export class KnowledgeBaseService {
         // result rather than an error, the worst outcome for an agent to act on.
         const cell = await this.projects.findCell(hit.projectId)
         if (!cell) throw new McpToolError(`"${hit.repoFullName || hit.name}" is not available right now.`)
+
+        // Hard gate (0076). Every MCP tool that costs anything — locate, ask,
+        // neighbours — funnels through this resolver, so a paused team is stopped
+        // here once rather than in each tool. MCP matters more than the UI paths
+        // do: an agent will happily retry in a loop, and nobody is watching.
+        const payer = await this.projects.findTeamId(hit.projectId)
+        if (!payer || (await this.spend.check(payer))) {
+            throw new McpToolError(
+                `"${hit.repoFullName || hit.name}" is paused in Ucelot — resume the team to use it again.`,
+            )
+        }
 
         return { ...hit, graphId, cell }
     }

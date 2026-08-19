@@ -37,6 +37,13 @@ export interface UsageRepository {
      *  events yet. THROWS RepositoryError on failure. */
     currentPeriodUsage(teamId: string, periodStart: string): Promise<PeriodUsage>
 
+    /** The same period read, but across EVERY team a usage subject has spent
+     *  through (0076) — including deleted ones, whose rollup rows survive now
+     *  that the cascade is gone. This is what makes a balance follow its owner
+     *  across a team deletion instead of resetting. An empty list reads as zero
+     *  without touching the database. THROWS. */
+    subjectPeriodUsage(teamIds: string[], periodStart: string): Promise<PeriodUsage>
+
     /** Per-kind point + call totals since `sinceIso`, highest spend first. Scans
      *  the raw event log — used only on the detailed Usage page (low frequency),
      *  not on the hot balance path. */

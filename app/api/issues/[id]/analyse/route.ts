@@ -32,6 +32,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
     if (status === "no_issue") return jsonError("not_found", "issue not found", 404)
+    // Paused team (0076) — a billing state, not a missing index, so it gets its
+    // own answer rather than being folded into "needs_indexing" and sending the
+    // user off to re-run an index that would not have helped.
+    if (status === "paused") {
+        return jsonError("suspended", "This team is paused, so analysis is off. Resume it in Team → Settings.", 402)
+    }
 
     // Return the cached suggestion if the run already completed (status 'done').
     // Fail-safe: a read error folds to null, matching the old maybeSingle.

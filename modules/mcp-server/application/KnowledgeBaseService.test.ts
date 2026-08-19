@@ -15,7 +15,7 @@ import { KnowledgeBaseService } from "./KnowledgeBaseService"
 import { McpToolError } from "../domain/McpTool"
 
 const access = { listTeams: mock(), accessibleProjectIds: mock(), canAccessProject: mock() }
-const projects = { listForTeam: mock(), findCell: mock() }
+const projects = { listForTeam: mock(), findCell: mock(), findTeamId: mock(async () => "team-1") }
 const mcpIntegration = { listEnabledProjectIds: mock() }
 const analyser = { findGraphId: mock() }
 const analyserPort = { retrieve: mock(), neighbours: mock() }
@@ -23,6 +23,9 @@ const analyserPort = { retrieve: mock(), neighbours: mock() }
 // Analyser. Recording the cell it asks for is how the tests below assert that a
 // tool call is routed to the cell actually holding the graph.
 const analyserFor = mock(() => analyserPort)
+// The billing hard gate (0076). Null = "may spend"; every existing case runs with
+// an unpaused team, and the suspension case below flips it.
+const spend = { check: mock(async () => null as null | { reason: string; message: string }) }
 
 // The service takes PORTS by constructor (no DB client, no RequestContext), so
 // plain mocks are enough — no module mocking needed.
@@ -39,6 +42,8 @@ const svc = () =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         analyserFor as any,
         "u1",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        spend as any,
     )
 
 const project = (id: string, name: string, repo: string | null) => ({
@@ -49,6 +54,10 @@ const project = (id: string, name: string, repo: string | null) => ({
 })
 
 beforeEach(() => {
+    // Reset the billing gate between cases — an unconsumed `once` value would
+    // leak into the next test and look like a flake.
+    spend.check.mockReset().mockResolvedValue(null)
+    projects.findTeamId.mockReset().mockResolvedValue("team-1")
     access.listTeams.mockReset()
     access.accessibleProjectIds.mockReset()
     access.canAccessProject.mockReset()
@@ -218,6 +227,14 @@ describe("resolve — no identifier given", () => {
 })
 
 describe("locate / neighbours — delegation", () => {
+    test("a PAUSED team is refused before anything reaches the analyser — the "
+        + "hard gate (0076), and the path that matters most because an agent "
+        + "retries in a loop with nobody watching", async () => {
+        spend.check.mockResolvedValue({ reason: "suspended", message: "paused" })
+        await expect(svc().locate("p1", "where is auth")).rejects.toThrow(/paused/i)
+        expect(analyserPort.retrieve).not.toHaveBeenCalled()
+    })
+
     test("locate addresses the analyser by graph id, not project id", async () => {
         analyser.findGraphId.mockResolvedValue("graph-7")
         analyserPort.retrieve.mockResolvedValue({ files: [], symbols: [], notes: [], clusters: [] })

@@ -31,3 +31,19 @@ export { createSupabaseSubscriptionsRepository } from "./infrastructure/Supabase
 // ─── usage ledger reads (prowl_usage_events) ─────────────────────────────────
 export type { UsageRepository, UsageEventRow, UsageByKind, PeriodUsage } from "./ports/UsageRepository"
 export { createSupabaseUsageRepository } from "./infrastructure/SupabaseUsageRepository"
+
+// ─── the free-team quota + durable billing identity (0076) ───────────────────
+// Usage belongs to a SUBJECT keyed by a hash of the owner's email, not to a team.
+// Teams bind to a subject, so deleting a team (or the whole account) no longer
+// resets the monthly allowance — the replacement rebinds to the same subject and
+// inherits its balance. Two reserved slots per email (personal + free); anything
+// beyond that needs a paid plan. Suspending a team releases its slot.
+export { SlotPolicy } from "./domain/SlotPolicy"
+export type { SlotKind, SubjectStatus, SubjectFacts, Allocation, PlanEndAction } from "./domain/SlotPolicy"
+export type { UsageSubjectStore } from "./ports/UsageSubjectStore"
+export { createSupabaseUsageSubjectStore } from "./infrastructure/SupabaseUsageSubjectStore"
+export { PeriodUsageReader } from "./application/PeriodUsageReader"
+export { SpendGate } from "./application/SpendGate"
+export { getSpendGate } from "./Composition"
+export type { SpendRefusal } from "./application/SpendGate"
+export { hashAccountEmail } from "./infrastructure/OwnerHash"

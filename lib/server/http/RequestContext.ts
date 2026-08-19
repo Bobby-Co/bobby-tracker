@@ -81,7 +81,13 @@ import {
 import { createSupabaseProjectMcpIntegrationRepository } from "@/modules/mcp"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
 import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
-import { createSupabaseSubscriptionsRepository, createSupabaseUsageRepository } from "@/modules/billing"
+import {
+    createSupabaseSubscriptionsRepository,
+    createSupabaseUsageRepository,
+    createSupabaseUsageSubjectStore,
+    PeriodUsageReader,
+    SpendGate,
+} from "@/modules/billing"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
 import { Supabase } from "@/lib/server/supabase"
 import { dbRef, trace } from "@/lib/server/trace"
@@ -268,6 +274,27 @@ export class RequestContext {
      *  is checked against means a balance is one query rather than a roll-up. */
     get usage() {
         return createSupabaseUsageRepository(this.controlDb)
+    }
+
+    /** The durable billing identities behind teams (0076): who a team's spend
+     *  belongs to, which survives the team and the account being deleted. Control
+     *  plane — a billing identity is a property of an email, not of a region. */
+    get usageSubjects() {
+        return createSupabaseUsageSubjectStore(this.controlDb)
+    }
+
+    /** May this team spend? The hard gate behind suspension — every route that
+     *  dispatches billable work to the analyser asks first (enforced by
+     *  lib/server/http/spend-gate.test.ts). */
+    get spendGate() {
+        return new SpendGate(this.usageSubjects, this.subscriptions)
+    }
+
+    /** This period's spend for a team, resolved through its billing subject —
+     *  the ONE place that decides what a team's balance means, so the sidebar
+     *  pill and the billing page can never disagree. */
+    get periodUsage() {
+        return new PeriodUsageReader(this.usageSubjects, this.usage)
     }
 
     // ─── control plane: identity, teams, billing policy ──────────────────────

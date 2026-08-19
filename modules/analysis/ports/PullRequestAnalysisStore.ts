@@ -11,6 +11,9 @@ export interface PullRequestAnalysisTracking {
     id: string
     status: string | null
     githubCommentId: number | null
+    /** The head the last run covered — a finished run at the same head is not
+     *  worth repeating (migration 0042). */
+    headSha: string | null
 }
 
 /** The callback view of a tracking row, looked up by task id. */

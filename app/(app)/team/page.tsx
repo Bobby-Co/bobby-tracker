@@ -22,7 +22,7 @@ export default function TeamPage() {
 }
 
 function TeamPageInner() {
-    const { activeTeam, loading } = useTeam()
+    const { activeTeam, loading, refetch } = useTeam()
     const params = useSearchParams()
     const raw = params.get("tab")
     const tab = raw === "groups" || raw === "settings" ? raw : "members"
@@ -70,7 +70,7 @@ function TeamPageInner() {
             </nav>
 
             <div className="mt-6">
-                {tab === "members" && <MembersTab team={activeTeam} isAdmin={isAdmin} />}
+                {tab === "members" && <MembersTab team={activeTeam} isAdmin={isAdmin} onTeamChanged={refetch} />}
                 {tab === "groups" && <GroupsTab team={activeTeam} isAdmin={isAdmin} />}
                 {tab === "settings" && <SettingsTab team={activeTeam} />}
             </div>

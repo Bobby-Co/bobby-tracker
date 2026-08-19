@@ -25,6 +25,11 @@ export class SupabaseSubscriptionsRepository implements SubscriptionsRepository 
         return data ?? null
     }
 
+    async setStatus(teamId: string, status: SubscriptionRow["status"]): Promise<void> {
+        const { error } = await this.db.from("team_subscriptions").update({ status }).eq("team_id", teamId)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+    }
+
     async setTier(teamId: string, tier: TierId): Promise<SubscriptionRow> {
         const { data, error } = await this.db
             .from("team_subscriptions")

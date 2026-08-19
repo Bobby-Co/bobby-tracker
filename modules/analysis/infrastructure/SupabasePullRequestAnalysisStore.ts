@@ -22,12 +22,12 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     async findTracking(projectId: string, prNumber: number): Promise<PullRequestAnalysisTracking | null> {
         const { data } = await this.db
             .from("pull_request_analyses")
-            .select("id,status,github_comment_id")
+            .select("id,status,github_comment_id,head_sha")
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
-            .maybeSingle<{ id: string; status: string | null; github_comment_id: number | null }>()
+            .maybeSingle<{ id: string; status: string | null; github_comment_id: number | null; head_sha: string | null }>()
         if (!data) return null
-        return { id: data.id, status: data.status, githubCommentId: data.github_comment_id }
+        return { id: data.id, status: data.status, githubCommentId: data.github_comment_id, headSha: data.head_sha }
     }
 
     async upsertTracking(input: PullRequestAnalysisUpsert): Promise<{ id: string } | null> {

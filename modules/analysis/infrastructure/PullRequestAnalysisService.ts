@@ -7,6 +7,7 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { PrAnalysis } from "@/lib/shared/types"
+import type { SpendGate } from "@/modules/billing"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
@@ -48,12 +49,16 @@ export class PullRequestAnalysisService {
         private readonly store: PullRequestAnalysisStore,
         private readonly vcsFor: VcsAppServiceResolver,
         private readonly comment: PullRequestAnalysisComment,
+        /** The billing hard gate — see IssueAnalysisService for why it is injected. */
+        private readonly spend: SpendGate,
     ) {}
 
     /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
      *  tracking row (its id is the analyser task_id), kick the run. Idempotent —
-     *  a run already in flight for this PR is left alone. */
-    async start(project: PrProject, pr: PrInput, origin: string): Promise<void> {
+     *  a run already in flight for this PR is left alone, and a run that already
+     *  FINISHED on this exact head is not repeated (see the head gate below).
+     *  `force` is the manual "Run review" button's override. */
+    async start(project: PrProject, pr: PrInput, origin: string, opts: { force?: boolean } = {}): Promise<void> {
         if (!Project.of(project).isSyncReady()) return
         const vcs = this.vcsFor(project)
         if (!vcs) return
@@ -67,8 +72,24 @@ export class PullRequestAnalysisService {
         const cell = await this.projects.findCell(project.id)
         if (!cell) return
 
+        // Hard gate (0076): a paused team runs no reviews. Checked here, with the
+        // other readiness gates and BEFORE the "analysing…" comment is posted —
+        // bailing after that would leave a comment on the PR that nothing ever
+        // comes back to edit. This service is webhook-driven, so this is the only
+        // thing standing between a paused team and a review on every push.
+        const payer = await tryOrNull(() => this.projects.findTeamId(project.id))
+        if (!payer || (await this.spend.check(payer))) return
+
         const existing = await this.store.findTracking(project.id, pr.number)
         if (existing?.status === "analysing") return
+
+        // A finished review already covers this head. Every `pull_request` event
+        // that isn't a code change — reopened, edited, labeled, review_requested —
+        // arrives with the SAME head_sha, so without this gate merely reopening or
+        // touching a PR days later re-runs (and re-bills) a review whose input is
+        // byte-for-byte identical. This is the skip migration 0042 provisioned
+        // head_sha for. A `synchronize` moves the head and still re-runs.
+        if (!opts.force && existing?.status === "done" && pr.headSha && existing.headSha === pr.headSha) return
 
         let files: PrAnalyseFile[]
         try {

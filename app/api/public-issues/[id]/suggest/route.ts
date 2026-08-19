@@ -5,6 +5,7 @@ import { publicIssueSuggestionChannel } from "@/lib/shared/realtime-channels"
 import { Supabase } from "@/lib/server/supabase"
 import type { IssueSuggestion } from "@/lib/shared/types"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { getSpendGate } from "@/modules/billing"
 import { getPublicSessionService } from "@/modules/public"
 import { RateLimiter } from "@/lib/server/RateLimiter"
 
@@ -55,6 +56,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const cell = await tryOrNull(() => createSupabaseProjectsRepository(svc).findCell(issue.project_id))
     if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
+
+    // Hard gate (0076). The visitor isn't the payer — the project's TEAM is — so a
+    // paused team means no analysis here either, however the request arrived. The
+    // message stays vague on purpose: a public reporter is not owed the
+    // maintainer's billing state.
+    const payer = await tryOrNull(() => createSupabaseProjectsRepository(svc).findTeamId(issue.project_id))
+    if (!payer) return jsonError("placement_unavailable", "This project is unavailable.", 503)
+    if (await getSpendGate().check(payer)) {
+        return jsonError("unavailable", "Analysis is paused for this project.", 402)
+    }
 
     try {
         const result = await getAnalyser(cell).analyseIssue({

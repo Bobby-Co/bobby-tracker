@@ -22,9 +22,26 @@ import { join } from "node:path"
 
 const MODULES_DIR = join(import.meta.dir, "..", "..", "..", "modules")
 
-/** Tables that are genuinely global — shared reference data owned by nobody, so
- *  reading all of one is the point rather than a leak. */
-const GLOBAL_TABLES = new Set(["icon_catalog", "icon_catalog_meta", "icon_search_cache", "app_config"])
+/** Tables that are genuinely global — no tenant to scope them to, so reading all
+ *  of one is the point rather than a leak.
+ *
+ *  The beta tables (0074) are installation-wide by construction: an invitation is
+ *  attached to an email address, not to a team, and the only readers are the
+ *  enrolment gate (which looks up ONE address by equality) and the staff surface
+ *  at /api/beta/allowlist, whose entire job is to show the list. Both tables have
+ *  RLS on with no policies, so "reachable at all" is already a service-role-only
+ *  question. */
+const GLOBAL_TABLES = new Set([
+    "icon_catalog", "icon_catalog_meta", "icon_search_cache", "app_config",
+    "beta_allowlist", "beta_requests",
+    // deleted_account_usage (0075) is keyed by a hash of an email and belongs to
+    // no team by construction — the account it describes has been deleted. Its
+    // sweep is a deliberate table-wide `delete where expires_at < now()`, which
+    // is the shape the keyed-mutation rule exists to catch; it is exempt because
+    // enforcing retention IS the statement, and this stack has no scheduler to
+    // do it anywhere else.
+    "deleted_account_usage",
+])
 
 /** Anything that narrows a statement. Deliberately broad: the test is looking for
  *  the total absence of a predicate, not judging which column is correct. */
