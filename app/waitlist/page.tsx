@@ -36,6 +36,34 @@ export default function WaitlistPage() {
         if (new BetaAccess().isAllowed(user)) router.replace("/projects")
     }, [loading, user, router])
 
+    // Has their spot opened since they last signed in?
+    //
+    // The beta list is a table the browser can't read (RLS, no policies), and the
+    // gate above reads a flag baked into the session's JWT — so a user enrolled
+    // an hour ago would sit here until their token happened to refresh. This asks
+    // the server, which stamps the flag on a hit; refreshSession() then pulls the
+    // new metadata into the session, AuthProvider re-renders, and the gate effect
+    // above does the redirecting. One check per visit, on the page that exists
+    // precisely for people waiting for this answer.
+    useEffect(() => {
+        if (loading || !user || new BetaAccess().isAllowed(user)) return
+        let active = true
+        ;(async () => {
+            try {
+                const res = await fetch("/api/beta/access", { method: "POST" })
+                if (!res.ok || !active) return
+                const { allowed } = (await res.json()) as { allowed?: boolean }
+                if (allowed && active) await supabase.auth.refreshSession()
+            } catch {
+                // Offline or a 500 — they stay on the waitlist, which is where
+                // they already are. Nothing to tell them.
+            }
+        })()
+        return () => {
+            active = false
+        }
+    }, [loading, user, supabase])
+
     // Returning visitors who already raised their hand see the joined state;
     // a fresh click drives the burst animation (status === "joined").
     const alreadyRequested = !!user?.user_metadata?.beta_requested
@@ -65,6 +93,11 @@ export default function WaitlistPage() {
         if (joined || status === "joining") return
         setStatus("joining")
         setError(null)
+        // Two writes, deliberately. The metadata flag is what THIS page reads on
+        // a return visit (it's already in the session, no fetch needed); the row
+        // in tracker.beta_requests is the queue we actually enrol from — a list
+        // of people, sortable by how long they've waited, which auth metadata
+        // could never be.
         const { error } = await supabase.auth.updateUser({
             data: { beta_requested: true, beta_requested_at: new Date().toISOString() },
         })
@@ -72,6 +105,14 @@ export default function WaitlistPage() {
             setError(error.message)
             setStatus("idle")
             return
+        }
+
+        try {
+            await fetch("/api/beta/request", { method: "POST" })
+        } catch {
+            // Best-effort: the user has raised their hand as far as they can
+            // tell, and failing them here would be a lie. The metadata flag
+            // above still marks them as having asked.
         }
         setStatus("joined")
     }

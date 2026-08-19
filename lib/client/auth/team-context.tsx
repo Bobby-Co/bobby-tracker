@@ -24,6 +24,17 @@ function writeCookie(name: string, value: string): void {
     document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`
 }
 
+/** Make a team the active one WITHOUT navigating.
+ *
+ *  Exported for onboarding, which creates the user's first team from outside the
+ *  app shell (no TeamProvider mounted, and it does its own redirect afterwards).
+ *  It shares this function rather than writing the cookie itself so the name,
+ *  path and lifetime stay defined in exactly one place — a mismatched `path`
+ *  would produce a second cookie the server never sees. */
+export function setActiveTeamCookie(id: string): void {
+    writeCookie(COOKIE, id)
+}
+
 interface TeamState {
     teams: TeamWithRole[]
     activeTeam: TeamWithRole | null
