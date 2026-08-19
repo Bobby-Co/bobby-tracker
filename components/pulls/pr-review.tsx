@@ -191,12 +191,32 @@ const GROUP_STYLE: Record<BlockState, { title: string; tone: string; open: boole
 
 // Semantic tone → the app's token pairs. The markdown renderer maps the same
 // five words to badge tones; neither knows about the other's palette.
+//
+// Built from --c-* pairs rather than `rose-50`/`amber-50` literals, and that is
+// not a style preference. A callout's BODY goes through Md, which wraps it in
+// .prose-tracker and colours it with --c-text — a theme-aware value. Pair that
+// with a fixed light background and dark mode renders near-white text on a
+// near-white card. This is the same trap 5379f1d cleaned up across the app: a
+// literal that only works in one theme, sitting next to a token that works in
+// both.
 const TONE_CLASSES: Record<BlockTone, string> = {
     neutral: "border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] text-[color:var(--c-text)]",
     info: "border-[color:var(--c-info-fg)]/25 bg-[color:var(--c-info-bg)] text-[color:var(--c-info-fg)]",
-    good: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    warn: "border-amber-200 bg-amber-50 text-amber-800",
-    critical: "border-rose-200 bg-rose-50 text-rose-800",
+    // --c-output-* rather than --c-success-*: the success token is a FILL green
+    // (#16a34a) and only reaches 3.2:1 as text on its own pale tint, under the
+    // 4.5:1 floor. The output pair is the app's green TEXT pair and clears 7:1
+    // in both themes.
+    good: "border-[color:var(--c-output-fg)]/30 bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]",
+    warn: "border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]",
+    critical: "border-[color:var(--c-rose-fg)]/30 bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]",
+}
+
+// Risk severity → text colour, for the likelihood/impact axes. Tokens for the
+// same reason as above: these sit on the page surface, which inverts.
+const RISK_CLASSES: Record<string, string> = {
+    high: "text-[color:var(--c-rose-fg)]", // 8.0 light / 9.1 dark
+    medium: "text-[color:var(--c-warn)]", // 5.0 / 10.7
+    low: "text-[color:var(--c-output-fg)]", // 7.7 / 11.7 — see the note above
 }
 
 /** What every block renderer gets. `r` is the canonical review — reference
@@ -378,7 +398,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         !b.body?.trim() && !b.title?.trim() ? null : (
             <div className={cn("rounded-[10px] border px-3 py-2.5", TONE_CLASSES[b.tone ?? "neutral"])}>
                 {b.title && <p className="text-[12.5px] font-bold leading-5">{b.title}</p>}
-                {b.body && <div className="mt-0.5 text-[12.5px] leading-5 opacity-90"><Md>{b.body}</Md></div>}
+                {b.body && <div className="mt-0.5 text-[12.5px] leading-5 text-[color:var(--c-text)] opacity-90"><Md>{b.body}</Md></div>}
             </div>
         ),
 
@@ -463,7 +483,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
     risk_matrix: ({ b }) => {
         const items = b.items ?? []
         if (items.length === 0) return null
-        const axis = (v?: string) => (v === "high" ? "text-rose-700" : v === "medium" ? "text-amber-700" : "text-emerald-700")
+        const axis = (v?: string) => RISK_CLASSES[v ?? ""] ?? "text-[color:var(--c-text-muted)]"
         return (
             <Section title={b.title || "Risks"} count={items.length}>
                 <ul className="flex flex-col gap-2">
@@ -593,12 +613,16 @@ function ScoreBar({ value, max }: { value: number; max: number }) {
 
 // Confidence meters: each dimension as a 3-stage bar (low→high), filled +
 // labelled in its level's tone. Basis is the hover title.
+// The FILL stays a literal — it is a saturated block, legible on either ground.
+// The LABEL takes the token pairs: `text-amber-600` on the dark surface measured
+// 1.39:1, well under the 4.5:1 floor, because a bare Tailwind colour cannot
+// invert with the theme. Same trap as the callout tones above.
 function meterTone(level: string): { fill: string; text: string } {
     return level === "high"
-        ? { fill: "bg-emerald-500", text: "text-emerald-600" }
+        ? { fill: "bg-emerald-500", text: "text-[color:var(--c-output-fg)]" }
         : level === "medium"
-          ? { fill: "bg-amber-500", text: "text-amber-600" }
-          : { fill: "bg-rose-500", text: "text-rose-600" }
+          ? { fill: "bg-amber-500", text: "text-[color:var(--c-warn)]" }
+          : { fill: "bg-rose-500", text: "text-[color:var(--c-rose-fg)]" }
 }
 function Meter({ label, dim }: { label: string; dim: PrConfidenceDimension }) {
     const idx = dim.level === "high" ? 3 : dim.level === "medium" ? 2 : 1
