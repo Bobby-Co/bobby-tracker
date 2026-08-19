@@ -78,6 +78,7 @@ import {
     createSupabasePublicSessionAdminRepository,
     createSupabaseProjectPublicIntegrationRepository,
 } from "@/modules/public"
+import { createSupabaseReviewProfileRepository } from "@/modules/analysis"
 import { createSupabaseProjectMcpIntegrationRepository } from "@/modules/mcp"
 import { createSupabaseRelayWorkerRepository } from "@/modules/relay"
 import { createSupabaseNotificationFeedRepository } from "@/modules/notifications"
@@ -233,6 +234,13 @@ export class RequestContext {
      *  result the moment the detached run's callback writes it. */
     get issueSuggestions() {
         return createSupabaseIssueSuggestionsRepository(this.controlDb)
+    }
+
+    /** A team's saved PR-reviewer profiles (0077). Control plane, alongside teams
+     *  and billing: a profile belongs to a team, and a team cannot span regions,
+     *  so its reviewer configuration has exactly one home. */
+    get reviewProfiles() {
+        return createSupabaseReviewProfileRepository(this.controlDb)
     }
 
     get projects() {
