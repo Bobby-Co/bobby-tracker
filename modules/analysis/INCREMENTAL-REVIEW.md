@@ -1,19 +1,20 @@
-# Incremental review — plan
+# Incremental review
 
 Review the push, carry the rest, and let the reader see which commit changed what.
 
-This is a **plan, not a description**: rounds (migration 0080) are built and the
-rest of this is not. It exists so the next person to open the PR-review pipeline
-finds the reasoning rather than re-deriving it, and so the parts that look like
-easy wins but are correctness bugs are marked as such before somebody ships one.
+This was a plan; it is now **built** — migration 0081 on the tracker, and the
+scope/carried fields on the analyser's `/pr/analyse` contract. The reasoning is
+kept in full rather than trimmed to a changelog, because the parts that look like
+easy wins here are correctness bugs, and the next person to open this pipeline
+should find why before they simplify one of them away.
 
 ---
 
 ## Where this starts
 
-Every push re-reviews the entire pull request. `listPullRequestFiles(number)` is
+Every push re-reviewed the entire pull request. `listPullRequestFiles(number)` is
 GitHub's PR-files endpoint — the full `base…head` diff — and
-`PullRequestAnalysisService.start` re-sends it verbatim on every round.
+`PullRequestAnalysisService.start` re-sent it verbatim on every round.
 
 Three consecutive rounds on one 12-file PR:
 
@@ -43,13 +44,13 @@ wholesale** on every round. Review only the last commit and a still-present
 blocker in an untouched file is simply absent from the new list — so the gate
 sees zero criticals and **opens the merge**.
 
-Full re-review is what prevents that today. It is not thoroughness for its own
+Full re-review is what prevented that. It is not thoroughness for its own
 sake; it is the thing that gives the reviewer a fair chance to re-find what it
 found before.
 
-A quiet version of this already ships: `previous_blockers` **asks** the reviewer
-whether each earlier blocker is fixed, but nothing **carries** them. If the model
-says nothing about one, it disappears. The full diff is currently masking that.
+A quiet version of this already shipped: `previous_blockers` **asks** the reviewer
+whether each earlier blocker is fixed, but nothing **carried** them. If the model
+said nothing about one, it disappeared. The full diff was masking that.
 
 > Every fail-open in this pipeline has had the same shape: something real exists,
 > but not in the place the gate reads. A degraded review scoring 10/10. A
@@ -79,41 +80,74 @@ Carried findings keep their line numbers, because an untouched file has not
 moved. That is the same fact the round fingerprint relies on when it *excludes*
 line, arriving from the other direction.
 
+`CarryForward.partitionForCarry` is the rule, and it errs toward re-judging in
+three further cases the prose above does not cover: a finding with no file (its
+premise is unprovable), a finding whose **evidence anchor** sits in a changed
+file (the reviewer's own statement of what it rests on moved), and — always — a
+finding whose text names a changed export.
+
 ### Testing the symbol, concretely
 
 `PrFinding` carries no symbol field — only `file`, `line`, `title`, `detail` and
 `evidence` anchors. So the test is a text match, and it should stay one:
 
-> A carried finding is **re-judged** when any exported symbol name from
-> `factscan.changedExported()` appears in its title or detail.
+> A carried finding is **re-judged** when any exported symbol name from the
+> tracker's own diff scan appears in its title or detail.
 
-Deterministic, tracker-side, no model, no graph round trip. It over-triggers on
-short or common names — a changed `get` would re-judge half the list — which
-costs a re-judgement rather than a missed defect, so the failure direction is
-right. If the over-triggering turns out to be expensive, the fix is a minimum
-name length before the test applies, not a cleverer matcher.
+Deterministic, tracker-side, no model, no graph round trip —
+`DiffFacts.changedExportedSymbols`. It over-triggers on short or common names — a
+changed `get` would re-judge half the list — which costs a re-judgement rather
+than a missed defect, so the failure direction is right. If the over-triggering
+turns out to be expensive, the fix is a minimum name length before the test
+applies, not a cleverer matcher.
+
+Two deliberate differences from the analyser's `factscan.changedExported()`,
+which the plan originally named as the source:
+
+- The scan is **tracker-side**. It answers whether a finding may ride along
+  unexamined, and routing that through the analyser would put a network hop, a
+  failure mode and a model in front of a decision that is arithmetic.
+- It includes **added** exports, which factscan does not. Factscan exists to
+  demand a caller-impact list, so a brand-new export is genuinely not its
+  business. This test does the opposite job, and a new export in a shared module
+  is exactly the sort of change that can invalidate a finding in a file the diff
+  never mentions.
+
+Matching is word-boundary and case-**sensitive**, so a changed `findUser` does not
+re-judge every finding that mentions `findUserById`.
 
 ---
 
 ## Deciding the scope — rules, not a model
 
-The scope decision is **rule-based on purpose**. Build this first, log the
-decision and its reason on every round, and only revisit it with real numbers.
+The scope decision is **rule-based**: `ReviewScope.decideScope`, pure, logged on
+every round with the rule that fired.
 
 Take the **full** review when any of these hold:
 
-| Condition | Why |
-| --- | --- |
-| No previous round | Nothing to carry. |
-| Previous round was `degraded` | A partial review is not a baseline. Carrying from one would manufacture the appearance of progress. |
-| Last reviewed head is **not an ancestor** of this head | Force-push or rebase: the relationship between the two heads cannot be established, so nothing may be carried. |
-| The base moved | `base…head` changed for reasons the push did not cause. |
-| A **migration** is in the diff | Schema changes reach code the diff never mentions — see the `tasks.tenant_id` rename that broke `tasks-repo.ts` without appearing in it. |
-| The **review profile changed** since the last round | Different lenses, different blocking bar. Round *n* was judged by a different reviewer than round *n−1*. |
-| Changed symbols have **more than N dependents** in the graph | The "looks small, isn't" case. `factscan.changedExported` plus `get_neighbors` already answers this; it is a lookup, not an inference. |
-| More than **M rounds** since the last full pass, or the carried fraction crosses a threshold | Bounds how long a finding can ride along unexamined, and gives the pipeline a way to recover from a bad baseline. |
+| Condition | Code | Why |
+| --- | --- | --- |
+| No previous round | `first_round` | Nothing to carry. |
+| Previous round was `degraded` | `degraded_baseline` | A partial review is not a baseline. Carrying from one would manufacture the appearance of progress. |
+| Last reviewed head is **not an ancestor** of this head | `force_push` / `ancestry_unknown` | Force-push or rebase: the relationship between the two heads cannot be established, so nothing may be carried. |
+| The base moved | `base_moved` | `base…head` changed for reasons the push did not cause. |
+| The push changed nothing | `empty_push` | An incremental pass would review an empty diff. |
+| A **migration** is in the diff | `migration` | Schema changes reach code the diff never mentions — see the `tasks.tenant_id` rename that broke `tasks-repo.ts` without appearing in it. |
+| The **review profile changed** since the last round | `profile_changed` | Different lenses, different blocking bar. Round *n* was judged by a different reviewer than round *n−1*. |
+| Changed symbols have **more than 25 dependents** in the graph | `blast_radius` | The "looks small, isn't" case. The changed-export scan plus `/neighbours` already answers this; it is a lookup, not an inference. |
+| **4 rounds** since the last full pass, or **75%** of the last round rode along unexamined | `periodic` / `carried_saturation` | Bounds how long a finding can ride along unexamined, and gives the pipeline a way to recover from a bad baseline. |
+| The analyser refused the incremental request | `dispatch_refused` | Not a rule — a half-finished deploy. See below. |
 
-Otherwise: incremental.
+Otherwise: `push_scoped`.
+
+`unknown` ancestry is not a synonym for `diverged`, but both force a full pass: a
+scope decision has to be able to prove its premise. A **truncated** compare is
+read as unknown ancestry for the same reason — the provider capped the file list,
+and the files it dropped are exactly the ones nothing would review.
+
+An unavailable dependent count is **not** an alarm. The count escalates a round
+to full, so treating a graph blip as "escalate" would make every blip cost six
+minutes.
 
 ### On a decider agent
 
@@ -131,36 +165,48 @@ a review nobody performed, with the merge gate reading the result.
 
 ## What a round does
 
-1. **Decide the scope** by the table above, and record the decision and its reason
-   on the round.
+1. **Decide the scope** by the table above. The decision, its reason and the
+   compared range are written to `pull_request_analyses.review_scope` at dispatch
+   and recorded on the round at the callback.
 
 2. **Partition the previous findings.** A finding is carried verbatim when its
    file is absent from the incremental diff *and* none of the round's changed
    exported symbols appears in its text. Everything else goes to the reviewer as
-   `previous_blockers` to re-judge, which is the mechanism that already exists.
+   `previous_blockers` to re-judge, which is the mechanism that already existed.
 
-3. **Review the push, not the pull request.** Send the incremental diff as
-   `Request.Files`, with the carried findings' files available to read but not
-   presented as the change under review. Blast radius stays global: it walks the
-   graph, so a changed public symbol still gets its callers enumerated across the
-   whole repository.
+3. **Review the push, not the pull request.** The incremental diff goes as
+   `Request.Files`, with a `SCOPE:` line telling the reviewer the diff is one
+   push — because "the diff does not touch X" is a conclusion it would otherwise
+   draw about the pull request from a list that only ever described a commit
+   range. Blast radius stays global, and the prompt says so outright: what is
+   narrowed is what CHANGED, never where the reviewer may look.
 
-4. **Merge the finding lists.** The stored review is *carried + re-judged + newly
-   found*, as **one list in `result.findings`** — because that is what `MergeGate`
-   counts and what the panel renders. A carried finding living in a side channel
-   would be invisible to both, which is the failure this whole document is about.
-   This step is pure, testable, and the highest-risk part of the change; write its
-   tests first.
+4. **Merge the finding lists.** `CarryForward.mergeRound` produces *carried +
+   re-judged + newly found*, as **one list in `result.findings`** — because that
+   is what `MergeGate` counts and what the panel renders. A carried finding
+   living in a side channel would be invisible to both, which is the failure this
+   whole document is about. This step is pure, testable, and the highest-risk
+   part of the change; its tests were written first.
 
-5. **Record the commits** the round covered — sha, subject, author, timestamp, and
-   the files each touched.
+5. **Record the commits** the round covered — sha, subject, author, timestamp.
+
+Merge rules worth knowing:
+
+- A finding the reviewer **did** report wins over the carried copy. It was
+  actually looked at, so it keeps the fresher line and the fresher provenance.
+- A reviewer that reports the same defect twice under two wordings does not make
+  the gate count two.
+- On a **degraded** round, re-judged blockers the reviewer never spoke about are
+  put **back**. A completed round's silence about a blocker is a judgement — it
+  read the file. A partial round's silence is an absence, and dropping a blocker
+  on it would be the same fail-open in a new place.
 
 ---
 
 ## Provenance, and why not an event log
 
-Rounds already store the **full findings list** per round, so "show me the review
-as it stood at round 2" is one row read and every round is self-contained.
+Rounds store the **full findings list** per round, so "show me the review as it
+stood at round 2" is one row read and every round is self-contained.
 Reconstruction is free.
 
 Replacing that with a delta log that replays would be worse in three ways:
@@ -179,8 +225,8 @@ is what creates it:
 
 Two adjacent snapshots both containing the same finding are indistinguishable.
 Once the reviewer stops reading every file, that distinction is the difference
-between a live finding and an assumption. So each finding gains provenance,
-inside the snapshot:
+between a live finding and an assumption. So each finding carries provenance,
+inside the snapshot (`PrFinding.provenance`):
 
 | Field | Meaning |
 | --- | --- |
@@ -189,13 +235,18 @@ inside the snapshot:
 | `carried` | This round inherited it without examining it. |
 | `resolvedBy` | The commit whose round dropped it. |
 
-That keeps reconstruction free, answers what a replay log would have been used
-for, gives the "N carried" chip somewhere to expand into, and gives the
-periodic-full-review rule its trigger.
+`firstSeenRound` is exact where a stored stamp exists and otherwise dates to the
+oldest round in the read window — a floor ("at least this old"), not a guess.
 
-It is also what makes the round selector below possible at all: switching to
-round 2 renders round 2's stored snapshot, not a state rebuilt from a chain of
-diffs that might have drifted from what the merge gate actually saw that day.
+`resolvedBy` is stamped on findings in the round's **`resolved`** column, never on
+a live one: a resolved blocker has to leave `result.findings` or fixing it would
+never open the merge, and it has to stay readable or the round selector could not
+show what a push fixed.
+
+Stamping happens on **full** rounds too, where nothing is carried. The stamps are
+what make a later round's "N carried" chip mean anything, and a full round that
+skipped them would leave a hole in the history at the one point it is most
+trustworthy.
 
 ---
 
@@ -207,20 +258,33 @@ places for different reasons.
 ### The comment: the latest review, and nothing else
 
 The GitHub comment shows the current review, edited in place, with the progress
-line above it — *"3 of 5 blockers resolved, 2 remain"*. No round table, no
-history.
+line above it — *"3 of 5 blockers resolved, 2 remain"* — and one collapsed
+section naming the commits the round covered. **No round table.** The one that
+used to be there is gone.
 
 That is a deliberate simplification. A pull-request comment is read on a phone,
 in a notification, between other things; the question it has to answer is "what
 do I have to fix now". History belongs where it can be navigated, and a collapsed
 table in a comment is neither the latest review nor a usable archive.
 
+An incremental round says so, and says how many findings rode along:
+
+```
+Reviewed this push · 1
+  063dc1e  fix(console): validate the saved-view name on the read route too · phongpak
+  11 findings carried forward from an earlier round — their files were not touched by this push.
+```
+
+Stated rather than hidden: without it a cheap round looks like a lazy one and the
+reader has no way to tell the difference. A **full** round says nothing about
+carrying — a "0 carried" would read as an apology.
+
 A link to the round in the app carries anyone who wants more.
 
 ### The panel: versioned, and switchable
 
 The app is where history lives, because it is the only surface that can be
-interactive. The round strip becomes a **selector**: choosing a round renders the
+interactive. The round strip is a **selector**: choosing a round renders the
 review exactly as it stood at that head — its verdict, its score, its findings,
 including the ones later fixed.
 
@@ -228,12 +292,15 @@ including the ones later fixed.
 Round 1        Round 2        Round 3  ●current
 8ecc02a        45e02d1        063dc1e
 5 blockers     3 blockers     3 blockers · 11 carried
+feat: saved…   fix: name val… fix(console): validate…
 ```
 
 Selecting round 1 shows five blockers, two of which no longer exist. That is the
 point: a reader can see what the review said before their fix, which is the only
 way to check that the fix addressed what was actually reported rather than what
-they remembered being reported.
+they remembered being reported. An archive banner says so out loud, because a
+stale review rendered without a frame around it is how somebody acts on a blocker
+that was fixed two pushes ago.
 
 **This is free, and it is why rounds store snapshots.** Each round already holds
 its complete findings list, so the switcher is a row read — no replay, no
@@ -241,55 +308,35 @@ reconstruction, no risk of a rendered history that disagrees with what the gate
 saw at the time. Had rounds stored deltas, this feature would have required
 building the replay engine that section argues against.
 
-The commit for each round sits under it, so the strip doubles as the series of
-pushes:
+The snapshot view is deliberately thinner than the live review: a round stores
+its verdict, score and findings, not the narrative blocks around them. Rendering
+a summary there would mean either storing a second copy of the whole result or
+reconstructing prose nobody wrote, and the question that view answers — "what did
+the review say I had to fix" — the findings answer on their own.
 
-```
-Round 3  changes requested   3 blockers · 11 carried
-  063dc1e  fix(console): validate the saved-view name on the read route too   1 file
-```
-
-The `11 carried` chip expands to which findings were carried, from which round,
-and when each was last verified. Without that, a cheap round looks like a lazy
-one and the reader has no way to tell the difference.
+The `11 carried` chip expands to which findings were carried, when each was last
+verified, and the rule that made carrying them safe.
 
 ---
 
-## What exists, what is new
+## The deploy order, and what happens if it is wrong
 
-| Piece | State |
-| --- | --- |
-| Round history (`pull_request_analysis_rounds`) | built — migration 0080 |
-| Finding identity + delta (`ReviewRounds.ts`) | built — reused as-is for carry-forward |
-| `previous_blockers` to the reviewer | built — becomes the re-judge half |
-| Push coalescing (`pending_head_sha`) | built |
-| Commit-range compare | **new** — the VCS layer has no compare API, only `listPullRequestFiles` |
-| Commits recorded on the round | **new** |
-| Scope decision + ancestry check | **new** — where the full-review fallback lives |
-| Finding merge with provenance | **new** — pure, highest risk |
-| Commit timeline in panel + comment | **new** |
+The analyser decodes `/pr/analyse` with `DisallowUnknownFields`, so a cell that
+predates `carried_findings` / `review_scope` **rejects** a request carrying them —
+a 400, not a field it ignores. The analyser therefore deploys first.
 
-The analyser needs almost nothing: `Request.Files` is already whatever the
-tracker sends, so scoping is a tracker decision.
+If it does not, the tracker does not wedge. An incremental dispatch that is
+refused is retried **once** as the review we would have run before any of this
+existed: the whole pull request, no new fields, nothing carried, recorded as
+`dispatch_refused`. The row's carried list is rewritten to empty *before* the
+retry — a row still claiming to carry eleven findings the retry never sent would
+put them back into a review that did not look at them, and label them verified.
 
----
-
-## Build order
-
-Each step is useful alone, and none of it has to land at once.
-
-1. **Commit-range compare + commits on the round.** Delivers the timeline with no
-   behaviour change — every round is still full. Ships the UI value first and
-   proves the compare plumbing before anything depends on it.
-2. **Scope decision, logged but not acted on.** Every round records what it
-   *would* have done and why. Gives real numbers on how often incremental is
-   available before a single review changes.
-3. **Carry-forward + finding merge**, behind the scope decision. The point of no
-   return; the merge is what the gate reads.
-4. **Provenance fields**, and the carried chip that expands.
-5. **Periodic full review** on the round/fraction thresholds.
-
-Steps 1 and 2 are safe by construction: neither changes what gets reviewed.
+The fallback is strictly **more** review, which is the only direction a fallback
+in this pipeline is allowed to go. The same is true of every other failure in the
+new machinery: a provider that cannot compare, a truncated compare, an
+unreadable round history — each one leaves the round FULL, which is where every
+round was before this existed.
 
 ---
 
@@ -305,20 +352,45 @@ carries the versioning. Different surfaces, different jobs.
 
 **Fixed findings stay visible** — through the round selector rather than the
 current findings list. A resolved blocker leaves `result.findings`, so the merge
-gate stays clean, and remains readable at the round that reported it. `resolvedBy`
-names the commit that closed it.
+gate stays clean, and remains readable at the round that reported it and in the
+`resolved` column of the round that closed it. `resolvedBy` names the commit.
+
+**How the reviewer is told what it is NOT reviewing** — it is handed the carried
+findings as a short list (file, line, title, capped at 20) under the heading
+`ALREADY REPORTED — do NOT re-report, do NOT open`.
+
+This was the open question, and the resolution turns on a distinction the
+`previous_blockers` work already established: the list REMOVES work rather than
+adding it. Without it the reviewer walks the graph into an untouched file,
+rediscovers a defect the last round already found, and spends one of nine turns
+reporting a duplicate the merge then has to reconcile. Naming the finding costs
+one line and buys that turn back. The reviewer is explicitly *not* told the
+carried findings are correct — only that they are not its job — so the one thing
+worth a turn stays available: if it opens such a file for a different reason and
+finds the finding is now wrong, it is asked to say so.
+
+The same note goes to the **reduce** pass, not only the review pass. Reduce's
+draft is the total fallback when the review pass exhausts its turn ceiling, so a
+reducer that thinks a push is the whole pull request produces the answer that
+ships on exactly the runs where nothing else checked it — and one that does not
+know about the carried findings would report them a second time.
+
+**The delta's pairing** — a completing run saves its result and *then* appends a
+round for the same head, so the newest round IS the current review. The panel was
+diffing the review against itself, which made the progress line permanently read
+"nothing fixed" on the one surface whose entire job is to say what the last push
+changed. The route now pairs against the newest round whose head differs.
 
 ---
 
 ## Still open
 
-**How the reviewer is told what it is NOT reviewing.** Sending only the
-incremental diff means the reviewer cannot see the carried findings' code unless
-it opens the files. Whether the carried list should be summarised into the
-context — and how that interacts with a nine-turn budget — is unresolved, and it
-is the question most likely to decide whether incremental review is actually
-cheaper in practice or merely differently expensive.
-
 **Whether round 1 of a PR should ever be incremental.** It cannot be, by the
 scope rules. But a PR opened with fifty commits already on the branch gets one
-enormous first round, and nothing in this plan makes that better.
+enormous first round, and nothing here makes that better.
+
+**Whether the thresholds are right.** 25 dependents, 4 rounds, 75% carried. Every
+round logs the rule that fired and every round records its scope, so
+`pr_rounds_scope_idx` answers "how often does incremental actually happen, and
+which rule blocks it?" over real traffic. Tune from that, not from this
+paragraph.

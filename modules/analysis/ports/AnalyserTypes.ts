@@ -367,6 +367,23 @@ export interface PrAnalyseInput {
      *  defect at a known path is a read or two, finding it again is most of a
      *  review. Omitted on a first review. */
     previous_blockers?: { file: string; line?: number; title: string }[]
+    /** Findings the tracker is CARRYING FORWARD this round — already reported at
+     *  an earlier head, in files this diff does not touch (0081).
+     *
+     *  The reviewer is told not to re-report them, which is the opposite of more
+     *  work: without this it walks the graph into an untouched file, rediscovers
+     *  a defect the last round already found, and spends one of nine turns
+     *  reporting a duplicate the merge would then have to reconcile. Omitted on
+     *  a full review, where there is nothing being carried. */
+    carried_findings?: { file: string; line?: number; title: string }[]
+    /** What the `files` list MEANS this round (0081).
+     *
+     *  Absent — the default, and every request before this existed — the files
+     *  are the whole pull request. Present with kind "incremental" they are the
+     *  diff of one PUSH, and the reviewer needs to know that, because "the diff
+     *  does not touch X" is a conclusion it would otherwise draw about the pull
+     *  request from a list that only ever described a commit range. */
+    review_scope?: { kind: "incremental"; previous_head_sha?: string }
 }
 
 // ─── /verify ─────────────────────────────────────────────────────────────────

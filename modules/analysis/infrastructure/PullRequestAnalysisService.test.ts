@@ -17,7 +17,7 @@ const projectsRepo = { findCell: mock(), findGithubSyncContext: mock(), findTeam
 const analyserRepo = { findReadiness: mock() }
 const analyser = { startPRAnalysis: mock(), cancelPRAnalysis: mock() }
 const analyserFor = mock(() => analyser)
-const vcsSvc = { listPullRequestFiles: mock(), postPrComment: mock(), updatePrComment: mock() }
+const vcsSvc = { listPullRequestFiles: mock(), compareCommits: mock(), postPrComment: mock(), updatePrComment: mock() }
 const vcsFor = () => vcsSvc
 
 mock.module("@/modules/projects", () => ({
@@ -49,6 +49,9 @@ beforeEach(() => {
     analyser.startPRAnalysis.mockReset().mockResolvedValue(undefined)
     analyserFor.mockClear()
     vcsSvc.listPullRequestFiles.mockReset().mockResolvedValue([{ filename: "a.ts", status: "modified", patch: "@@", additions: 1, deletions: 0 }])
+    // No compare by default: the provider cannot place the heads, which leaves
+    // every round FULL — the behaviour before incremental review existed.
+    vcsSvc.compareCommits.mockReset().mockRejectedValue(new Error("no compare"))
     vcsSvc.postPrComment.mockReset().mockResolvedValue({ id: 9001 })
     vcsSvc.updatePrComment.mockReset().mockResolvedValue(undefined)
 })
@@ -277,5 +280,269 @@ describe("applyResult — rounds and the continuation", () => {
         store.findResultRow.mockResolvedValue(doneRow())
         await svcWithPulls().applyResult("task-1", "failed", null, "https://app")
         expect(store.appendRound).not.toHaveBeenCalled()
+    })
+})
+
+// ─── incremental review (0081) ──────────────────────────────────────────────
+//
+// Two halves that have to agree: `start` decides the scope and writes down what
+// it is carrying; `applyResult` merges that into the ONE findings list the merge
+// gate counts. The tests below check the seam between them, because the pure
+// arithmetic on either side is covered by ReviewScope/CarryForward's own suites
+// and the failure this feature can actually produce is a decision that never
+// reaches the callback.
+describe("start — deciding the scope", () => {
+    const blocker = {
+        file: "src/untouched.ts", line: 3, severity: "critical", category: "bug",
+        title: "unchecked owner on delete", detail: "any member can delete another's row",
+    }
+    const round = (over: Record<string, unknown> = {}) => ({
+        headSha: "head0", round: 1, status: "done", verdict: "request_changes", score: 4, scoreMax: 10,
+        findings: [blocker], degraded: false, reviewProfile: { kind: "default" }, analyserBuild: null,
+        createdAt: "", scope: "full", scopeReason: null, prevHeadSha: null, baseSha: "base1",
+        commits: [], carriedCount: 0, reviewedFiles: 3, resolved: [], ...over,
+    })
+    const compare = (over: Record<string, unknown> = {}) => ({
+        status: "ahead",
+        files: [{ filename: "src/touched.ts", status: "modified", patch: "@@\n+const x = 1", additions: 1, deletions: 0 }],
+        commits: [{ sha: "head1", message: "fix(x): tighten the guard\n\nbody", author: "phongpak", committedAt: "2026-08-22T00:00:00Z" }],
+        truncated: false,
+        ...over,
+    })
+
+    test("a push after a clean round is scoped to the push", async () => {
+        store.listRounds.mockResolvedValue([round()])
+        vcsSvc.compareCommits.mockResolvedValue(compare())
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.scope).toBe("incremental")
+        expect(scope.reviewedFiles).toBe(1)
+        // The whole PR is NOT re-fetched: that is the six minutes this saves.
+        expect(vcsSvc.listPullRequestFiles).not.toHaveBeenCalled()
+        expect(analyser.startPRAnalysis.mock.calls[0][0].files).toHaveLength(1)
+    })
+
+    test("the untouched blocker is carried, not silently dropped", async () => {
+        store.listRounds.mockResolvedValue([round()])
+        vcsSvc.compareCommits.mockResolvedValue(compare())
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.carried).toHaveLength(1)
+        expect(scope.carried[0].title).toBe("unchecked owner on delete")
+        // …and the reviewer is told not to re-report it.
+        expect(analyser.startPRAnalysis.mock.calls[0][0].carried_findings).toHaveLength(1)
+        expect(analyser.startPRAnalysis.mock.calls[0][0].review_scope).toMatchObject({ kind: "incremental" })
+    })
+
+    test("a blocker in a file the push touched goes back to be re-judged", async () => {
+        store.listRounds.mockResolvedValue([round({ findings: [{ ...blocker, file: "src/touched.ts" }] })])
+        vcsSvc.compareCommits.mockResolvedValue(compare())
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.carried).toHaveLength(0)
+        expect(analyser.startPRAnalysis.mock.calls[0][0].previous_blockers).toHaveLength(1)
+    })
+
+    test("a force-push carries nothing and reviews everything", async () => {
+        store.listRounds.mockResolvedValue([round()])
+        vcsSvc.compareCommits.mockResolvedValue(compare({ status: "diverged" }))
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.scope).toBe("full")
+        expect(scope.code).toBe("force_push")
+        expect(scope.carried).toHaveLength(0)
+        expect(vcsSvc.listPullRequestFiles).toHaveBeenCalledTimes(1)
+    })
+
+    test("a migration in the push forces a full pass", async () => {
+        store.listRounds.mockResolvedValue([round()])
+        vcsSvc.compareCommits.mockResolvedValue(
+            compare({ files: [{ filename: "supabase/migrations/0082_x.sql", status: "added", patch: "@@", additions: 1, deletions: 0 }] }),
+        )
+        await svc().start(project, pr, "https://app")
+        expect(store.upsertTracking.mock.calls[0][0].reviewScope.code).toBe("migration")
+    })
+
+    // The failure mode of the new machinery must be the OLD behaviour.
+    test("a provider that cannot compare leaves the round full", async () => {
+        store.listRounds.mockResolvedValue([round()])
+        vcsSvc.compareCommits.mockRejectedValue(new Error("shallow mirror"))
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.scope).toBe("full")
+        expect(vcsSvc.listPullRequestFiles).toHaveBeenCalledTimes(1)
+    })
+
+    test("the commits behind the round are recorded even on a full first review", async () => {
+        store.listRounds.mockResolvedValue([])
+        vcsSvc.compareCommits.mockResolvedValue(compare())
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.scope).toBe("full")
+        expect(scope.commits).toEqual([
+            { sha: "head1", subject: "fix(x): tighten the guard", author: "phongpak", at: "2026-08-22T00:00:00Z" },
+        ])
+    })
+})
+
+describe("applyResult — the merge", () => {
+    const carried = {
+        file: "src/untouched.ts", line: 3, severity: "critical", category: "bug",
+        title: "unchecked owner on delete", detail: "any member can delete another's row",
+    }
+    const scopeRow = (over: Record<string, unknown> = {}) => ({
+        scope: "incremental", code: "push_scoped", reason: "reviewing the 1 file this push changed",
+        prevHeadSha: "head0", baseSha: "base1",
+        commits: [{ sha: "head1", subject: "fix(x): tighten the guard", author: "p", at: null }],
+        reviewedFiles: 1, carried: [carried], reJudgedBlockers: [], ...over,
+    })
+    const row = (over: Record<string, unknown> = {}) => ({
+        id: "task-1", projectId: "proj-1", prNumber: 7, githubCommentId: null,
+        reviewProfile: { kind: "default" }, headSha: "head1", pendingHeadSha: null,
+        reviewScope: scopeRow(), ...over,
+    })
+
+    // THE failure this whole feature is built around: a carried blocker that
+    // never reaches result.findings leaves the gate seeing zero criticals.
+    test("a carried blocker reaches the list the merge gate counts", async () => {
+        store.findResultRow.mockResolvedValue(row())
+        store.listRounds.mockResolvedValue([])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", { summary: "s", impact: "i", findings: [] } as any, "https://app")
+
+        const saved = store.saveResult.mock.calls.at(-1)![2]
+        expect(saved.findings).toHaveLength(1)
+        expect(saved.findings[0].provenance).toMatchObject({ carried: true })
+    })
+
+    test("the round records what it was scoped to and what it carried", async () => {
+        store.findResultRow.mockResolvedValue(row())
+        store.listRounds.mockResolvedValue([])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", { summary: "s", impact: "i", findings: [] } as any, "https://app")
+
+        expect(store.appendRound.mock.calls[0][0]).toMatchObject({
+            scope: "incremental",
+            scopeReason: "reviewing the 1 file this push changed",
+            prevHeadSha: "head0",
+            carriedCount: 1,
+            reviewedFiles: 1,
+        })
+        expect(store.appendRound.mock.calls[0][0].commits).toHaveLength(1)
+    })
+
+    // A run whose scope was never written down must not be recorded as a scoped
+    // one: the reader of that row has to be able to trust "full".
+    test("a run with no recorded scope records itself as full", async () => {
+        store.findResultRow.mockResolvedValue(row({ reviewScope: null }))
+        store.listRounds.mockResolvedValue([])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", { summary: "s", impact: "i", findings: [] } as any, "https://app")
+        expect(store.appendRound.mock.calls[0][0]).toMatchObject({ scope: "full", carriedCount: 0 })
+    })
+
+    test("a full round still stamps provenance, so a later carried chip means something", async () => {
+        store.findResultRow.mockResolvedValue(row({ reviewScope: scopeRow({ scope: "full", carried: [] }) }))
+        store.listRounds.mockResolvedValue([])
+        const found = { ...carried, file: "src/touched.ts" }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", { summary: "s", impact: "i", findings: [found] } as any, "https://app")
+
+        const saved = store.saveResult.mock.calls.at(-1)![2]
+        expect(saved.findings[0].provenance).toMatchObject({ carried: false, lastVerifiedRound: 1, firstSeenRound: 1 })
+    })
+
+    test("a blocker the round did not report is recorded as resolved by this head", async () => {
+        store.findResultRow.mockResolvedValue(row({ reviewScope: scopeRow({ carried: [] }) }))
+        store.listRounds.mockResolvedValue([
+            { headSha: "head0", round: 1, findings: [carried], degraded: false, reviewProfile: null, baseSha: "base1", scope: "full" },
+        ])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", { summary: "s", impact: "i", findings: [] } as any, "https://app")
+
+        const round = store.appendRound.mock.calls[0][0]
+        expect(round.resolved).toHaveLength(1)
+        expect(round.resolved[0].provenance.resolvedBy).toBe("head1")
+        expect(round.result.findings).toHaveLength(0)
+    })
+
+    // A partial review read nothing, so its silence about a blocker is an
+    // absence rather than a judgement.
+    test("a degraded round puts back the re-judged blockers it never spoke about", async () => {
+        store.findResultRow.mockResolvedValue(row({ reviewScope: scopeRow({ carried: [], reJudgedBlockers: [carried] }) }))
+        store.listRounds.mockResolvedValue([])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", { summary: "s", impact: "i", findings: [], degraded: true } as any, "https://app")
+
+        const saved = store.saveResult.mock.calls.at(-1)![2]
+        expect(saved.findings).toHaveLength(1)
+        expect(saved.findings[0].provenance.carried).toBe(true)
+    })
+})
+
+// A cell deployed before incremental review REJECTS the request outright (the
+// analyser decodes with DisallowUnknownFields). Without a fallback the row stays
+// "analysing" and every pull request keeps a loading comment nothing comes back
+// to edit, for the length of a partial deploy.
+describe("start — an analyser that refuses the incremental request", () => {
+    const blocker = {
+        file: "src/untouched.ts", line: 3, severity: "critical", category: "bug",
+        title: "unchecked owner on delete", detail: "any member can delete another's row",
+    }
+
+    beforeEach(() => {
+        store.listRounds.mockResolvedValue([{
+            headSha: "head0", round: 1, status: "done", verdict: "request_changes", score: 4, scoreMax: 10,
+            findings: [blocker], degraded: false, reviewProfile: { kind: "default" }, analyserBuild: null,
+            createdAt: "", scope: "full", scopeReason: null, prevHeadSha: null, baseSha: "base1",
+            commits: [], carriedCount: 0, reviewedFiles: 3, resolved: [],
+        }])
+        vcsSvc.compareCommits.mockResolvedValue({
+            status: "ahead",
+            files: [{ filename: "src/touched.ts", status: "modified", patch: "@@\n+const x = 1", additions: 1, deletions: 0 }],
+            commits: [],
+            truncated: false,
+        })
+    })
+
+    test("falls back to a full review rather than wedging the run", async () => {
+        analyser.startPRAnalysis
+            .mockRejectedValueOnce(new Error("pr/analyse/run failed: HTTP 400"))
+            .mockResolvedValueOnce(undefined)
+        await svc().start(project, pr, "https://app")
+
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(2)
+        const retry = analyser.startPRAnalysis.mock.calls[1][0]
+        expect(retry.review_scope).toBeUndefined()
+        expect(retry.carried_findings).toBeUndefined()
+        expect(vcsSvc.listPullRequestFiles).toHaveBeenCalledTimes(1)
+    })
+
+    // The row is what the callback merges from. A row still claiming to carry a
+    // blocker the retry never sent would put it back into a review that did not
+    // look at it — and label it verified.
+    test("the row stops claiming to carry anything before the retry", async () => {
+        analyser.startPRAnalysis
+            .mockRejectedValueOnce(new Error("HTTP 400"))
+            .mockResolvedValueOnce(undefined)
+        await svc().start(project, pr, "https://app")
+
+        const rewritten = store.upsertTracking.mock.calls.at(-1)![0].reviewScope
+        expect(rewritten.scope).toBe("full")
+        expect(rewritten.code).toBe("dispatch_refused")
+        expect(rewritten.carried).toHaveLength(0)
+    })
+
+    test("a FULL dispatch that fails still throws — there is nothing to fall back to", async () => {
+        vcsSvc.compareCommits.mockResolvedValue({ status: "diverged", files: [], commits: [], truncated: false })
+        analyser.startPRAnalysis.mockRejectedValue(new Error("HTTP 500"))
+        await expect(svc().start(project, pr, "https://app")).rejects.toThrow("HTTP 500")
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
     })
 })

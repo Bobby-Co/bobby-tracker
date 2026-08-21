@@ -4,7 +4,7 @@
 // stored structured review. The PullRequestAnalysisService depends on this role
 // instead of hitting the table inline (the golden-standard fix).
 
-import type { PrAnalysis, PrFinding, ReviewRunProfile } from "@/lib/shared/types"
+import type { PrAnalysis, PrFinding, ReviewRoundCommit, ReviewRunProfile, ReviewRunScope } from "@/lib/shared/types"
 
 /** The idempotency/comment view of a PR's tracking row. */
 export interface PullRequestAnalysisTracking {
@@ -34,6 +34,12 @@ export interface PullRequestAnalysisResultRow {
      *  The callback compares them to decide whether the PR has already moved on. */
     headSha: string | null
     pendingHeadSha: string | null
+    /** What this run was SCOPED to, written at dispatch (0081) — including the
+     *  findings it is carrying forward. The callback reads it to merge them into
+     *  the one findings list; re-deriving the decision here would compare against
+     *  a head that has since moved. Null on a run that predates incremental
+     *  review, and on any run that could not record it. */
+    reviewScope: ReviewRunScope | null
 }
 
 /** One completed review of one head (0080). */
@@ -51,6 +57,25 @@ export interface ReviewRound {
     reviewProfile: ReviewRunProfile | null
     analyserBuild: string | null
     createdAt: string
+
+    // ── scope + provenance (0081) ───────────────────────────────────────────
+    /** What this round reviewed, and which rule chose it. Rounds written before
+     *  0081 read as "full", which is what they were. */
+    scope: "full" | "incremental"
+    scopeReason: string | null
+    /** The range this round covered: the head the LAST round reviewed (null on a
+     *  first round) and the pull request's base. */
+    prevHeadSha: string | null
+    baseSha: string | null
+    /** The commits between prevHeadSha (or the base) and headSha. */
+    commits: ReviewRoundCommit[]
+    /** How many findings rode along unexamined, and how many files the reviewer
+     *  was given. */
+    carriedCount: number
+    reviewedFiles: number | null
+    /** Blockers the previous round had that this one does not, stamped with the
+     *  head that closed them. Never part of `findings` — see the migration. */
+    resolved: PrFinding[]
 }
 
 /** What a completing run records as its round. */
@@ -61,6 +86,19 @@ export interface ReviewRoundInsert {
     status: string
     result: PrAnalysis | null
     reviewProfile: ReviewRunProfile | null
+
+    // ── scope + provenance (0081) ───────────────────────────────────────────
+    /** The decision this run was dispatched under, read back from the tracking
+     *  row. Absent leaves the round reading as a full review, which is the only
+     *  honest default: a round that cannot say it was scoped was not. */
+    scope?: "full" | "incremental"
+    scopeReason?: string | null
+    prevHeadSha?: string | null
+    baseSha?: string | null
+    commits?: ReviewRoundCommit[]
+    carriedCount?: number
+    reviewedFiles?: number | null
+    resolved?: PrFinding[]
 }
 
 /** The fields upserted when a run is (re)started. */
@@ -74,6 +112,11 @@ export interface PullRequestAnalysisUpsert {
      *  Written at dispatch, with the run, so the record describes what ACTUALLY
      *  ran rather than what the project points at when somebody later looks. */
     reviewProfileId: string | null
+    /** What this run is scoped to, and what it carries (0081). Written at
+     *  dispatch for the same reason as the profile: the decision is made here,
+     *  and the callback that has to honour it runs minutes later against a head
+     *  that may have moved again. */
+    reviewScope: ReviewRunScope | null
     /** The same answer in full, including the compiled policy. Not optional: a
      *  new run always knows what it is running, and letting a caller omit it
      *  would quietly reintroduce the "null means we don't know" gap that only

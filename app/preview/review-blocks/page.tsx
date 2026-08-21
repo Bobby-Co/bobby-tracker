@@ -54,6 +54,11 @@ const FIXTURE: PrAnalysis = {
             detail: "ProjectDeletionService.test.ts covers the happy path and the suggestion-cleanup failure, but not a null cell.",
             evidence: [{ file: "modules/projects/application/ProjectDeletionService.test.ts", line: 1, kind: "test", note: "no case for a null cell" }],
             checked: ["ripgrep for findCell in the test file"],
+            // Carried (0081): reported at round 1, and this round reviewed only
+            // the push — which did not touch this file or any symbol the finding
+            // names. The state exists so the "carried" chip and the expandable
+            // note below it can be seen without a live incremental round.
+            provenance: { firstSeenRound: 1, lastVerifiedRound: 1, carried: true },
         },
         {
             file: "modules/projects/application/ProjectDeletionService.ts",
@@ -303,6 +308,9 @@ export default function ReviewBlocksPreview() {
         // actually sent; these are hand-written to match its shape.
         review_profile_id: attribution.value?.kind === "profile" ? attribution.value.id : null,
         review_profile: attribution.value,
+        // Scope (0081). The preview always renders a full review — the round
+        // strip below is where the incremental cases are exercised.
+        review_scope: null,
         created_at: "",
         updated_at: "",
     }
@@ -310,8 +318,20 @@ export default function ReviewBlocksPreview() {
     // Rounds (0080). The fixture's second round "fixes" the blocker the first one
     // found and introduces one of its own, which is the case the strip exists for.
     const ROUNDS: RoundSummary[] = [
-        { headSha: "a3f1c02aaa", round: 1, verdict: "request_changes", blockers: 2, fixed: 0, degraded: false },
-        { headSha: "7bd9e14bbb", round: 2, verdict: "request_changes", blockers: 1, fixed: 1, degraded: false },
+        {
+            headSha: "a3f1c02aaa", round: 1, verdict: "request_changes", score: 4, scoreMax: 10,
+            findings: FIXTURE.findings ?? [], degraded: false, scope: "full",
+            scopeReason: "first review of this pull request — nothing to carry",
+            commits: [{ sha: "a3f1c02aaa", subject: "feat(console): saved views", author: "phongpak", at: null }],
+            carriedCount: 0, resolved: [], createdAt: "", blockers: 2, fixed: 0,
+        },
+        {
+            headSha: "7bd9e14bbb", round: 2, verdict: "request_changes", score: 6, scoreMax: 10,
+            findings: FIXTURE.findings ?? [], degraded: false, scope: "incremental",
+            scopeReason: "reviewing the 1 file this push changed",
+            commits: [{ sha: "7bd9e14bbb", subject: "fix(console): validate the saved-view name", author: "phongpak", at: null }],
+            carriedCount: 1, resolved: [], createdAt: "", blockers: 1, fixed: 1,
+        },
     ]
     const delta = diffRounds(
         { headSha: "7bd9e14bbb", findings: result.findings ?? [] },

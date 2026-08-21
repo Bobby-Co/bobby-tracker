@@ -1,7 +1,7 @@
 import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
-import type { PrAnalysis, PrFinding, ReviewRunProfile } from "@/lib/shared/types"
+import type { PrAnalysis, PrFinding, ReviewRoundCommit, ReviewRunProfile } from "@/lib/shared/types"
 
 /** Escape team-written text for inline markdown in a comment Ucelot posts under
  *  its own account. Profile NAMES are a label rather than a prompt, so they skip
@@ -196,7 +196,14 @@ const MD_BLOCKS: Record<BlockKind, (p: MdBlockProps) => string[]> = {
 }
 
 /** Builds the GitHub-comment body for a PR review. */
-/** What the comment needs to know about the rounds before this one (0080). */
+/** What the comment needs to know about the rounds before this one (0080).
+ *
+ *  Deliberately thin. The comment shows THE LATEST REVIEW and nothing else — no
+ *  round table, no archive — because a pull-request comment is read on a phone,
+ *  in a notification, between other things, and the question it has to answer is
+ *  "what do I have to fix now". History belongs where it can be navigated, and a
+ *  collapsed table in a comment is neither the latest review nor a usable
+ *  archive. The link into the app carries anyone who wants more. */
 export interface CommentHistory {
     /** 1-based ordinal of the round this comment is rendering. */
     round: number
@@ -206,8 +213,14 @@ export interface CommentHistory {
     remaining: number
     /** True when this round did not complete, so nothing may be called resolved. */
     withheld: boolean
-    /** Earlier rounds, newest first: head, verdict, blocker count. */
-    previous: { headSha: string; verdict: string | null; blockers: number; fixed: number }[]
+    /** The commits this round covered — the push the reader just made. */
+    commits: ReviewRoundCommit[]
+    /** What this round reviewed: the whole PR, or only the push (0081). */
+    scope: "full" | "incremental"
+    /** How many of the findings below rode along without being re-examined.
+     *  Stated rather than hidden: without it a cheap round looks like a lazy one
+     *  and the reader has no way to tell the difference. */
+    carried: number
 }
 
 export class PullRequestAnalysisComment {
@@ -257,25 +270,27 @@ export class PullRequestAnalysisComment {
         return `> **Round ${h.round}** — ${h.fixed} of ${h.fixed + h.remaining} blockers resolved, ${h.remaining} remain.`
     }
 
-    /** Earlier rounds, collapsed under a summary. */
-    private earlierRounds(h?: CommentHistory): string {
-        if (!h || h.previous.length === 0) return ""
-        const rows = h.previous.map((p) => {
-            const verdict = p.verdict ? mergeVerdictLabel(p.verdict) : "—"
-            const bits = [`${p.blockers} blocker${p.blockers === 1 ? "" : "s"}`]
-            if (p.fixed > 0) bits.push(`${p.fixed} fixed`)
-            return `| \`${p.headSha.slice(0, 7)}\` | ${verdict} | ${bits.join(" · ")} |`
+    /** What this round actually looked at.
+     *
+     *  The commits behind the round, plus — when the round was scoped to the push
+     *  — how many findings rode along unexamined. That second number is not an
+     *  apology, it is the honest reading of the list above it: a reader deciding
+     *  whether to trust a two-minute review needs to know which of its findings
+     *  somebody looked at this time. */
+    private reviewed(h?: CommentHistory): string {
+        if (!h || h.commits.length === 0) return ""
+        const rows = h.commits.slice(0, 8).map((c) => {
+            const who = c.author ? ` · ${this.esc(c.author)}` : ""
+            return `- \`${c.sha.slice(0, 7)}\` ${this.esc(c.subject)}${who}`
         })
-        return [
-            "<details>",
-            `<summary>Earlier rounds (${h.previous.length})</summary>`,
-            "",
-            "| Head | Verdict | Findings |",
-            "| --- | --- | --- |",
-            ...rows,
-            "",
-            "</details>",
-        ].join("\n")
+        if (h.commits.length > 8) rows.push(`- …and ${h.commits.length - 8} more`)
+        const label = h.scope === "incremental" ? "Reviewed this push" : "Commits in this pull request"
+        const carried =
+            h.scope === "incremental" && h.carried > 0
+                ? `\n_${h.carried} finding${h.carried === 1 ? "" : "s"} carried forward from an earlier round — ` +
+                  `${h.carried === 1 ? "its file was" : "their files were"} not touched by this push._`
+                : ""
+        return ["<details>", `<summary><b>${label} · ${h.commits.length}</b></summary>`, "", ...rows, carried, "", "</details>"].join("\n")
     }
 
     result(
@@ -345,11 +360,11 @@ export class PullRequestAnalysisComment {
             profile?.kind === "profile" ? ` · under the ${mdEscape(profile.name)} profile` : ""
         out.push(`<sub>🔎 Reviewed by Ucelot${under}${dur}</sub>`, "", `<sub>Ucelot is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
 
-        // Earlier rounds, collapsed. One comment that grows a history rather than
-        // a new comment per push: a bot that posts on every push is one people
-        // mute, and muting it is the end of the feature.
-        const earlier = this.earlierRounds(history)
-        if (earlier) out.push("", earlier)
+        // The commits behind this round, collapsed. One comment edited in place
+        // rather than a new one per push: a bot that posts on every push is one
+        // people mute, and muting it is the end of the feature.
+        const reviewed = this.reviewed(history)
+        if (reviewed) out.push("", reviewed)
         return out.join("\n")
     }
 

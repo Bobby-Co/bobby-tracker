@@ -177,6 +177,53 @@ export type ReviewRunProfile =
     | { kind: "default" }
     | { kind: "profile"; id: string | null; name: string; preset: string | null; policy: ReviewRunPolicy }
 
+/** One commit a review round covered (migration 0081). Recorded so the surfaces
+ *  can say WHICH push produced which review rather than showing a bare sha, and
+ *  so the round strip doubles as the series of pushes. `files` is the paths that
+ *  commit touched, best-effort — providers report it per compare, not per commit,
+ *  so it is empty when only the range's file list was available. */
+export interface ReviewRoundCommit {
+    sha: string
+    subject: string
+    author: string | null
+    at: string | null
+    files?: string[]
+}
+
+/** Why a round reviewed what it reviewed, and what it carried (migration 0081).
+ *
+ *  Written on the TRACKING row at dispatch and read back by the callback, which
+ *  is the only way the two halves can agree: the scope is decided where the diff
+ *  is fetched, and the merge happens where the result lands. Carrying the
+ *  decision through the round row instead would mean re-deriving it after the
+ *  fact from a head that has since moved. */
+export interface ReviewRunScope {
+    scope: "full" | "incremental"
+    /** The rule that fired, as a stable code — `reason` is its prose. */
+    code: string
+    reason: string
+    /** The head the LAST round reviewed; the left-hand side of the compare. Null
+     *  on a first review. */
+    prevHeadSha: string | null
+    baseSha: string | null
+    /** The commits between prevHeadSha (or the base, on a first round) and this
+     *  head. */
+    commits: ReviewRoundCommit[]
+    /** How many files were actually sent to the reviewer. */
+    reviewedFiles: number
+    /** Findings this round inherits WITHOUT re-examining, verbatim from the last
+     *  round. Empty on a full review. Kept in full rather than by id: the merge
+     *  has to produce one findings list, and a reference to a row that could be
+     *  read differently later is exactly the drift this avoids. */
+    carried: PrFinding[]
+    /** The BLOCKERS sent back to the reviewer to re-judge. Only the blockers,
+     *  and only so the callback can put them back if the round turns out to have
+     *  been degraded: a partial review read nothing, so its silence about a
+     *  blocker is an absence rather than a judgement, and dropping one on it
+     *  would be the same fail-open in a new place. */
+    reJudgedBlockers: PrFinding[]
+}
+
 export interface PullRequestAnalysis {
     id: string
     project_id: string
@@ -191,6 +238,9 @@ export interface PullRequestAnalysis {
     review_profile_id: string | null
     /** What ran, in full. Null only for runs that predate migration 0079. */
     review_profile: ReviewRunProfile | null
+    /** What this run was SCOPED to, and what it carried (migration 0081). Null
+     *  on rows written before incremental review — which were all full reviews. */
+    review_scope: ReviewRunScope | null
     created_at: string
     updated_at: string
 }
@@ -317,6 +367,31 @@ export interface PrFinding {
      *  snippet in the UI; `lang` is the fenced-block language (usually "diff"). */
     snippet?: string
     lang?: string
+    /** Round provenance (migration 0081). Stamped by the TRACKER when a round is
+     *  merged, never sent by the analyser — see PrFindingProvenance for why a
+     *  snapshot alone cannot answer what this records. Absent on every finding
+     *  written before incremental review existed. */
+    provenance?: PrFindingProvenance
+}
+
+/** Where a finding came from, and whether anyone looked at it this round.
+ *
+ *  Two adjacent round snapshots containing the same finding are
+ *  INDISTINGUISHABLE without this: one may be a defect the reviewer re-opened
+ *  the code to confirm, the other a finding carried forward untouched because
+ *  its file was not in the push. Once the reviewer stops reading every file that
+ *  distinction is the difference between a live finding and an assumption, so it
+ *  is recorded rather than inferred. */
+export interface PrFindingProvenance {
+    /** The round that first reported it. */
+    firstSeenRound: number
+    /** The last round that actually read the code behind it. */
+    lastVerifiedRound: number
+    /** True when THIS round inherited it without examining it. */
+    carried: boolean
+    /** The head whose round dropped it — set only on a finding stored in a
+     *  round's `resolved` list, never on a live one. */
+    resolvedBy?: string
 }
 
 /** Per-dimension calibrated confidence (analyser ADR-0057). `level` is the

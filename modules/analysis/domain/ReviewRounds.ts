@@ -165,9 +165,28 @@ function matchIn(pool: { finding: PrFinding; key: string }[], target: { finding:
 
 function same(a: { finding: PrFinding; key: string }, b: { finding: PrFinding; key: string }): boolean {
     if (a.key === b.key) return true
-    if (file(a.finding) !== file(b.finding)) return false
-    if ((a.finding.category ?? "") !== (b.finding.category ?? "")) return false
-    return titleSimilarity(titleOf(a.finding), titleOf(b.finding)) >= SIMILAR_ENOUGH
+    return sameFinding(a.finding, b.finding)
+}
+
+/** Are these two findings the same defect?
+ *
+ *  Exported because carry-forward asks the SAME question the delta does — "is
+ *  this the one I already had?" — and two answers to it would eventually
+ *  disagree, which is how a carried finding ends up counted as both still-open
+ *  and new in the same round. */
+export function sameFinding(a: PrFinding, b: PrFinding): boolean {
+    if (fingerprint(a) === fingerprint(b)) return true
+    if (file(a) !== file(b)) return false
+    if ((a.category ?? "") !== (b.category ?? "")) return false
+    return titleSimilarity(titleOf(a), titleOf(b)) >= SIMILAR_ENOUGH
+}
+
+/** The finding's file, normalised the way identity compares it. Exported so the
+ *  carry rule tests the same string the fingerprint does — a finding carried
+ *  because "src/A.ts" looked untouched while the diff said "src/a.ts" is exactly
+ *  the kind of near-miss this exists to make impossible. */
+export function findingFile(f: PrFinding): string {
+    return file(f)
 }
 
 /** Only findings that GATE a merge count as "fixed" — a positive note vanishing

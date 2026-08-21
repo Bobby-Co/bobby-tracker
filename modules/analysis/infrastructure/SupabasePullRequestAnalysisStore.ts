@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
-import type { PrAnalysis, PrFinding, ReviewRunProfile } from "@/lib/shared/types"
+import type { PrAnalysis, PrFinding, ReviewRoundCommit, ReviewRunProfile, ReviewRunScope } from "@/lib/shared/types"
 import type {
     PullRequestAnalysisResultRow,
     PullRequestAnalysisStore,
@@ -60,6 +60,10 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                     // profile is a different review.
                     review_profile_id: input.reviewProfileId,
                     review_profile: input.reviewProfile,
+                    // The scope decision travels with the run for the same
+                    // reason (0081) — and the callback READS it back, so a
+                    // re-run must overwrite rather than accumulate.
+                    review_scope: input.reviewScope,
                 },
                 { onConflict: "project_id,pr_number" },
             )
@@ -71,7 +75,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     async findResultRow(taskId: string): Promise<PullRequestAnalysisResultRow | null> {
         const { data } = await this.db
             .from("pull_request_analyses")
-            .select("id,project_id,pr_number,github_comment_id,review_profile,head_sha,pending_head_sha")
+            .select("id,project_id,pr_number,github_comment_id,review_profile,review_scope,head_sha,pending_head_sha")
             .eq("id", taskId)
             .maybeSingle<{
                 id: string
@@ -79,6 +83,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                 pr_number: number
                 github_comment_id: number | null
                 review_profile: ReviewRunProfile | null
+                review_scope: ReviewRunScope | null
                 head_sha: string | null
                 pending_head_sha: string | null
             }>()
@@ -89,6 +94,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             prNumber: data.pr_number,
             githubCommentId: data.github_comment_id,
             reviewProfile: data.review_profile ?? null,
+            reviewScope: data.review_scope ?? null,
             headSha: data.head_sha,
             pendingHeadSha: data.pending_head_sha ?? null,
         }
@@ -128,13 +134,25 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             degraded: input.result?.degraded === true,
             review_profile: input.reviewProfile,
             analyser_build: input.result?.analyser_build ?? null,
+            // Scope + provenance (0081). A round that cannot say it was scoped
+            // records itself as full, which is the only honest default: the
+            // reader of this row has to be able to trust that "full" means the
+            // reviewer saw everything.
+            scope: input.scope ?? "full",
+            scope_reason: input.scopeReason ?? null,
+            prev_head_sha: input.prevHeadSha ?? null,
+            base_sha: input.baseSha ?? null,
+            commits: input.commits ?? [],
+            carried_count: input.carriedCount ?? 0,
+            reviewed_files: input.reviewedFiles ?? null,
+            resolved: input.resolved ?? [],
         })
     }
 
     async listRounds(projectId: string, prNumber: number, limit: number): Promise<ReviewRound[]> {
         const { data } = await this.db
             .from("pull_request_analysis_rounds")
-            .select("head_sha,round,status,verdict,score,score_max,findings,degraded,review_profile,analyser_build,created_at")
+            .select("head_sha,round,status,verdict,score,score_max,findings,degraded,review_profile,analyser_build,created_at,scope,scope_reason,prev_head_sha,base_sha,commits,carried_count,reviewed_files,resolved")
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
             .order("round", { ascending: false })
@@ -151,6 +169,14 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             reviewProfile: r.review_profile ?? null,
             analyserBuild: r.analyser_build ?? null,
             createdAt: r.created_at,
+            scope: r.scope === "incremental" ? "incremental" : "full",
+            scopeReason: r.scope_reason ?? null,
+            prevHeadSha: r.prev_head_sha ?? null,
+            baseSha: r.base_sha ?? null,
+            commits: (r.commits ?? []) as ReviewRoundCommit[],
+            carriedCount: r.carried_count ?? 0,
+            reviewedFiles: r.reviewed_files ?? null,
+            resolved: (r.resolved ?? []) as PrFinding[],
         }))
     }
 
@@ -183,6 +209,14 @@ interface RoundRow {
     review_profile: ReviewRunProfile | null
     analyser_build: string | null
     created_at: string
+    scope: string | null
+    scope_reason: string | null
+    prev_head_sha: string | null
+    base_sha: string | null
+    commits: unknown
+    carried_count: number | null
+    reviewed_files: number | null
+    resolved: unknown
 }
 
 /** Composition seam: bind the store to the SERVICE-ROLE client. pull_request_analyses

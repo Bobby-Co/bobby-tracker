@@ -2,7 +2,7 @@
 // pull_request_analyses + pr_comments). Distinct from PullRequestStore, which is
 // the service-role write/sync side. The PR tab routes read through this contract.
 
-import type { PrComment, PrFinding, PullRequest, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
+import type { PrComment, PrFinding, PullRequest, PullRequestAnalysis, ReviewRoundCommit, ReviewRunProfile } from "@/lib/shared/types"
 
 /** The ownership fields for a mirrored comment (who authored it, from where). */
 export interface CommentOwnership {
@@ -11,15 +11,35 @@ export interface CommentOwnership {
     pr_number: number
 }
 
-/** One completed review of one head (0080), as the PR page reads it. */
+/** One completed review of one head (0080/0081), as the PR page reads it.
+ *
+ *  A SNAPSHOT, not a delta. Every round holds its own complete findings list, so
+ *  "show me the review as it stood at round 2" is one row read — no replay, no
+ *  reconstruction, and no risk of a rendered history that disagrees with what
+ *  the merge gate saw at the time. That is the whole reason the round selector
+ *  in the panel is a row read rather than a replay engine. */
 export interface PullRequestRound {
     headSha: string
     round: number
     verdict: string | null
+    score: number | null
+    scoreMax: number | null
     findings: PrFinding[]
     degraded: boolean
     reviewProfile: ReviewRunProfile | null
     createdAt: string
+    /** What this round reviewed, and which rule chose it (0081). */
+    scope: "full" | "incremental"
+    scopeReason: string | null
+    /** The commits this round covered — the strip doubles as the series of
+     *  pushes. */
+    commits: ReviewRoundCommit[]
+    /** How many of `findings` rode along without being re-examined. */
+    carriedCount: number
+    /** Blockers the previous round had that this one does not, each stamped with
+     *  the head that closed it. Kept out of `findings` so the merge gate stays
+     *  clean, and kept at all so a reader can see what their push fixed. */
+    resolved: PrFinding[]
 }
 
 export interface PullRequestReadRepository {

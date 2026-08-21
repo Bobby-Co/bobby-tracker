@@ -204,13 +204,13 @@ describe("PR comment: run attribution", () => {
 describe("PR comment: rounds", () => {
     const c = new PullRequestAnalysisComment()
     const hist = (over: Record<string, unknown> = {}) => ({
-        round: 2, fixed: 3, remaining: 2, withheld: false,
-        previous: [{ headSha: "a3f1c02aaa", verdict: "request_changes", blockers: 5, fixed: 0 }],
+        round: 2, fixed: 3, remaining: 2, withheld: false, scope: "full" as const, carried: 0,
+        commits: [{ sha: "a3f1c02aaa", subject: "fix(console): validate the saved-view name", author: "phongpak", at: null }],
         ...over,
     })
 
     test("a first round says nothing about progress", () => {
-        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ round: 1, previous: [] }))
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ round: 1, commits: [] }))
         expect(md).not.toContain("Round")
     })
 
@@ -236,10 +236,31 @@ describe("PR comment: rounds", () => {
         expect(md).not.toContain("resolved,")
     })
 
-    test("earlier rounds are collapsed, not stacked", () => {
+    // The round TABLE is deliberately gone (0081). A pull-request comment is read
+    // on a phone, in a notification, between other things; it answers "what do I
+    // have to fix now", and history belongs where it can be navigated.
+    test("the comment carries no round table — the app does that", () => {
         const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
-        expect(md).toContain("<summary>Earlier rounds (1)</summary>")
+        expect(md).not.toContain("Earlier rounds")
+        expect(md).toContain("View the full review in ucelot")
+    })
+
+    test("the commits behind the round are collapsed under one summary", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
+        expect(md).toContain("<summary><b>Commits in this pull request · 1</b></summary>")
         expect(md).toContain("`a3f1c02`")
+        expect(md).toContain("validate the saved-view name")
+    })
+
+    test("an incremental round says it reviewed the push, and how much rode along", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ scope: "incremental", carried: 11 }))
+        expect(md).toContain("<summary><b>Reviewed this push · 1</b></summary>")
+        expect(md).toContain("11 findings carried forward from an earlier round")
+    })
+
+    // Stating zero would read as an apology for a full review.
+    test("a full round says nothing about carrying", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null, hist())).not.toContain("carried forward")
     })
 
     test("no history renders exactly as before", () => {

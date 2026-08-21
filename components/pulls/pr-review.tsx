@@ -10,7 +10,7 @@ import { severityLabel } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
 import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
-import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
+import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRoundCommit, ReviewRunProfile } from "@/lib/shared/types"
 import type { DeltaFinding, RoundDelta } from "@/modules/analysis/domain/ReviewRounds"
 // Domain file directly, never the barrel — the barrel reaches infrastructure and
 // next/headers, which fails the browser build. See review-profile-panel.
@@ -229,28 +229,66 @@ function PolicyCard({ profile, onClose }: { profile: Extract<ReviewRunProfile, {
     )
 }
 
-/** One round per push, oldest first — the panel's memory.
+/** One completed review of one head, as the panel reads it — a SNAPSHOT.
+ *
+ *  Every round holds its own complete findings list, which is what makes the
+ *  selector below a row read rather than a replay engine: switching to round 2
+ *  renders round 2's stored answer, not a state rebuilt from a chain of diffs
+ *  that might have drifted from what the merge gate actually saw that day. */
+export interface RoundSummary {
+    headSha: string
+    round: number
+    verdict: string | null
+    score: number | null
+    scoreMax: number | null
+    findings: PrFinding[]
+    degraded: boolean
+    scope: "full" | "incremental"
+    scopeReason: string | null
+    commits: ReviewRoundCommit[]
+    carriedCount: number
+    resolved: PrFinding[]
+    createdAt: string
+    /** Blockers the previous round had that this one does not — precomputed by
+     *  the route from `resolved`, so the strip does not re-derive it. */
+    fixed: number
+    blockers: number
+}
+
+/** One round per push, oldest first — the panel's memory, and a SELECTOR.
  *
  *  It exists because a re-review used to replace the last one, so a developer
  *  who had just fixed three of five blockers saw a fresh verdict with no sign
- *  that anything had moved. The strip is the difference between a verdict and a
- *  conversation. */
-function RoundStrip({ rounds }: { rounds: RoundSummary[] }) {
+ *  that anything had moved. Choosing a round renders the review exactly as it
+ *  stood at that head — its verdict, its score, its findings, including the ones
+ *  later fixed. That is the point: a reader can see what the review said BEFORE
+ *  their fix, which is the only way to check that the fix addressed what was
+ *  actually reported rather than what they remembered being reported. */
+function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; selected: number | null; onSelect: (round: number | null) => void }) {
     if (rounds.length < 2) return null // one round is not a story
+    const latest = rounds[rounds.length - 1].round
     return (
         <div className="flex gap-0 overflow-x-auto rounded-[10px] border border-[color:var(--c-border)]">
-            {rounds.map((r, i) => {
-                const last = i === rounds.length - 1
+            {rounds.map((r) => {
+                const isLatest = r.round === latest
+                const isSelected = (selected ?? latest) === r.round
+                const commit = r.commits[r.commits.length - 1]
                 return (
-                    <div
+                    <button
                         key={r.headSha + r.round}
+                        type="button"
+                        onClick={() => onSelect(isLatest ? null : r.round)}
+                        aria-pressed={isSelected}
+                        title={r.scopeReason ?? undefined}
                         className={cn(
-                            "flex min-w-[9.5rem] flex-1 flex-col gap-1 border-r border-[color:var(--c-border)] px-3 py-2 last:border-r-0",
-                            last && "bg-[color:var(--c-primary-tint)]",
+                            "flex min-w-[10.5rem] flex-1 cursor-pointer flex-col gap-1 border-r border-[color:var(--c-border)] px-3 py-2 text-left transition-colors last:border-r-0",
+                            "hover:bg-[color:var(--c-surface-2)]",
+                            isSelected && "bg-[color:var(--c-primary-tint)] hover:bg-[color:var(--c-primary-tint)]",
                         )}
                     >
-                        <span className={cn("font-mono text-[10.5px]", last ? "font-semibold text-[color:var(--c-primary)]" : "text-[color:var(--c-text-muted)]")}>
+                        <span className={cn("font-mono text-[10.5px]", isSelected ? "font-semibold text-[color:var(--c-primary)]" : "text-[color:var(--c-text-muted)]")}>
                             {r.headSha.slice(0, 7)} · round {r.round}
+                            {isLatest && " · current"}
                         </span>
                         <span className="text-[12px] font-semibold leading-4">{r.verdict ? verdictLabel(r.verdict) : "—"}</span>
                         <span className="flex flex-wrap gap-1">
@@ -258,21 +296,144 @@ function RoundStrip({ rounds }: { rounds: RoundSummary[] }) {
                             {r.fixed > 0 && <DeltaChip kind="fixed" n={r.fixed} />}
                             {r.blockers > 0 && <DeltaChip kind="blockers" n={r.blockers} />}
                             {!r.degraded && r.blockers === 0 && <DeltaChip kind="clear" />}
+                            {r.carriedCount > 0 && <DeltaChip kind="carried" n={r.carriedCount} />}
                         </span>
-                    </div>
+                        {/* The commit under the round, so the strip doubles as the
+                            series of pushes: a bare sha says which head, this says
+                            which CHANGE the review was answering. */}
+                        {commit && (
+                            <span className="truncate text-[10.5px] leading-4 text-[color:var(--c-text-dim)]" title={commit.subject}>
+                                {commit.subject}
+                            </span>
+                        )}
+                    </button>
                 )
             })}
         </div>
     )
 }
 
-export interface RoundSummary {
-    headSha: string
-    round: number
-    verdict: string | null
-    blockers: number
-    fixed: number
-    degraded: boolean
+/** The banner that appears when a reader has stepped back into history.
+ *
+ *  Loud on purpose. A stale review rendered without a frame around it is how
+ *  somebody acts on a blocker that was fixed two pushes ago. */
+function ArchiveBanner({ round, onBack }: { round: RoundSummary; onBack: () => void }) {
+    return (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border border-[color:var(--c-info-fg)]/25 bg-[color:var(--c-info-bg)] px-3 py-2 text-[12px] text-[color:var(--c-info-fg)]">
+            <span className="font-semibold">Viewing round {round.round}</span>
+            <span className="opacity-80">
+                — the review as it stood at <code className="font-mono">{round.headSha.slice(0, 7)}</code>. Some of it may since have been fixed.
+            </span>
+            <button type="button" onClick={onBack} className="ml-auto shrink-0 cursor-pointer font-semibold underline underline-offset-2">
+                Back to the current review
+            </button>
+        </div>
+    )
+}
+
+/** An earlier round, rendered from its own stored snapshot.
+ *
+ *  Deliberately thinner than the live review: a round stores its verdict, score
+ *  and findings, not the narrative blocks around them. Rendering a summary here
+ *  would mean either storing a second copy of the whole result or reconstructing
+ *  prose that nobody wrote — and the question this view answers is "what did the
+ *  review say I had to fix", which the findings answer on their own. */
+function RoundSnapshot({ round }: { round: RoundSummary }) {
+    const groups: BlockState[] = ["critical", "review", "good"]
+    return (
+        <div className="flex flex-col gap-3">
+            {round.verdict && (
+                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(round.verdict))}>
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
+                        <VerdictIcon v={round.verdict} />
+                        {verdictLabel(round.verdict)}
+                    </span>
+                </div>
+            )}
+            {typeof round.score === "number" && round.scoreMax ? <ScoreBar value={round.score} max={round.scoreMax} /> : null}
+            <PushSummary round={round} />
+            {groups.map((state) => {
+                const items = round.findings.filter((f) => findingState(f.severity) === state)
+                if (items.length === 0) return null
+                const style = GROUP_STYLE[state]
+                return (
+                    <Section key={state} title={style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
+                        <div className="flex flex-col gap-2">
+                            {items.map((f, i) => (
+                                <Finding key={i} f={f} />
+                            ))}
+                        </div>
+                    </Section>
+                )
+            })}
+            {round.resolved.length > 0 && (
+                <Section title="Resolved by this push" count={round.resolved.length} countTone="bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" defaultOpen={false}>
+                    <div className="flex flex-col gap-2">
+                        {round.resolved.map((f, i) => (
+                            <Finding key={i} f={f} />
+                        ))}
+                    </div>
+                </Section>
+            )}
+        </div>
+    )
+}
+
+/** What a round actually looked at: the commits behind it, and — when it was
+ *  scoped to the push — why. Collapsed, because it is provenance rather than
+ *  the answer somebody came for. */
+function PushSummary({ round }: { round: RoundSummary | null }) {
+    if (!round || round.commits.length === 0) return null
+    const label = round.scope === "incremental" ? "Reviewed this push" : "Commits in this round"
+    return (
+        <Section title={label} count={round.commits.length} defaultOpen={false}>
+            <ul className="flex flex-col gap-1">
+                {round.commits.slice(0, 20).map((c) => (
+                    <li key={c.sha} className="flex items-baseline gap-2 text-[12px]">
+                        <code className="shrink-0 font-mono text-[10.5px] text-[color:var(--c-text-muted)]">{c.sha.slice(0, 7)}</code>
+                        <span className="min-w-0 flex-1 truncate text-[color:var(--c-text)]" title={c.subject}>
+                            {c.subject}
+                        </span>
+                        {c.author && <span className="shrink-0 text-[10.5px] text-[color:var(--c-text-dim)]">{c.author}</span>}
+                    </li>
+                ))}
+            </ul>
+            {round.scopeReason && <p className="mt-2 text-[11px] leading-4 text-[color:var(--c-text-dim)]">{round.scopeReason}</p>}
+        </Section>
+    )
+}
+
+/** The "N carried" chip, expanded.
+ *
+ *  Without this a cheap round looks like a lazy one and the reader has no way to
+ *  tell the difference. It names which findings rode along, when each was last
+ *  actually verified, and states the rule that made carrying them safe — so
+ *  somebody deciding whether to trust a two-minute review can check the
+ *  reasoning rather than the vibe. */
+function CarriedNote({ findings }: { findings: PrFinding[] }) {
+    const carried = findings.filter((f) => f.provenance?.carried === true)
+    if (carried.length === 0) return null
+    return (
+        <Section title="Carried forward" count={carried.length} countTone="bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]" defaultOpen={false}>
+            <p className="mb-2 text-[11.5px] leading-5 text-[color:var(--c-text-muted)]">
+                This round reviewed only what the push changed. These findings were reported earlier, their files were not touched, and no symbol
+                they name was changed elsewhere — so they are still there, and nothing needed to be asked.
+            </p>
+            <ul className="flex flex-col gap-1.5">
+                {carried.map((f, i) => (
+                    <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
+                        <span className={cn("shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide", severityClasses(f.severity))}>
+                            {severityLabel(f.severity)}
+                        </span>
+                        <span className="min-w-0 flex-1 text-[color:var(--c-text)]">{(f.title && f.title.trim()) || f.detail}</span>
+                        <span className="shrink-0 text-[10.5px] text-[color:var(--c-text-dim)]">
+                            first seen round {f.provenance?.firstSeenRound ?? "?"} · last verified round {f.provenance?.lastVerifiedRound ?? "?"}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </Section>
+    )
 }
 
 /** `plural` is set only where the label is a NOUN. "blocker" pluralises; "new"
@@ -289,6 +450,11 @@ const DELTA_STYLE: Record<string, { label: string; plural?: string; cls: string 
     blockers:  { label: "blocker",    plural: "blockers", cls: "bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]" },
     clear:     { label: "clear",      cls: "bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" },
     partial:   { label: "partial",    cls: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]" },
+    // Neutral, not a warning. A carried finding is not a defect in the review —
+    // it is a finding the round proved it did not need to re-open. Colouring it
+    // like a problem would teach readers to distrust the cheap rounds, which are
+    // the ones this whole feature exists to make possible.
+    carried:   { label: "carried",    cls: "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]" },
 }
 
 function DeltaChip({ kind, n }: { kind: string; n?: number }) {
@@ -352,6 +518,12 @@ export function PrReview({ analysis, rounds = [], delta = null }: {
      *  review. Drives the per-finding chips and the progress line. */
     delta?: RoundDelta | null
 }) {
+    // Which round the reader is looking at. `null` is the LIVE review rather
+    // than "the latest round", and the difference matters: the live row carries
+    // the narrative blocks a round snapshot does not store, so defaulting to a
+    // round number would quietly downgrade the default view.
+    const [viewing, setViewing] = useState<number | null>(null)
+
     const status = analysis?.status ?? null
     const result = analysis?.result ?? null
     const profile = analysis?.review_profile ?? null
@@ -385,11 +557,25 @@ export function PrReview({ analysis, rounds = [], delta = null }: {
         )
     }
 
+    const archived = viewing != null ? (rounds.find((r) => r.round === viewing) ?? null) : null
+    const latest = rounds.length > 0 ? rounds[rounds.length - 1] : null
+
     return (
         <Shell profile={profile}>
-            <RoundStrip rounds={rounds} />
-            <ProgressLine delta={delta} />
-            <Review r={result} projectId={analysis?.project_id ?? null} profile={profile} delta={delta} />
+            <RoundStrip rounds={rounds} selected={viewing} onSelect={setViewing} />
+            {archived ? (
+                <>
+                    <ArchiveBanner round={archived} onBack={() => setViewing(null)} />
+                    <RoundSnapshot round={archived} />
+                </>
+            ) : (
+                <>
+                    <ProgressLine delta={delta} />
+                    <PushSummary round={latest} />
+                    <CarriedNote findings={result.findings ?? []} />
+                    <Review r={result} projectId={analysis?.project_id ?? null} profile={profile} delta={delta} />
+                </>
+            )}
         </Shell>
     )
 }
@@ -982,6 +1168,11 @@ function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | n
                     finding "still open" would put a badge on most of the list and
                     say nothing — the interesting states are the ones that changed. */}
                 {(delta === "new" || delta === "regressed") && <DeltaChip kind={delta} />}
+                {/* Carried findings are the one case where a chip on a
+                    still-open finding earns its place: it is the difference
+                    between "somebody read this code again this round" and "this
+                    rode along because nothing it depends on moved". */}
+                {f.provenance?.carried === true && <DeltaChip kind="carried" />}
                 <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-[color:var(--c-text)]">{title}</span>
                 <code className="max-w-[42%] shrink-0 truncate font-mono text-[10.5px] text-[color:var(--c-text-muted)]" title={loc}>
                     {loc}

@@ -34,16 +34,32 @@ export default function PullDetailPage() {
     const pull = data?.pull ?? null
     if (!loading && data && !pull) notFound()
 
-    // The strip's own view of each round: verdict plus the counts it shows.
-    // Blockers are counted with the SAME normaliser the panel groups by, so a
-    // round summary can never disagree with the findings underneath it.
+    // Each round, as the strip and the round selector read it. The stored
+    // SNAPSHOT is passed through whole — that is what lets selecting round 2
+    // render round 2's answer rather than one rebuilt from a chain of diffs.
+    //
+    // The two counts are derived here rather than stored, with the SAME
+    // normaliser the panel groups findings by, so a round summary can never
+    // disagree with the findings underneath it.
     const rounds: RoundSummary[] = (data?.rounds ?? []).map((r) => ({
         headSha: r.headSha,
         round: r.round,
         verdict: r.verdict,
-        blockers: r.findings.filter((f) => findingState(f.severity) === "critical").length,
-        fixed: 0,
+        score: r.score,
+        scoreMax: r.scoreMax,
+        findings: r.findings,
         degraded: r.degraded,
+        scope: r.scope,
+        scopeReason: r.scopeReason,
+        commits: r.commits ?? [],
+        carriedCount: r.carriedCount ?? 0,
+        resolved: r.resolved ?? [],
+        createdAt: r.createdAt,
+        blockers: r.findings.filter((f) => findingState(f.severity) === "critical").length,
+        // What this round closed, from its own record. A round that predates the
+        // resolved column reports zero, which reads as "we did not track it"
+        // rather than as "nothing was fixed" — the strip simply omits the chip.
+        fixed: (r.resolved ?? []).length,
     }))
     const delta = data?.delta ?? null
 

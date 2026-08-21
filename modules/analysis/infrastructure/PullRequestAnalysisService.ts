@@ -6,7 +6,7 @@
 import { RepositoryError, tryOrNull } from "@/lib/shared/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
-import type { PrAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis, PrFinding, ReviewRoundCommit, ReviewRunScope } from "@/lib/shared/types"
 import type { SpendGate, SubscriptionsRepository } from "@/modules/billing"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { AnalyserResolver } from "../ports/Analyser"
@@ -16,6 +16,10 @@ import type { PullRequestAnalysisResultRow, PullRequestAnalysisStore } from "../
 import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
 import { compilePolicy, maxDepthForTier, type ReviewProfile } from "../domain/ReviewProfile"
 import { diffRounds } from "../domain/ReviewRounds"
+import { changedExportedSymbols } from "../domain/DiffFacts"
+import { carriedFraction, changedPathSet, mergeRound, partitionForCarry, type CarryPartition } from "../domain/CarryForward"
+import { decideScope, roundsSinceFull, type Ancestry } from "../domain/ReviewScope"
+import type { ReviewRound } from "../ports/PullRequestAnalysisStore"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
@@ -59,6 +63,78 @@ export type PrInput = {
 }
 
 type VcsAppServiceResolver = (project: VcsProviderBinding) => VcsAppService | null
+
+/** How many rounds of history every read of this table asks for.
+ *
+ *  One number, used by the scope decision, the carry partition, the comment and
+ *  the round selector alike. They all answer questions about the same story, and
+ *  three different windows onto it is how one surface comes to say "round 3 of
+ *  5" while another shows four rounds. */
+const ROUND_WINDOW = 8
+
+/** How many changed symbols the dependent-count rule probes.
+ *
+ *  The rule wants a MAXIMUM, and a push that changes more exported symbols than
+ *  this is already large enough that the other rules will have caught it. Each
+ *  probe is a graph hop with no model in it, but it is still a network call at
+ *  dispatch, and the review is what the developer is waiting on. */
+const DEPENDENT_PROBES = 5
+
+/** The provider's file shape onto the analyser's. */
+function toAnalyseFile(f: {
+    filename: string
+    previousFilename?: string
+    status: string
+    patch?: string
+    additions: number
+    deletions: number
+}): PrAnalyseFile {
+    return {
+        path: f.filename,
+        previous_path: f.previousFilename,
+        status: f.status,
+        patch: f.patch,
+        additions: f.additions,
+        deletions: f.deletions,
+    }
+}
+
+/** A commit's first line. Providers hand back the whole message, and a round
+ *  strip that rendered a paragraph per commit would be unreadable. */
+function subjectOf(message: string): string {
+    return (message ?? "").split("\n")[0].trim().slice(0, 200)
+}
+
+/** Only findings that GATE a merge. The same normaliser the gate and the panel
+ *  use, so none of the three can disagree about what a blocker is. */
+function isBlocker(f: PrFinding): boolean {
+    return findingState(f.severity) === "critical"
+}
+
+/** Which profile judged a round, from its stored attribution. `null` means the
+ *  built-in default ran — which is a real answer and compares equal to another
+ *  default-reviewer round, so switching a project onto a profile registers as a
+ *  change and switching it back off does too. */
+function profileIdOf(round: ReviewRound): string | null {
+    const p = round.reviewProfile
+    return p?.kind === "profile" ? (p.id ?? null) : null
+}
+
+/** The blockers handed to the reviewer as a checklist.
+ *
+ *  Capped: a review that found twenty blockers does not need all twenty
+ *  re-checked by name, and the list competes for the same context the diff
+ *  needs. Withheld entirely when the last round was degraded — a partial review
+ *  is not a baseline, and asking "is this still present?" about a list that was
+ *  never complete would manufacture the appearance of progress. */
+function previousBlockers(candidates: PrFinding[], previous: ReviewRound | null) {
+    if (!previous || previous.degraded) return undefined
+    const blockers = candidates
+        .filter(isBlocker)
+        .slice(0, 12)
+        .map((f) => ({ file: f.file, line: f.line, title: (f.title ?? f.detail ?? "").slice(0, 160) }))
+    return blockers.length > 0 ? blockers : undefined
+}
 
 export class PullRequestAnalysisService {
     constructor(
@@ -140,21 +216,108 @@ export class PullRequestAnalysisService {
         // head_sha for. A `synchronize` moves the head and still re-runs.
         if (!opts.force && existing?.status === "done" && pr.headSha && existing.headSha === pr.headSha) return
 
+        // ─── what to review ─────────────────────────────────────────────────
+        //
+        // Everything from here to the dispatch answers one question: does this
+        // round review the whole pull request, or only what the push changed?
+        // The rounds are read first because every input to that decision comes
+        // from them — the last reviewed head, whether it completed, which
+        // profile judged it, and how much of it was already riding along.
+        const rounds = (await tryOrNull(() => this.store.listRounds(project.id, pr.number, ROUND_WINDOW))) ?? []
+        const previous = rounds[0] ?? null
+
+        // The team's reviewer configuration. Best-effort on purpose: a profile
+        // that can't be read must not stop the review, because the failure mode
+        // of "we couldn't load your settings" should be the DEFAULT reviewer, not
+        // silence on a pull request.
+        //
+        // Resolved HERE rather than after the loading comment, where it used to
+        // sit, because the scope decision reads it: a profile change since the
+        // last round means round n was judged by a different reviewer than round
+        // n−1, and nothing may be carried across that.
+        const profile = this.profiles ? await this.loadProfile(project.id) : null
+
+        // The compare. On a first round this is base…head (the whole PR's
+        // commits, for the timeline); afterwards it is lastHead…head — the push
+        // itself. Best-effort: a provider that cannot compare leaves the round
+        // full, which is where every round was before this existed.
+        const range = await this.compareRange(vcs, previous?.headSha ?? pr.baseSha, pr.headSha)
+
+        const pushFiles: PrAnalyseFile[] = range ? range.files.map(toAnalyseFile) : []
+        const changedSymbols = changedExportedSymbols(pushFiles)
+
+        const decision = decideScope({
+            previous: previous
+                ? {
+                      headSha: previous.headSha,
+                      degraded: previous.degraded,
+                      baseSha: previous.baseSha,
+                      profileId: profileIdOf(previous),
+                      round: previous.round,
+                  }
+                : null,
+            headSha: pr.headSha,
+            baseSha: pr.baseSha,
+            // A truncated compare is not a picture of the push, so it cannot be
+            // the basis of a scope decision — the provider capped the file list
+            // and the files it dropped are exactly the ones nothing would review.
+            ancestry: range && !range.truncated ? range.status : "unknown",
+            pushFiles,
+            profileId: profile?.id ?? null,
+            roundsSinceFull: roundsSinceFull(rounds),
+            carriedFraction: carriedFraction(previous?.findings ?? []),
+            // Only worth asking when incremental is on the table at all. A first
+            // round goes full whatever the graph says, and five graph hops at
+            // dispatch are five hops the developer waits through.
+            dependents: previous ? await this.maxDependents(analyser!.graph_id!, cell, changedSymbols) : null,
+        })
+
+        // The diff the reviewer actually receives. `full` re-reads the pull
+        // request from the provider rather than reusing the compare:
+        // listPullRequestFiles is base…head as GitHub computes it for the PR, and
+        // it is the input every full review has ever had.
         let files: PrAnalyseFile[]
-        try {
-            const gh = await vcs.listPullRequestFiles(pr.number)
-            files = gh.map((f) => ({
-                path: f.filename,
-                previous_path: f.previousFilename,
-                status: f.status,
-                patch: f.patch,
-                additions: f.additions,
-                deletions: f.deletions,
-            }))
-        } catch {
-            return
+        if (decision.scope === "incremental") {
+            files = pushFiles
+        } else {
+            try {
+                files = (await vcs.listPullRequestFiles(pr.number)).map(toAnalyseFile)
+            } catch {
+                return
+            }
         }
         if (files.length === 0) return
+
+        // Partition the previous findings. A finding rides along when its file is
+        // absent from this diff AND none of the changed exported symbols appears
+        // in its text; everything else goes back to the reviewer to re-judge,
+        // which is the mechanism `previous_blockers` already is.
+        const partition: CarryPartition =
+            decision.scope === "incremental" && previous
+                ? partitionForCarry({
+                      previous: previous.findings,
+                      changedFiles: [...changedPathSet(files)],
+                      changedSymbols,
+                  })
+                : { carried: [], reJudge: previous?.findings ?? [], reasons: [] }
+
+        const scope: ReviewRunScope = {
+            scope: decision.scope,
+            code: decision.code,
+            reason: decision.reason,
+            prevHeadSha: previous?.headSha ?? null,
+            baseSha: pr.baseSha,
+            commits: range?.commits ?? [],
+            reviewedFiles: files.length,
+            carried: partition.carried,
+            reJudgedBlockers: partition.reJudge.filter(isBlocker),
+        }
+
+        console.info(
+            `[pr-review] project=${project.id} pr=${pr.number} scope=${decision.scope} (${decision.code}) — ` +
+                `${decision.reason}; ${files.length} file(s) reviewed, ${partition.carried.length} carried, ` +
+                `${partition.reJudge.length} to re-judge`,
+        )
 
         // Loading comment: edit the prior one on a re-run, else post fresh.
         const loadingUrl = `${origin}/projects/${project.id}/pulls/${pr.number}`
@@ -174,13 +337,6 @@ export class PullRequestAnalysisService {
                 return
             }
         }
-
-        // The team's reviewer configuration. Best-effort on purpose: a profile
-        // that can't be read must not stop the review, because the failure mode
-        // of "we couldn't load your settings" should be the DEFAULT reviewer, not
-        // silence on a pull request. Resolved late — after every gate has passed
-        // and the loading comment is up — so an unreadable profile costs nothing.
-        const profile = this.profiles ? await this.loadProfile(project.id) : null
 
         // Depth is the one dial that costs money, so it is the only one the plan
         // gets a say in — and it CLAMPS rather than refuses: a team that
@@ -219,10 +375,17 @@ export class PullRequestAnalysisService {
                 profile && policy
                     ? { kind: "profile", id: profile.id, name: profile.name, preset: profile.preset, policy }
                     : { kind: "default" },
+            // What this run is scoped to, and what it carries (0081). Written
+            // here, with the run, because the CALLBACK has to honour it: it
+            // merges the carried findings into the one list the merge gate
+            // counts, and by the time it runs the head may have moved again.
+            reviewScope: scope,
         })
         if (!row) return
 
-        await this.analyserFor(cell).startPRAnalysis(
+        const callback = { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN }
+        const dispatch = (input: PrAnalyseFile[], carrying: ReviewRunScope) =>
+            this.analyserFor(cell).startPRAnalysis(
             {
                 repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
                 number: pr.number,
@@ -230,20 +393,101 @@ export class PullRequestAnalysisService {
                 body: pr.body || "",
                 baseSha: pr.baseSha || undefined,
                 headSha: pr.headSha || undefined,
-                files,
+                files: input,
                 projectId: project.id,
                 // null (no profile, or unreadable) sends NOTHING, which every
                 // analyser build understands as the default reviewer — including
                 // the ones deployed before policies existed.
                 policy: policy ?? undefined,
                 // What the last round flagged, so this one can check rather than
-                // rediscover. Best-effort: a re-review without it is simply the
-                // review we would have run before rounds existed.
-                previous_blockers: await this.previousBlockers(project.id, pr.number),
+                // rediscover. On an incremental round this is the RE-JUDGE half
+                // of the partition — the blockers whose file or symbols this push
+                // touched. On a full round it is everything the last round
+                // blocked on, which is what it has always been.
+                previous_blockers: previousBlockers(carrying.scope === "incremental" ? partition.reJudge : (previous?.findings ?? []), previous),
+                // What this round is NOT reviewing, and must not re-report.
+                //
+                // Sending only the incremental diff means the reviewer cannot
+                // see the carried findings' code unless it opens the files —
+                // and on a nine-turn budget it should not. Naming them costs a
+                // few lines and REMOVES work: without this the reviewer walks
+                // the graph into an untouched file, finds the defect the last
+                // round already found, and spends a turn reporting a duplicate
+                // the merge would then count twice.
+                carried_findings:
+                    carrying.scope === "incremental" && carrying.carried.length > 0
+                        ? carrying.carried.slice(0, 20).map((f) => ({
+                              file: f.file,
+                              line: f.line,
+                              title: (f.title ?? f.detail ?? "").slice(0, 160),
+                          }))
+                        : undefined,
+                // The range under review, so the reviewer knows the diff is a
+                // PUSH and not the pull request. Omitted on a full round, where
+                // the diff means exactly what it has always meant.
+                review_scope:
+                    carrying.scope === "incremental"
+                        ? { kind: "incremental", previous_head_sha: carrying.prevHeadSha ?? undefined }
+                        : undefined,
             },
             row.id,
-            { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
+            callback,
         )
+
+        try {
+            await dispatch(files, scope)
+        } catch (e) {
+            // A cell that predates incremental review REJECTS this request
+            // outright: the analyser decodes with DisallowUnknownFields, so
+            // `carried_findings` and `review_scope` are a 400 rather than fields
+            // it ignores. Without this the row stays "analysing" and the pull
+            // request keeps a loading comment nothing ever comes back to edit —
+            // for every PR, for the length of a partial deploy.
+            //
+            // So an incremental dispatch that fails is retried ONCE as the
+            // review we would have run before any of this existed: the whole
+            // pull request, no new fields, nothing carried. The fallback is
+            // strictly MORE review, which is the only direction a fallback in
+            // this pipeline is allowed to go.
+            if (scope.scope !== "incremental") throw e
+            console.warn(
+                `[pr-review] project=${project.id} pr=${pr.number} — the incremental dispatch was refused ` +
+                    `(${e instanceof Error ? e.message : String(e)}); falling back to a full review. ` +
+                    `This is what an analyser cell deployed before incremental review looks like.`,
+            )
+
+            const fullFiles = await tryOrNull(() => vcs.listPullRequestFiles(pr.number))
+            if (!fullFiles || fullFiles.length === 0) throw e
+            const fallback: ReviewRunScope = {
+                ...scope,
+                scope: "full",
+                code: "dispatch_refused",
+                reason: "the analyser refused an incremental request, so this round reviewed everything",
+                reviewedFiles: fullFiles.length,
+                carried: [],
+                reJudgedBlockers: [],
+            }
+            // Rewritten on the row BEFORE the retry: the callback merges from
+            // this record, and a row still claiming to carry eleven findings
+            // that the retry did not send would put them back into a review that
+            // never looked at them.
+            await tryOrNull(() =>
+                this.store.upsertTracking({
+                    projectId: project.id,
+                    prNumber: pr.number,
+                    githubCommentId: commentId,
+                    headSha: pr.headSha,
+                    status: "analysing",
+                    reviewProfileId: profile?.id ?? null,
+                    reviewProfile:
+                        profile && policy
+                            ? { kind: "profile", id: profile.id, name: profile.name, preset: profile.preset, policy }
+                            : { kind: "default" },
+                    reviewScope: fallback,
+                }),
+            )
+            await dispatch(fullFiles.map(toAnalyseFile), fallback)
+        }
     }
 
     /** The team's profile for this project, or null if it cannot be read.
@@ -285,13 +529,47 @@ export class PullRequestAnalysisService {
         const row = await this.store.findResultRow(taskId)
         if (!row) return
 
-        // The rounds BEFORE this one, so the comment can say what changed. Read
-        // before the new round is appended, which is what makes "previous" mean
-        // previous. Best-effort: a comment without history is the old comment,
-        // and that is a better outcome than no comment.
-        const history = status === "done" && result
-            ? await this.commentHistory(row.projectId, row.prNumber, result)
-            : undefined
+        // The rounds BEFORE this one. Read once and used for everything that
+        // needs them — the merge, the comment's progress line, the round's own
+        // ordinal — because reading them twice is how two answers to "what did
+        // the last round say" come to disagree. Read before the new round is
+        // appended, which is what makes "previous" mean previous.
+        const rounds =
+            status === "done" && result
+                ? ((await tryOrNull(() => this.store.listRounds(row.projectId, row.prNumber, ROUND_WINDOW))) ?? [])
+                : []
+        const roundNumber = (rounds[0]?.round ?? 0) + 1
+
+        // THE MERGE. The stored review is carried + re-judged + newly found, as
+        // ONE list in result.findings — because that is what MergeGate counts and
+        // what both surfaces render. A carried finding living in a side channel
+        // would be invisible to both, which is the failure this whole feature is
+        // built around.
+        //
+        // It also runs on a FULL round, where nothing is carried: the provenance
+        // stamps (first seen, last verified) are what make a later incremental
+        // round's "N carried" chip mean anything, and a full round that skipped
+        // them would leave a hole in the history at the one point it is most
+        // trustworthy.
+        const merged =
+            status === "done" && result
+                ? mergeRound({
+                      produced: result.findings ?? [],
+                      carried: row.reviewScope?.carried ?? [],
+                      reJudged: row.reviewScope?.reJudgedBlockers ?? [],
+                      round: roundNumber,
+                      headSha: row.headSha ?? "",
+                      degraded: result.degraded === true,
+                      history: rounds.map((r) => ({ round: r.round, findings: r.findings })),
+                  })
+                : null
+
+        // Everything downstream — the comment, the stored result, the round —
+        // reads THIS object. The analyser's own list is never persisted on its
+        // own once a round can carry: the merge is the review.
+        const review: PrAnalysis | null = merged ? { ...(result as PrAnalysis), findings: merged.findings } : result
+
+        const history = review && merged ? this.commentHistory(rounds, review, roundNumber, row.reviewScope) : undefined
 
         if (row.githubCommentId != null) {
             const project = await this.projects.findGithubSyncContext(row.projectId)
@@ -300,8 +578,8 @@ export class PullRequestAnalysisService {
                 if (vcs) {
                     const uiUrl = `${origin}/projects/${row.projectId}/pulls/${row.prNumber}`
                     const body =
-                        status === "done" && result
-                            ? this.comment.result(result, origin, uiUrl, row.prNumber, row.reviewProfile, history)
+                        status === "done" && review
+                            ? this.comment.result(review, origin, uiUrl, row.prNumber, row.reviewProfile, history)
                             : status === "cancelled"
                               ? this.comment.cancelled(origin, row.prNumber)
                               : this.comment.failed(origin, row.prNumber)
@@ -314,21 +592,34 @@ export class PullRequestAnalysisService {
             }
         }
 
-        await this.store.saveResult(taskId, status, result)
+        await this.store.saveResult(taskId, status, review)
 
         // The round: this review, at this head, kept so the NEXT one can say what
         // changed instead of replacing the answer. Best-effort — history is worth
         // less than the review it describes, and a failure to record it must not
         // fail the callback that just delivered one.
         if (status === "done" && row.headSha) {
+            const scope = row.reviewScope
             await tryOrNull(() =>
                 this.store.appendRound({
                     projectId: row.projectId,
                     prNumber: row.prNumber,
                     headSha: row.headSha as string,
                     status,
-                    result,
+                    result: review,
                     reviewProfile: row.reviewProfile,
+                    // A run with no recorded scope records itself as full. That
+                    // is the only honest default: a reader of this row has to be
+                    // able to trust that "full" means the reviewer saw
+                    // everything, so the uncertain case must be the expensive one.
+                    scope: scope?.scope ?? "full",
+                    scopeReason: scope?.reason ?? null,
+                    prevHeadSha: scope?.prevHeadSha ?? null,
+                    baseSha: scope?.baseSha ?? null,
+                    commits: scope?.commits ?? [],
+                    carriedCount: merged?.counts.carried ?? 0,
+                    reviewedFiles: scope?.reviewedFiles ?? null,
+                    resolved: merged?.resolved ?? [],
                 }),
             )
         }
@@ -336,28 +627,78 @@ export class PullRequestAnalysisService {
         await this.continueIfMoved(row, origin)
     }
 
-    /** The last round's blockers, shaped for the analyser. Capped: a review that
-     *  found twenty blockers does not need all twenty re-checked by name, and the
-     *  list competes for the same context the diff needs. */
-    private async previousBlockers(projectId: string, prNumber: number) {
-        const rounds = await tryOrNull(() => this.store.listRounds(projectId, prNumber, 1))
-        const last = rounds?.[0]
-        if (!last || last.degraded) return undefined // a partial round is not a baseline
-        const blockers = last.findings
-            .filter((f) => findingState(f.severity) === "critical")
-            .slice(0, 12)
-            .map((f) => ({ file: f.file, line: f.line, title: (f.title ?? f.detail ?? "").slice(0, 160) }))
-        return blockers.length > 0 ? blockers : undefined
+    /** The compare between two commits, or null when it cannot be had.
+     *
+     *  Best-effort by contract. A provider that cannot compare (a shallow
+     *  mirror, a permissions change, a sha that has been garbage-collected after
+     *  a force-push) leaves the round FULL, which is where every round was before
+     *  this existed — so the failure mode of the new machinery is the old
+     *  behaviour rather than a broken review. */
+    private async compareRange(
+        vcs: VcsAppService,
+        base: string | null,
+        head: string | null,
+    ): Promise<{ status: Ancestry; files: { filename: string; previousFilename?: string; status: string; patch?: string; additions: number; deletions: number }[]; commits: ReviewRoundCommit[]; truncated: boolean } | null> {
+        if (!base || !head || base === head) return null
+        try {
+            const cmp = await vcs.compareCommits(base, head)
+            return {
+                status: cmp.status,
+                files: cmp.files,
+                commits: cmp.commits.map((c) => ({
+                    sha: c.sha,
+                    subject: subjectOf(c.message),
+                    author: c.author,
+                    at: c.committedAt,
+                })),
+                truncated: cmp.truncated,
+            }
+        } catch {
+            return null
+        }
+    }
+
+    /** The largest dependent count among the symbols this push changed, or null.
+     *
+     *  This is the "looks small, isn't" rule: a one-line edit to a shared kernel
+     *  function is the case a scope decision most needs to get right, and it is
+     *  the case a model reading a diff is worst at. `get_neighbours` already
+     *  answers it — it is a lookup, not an inference.
+     *
+     *  Null on ANY failure, and null is not an alarm: the count escalates a round
+     *  to full, so treating an unavailable graph as "escalate" would make every
+     *  blip cost six minutes. Capped at a handful of symbols because the answer
+     *  is a maximum, and the symbols a push changes are rarely more than a few. */
+    private async maxDependents(repoId: string, cell: Parameters<AnalyserResolver>[0], symbols: string[]): Promise<number | null> {
+        if (symbols.length === 0) return null
+        const probes = symbols.slice(0, DEPENDENT_PROBES)
+        const counts = await Promise.all(
+            probes.map(async (symbol) => {
+                try {
+                    const r = await this.analyserFor(cell).neighbours({
+                        repoId,
+                        symbol,
+                        edges: ["IMPORTS", "CALLS", "IMPLEMENTS", "EXTENDS"],
+                        direction: "in",
+                        limit: 200,
+                    })
+                    return r.neighbours.length
+                } catch {
+                    return null
+                }
+            }),
+        )
+        const known = counts.filter((c): c is number => c != null)
+        return known.length > 0 ? Math.max(...known) : null
     }
 
     /** What the comment needs to know about earlier rounds.
      *
      *  The delta itself is computed by the pure domain (diffRounds) from the two
      *  finding lists — never asked of the model, and never derived twice. This
-     *  method only fetches and shapes. */
-    private async commentHistory(projectId: string, prNumber: number, result: PrAnalysis) {
-        const rounds = await tryOrNull(() => this.store.listRounds(projectId, prNumber, 6))
-        if (!rounds || rounds.length === 0) return undefined
+     *  method only shapes what the caller already read. */
+    private commentHistory(rounds: ReviewRound[], result: PrAnalysis, round: number, scope: ReviewRunScope | null) {
+        if (rounds.length === 0) return undefined
 
         const [previous, ...earlier] = rounds // newest first
         const delta = diffRounds(
@@ -365,19 +706,21 @@ export class PullRequestAnalysisService {
             { headSha: previous.headSha, findings: previous.findings },
             earlier.map((r) => ({ headSha: r.headSha, findings: r.findings })),
         )
-        const remaining = (result.findings ?? []).filter((f) => findingState(f.severity) === "critical").length
+        const remaining = (result.findings ?? []).filter(isBlocker).length
 
         return {
-            round: rounds.length + 1,
+            round,
             fixed: delta.counts.fixed,
             remaining,
             withheld: delta.withheld,
-            previous: rounds.map((r) => ({
-                headSha: r.headSha,
-                verdict: r.verdict,
-                blockers: r.findings.filter((f) => findingState(f.severity) === "critical").length,
-                fixed: 0,
-            })),
+            // This push, so a reader can see WHICH commits the round was
+            // answering. The round table that used to live here is gone: a
+            // pull-request comment is read on a phone, in a notification,
+            // between other things, and the question it has to answer is "what
+            // do I have to fix now". History belongs where it can be navigated.
+            commits: scope?.commits ?? [],
+            scope: scope?.scope ?? "full",
+            carried: (result.findings ?? []).filter((f) => f.provenance?.carried === true).length,
         }
     }
 
