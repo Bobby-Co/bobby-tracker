@@ -63,7 +63,12 @@ says nothing about one, it disappears. The full diff is currently masking that.
 ## The rule that makes it safe
 
 **If a finding's file is untouched between the last reviewed head and this one,
-the finding is still there.** Nothing needs to be asked.
+and no symbol it cites was changed elsewhere, the finding is still there.**
+Nothing needs to be asked.
+
+The second clause exists because blast radius is global: deleting a caller in
+file X can resolve a finding in untouched file Y, and carrying it forward would
+report a defect that no longer exists. The file test alone would miss that.
 
 That single rule turns incremental review from a gamble into arithmetic, which is
 the same posture `ReviewRounds.diffRounds` already takes. A carried finding
@@ -73,6 +78,20 @@ cannot be lost to a distracted reviewer — which is exactly what happened when 
 Carried findings keep their line numbers, because an untouched file has not
 moved. That is the same fact the round fingerprint relies on when it *excludes*
 line, arriving from the other direction.
+
+### Testing the symbol, concretely
+
+`PrFinding` carries no symbol field — only `file`, `line`, `title`, `detail` and
+`evidence` anchors. So the test is a text match, and it should stay one:
+
+> A carried finding is **re-judged** when any exported symbol name from
+> `factscan.changedExported()` appears in its title or detail.
+
+Deterministic, tracker-side, no model, no graph round trip. It over-triggers on
+short or common names — a changed `get` would re-judge half the list — which
+costs a re-judgement rather than a missed defect, so the failure direction is
+right. If the over-triggering turns out to be expensive, the fix is a minimum
+name length before the test applies, not a cleverer matcher.
 
 ---
 
@@ -115,10 +134,10 @@ a review nobody performed, with the merge gate reading the result.
 1. **Decide the scope** by the table above, and record the decision and its reason
    on the round.
 
-2. **Partition the previous findings** by whether their file appears in the
-   incremental diff. Untouched → carry forward verbatim, no model call. Touched →
-   hand to the reviewer as `previous_blockers` to re-judge, which is the mechanism
-   that already exists.
+2. **Partition the previous findings.** A finding is carried verbatim when its
+   file is absent from the incremental diff *and* none of the round's changed
+   exported symbols appears in its text. Everything else goes to the reviewer as
+   `previous_blockers` to re-judge, which is the mechanism that already exists.
 
 3. **Review the push, not the pull request.** Send the incremental diff as
    `Request.Files`, with the carried findings' files available to read but not
@@ -174,32 +193,65 @@ That keeps reconstruction free, answers what a replay log would have been used
 for, gives the "N carried" chip somewhere to expand into, and gives the
 periodic-full-review rule its trigger.
 
+It is also what makes the round selector below possible at all: switching to
+round 2 renders round 2's stored snapshot, not a state rebuilt from a chain of
+diffs that might have drifted from what the merge gate actually saw that day.
+
 ---
 
 ## The surfaces
 
-Rounds gave the panel a strip of verdicts. Commits give it what a developer
-actually recognises — what they pushed, and what it changed:
+The two surfaces get **different** treatments, because they are read in different
+places for different reasons.
+
+### The comment: the latest review, and nothing else
+
+The GitHub comment shows the current review, edited in place, with the progress
+line above it — *"3 of 5 blockers resolved, 2 remain"*. No round table, no
+history.
+
+That is a deliberate simplification. A pull-request comment is read on a phone,
+in a notification, between other things; the question it has to answer is "what
+do I have to fix now". History belongs where it can be navigated, and a collapsed
+table in a comment is neither the latest review nor a usable archive.
+
+A link to the round in the app carries anyone who wants more.
+
+### The panel: versioned, and switchable
+
+The app is where history lives, because it is the only surface that can be
+interactive. The round strip becomes a **selector**: choosing a round renders the
+review exactly as it stood at that head — its verdict, its score, its findings,
+including the ones later fixed.
 
 ```
-Round 1  changes requested   5 blockers
-  8ecc02a  feat(console): cross-tenant admin search, exports and saved views   12 files
+Round 1        Round 2        Round 3  ●current
+8ecc02a        45e02d1        063dc1e
+5 blockers     3 blockers     3 blockers · 11 carried
+```
 
-Round 2  changes requested   2 fixed · 3 blockers
-  45e02d1  fix(console): parameterise the search and drop the shell from export  2 files
+Selecting round 1 shows five blockers, two of which no longer exist. That is the
+point: a reader can see what the review said before their fix, which is the only
+way to check that the fix addressed what was actually reported rather than what
+they remembered being reported.
 
+**This is free, and it is why rounds store snapshots.** Each round already holds
+its complete findings list, so the switcher is a row read — no replay, no
+reconstruction, no risk of a rendered history that disagrees with what the gate
+saw at the time. Had rounds stored deltas, this feature would have required
+building the replay engine that section argues against.
+
+The commit for each round sits under it, so the strip doubles as the series of
+pushes:
+
+```
 Round 3  changes requested   3 blockers · 11 carried
-  063dc1e  fix(console): validate the saved-view name on the read route too      1 file
+  063dc1e  fix(console): validate the saved-view name on the read route too   1 file
 ```
 
-The `11 carried` chip is doing real work: it says eleven files were **not**
-re-examined this round. Without it a cheap round looks like a lazy one, and the
-reader has no way to tell the difference. It should expand to which findings,
-from which round, last verified when.
-
-The comment carries the same series, collapsed under the progress line, inside
-the one comment that is already edited in place. One comment that grows a
-history — never a comment per push, which is what gets a bot muted.
+The `11 carried` chip expands to which findings were carried, from which round,
+and when each was last verified. Without that, a cheap round looks like a lazy
+one and the reader has no way to tell the difference.
 
 ---
 
@@ -241,21 +293,32 @@ Steps 1 and 2 are safe by construction: neither changes what gets reviewed.
 
 ---
 
-## Open questions
+## Decisions taken
 
-**When does a carried finding go stale?** Blast radius is global, so deleting a
-caller in file X can resolve a finding in untouched file Y, and carrying it
-forward would report a defect that no longer exists. Carrying errs toward a false
-positive, which is the safe direction but not a free one. A cheap mitigation is
-to re-judge any carried finding whose cited *symbol* appears in the changed set,
-rather than only its file.
+**Stale carried findings** — a carried finding is re-judged when a changed
+exported symbol appears in its text, not only when its file changes. See the
+carry rule above. Errs toward re-judging, which costs a call rather than a missed
+defect.
 
-**What does the reader get to see?** The carried count says a number. Whether it
-expands into which findings and when they were last verified is a product call —
-though the alternative is asking somebody to trust a review that quietly did less
-work than the one before it.
+**Where history lives** — the comment shows only the latest review; the panel
+carries the versioning. Different surfaces, different jobs.
 
-**Does a fixed finding stay visible?** A resolved blocker disappearing from the
-list is correct for the gate and arguably wrong for the reader, who may want to
-see that round 2 fixed the injection. `resolvedBy` makes that renderable without
-putting it back in the findings list.
+**Fixed findings stay visible** — through the round selector rather than the
+current findings list. A resolved blocker leaves `result.findings`, so the merge
+gate stays clean, and remains readable at the round that reported it. `resolvedBy`
+names the commit that closed it.
+
+---
+
+## Still open
+
+**How the reviewer is told what it is NOT reviewing.** Sending only the
+incremental diff means the reviewer cannot see the carried findings' code unless
+it opens the files. Whether the carried list should be summarised into the
+context — and how that interacts with a nine-turn budget — is unresolved, and it
+is the question most likely to decide whether incremental review is actually
+cheaper in practice or merely differently expensive.
+
+**Whether round 1 of a PR should ever be incremental.** It cannot be, by the
+scope rules. But a PR opened with fifty commits already on the branch gets one
+enormous first round, and nothing in this plan makes that better.
