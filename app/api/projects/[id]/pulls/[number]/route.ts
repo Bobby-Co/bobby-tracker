@@ -3,6 +3,11 @@ import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
 import { diffRounds } from "@/modules/analysis/domain/ReviewRounds"
 
+/** How many rounds this page shows. The same window the review service reads,
+ *  so the round selector and the scope decision are looking at one story rather
+ *  than two overlapping ones. */
+const ROUND_WINDOW = 8
+
 // GET /api/projects/[id]/pulls/[number]
 //
 // Consolidated page-data endpoint for the PR-detail page (one Worker invocation,
@@ -27,7 +32,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         repoRead(() => ctx.projects.findPullContext(id)),
         repoRead(() => ctx.pullRequests.findAnalysis(id, prNumber)),
         repoRead(() => ctx.pullRequests.listComments(id, prNumber)),
-        repoRead(() => ctx.pullRequests.listAnalysisRounds(id, prNumber, 6)),
+        repoRead(() => ctx.pullRequests.listAnalysisRounds(id, prNumber, ROUND_WINDOW)),
     ])
 
     const readErr = pullR.error || projectR.error || analysisR.error || commentsR.error
@@ -47,13 +52,25 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     // oldest first, which is the order a conversation happened in.
     const rounds = (roundsR.error ? [] : roundsR.data).slice().reverse()
     const current = analysisR.data?.result ?? null
-    const previous = rounds.length > 0 ? rounds[rounds.length - 1] : null
+    const head = analysisR.data?.head_sha ?? ""
+
+    // The round BEFORE the current review, which is not simply the newest round:
+    // a completing run saves its result and then appends a round for the same
+    // head, so the newest round IS the current review. Diffing the review
+    // against itself made the progress line permanently read "nothing fixed" —
+    // on the one surface whose entire job is to say what the last push changed.
+    //
+    // Matched by head rather than by position so a round that failed to record
+    // (appendRound is best-effort) degrades to comparing against the newest one
+    // there is, instead of skipping a round that was never written.
+    const beforeCurrent = rounds.filter((r) => r.headSha !== head)
+    const previous = beforeCurrent.length > 0 ? beforeCurrent[beforeCurrent.length - 1] : null
 
     const delta = current && previous
         ? diffRounds(
-              { headSha: analysisR.data?.head_sha ?? "", findings: current.findings ?? [], degraded: current.degraded === true },
+              { headSha: head, findings: current.findings ?? [], degraded: current.degraded === true },
               { headSha: previous.headSha, findings: previous.findings },
-              rounds.slice(0, -1).reverse().map((r) => ({ headSha: r.headSha, findings: r.findings })),
+              beforeCurrent.slice(0, -1).reverse().map((r) => ({ headSha: r.headSha, findings: r.findings })),
           )
         : null
 
