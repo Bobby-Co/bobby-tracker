@@ -102,3 +102,67 @@ describe("start — run-once-per-head idempotency", () => {
         expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
     })
 })
+
+// ─── an unreadable profile is loud (not just survivable) ────────────────────
+//
+// Falling back to the default reviewer is the RIGHT behaviour — a settings read
+// that fails must not cost somebody their review. What was wrong was doing it in
+// total silence: the resulting review is byte-identical to one where no profile
+// was ever assigned, so a broken profile and a working one that found nothing
+// look the same on the page AND in the logs. These pin the warning.
+describe("start — an unreadable review profile", () => {
+    const boom = () => {
+        const e = new Error("column projects.review_profile_id does not exist")
+        e.name = "RepositoryError"
+        return e
+    }
+    // The real class, so `instanceof` matches the branch under test.
+    let RepositoryError: typeof import("@/lib/shared/kernel").RepositoryError
+    beforeAll(async () => {
+        ;({ RepositoryError } = await import("@/lib/shared/kernel"))
+    })
+
+    const withProfiles = (profiles: unknown) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, profiles as any)
+
+    test("the review still runs, as the default reviewer", async () => {
+        const profiles = { findForProject: mock(async () => { throw new RepositoryError(boom().message) }) }
+        const warn = mock(() => {})
+        const original = console.warn
+        console.warn = warn
+        try {
+            await withProfiles(profiles).start(project, pr, "https://app")
+        } finally {
+            console.warn = original
+        }
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
+        // No policy on the wire, and the row records the DEFAULT explicitly —
+        // never "a profile ran", which would be a lie about what reviewed this.
+        expect(analyser.startPRAnalysis.mock.calls[0][0].policy).toBeUndefined()
+        expect(store.upsertTracking.mock.calls[0][0].reviewProfile).toEqual({ kind: "default" })
+    })
+
+    test("and it says so, naming the project and the cause", async () => {
+        const profiles = { findForProject: mock(async () => { throw new RepositoryError("column projects.review_profile_id does not exist") }) }
+        const warn = mock(() => {})
+        const original = console.warn
+        console.warn = warn
+        try {
+            await withProfiles(profiles).start(project, pr, "https://app")
+        } finally {
+            console.warn = original
+        }
+        expect(warn).toHaveBeenCalledTimes(1)
+        const line = String(warn.mock.calls[0][0])
+        expect(line).toContain("proj-1")
+        expect(line).toContain("review_profile_id")
+        expect(line).toContain("DEFAULT")
+    })
+
+    // A bug in our own code must not be laundered into "no profile today".
+    test("a non-repository error still propagates", async () => {
+        const profiles = { findForProject: mock(async () => { throw new TypeError("undefined is not a function") }) }
+        await expect(withProfiles(profiles).start(project, pr, "https://app")).rejects.toThrow(TypeError)
+    })
+})

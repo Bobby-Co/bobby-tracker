@@ -152,21 +152,70 @@ export interface LensSpec {
     label: string
     help: string
     alwaysOn?: boolean
+    /** The finding categories this lens produces, mirroring `Categories` on the
+     *  analyser's own catalogue (internal/pranalysis/lens.go).
+     *
+     *  It exists so the review panel can say which lenses RAN and which of them
+     *  accounted for nothing — the difference between "the security lens found
+     *  no risks" and "the security lens never ran", which was previously
+     *  invisible and read to every human as the same thing.
+     *
+     *  Drift here is one-directional and safe: a category the analyser emits
+     *  that no lens claims is simply not attributed to any lens, which under-
+     *  reports. What it must never do is claim a category a lens does NOT
+     *  produce, because that would show a count beside a lens that did nothing.
+     *  Categories are additive on the analyser side, so absence is the failure
+     *  mode, not falsehood. */
+    categories: string[]
 }
 
 export const LENSES: LensSpec[] = [
-    { key: "correctness", label: "Correctness & bugs", help: "Probes each risky change for a concrete failure it doesn't already guard against.", alwaysOn: true },
-    { key: "blast_radius", label: "Blast radius", help: "Enumerates the callers of every changed public symbol.", alwaysOn: true },
-    { key: "test_gap", label: "Test gaps", help: "Looks for a covering test and names the untested path when there isn't one.", alwaysOn: true },
-    { key: "convention", label: "Conventions", help: "Judges against how this repo already does it, citing the exemplar." },
-    { key: "drift", label: "Layering drift", help: "Flags a new import that crosses a boundary its neighbours don't." },
-    { key: "history", label: "History & regressions", help: "Reads git history for reverts and repeat hot-spots in the changed area." },
-    { key: "security", label: "Security", help: "Traces untrusted input to dangerous sinks. Adds a risk summary to the review." },
-    { key: "performance", label: "Performance & load", help: "Looks for work that grows with caller-controlled input." },
-    { key: "api_contract", label: "API contract", help: "Tabulates changed public signatures, before and after, with their callers." },
-    { key: "data_migration", label: "Data & migrations", help: "Checks migrations for reversibility, locking and destructive statements." },
-    { key: "dependencies", label: "Dependencies", help: "Reports added and major-bumped packages, and what they're for." },
+    { key: "correctness", categories: ["bug", "failure"], label: "Correctness & bugs", help: "Probes each risky change for a concrete failure it doesn't already guard against.", alwaysOn: true },
+    { key: "blast_radius", categories: ["blast_radius"], label: "Blast radius", help: "Enumerates the callers of every changed public symbol.", alwaysOn: true },
+    { key: "test_gap", categories: ["test_gap"], label: "Test gaps", help: "Looks for a covering test and names the untested path when there isn't one.", alwaysOn: true },
+    { key: "convention", categories: ["convention"], label: "Conventions", help: "Judges against how this repo already does it, citing the exemplar." },
+    { key: "drift", categories: ["drift"], label: "Layering drift", help: "Flags a new import that crosses a boundary its neighbours don't." },
+    { key: "history", categories: ["history"], label: "History & regressions", help: "Reads git history for reverts and repeat hot-spots in the changed area." },
+    { key: "security", categories: ["security"], label: "Security", help: "Traces untrusted input to dangerous sinks. Adds a risk summary to the review." },
+    { key: "performance", categories: ["performance"], label: "Performance & load", help: "Looks for work that grows with caller-controlled input." },
+    { key: "api_contract", categories: ["api_contract", "blast_radius"], label: "API contract", help: "Tabulates changed public signatures, before and after, with their callers." },
+    { key: "data_migration", categories: ["data_migration"], label: "Data & migrations", help: "Checks migrations for reversibility, locking and destructive statements." },
+    { key: "dependencies", categories: ["dependency"], label: "Dependencies", help: "Reports added and major-bumped packages, and what they're for." },
 ]
+
+/** One lens that ran, and what it accounted for. */
+export interface LensActivity {
+    key: string
+    label: string
+    /** Findings whose category this lens claims. ZERO IS THE INTERESTING VALUE:
+     *  it means the lens ran and found nothing, which is a result. Its absence
+     *  from the list entirely is the other thing — it never ran. */
+    findings: number
+}
+
+/** The lenses a review actually ran, in catalogue order, each with the number of
+ *  findings attributable to it.
+ *
+ *  `optional` is the lens list from the run's own policy snapshot — for a run
+ *  under the built-in reviewer that is DEFAULT_LENSES. A run with NO attribution
+ *  recorded has no answer here and the caller must render nothing rather than
+ *  guess, for the same reason the profile chip shows nothing for those rows.
+ *
+ *  The always-on three are added here rather than read from the snapshot,
+ *  mirroring activeLenses() in the analyser's lens.go: they run whatever the
+ *  policy says, so storing them would only create something to drift. */
+export function lensActivity(optional: string[], findingCategories: string[]): LensActivity[] {
+    const want = new Set(optional.map((k) => k.trim()))
+    const counts = new Map<string, number>()
+    for (const c of findingCategories) counts.set(c, (counts.get(c) ?? 0) + 1)
+    return LENSES.filter((l) => l.alwaysOn || want.has(l.key)).map((l) => ({
+        key: l.key,
+        label: l.label,
+        // A finding can count toward two lenses — a changed signature is both an
+        // api_contract and a blast_radius finding, and both lenses did the work.
+        findings: l.categories.reduce((n, c) => n + (counts.get(c) ?? 0), 0),
+    }))
+}
 
 const LENS_KEYS = new Set(LENSES.map((l) => l.key))
 const OPTIONAL_LENS_KEYS = LENSES.filter((l) => !l.alwaysOn).map((l) => l.key)
@@ -222,6 +271,26 @@ export const PRESETS: Preset[] = [
         tagline: "Enforces how this codebase already does things.",
         dials: { ...DEFAULT_DIALS, strictness: "thorough", verbosity: "explanatory", voice: "coaching" },
         lenses: ["convention", "drift", "history", "api_contract"],
+    },
+    {
+        // The only preset defined by what it SHOWS rather than by how it judges.
+        // Every optional lens is on, which matters beyond thoroughness: a lens is
+        // what UNLOCKS a report block (lens.go declares them, and allowedBlocks
+        // drops any block no enabled lens asked for), so this is the one profile
+        // under which the reviewer may emit the full block vocabulary — risk
+        // matrix, contract table, history timeline, dependency list, callouts.
+        //
+        // It still cannot GUARANTEE those blocks appear. Inline blocks carry
+        // their own content and the reviewer is told to emit one only when it
+        // has something real to put in it, so a clean PR under this preset looks
+        // much like a clean PR under any other. Unlocking is permission, not a
+        // promise — which is exactly the distinction the lens line in the review
+        // footer now makes visible.
+        key: "full_report",
+        label: "Full report",
+        tagline: "Every lens on. The richest review Ucelot can produce, and the slowest.",
+        dials: { ...DEFAULT_DIALS, strictness: "thorough", verbosity: "explanatory", depth: "deep" },
+        lenses: [...OPTIONAL_LENS_KEYS],
     },
     {
         key: "mentor",

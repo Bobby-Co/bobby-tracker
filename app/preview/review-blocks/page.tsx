@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { PrReview } from "@/components/pulls/pr-review"
 import { CLASSIC_LAYOUT, type ReportBlock } from "@/lib/shared/report/registry"
-import type { PrAnalysis, PullRequestAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
 
 // Preview harness for the report-block renderer (analyser ADR-0066).
 //
@@ -77,6 +77,7 @@ const FIXTURE: PrAnalysis = {
     score_max: 10,
     duration_ms: 41_200,
     insight_id: "ins_preview",
+    analyser_build: "af71ce4",
 }
 
 // The layouts a profile can produce, as the analyser's assembler would emit them.
@@ -154,6 +155,69 @@ const LAYOUTS: { key: string; label: string; note: string; blocks: ReportBlock[]
         ],
     },
     {
+        // Every kind in the registry, in one panel. Not a layout any profile
+        // produces — the assembler caps a report at 24 blocks and the reviewer
+        // emits an inline block only when it has real content — but it is the
+        // only way to SEE the whole vocabulary without waiting for a pull request
+        // that happens to trip all five inline blocks at once.
+        //
+        // Under "Full report" (every lens on) this is the ceiling of what a real
+        // review may contain. What it actually contains is up to the diff.
+        key: "everything",
+        label: "Every block",
+        note: "All 16 kinds at once — the ceiling of what the Full report preset unlocks. Real reviews show the subset the diff earns.",
+        blocks: [
+            { kind: "verdict_banner" },
+            { kind: "callout", tone: "critical", title: "Unbound projects reach a destructive path", body: "Projects created before migration 0062 have no cell. `findCell` returns null and the delete proceeds against whatever the context is bound to." },
+            {
+                kind: "risk_matrix",
+                title: "Risks",
+                items: [
+                    { label: "Purge runs against the home database", likelihood: "medium", impact: "high", detail: "An unbound project id reaches the regional delete with no cell resolved." },
+                    { label: "Partial delete leaves orphaned rows", likelihood: "low", impact: "medium", detail: "The purge aborts mid-way if the first regional read throws." },
+                ],
+            },
+            { kind: "score" },
+            { kind: "tally" },
+            { kind: "meters", dims: ["security", "correctness", "load_perf"] },
+            { kind: "prose", role: "summary" },
+            { kind: "prose", role: "impact" },
+            { kind: "prose", role: "note", body: "The migration in this PR is reversible, but the code that reads the new column ships in the same change — deploy them together or the read fails closed." },
+            { kind: "file_impact_list" },
+            {
+                kind: "spec_table",
+                title: "Contract changes",
+                columns: ["Symbol", "Before", "After", "Callers"],
+                rows: [
+                    ["ProjectDeletionService.delete", "(id: string)", "(id: string) throws", "2"],
+                    ["ProjectsRepository.findCell", "string", "string | null", "5"],
+                ],
+            },
+            {
+                kind: "timeline",
+                title: "History",
+                items: [
+                    { when: "6dacdc6", label: "fix(delete): bind the region before purging", detail: "the change under review" },
+                    { when: "0062", label: "project region added", detail: "projects created before this have no cell" },
+                ],
+            },
+            {
+                kind: "dependency_list",
+                items: [
+                    { label: "pg", from: "8.11.3", to: "8.13.0", detail: "the driver the regional pool uses" },
+                    { label: "zod", from: "3.22.4", to: "4.0.1", detail: "major bump — parse errors changed shape" },
+                ],
+            },
+            { kind: "finding_group", state: "critical" },
+            { kind: "finding_group", state: "review" },
+            { kind: "finding_group", state: "good" },
+            { kind: "claims_table" },
+            { kind: "checklist" },
+            { kind: "checks_footer" },
+            { kind: "deep_dive_cta" },
+        ],
+    },
+    {
         key: "empty",
         label: "Clean PR",
         note: "Nothing found. Blocks with no data return null, so this is a short panel rather than a column of empty boxes.",
@@ -177,9 +241,53 @@ const CLEAN: PrAnalysis = {
     duration_ms: 9_800,
 }
 
+// The three states of run attribution (0079). Switchable here because the whole
+// point of the design is that they are DIFFERENT answers — "a profile ran", "the
+// built-in reviewer ran", and "this run predates attribution, we don't know" —
+// and a design that leans on the difference should be inspectable side by side.
+const ATTRIBUTIONS: { key: string; label: string; note: string; value: ReviewRunProfile | null }[] = [
+    {
+        key: "profile",
+        label: "Under a profile",
+        note: "A team profile reviewed it. The chip names it and opens the policy that was actually sent.",
+        value: {
+            kind: "profile",
+            id: "preview-profile",
+            name: "Payments — strict",
+            preset: "gatekeeper",
+            policy: {
+                strictness: "thorough",
+                evidence: "strict",
+                blocking: "any",
+                positivity: "sparing",
+                verbosity: "explanatory",
+                voice: "neutral",
+                depth: "deep",
+                lenses: ["convention", "drift", "history", "security", "api_contract", "data_migration"],
+                instructions: "We wrap errors with %w.",
+                path_rules: [{ glob: "supabase/migrations/*", text: "Every migration must be reversible." }],
+            },
+        },
+    },
+    {
+        key: "default",
+        label: "Built-in default",
+        note: "No profile assigned. Stated outright rather than left blank — silence is what made this unverifiable before.",
+        value: { kind: "default" },
+    },
+    {
+        key: "unknown",
+        label: "Pre-0079 row",
+        note: "A run from before attribution was recorded. No chip at all: guessing \"Default\" here would be the exact failure this feature exists to prevent.",
+        value: null,
+    },
+]
+
 export default function ReviewBlocksPreview() {
     const [key, setKey] = useState("classic")
+    const [attrKey, setAttrKey] = useState("profile")
     const layout = LAYOUTS.find((l) => l.key === key)!
+    const attribution = ATTRIBUTIONS.find((a) => a.key === attrKey)!
     const result = key === "empty" ? CLEAN : FIXTURE
 
     const analysis: PullRequestAnalysis = {
@@ -190,6 +298,10 @@ export default function ReviewBlocksPreview() {
         github_comment_id: null,
         head_sha: null,
         result: layout.blocks ? { ...result, report: { version: 1, blocks: layout.blocks } } : result,
+        // Run attribution (0079). Real rows carry the snapshot the dispatch
+        // actually sent; these are hand-written to match its shape.
+        review_profile_id: attribution.value?.kind === "profile" ? attribution.value.id : null,
+        review_profile: attribution.value,
         created_at: "",
         updated_at: "",
     }
@@ -222,6 +334,25 @@ export default function ReviewBlocksPreview() {
                 ))}
             </div>
             <p className="text-[12px] leading-5 text-[color:var(--c-text-muted)]">{layout.note}</p>
+
+            <div className="flex flex-wrap gap-1.5">
+                {ATTRIBUTIONS.map((a) => (
+                    <button
+                        key={a.key}
+                        type="button"
+                        onClick={() => setAttrKey(a.key)}
+                        className={
+                            "rounded-full border px-3 py-1.5 text-[12.5px] transition-colors " +
+                            (attrKey === a.key
+                                ? "border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] font-semibold"
+                                : "border-[color:var(--c-border)] hover:border-[color:var(--c-border-strong)]")
+                        }
+                    >
+                        {a.label}
+                    </button>
+                ))}
+            </div>
+            <p className="text-[12px] leading-5 text-[color:var(--c-text-muted)]">{attribution.note}</p>
             <p className="font-mono text-[11px] text-[color:var(--c-text-dim)]">
                 {(layout.blocks ?? CLASSIC_LAYOUT).map((b) => b.kind).join(" · ")}
             </p>

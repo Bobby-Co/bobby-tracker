@@ -8,6 +8,7 @@ import {
     affectsMergeGate,
     clampDepth,
     compilePolicy,
+    lensActivity,
     matchingPreset,
     maxDepthForTier,
     parseDials,
@@ -248,5 +249,109 @@ describe("the tier vocabulary cannot drift", () => {
         for (let i = 1; i < ladder.length; i++) {
             expect(ladder[i]).toBeGreaterThanOrEqual(ladder[i - 1])
         }
+    })
+})
+
+// ─── lensActivity: which lenses ran, and what each accounted for ────────────
+//
+// The distinction this exists to draw: a lens that ran and found NOTHING versus
+// a lens that never ran. Those produce identical reviews, and reading them as
+// the same thing is what makes a working profile look like a broken one.
+describe("lensActivity", () => {
+    const keys = (a: { key: string }[]) => a.map((l) => l.key)
+
+    test("the always-on three run whatever the profile asked for", () => {
+        expect(keys(lensActivity([], []))).toEqual(["correctness", "blast_radius", "test_gap"])
+    })
+
+    test("optional lenses are added in catalogue order, not the order they were listed", () => {
+        expect(keys(lensActivity(["security", "convention"], []))).toEqual([
+            "correctness", "blast_radius", "test_gap", "convention", "security",
+        ])
+    })
+
+    test("a lens that ran and found nothing is PRESENT with a zero", () => {
+        const security = lensActivity(["security"], ["bug"]).find((l) => l.key === "security")
+        expect(security).toBeDefined()
+        expect(security!.findings).toBe(0)
+    })
+
+    test("a lens that never ran is absent entirely — not a zero", () => {
+        expect(lensActivity([], ["security"]).find((l) => l.key === "security")).toBeUndefined()
+    })
+
+    test("findings are counted by the categories their lens claims", () => {
+        const a = lensActivity(["security"], ["bug", "failure", "bug", "security"])
+        expect(a.find((l) => l.key === "correctness")!.findings).toBe(3) // bug + failure
+        expect(a.find((l) => l.key === "security")!.findings).toBe(1)
+    })
+
+    // Two lenses legitimately did the work behind one finding; both say so.
+    test("a blast-radius finding counts for the api_contract lens too", () => {
+        const a = lensActivity(["api_contract"], ["blast_radius"])
+        expect(a.find((l) => l.key === "blast_radius")!.findings).toBe(1)
+        expect(a.find((l) => l.key === "api_contract")!.findings).toBe(1)
+    })
+
+    test("the dependencies lens claims the SINGULAR category the analyser tags", () => {
+        expect(lensActivity(["dependencies"], ["dependency"]).find((l) => l.key === "dependencies")!.findings).toBe(1)
+    })
+
+    test("an unknown lens key is ignored rather than invented", () => {
+        expect(keys(lensActivity(["not_a_lens"], []))).toEqual(["correctness", "blast_radius", "test_gap"])
+    })
+
+    // Under-reporting is the acceptable drift direction; over-reporting is not.
+    test("a category no lens claims is attributed to nobody", () => {
+        for (const l of lensActivity(["security", "convention"], ["some_future_category"])) {
+            expect(l.findings).toBe(0)
+        }
+    })
+
+    test("the default reviewer's lenses are the three that reproduce it", () => {
+        expect(keys(lensActivity(DEFAULT_LENSES, []))).toEqual([
+            "correctness", "blast_radius", "test_gap", "convention", "drift", "history",
+        ])
+    })
+})
+
+// ─── the Full report preset ─────────────────────────────────────────────────
+//
+// It exists to make the block vocabulary reachable, so what it must guarantee is
+// PERMISSION: every lens that unlocks an inline block is on. Whether the blocks
+// then appear is the reviewer's call, and no test here can (or should) pin that.
+describe("PRESETS: full report", () => {
+    const full = PRESETS.find((p) => p.key === "full_report")!
+
+    test("it exists and turns on every optional lens", () => {
+        const optional = LENSES.filter((l) => !l.alwaysOn).map((l) => l.key)
+        expect([...full.lenses].sort()).toEqual([...optional].sort())
+    })
+
+    // The point of the preset. If a lens that unlocks a block is ever added and
+    // this preset isn't updated, that block becomes unreachable from the UI and
+    // nobody finds out — the review just quietly never shows it.
+    test("no lens is left off, so every block kind stays reachable", () => {
+        for (const l of LENSES) {
+            if (l.alwaysOn) continue
+            expect(full.lenses).toContain(l.key)
+        }
+    })
+
+    test("it does not weaken the merge gate to get a richer report", () => {
+        expect(full.dials.blocking).toBe(DEFAULT_DIALS.blocking)
+        expect(affectsMergeGate(full.dials)).toBe(affectsMergeGate(DEFAULT_DIALS))
+    })
+
+    test("every lens it names is a real one", () => {
+        const known = new Set(LENSES.map((l) => l.key))
+        for (const k of full.lenses) expect(known.has(k)).toBe(true)
+    })
+
+    // Under this preset every lens ran, so the footer accounts for all of them —
+    // which is what makes "security is listed but has no number" readable as a
+    // result rather than as a lens that was never switched on.
+    test("its lens line accounts for every lens in the catalogue", () => {
+        expect(lensActivity(full.lenses, []).map((l) => l.key)).toEqual(LENSES.map((l) => l.key))
     })
 })

@@ -144,6 +144,39 @@ export interface GithubInstallation {
  *  place and the run cancelled (migration 0042). `id` doubles as the analyser
  *  task_id. One row per (project, pr_number). `result` (migration 0043) is the
  *  persisted structured review so the detail page can render it natively. */
+/** The reviewer configuration a run actually used, as it crossed the wire
+ *  (migration 0079). Structurally the ReviewPolicyWire that
+ *  modules/analysis/domain/ReviewProfile.ts compiles — restated here with plain
+ *  `string` dials rather than imported, because lib/shared deliberately depends
+ *  on nothing outside lib/shared. The literal unions there are assignable to
+ *  this, so the service still hands over a compiled policy without a cast, and a
+ *  renderer reading a dial value this build doesn't know shows it verbatim
+ *  instead of failing to compile. */
+export interface ReviewRunPolicy {
+    strictness: string
+    evidence: string
+    blocking: string
+    positivity: string
+    verbosity: string
+    voice: string
+    depth: string
+    lenses: string[]
+    instructions?: string
+    path_rules?: { glob: string; text: string }[]
+}
+
+/** Which reviewer produced a review (migration 0079). Snapshotted onto the run
+ *  at dispatch rather than read back through projects.review_profile_id, which
+ *  says what the NEXT review will use — re-labelling old reviews every time the
+ *  assignment moves is worse than not labelling them at all.
+ *
+ *  A discriminated union because "the built-in default ran" and "we don't know
+ *  what ran" are genuinely different answers, and only the second one is a gap.
+ *  `null` on the row is that gap: a run from before attribution existed. */
+export type ReviewRunProfile =
+    | { kind: "default" }
+    | { kind: "profile"; id: string | null; name: string; preset: string | null; policy: ReviewRunPolicy }
+
 export interface PullRequestAnalysis {
     id: string
     project_id: string
@@ -152,6 +185,12 @@ export interface PullRequestAnalysis {
     head_sha: string | null
     status: "analysing" | "done" | "failed" | "cancelled" | null
     result: PrAnalysis | null
+    /** The profile this run used, for queries ("what did this profile review?").
+     *  Null for a default-reviewer run. See ReviewRunProfile for why this is a
+     *  plain uuid with no foreign key behind it. */
+    review_profile_id: string | null
+    /** What ran, in full. Null only for runs that predate migration 0079. */
+    review_profile: ReviewRunProfile | null
     created_at: string
     updated_at: string
 }
@@ -345,6 +384,14 @@ export interface PrAnalysis {
     duration_ms?: number
     /** Session-insight id → powers the deep-dive chat (analyser ADR-0055). */
     insight_id?: string
+    /** The analyser build that produced this review — a short git SHA, with
+     *  `-dirty` for an unclean tree.
+     *
+     *  Rides the result JSON, so it needed no migration. Absent on every review
+     *  written before the analyser started stamping it, and that absence is
+     *  read as "unknown" rather than filled in: findings, layout, lenses and
+     *  gating all move between builds, so a guessed build is worse than none. */
+    analyser_build?: string
     /** The review's LAYOUT — which blocks render, in what order (analyser
      *  ADR-0066). It ACCOMPANIES the fields above rather than replacing them:
      *  the blocks reference this data, because the analyser's gate rewrites
@@ -694,6 +741,7 @@ export interface ProjectGroupWithMembers extends ProjectGroup {
 export type NotificationKind =
     | "kb_ready"          // first successful index of a project
     | "kb_updated"        // every index after that
+    | "kb_failed"         // an index run ended in 'failed' (migration 0078)
     | "pr_analysis_ready" // Bobby's PR review finished
     | "pr_opened"         // a new PR landed on a synced repo
 

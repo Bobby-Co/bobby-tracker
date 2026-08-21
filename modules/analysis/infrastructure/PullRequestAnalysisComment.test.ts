@@ -149,3 +149,50 @@ describe("PR comment: registry coverage", () => {
         }
     })
 })
+
+// ─── run attribution in the footer (0079) ───────────────────────────────────
+//
+// The comment names the profile a review ran under so the answer sits beside the
+// review on GitHub, not only in the app. What these pin is the ASYMMETRY: a
+// profile is named, the built-in default is not. Saying "default reviewer" on
+// every comment of every team that never opened the setting is noise, while its
+// absence is only ever read by somebody who knows the feature exists.
+describe("PR comment: run attribution", () => {
+    const c = new PullRequestAnalysisComment()
+
+    test("a profile run names the profile in the footer", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, {
+            kind: "profile",
+            id: "p-1",
+            name: "Payments strict",
+            preset: "gatekeeper",
+            policy: { strictness: "thorough", evidence: "strict", blocking: "any", positivity: "sparing", verbosity: "explanatory", voice: "neutral", depth: "deep", lenses: [] },
+        })
+        expect(md).toContain("under the Payments strict profile")
+    })
+
+    test("a default run says nothing about profiles", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, { kind: "default" })
+        expect(md).toContain("Reviewed by Ucelot")
+        expect(md).not.toContain("profile")
+    })
+
+    test("a run with no attribution renders exactly as before", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null)).toBe(c.result(analysis(), ORIGIN, UI, 7))
+    })
+
+    test("a profile name can't inject markup into a comment Ucelot signs", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, {
+            kind: "profile",
+            id: "p-2",
+            name: "_sneaky_ <img src=x>",
+            preset: null,
+            policy: { strictness: "balanced", evidence: "standard", blocking: "any", positivity: "sparing", verbosity: "normal", voice: "neutral", depth: "standard", lenses: [] },
+        })
+        // The escaped forms, not the raw ones: `\<` is a literal angle bracket to
+        // GFM, so the name reads as typed instead of opening a tag. (A bare
+        // `<img` check would be meaningless here — the badge markup around it
+        // legitimately contains one.)
+        expect(md).toContain("under the \\_sneaky\\_ \\<img src=x\\> profile")
+    })
+})

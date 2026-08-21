@@ -3,7 +3,7 @@
 // close. Every collaborator is injected by the composition root; the
 // pull_request_analyses table is reached through PullRequestAnalysisStore.
 
-import { tryOrNull } from "@/lib/shared/kernel"
+import { RepositoryError, tryOrNull } from "@/lib/shared/kernel"
 import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { PrAnalysis } from "@/lib/shared/types"
@@ -14,7 +14,7 @@ import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
 import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
 import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
-import { compilePolicy, maxDepthForTier } from "../domain/ReviewProfile"
+import { compilePolicy, maxDepthForTier, type ReviewProfile } from "../domain/ReviewProfile"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
 
@@ -136,21 +136,12 @@ export class PullRequestAnalysisService {
             }
         }
 
-        const row = await this.store.upsertTracking({
-            projectId: project.id,
-            prNumber: pr.number,
-            githubCommentId: commentId,
-            headSha: pr.headSha,
-            status: "analysing",
-        })
-        if (!row) return
-
         // The team's reviewer configuration. Best-effort on purpose: a profile
         // that can't be read must not stop the review, because the failure mode
         // of "we couldn't load your settings" should be the DEFAULT reviewer, not
         // silence on a pull request. Resolved late — after every gate has passed
         // and the loading comment is up — so an unreadable profile costs nothing.
-        const profile = this.profiles ? await tryOrNull(() => this.profiles!.findForProject(project.id)) : null
+        const profile = this.profiles ? await this.loadProfile(project.id) : null
 
         // Depth is the one dial that costs money, so it is the only one the plan
         // gets a say in — and it CLAMPS rather than refuses: a team that
@@ -166,6 +157,32 @@ export class PullRequestAnalysisService {
             ? (await tryOrNull(() => this.subscriptions!.findByTeam(payer)))?.tier
             : undefined
 
+        // Compiled ONCE, then both sent and recorded. That is the point of doing
+        // it here rather than inline at the dispatch below: the attribution
+        // stored on the row is the very object that crossed the wire, not a
+        // second reconstruction of it that could disagree. Resolution moved above
+        // the upsert for the same reason — a row that exists before we know what
+        // is reviewing it has a window where it can only answer "unknown".
+        const policy = compilePolicy(profile, tier ? { maxDepth: maxDepthForTier(tier) } : {})
+
+        const row = await this.store.upsertTracking({
+            projectId: project.id,
+            prNumber: pr.number,
+            githubCommentId: commentId,
+            headSha: pr.headSha,
+            status: "analysing",
+            reviewProfileId: profile?.id ?? null,
+            // The default is recorded EXPLICITLY rather than left as an absence.
+            // "Nothing is configured, so the built-in reviewer ran" is an answer;
+            // a blank row is not, and the two are indistinguishable once stored
+            // the same way. Only pre-0079 rows are allowed to be blank.
+            reviewProfile:
+                profile && policy
+                    ? { kind: "profile", id: profile.id, name: profile.name, preset: profile.preset, policy }
+                    : { kind: "default" },
+        })
+        if (!row) return
+
         await this.analyserFor(cell).startPRAnalysis(
             {
                 repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
@@ -179,11 +196,39 @@ export class PullRequestAnalysisService {
                 // null (no profile, or unreadable) sends NOTHING, which every
                 // analyser build understands as the default reviewer — including
                 // the ones deployed before policies existed.
-                policy: compilePolicy(profile, tier ? { maxDepth: maxDepthForTier(tier) } : {}) ?? undefined,
+                policy: policy ?? undefined,
             },
             row.id,
             { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
         )
+    }
+
+    /** The team's profile for this project, or null if it cannot be read.
+     *
+     *  Fail-open, for the reason given at the call site — but NOT silent, which
+     *  is why this exists instead of `tryOrNull`. That helper swallows every
+     *  RepositoryError without a trace, and the failure it hides here is
+     *  invisible downstream: the review runs as the DEFAULT reviewer and comes
+     *  out looking exactly like a profile whose lenses found nothing. An
+     *  unapplied migration, a renamed column, a permissions change and a
+     *  correctly-unassigned project all produce the same clean output, and only
+     *  one of them is intentional.
+     *
+     *  Non-repository errors still propagate, matching tryOrNull: a TypeError in
+     *  here is a bug in our code, and swallowing it would be the very thing this
+     *  method exists to stop. */
+    private async loadProfile(projectId: string): Promise<ReviewProfile | null> {
+        try {
+            return await this.profiles!.findForProject(projectId)
+        } catch (e) {
+            if (!(e instanceof RepositoryError)) throw e
+            console.warn(
+                `[pr-review] could not read the review profile for project ${projectId} — ` +
+                    `this review will run as the DEFAULT reviewer and will look like an unconfigured one. ` +
+                    `Cause: ${e.message}`,
+            )
+            return null
+        }
     }
 
     /** Terminal-state callback (from /api/internal/pr-analysis-result): edit the PR
@@ -205,7 +250,7 @@ export class PullRequestAnalysisService {
                     const uiUrl = `${origin}/projects/${row.projectId}/pulls/${row.prNumber}`
                     const body =
                         status === "done" && result
-                            ? this.comment.result(result, origin, uiUrl, row.prNumber)
+                            ? this.comment.result(result, origin, uiUrl, row.prNumber, row.reviewProfile)
                             : status === "cancelled"
                               ? this.comment.cancelled(origin, row.prNumber)
                               : this.comment.failed(origin, row.prNumber)

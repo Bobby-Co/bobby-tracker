@@ -5,7 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
-import type { PrAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis, ReviewRunProfile } from "@/lib/shared/types"
 import type {
     PullRequestAnalysisResultRow,
     PullRequestAnalysisStore,
@@ -40,6 +40,12 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                     github_comment_id: input.githubCommentId,
                     head_sha: input.headSha,
                     status: input.status,
+                    // Attribution travels with the run (0079). On a re-run the
+                    // upsert overwrites it, which is right: the row describes the
+                    // review currently on the PR, and a re-run under a changed
+                    // profile is a different review.
+                    review_profile_id: input.reviewProfileId,
+                    review_profile: input.reviewProfile,
                 },
                 { onConflict: "project_id,pr_number" },
             )
@@ -51,11 +57,23 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     async findResultRow(taskId: string): Promise<PullRequestAnalysisResultRow | null> {
         const { data } = await this.db
             .from("pull_request_analyses")
-            .select("id,project_id,pr_number,github_comment_id")
+            .select("id,project_id,pr_number,github_comment_id,review_profile")
             .eq("id", taskId)
-            .maybeSingle<{ id: string; project_id: string; pr_number: number; github_comment_id: number | null }>()
+            .maybeSingle<{
+                id: string
+                project_id: string
+                pr_number: number
+                github_comment_id: number | null
+                review_profile: ReviewRunProfile | null
+            }>()
         if (!data) return null
-        return { id: data.id, projectId: data.project_id, prNumber: data.pr_number, githubCommentId: data.github_comment_id }
+        return {
+            id: data.id,
+            projectId: data.project_id,
+            prNumber: data.pr_number,
+            githubCommentId: data.github_comment_id,
+            reviewProfile: data.review_profile ?? null,
+        }
     }
 
     async saveResult(taskId: string, status: string, result: PrAnalysis | null): Promise<void> {

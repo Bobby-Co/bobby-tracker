@@ -10,7 +10,10 @@ import { severityLabel } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
 import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
-import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
+// Domain file directly, never the barrel — the barrel reaches infrastructure and
+// next/headers, which fails the browser build. See review-profile-panel.
+import { DEFAULT_LENSES, DIAL_SPECS, LENSES, lensActivity } from "@/modules/analysis/domain/ReviewProfile"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
 // `.prose-tracker .hljs-*` theme in globals.css). Used for summary/impact/detail
@@ -113,7 +116,7 @@ function VerdictIcon({ v }: { v: string }) {
     )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, profile }: { children: React.ReactNode; profile?: ReviewRunProfile | null }) {
     return (
         <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -124,9 +127,104 @@ function Shell({ children }: { children: React.ReactNode }) {
                     </svg>
                 </span>
                 <h2 className="text-[14px] font-bold tracking-[-0.005em]">Ucelot · PR review</h2>
+                {/* In the HEADER, not the footer, and rendered for every status
+                    including "analysing": the attribution is written when the run
+                    is dispatched, so the answer to "which reviewer is this?" is
+                    available from the moment the spinner appears — which is
+                    exactly when somebody who just changed the setting is looking. */}
+                <ProfileTag profile={profile ?? null} />
             </div>
             {children}
         </section>
+    )
+}
+
+// Which reviewer produced this review (0079), and — on click — the settings it
+// actually ran with.
+//
+// The dials are shown from the run's own SNAPSHOT rather than fetched from the
+// profile, and that is the entire point of the control. A profile that has been
+// edited since, reassigned since, or deleted since would otherwise describe this
+// review as something it never was; what is rendered here is the policy that
+// crossed the wire, so "did my setting take effect?" is answerable from the
+// review itself instead of by trusting that the plumbing worked.
+function ProfileTag({ profile }: { profile: ReviewRunProfile | null }) {
+    const [open, setOpen] = useState(false)
+
+    // A run from before attribution existed. Claiming "Default" here would be a
+    // guess dressed as a fact — the one thing this control exists to avoid.
+    if (!profile) return null
+
+    const isDefault = profile.kind === "default"
+    return (
+        <div className="relative ml-auto">
+            <button
+                type="button"
+                onClick={() => !isDefault && setOpen((o) => !o)}
+                aria-expanded={isDefault ? undefined : open}
+                title={isDefault ? "This review ran under the built-in reviewer" : "What this profile was set to for this review"}
+                className={cn(
+                    "inline-flex max-w-[220px] items-center gap-1 rounded-full border border-[color:var(--c-border)] px-2 py-[3px] text-[11px] text-[color:var(--c-text-muted)]",
+                    isDefault ? "cursor-default" : "cursor-pointer hover:border-[color:var(--c-border-strong)]",
+                )}
+            >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+                    <path d="M1 14h6M9 8h6M17 16h6" />
+                </svg>
+                <span className="truncate">{isDefault ? "Default reviewer" : profile.name}</span>
+                {!isDefault && <span aria-hidden className="text-[color:var(--c-text-dim)]">{open ? "▴" : "▾"}</span>}
+            </button>
+
+            {open && profile.kind === "profile" && <PolicyCard profile={profile} onClose={() => setOpen(false)} />}
+        </div>
+    )
+}
+
+function PolicyCard({ profile, onClose }: { profile: Extract<ReviewRunProfile, { kind: "profile" }>; onClose: () => void }) {
+    const p = profile.policy
+    // Labels come from the same catalogue the settings form is built from, so the
+    // two surfaces can never disagree about what "strict" is called. A value this
+    // build doesn't know is shown verbatim rather than dropped — an unfamiliar
+    // dial is still evidence of what ran.
+    const dials = DIAL_SPECS.map((spec) => {
+        const value = String((p as unknown as Record<string, unknown>)[spec.key] ?? "")
+        return { key: spec.key, label: spec.label, value: spec.options.find((o) => o.value === value)?.label ?? value }
+    }).filter((d) => d.value)
+
+    const lensLabels = (p.lenses ?? []).map((k) => LENSES.find((l) => l.key === k)?.label ?? k.replace(/_/g, " "))
+
+    return (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-[280px] rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-3 text-left shadow-[var(--shadow-card)]">
+            <div className="flex items-start gap-2">
+                <div className="min-w-0">
+                    <p className="truncate text-[12.5px] font-semibold">{profile.name}</p>
+                    <p className="mt-0.5 text-[11px] text-[color:var(--c-text-dim)]">Settings used for this review</p>
+                </div>
+                <button type="button" onClick={onClose} aria-label="Close" className="ml-auto text-[color:var(--c-text-dim)] hover:text-[color:var(--c-text)]">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <dl className="mt-2.5 flex flex-col gap-1">
+                {dials.map((d) => (
+                    <div key={d.key} className="flex items-baseline justify-between gap-3">
+                        <dt className="text-[11px] text-[color:var(--c-text-muted)]">{d.label}</dt>
+                        <dd className="truncate text-[11px] font-medium">{d.value}</dd>
+                    </div>
+                ))}
+            </dl>
+
+            <div className="mt-2.5 border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-muted)]">
+                {/* An empty lens list is meaningful — every optional lens off —
+                    so it gets a sentence rather than a blank row. */}
+                <p>{lensLabels.length ? `Lenses: ${lensLabels.join(", ")}.` : "No optional lenses."}</p>
+                {p.instructions ? <p className="mt-1">Team instructions applied.</p> : null}
+                {p.path_rules?.length ? <p className="mt-1">{p.path_rules.length} path rule{p.path_rules.length === 1 ? "" : "s"} applied.</p> : null}
+            </div>
+        </div>
     )
 }
 
@@ -143,24 +241,25 @@ function Placeholder({ tone, text }: { tone: "muted" | "amber" | "rose"; text: s
 export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null }) {
     const status = analysis?.status ?? null
     const result = analysis?.result ?? null
+    const profile = analysis?.review_profile ?? null
 
     if (status === "analysing") {
         return (
-            <Shell>
+            <Shell profile={profile}>
                 <Placeholder tone="amber" text="Ucelot is reviewing this pull request… this panel fills in automatically." />
             </Shell>
         )
     }
     if (status === "failed") {
         return (
-            <Shell>
+            <Shell profile={profile}>
                 <Placeholder tone="rose" text="Ucelot couldn't complete the review this time." />
             </Shell>
         )
     }
     if (status === "cancelled") {
         return (
-            <Shell>
+            <Shell profile={profile}>
                 <Placeholder tone="muted" text="The review was cancelled (the PR was closed before it finished)." />
             </Shell>
         )
@@ -174,8 +273,8 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
     }
 
     return (
-        <Shell>
-            <Review r={result} projectId={analysis?.project_id ?? null} />
+        <Shell profile={profile}>
+            <Review r={result} projectId={analysis?.project_id ?? null} profile={profile} />
         </Shell>
     )
 }
@@ -226,6 +325,9 @@ interface BlockProps {
     b: ReportBlock
     r: PrAnalysis
     projectId: string | null
+    /** The run's attribution snapshot, for blocks that report on the review
+     *  itself rather than on the code. Null for a row written before 0079. */
+    profile: ReviewRunProfile | null
 }
 
 // The renderer table. Typed as a Record over BlockKind ON PURPOSE: adding a kind
@@ -379,7 +481,9 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         )
     },
 
-    checks_footer: ({ r }) => (r.checks ? <ChecksFooter checks={r.checks} /> : null),
+    checks_footer: ({ r, profile }) => (
+        <ChecksFooter checks={r.checks ?? null} findings={r.findings ?? []} profile={profile} build={r.analyser_build} />
+    ),
 
     deep_dive_cta: ({ r, projectId }) =>
         r.duration_ms == null && !(r.insight_id && projectId) ? null : (
@@ -509,7 +613,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
 // one, for the years of stored reviews written before layouts existed. Blocks
 // whose data is empty return null and simply take up no space, so a small PR
 // doesn't render as a column of empty boxes.
-function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
+function Review({ r, projectId, profile }: { r: PrAnalysis; projectId: string | null; profile: ReviewRunProfile | null }) {
     return (
         <div className="flex flex-col gap-3">
             {layoutFor(r.report).map((b, i) => {
@@ -518,7 +622,7 @@ function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
                 // kinds we don't know, but this render path is the one place a
                 // newer analyser's vocabulary reaches the browser.
                 if (!render) return null
-                return <Fragment key={i}>{render({ b, r, projectId })}</Fragment>
+                return <Fragment key={i}>{render({ b, r, projectId, profile })}</Fragment>
             })}
 
             {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note.
@@ -669,19 +773,69 @@ function ConfidenceMeters({ c, dims }: { c: PrConfidences; dims?: string[] }) {
 // The KB-verification tally (ADR-0057) — the diligence behind the review,
 // rendered as a terse "Checked N callers · M precedents · …" line. Zero counts
 // are omitted; nothing to show → nothing rendered.
-function ChecksFooter({ checks }: { checks: PrChecks }) {
+//
+// Since 0079 it also carries the LENS LINE, and that is the more important half.
+// A profile whose lenses find nothing produces a review byte-identical to the
+// default reviewer's, so "I set a security profile and the output looks the
+// same" is indistinguishable from "the profile silently never applied" — a
+// confusion this feature caused in practice before the line existed. Naming the
+// lenses that ran answers it on the page, with no digging.
+function ChecksFooter({ checks, findings, profile, build }: { checks: PrChecks | null; findings: PrFinding[]; profile: ReviewRunProfile | null; build?: string }) {
     const parts: string[] = []
-    if (checks.callers) parts.push(`${checks.callers} caller${checks.callers === 1 ? "" : "s"}`)
-    if (checks.precedents) parts.push(`${checks.precedents} precedent${checks.precedents === 1 ? "" : "s"}`)
-    if (checks.tests) parts.push(`${checks.tests} test${checks.tests === 1 ? "" : "s"}`)
-    if (checks.failure_probes) parts.push(`${checks.failure_probes} failure probe${checks.failure_probes === 1 ? "" : "s"}`)
-    if (checks.git_reads) parts.push(`${checks.git_reads} history read${checks.git_reads === 1 ? "" : "s"}`)
-    if (parts.length === 0 && !checks.dropped) return null
+    if (checks?.callers) parts.push(`${checks.callers} caller${checks.callers === 1 ? "" : "s"}`)
+    if (checks?.precedents) parts.push(`${checks.precedents} precedent${checks.precedents === 1 ? "" : "s"}`)
+    if (checks?.tests) parts.push(`${checks.tests} test${checks.tests === 1 ? "" : "s"}`)
+    if (checks?.failure_probes) parts.push(`${checks.failure_probes} failure probe${checks.failure_probes === 1 ? "" : "s"}`)
+    if (checks?.git_reads) parts.push(`${checks.git_reads} history read${checks.git_reads === 1 ? "" : "s"}`)
+
+    // Which lenses ran is only knowable from the run's own snapshot. A row with
+    // no attribution (pre-0079) gets NO lens line rather than a guessed one —
+    // the same rule the profile chip follows, and for the same reason: a wrong
+    // answer here is worse than none, because the whole point is to be trusted.
+    const lenses = profile
+        ? lensActivity(
+              profile.kind === "profile" ? (profile.policy.lenses ?? []) : DEFAULT_LENSES,
+              findings.map((f) => f.category).filter((c): c is string => !!c),
+          )
+        : []
+
+    if (parts.length === 0 && !checks?.dropped && lenses.length === 0 && !build) return null
     return (
-        <p className="border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-dim)]">
-            {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
-            {checks.dropped ? <span className="text-[color:var(--c-text-muted)]">{parts.length > 0 ? " · " : ""}{checks.dropped} ungrounded dropped</span> : null}
-        </p>
+        <div className="flex flex-col gap-1 border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-dim)]">
+            {(parts.length > 0 || checks?.dropped) && (
+                <p>
+                    {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
+                    {checks?.dropped ? <span className="text-[color:var(--c-text-muted)]">{parts.length > 0 ? " · " : ""}{checks.dropped} ungrounded dropped</span> : null}
+                </p>
+            )}
+            {build ? (
+                <p title="The analyser build that produced this review. Findings, layout and gating all move between builds, so this is what makes a stored review reproducible.">
+                    <span className="text-[color:var(--c-text-muted)]">Analyser</span>{" "}
+                    <code className="font-mono text-[10.5px] text-[color:var(--c-text-muted)]">{build}</code>
+                </p>
+            ) : null}
+            {lenses.length > 0 && (
+                <p title="The lenses this review ran. A number is how many findings that lens accounts for; a lens with no number ran and found nothing.">
+                    <span className="text-[color:var(--c-text-muted)]">Lenses</span>{" "}
+                    {lenses.map((l, i) => (
+                        <Fragment key={l.key}>
+                            {i > 0 && " · "}
+                            {/* EVERY lens name gets the readable muted token, and
+                                the count — not the label — carries the emphasis.
+                                Dimming the lenses that found nothing was the
+                                obvious first cut and exactly backwards: "security
+                                ran and found nothing" is the sentence this line
+                                exists to say, and it was landing in the lowest-
+                                contrast text on the card (2.4:1). */}
+                            <span className="text-[color:var(--c-text-muted)]">
+                                {l.label.toLowerCase()}
+                                {l.findings > 0 ? <span className="font-semibold text-[color:var(--c-text)]"> {l.findings}</span> : null}
+                            </span>
+                        </Fragment>
+                    ))}
+                </p>
+            )}
+        </div>
     )
 }
 

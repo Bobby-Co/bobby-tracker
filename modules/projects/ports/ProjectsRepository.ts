@@ -177,11 +177,13 @@ export interface ProjectsRepository {
      *  null when absent / not visible. */
     findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null>
 
-    /** repo_url + repo_full_name for GitHub-link building. THROWS RepositoryError
+    /** repo_url + repo_full_name for GitHub-link building, plus the owning
+     *  team_id — the Intelligence tab needs it to fetch the team's review-profile
+     *  library. THROWS RepositoryError
      *  on a genuine query failure — unlike the null-swallowing reads above — so a
      *  caller that must distinguish "store broken" (500) from "absent" (404) can.
      *  Returns null only for a genuinely absent row. */
-    findRepoRef(projectId: string): Promise<Pick<Project, "repo_url" | "repo_full_name"> | null>
+    findRepoRef(projectId: string): Promise<Pick<Project, "id" | "team_id" | "repo_url" | "repo_full_name"> | null>
 
     /** id+name of a TEAM's projects, alphabetical — the collection settings
      *  "add member" picker. FAIL-SAFE ([] on error).

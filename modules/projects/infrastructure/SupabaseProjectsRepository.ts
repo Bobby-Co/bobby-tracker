@@ -216,12 +216,12 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
         return data ?? null
     }
 
-    async findRepoRef(projectId: string): Promise<{ id: string; repo_url: string; repo_full_name: string | null } | null> {
+    async findRepoRef(projectId: string): Promise<{ id: string; team_id: string; repo_url: string; repo_full_name: string | null } | null> {
         const { data, error } = await this.db
             .from("projects")
-            .select("id,repo_url,repo_full_name")
+            .select("id,team_id,repo_url,repo_full_name")
             .eq("id", projectId)
-            .maybeSingle<{ id: string; repo_url: string; repo_full_name: string | null }>()
+            .maybeSingle<{ id: string; team_id: string; repo_url: string; repo_full_name: string | null }>()
         if (error) throw new RepositoryError(error.message, { cause: error })
         return data ?? null
     }

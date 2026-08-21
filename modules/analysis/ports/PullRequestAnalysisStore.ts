@@ -4,7 +4,7 @@
 // stored structured review. The PullRequestAnalysisService depends on this role
 // instead of hitting the table inline (the golden-standard fix).
 
-import type { PrAnalysis } from "@/lib/shared/types"
+import type { PrAnalysis, ReviewRunProfile } from "@/lib/shared/types"
 
 /** The idempotency/comment view of a PR's tracking row. */
 export interface PullRequestAnalysisTracking {
@@ -22,6 +22,10 @@ export interface PullRequestAnalysisResultRow {
     projectId: string
     prNumber: number
     githubCommentId: number | null
+    /** What reviewed it (0079) — the callback renders it into the PR comment's
+     *  footer, so the answer sits next to the review on GitHub too and not only
+     *  in the app. Null on rows written before attribution existed. */
+    reviewProfile: ReviewRunProfile | null
 }
 
 /** The fields upserted when a run is (re)started. */
@@ -31,6 +35,15 @@ export interface PullRequestAnalysisUpsert {
     githubCommentId: number | null
     headSha: string | null
     status: string
+    /** Which profile is about to review this PR (0079), or null for the default.
+     *  Written at dispatch, with the run, so the record describes what ACTUALLY
+     *  ran rather than what the project points at when somebody later looks. */
+    reviewProfileId: string | null
+    /** The same answer in full, including the compiled policy. Not optional: a
+     *  new run always knows what it is running, and letting a caller omit it
+     *  would quietly reintroduce the "null means we don't know" gap that only
+     *  pre-0079 rows are entitled to. */
+    reviewProfile: ReviewRunProfile
 }
 
 export interface PullRequestAnalysisStore {

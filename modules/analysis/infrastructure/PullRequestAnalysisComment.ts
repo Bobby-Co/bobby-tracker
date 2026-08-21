@@ -1,7 +1,16 @@
 import { badge, type BadgeTone, badgeUrl, confidenceImage, mergeVerdictIcon, mergeVerdictLabel, mergeVerdictTone, scoreImage, verdictTone } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
-import type { PrAnalysis, PrFinding } from "@/lib/shared/types"
+import type { PrAnalysis, PrFinding, ReviewRunProfile } from "@/lib/shared/types"
+
+/** Escape team-written text for inline markdown in a comment Ucelot posts under
+ *  its own account. Profile NAMES are a label rather than a prompt, so they skip
+ *  the instruction sanitiser — which makes this the one place an underscore stops
+ *  starting italics and a stray `<` stops opening a tag. Every character escaped
+ *  here is ASCII punctuation, which GFM renders back as itself. */
+function mdEscape(text: string): string {
+    return text.replace(/[\r\n]+/g, " ").replace(/[\\`*_{}[\]()#+\-.!<>|]/g, "\\$&")
+}
 
 // Finding groups → collapsible sections; issues open, positives collapsed. The
 // analyser sends the STATE, this decides what the state looks like — which is
@@ -214,7 +223,14 @@ export class PullRequestAnalysisComment {
         return [this.marker, `## PR Review${name ? ` (${name})` : ""}`, "", badge(origin, "review unavailable", "rose", { size: "header" }), "", "Ucelot couldn't complete the review this time."].join("\n")
     }
 
-    result(r: PrAnalysis, origin: string, uiUrl?: string, prNumber?: number): string {
+    /** `profile` is what actually reviewed this PR (0079). Named in the footer
+     *  when it was a team profile, and silent when it was the built-in default:
+     *  a line saying "default reviewer" on every comment of every team that never
+     *  opened the setting is noise, while its ABSENCE is only ever read by
+     *  someone who knows the feature exists. The app-side panel is the opposite
+     *  — it states the default outright, because that surface is where the
+     *  question "did my profile take effect?" actually gets asked. */
+    result(r: PrAnalysis, origin: string, uiUrl?: string, prNumber?: number, profile?: ReviewRunProfile | null): string {
         const name = (r.title ?? "").replace(/[\r\n]+/g, " ").trim() || (prNumber != null ? `#${prNumber}` : "")
         const out: string[] = [this.marker, `## PR Review${name ? ` (${name})` : ""}`, ""]
 
@@ -261,7 +277,12 @@ export class PullRequestAnalysisComment {
         if (uiUrl) out.push(`**[View the full review in ucelot →](${uiUrl})**`, "")
 
         const dur = r.duration_ms ? ` · reviewed in ${(r.duration_ms / 1000).toFixed(1)}s` : ""
-        out.push(`<sub>🔎 Reviewed by Ucelot${dur}</sub>`, "", `<sub>Ucelot is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
+        // Markdown-escaped: a profile name is team-written text landing in a
+        // comment Ucelot posts under its own account, so an underscore in it
+        // should read as an underscore rather than start italics.
+        const under =
+            profile?.kind === "profile" ? ` · under the ${mdEscape(profile.name)} profile` : ""
+        out.push(`<sub>🔎 Reviewed by Ucelot${under}${dur}</sub>`, "", `<sub>Ucelot is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
         return out.join("\n")
     }
 
