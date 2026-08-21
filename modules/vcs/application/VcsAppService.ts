@@ -20,6 +20,7 @@ import type {
     VcsMergeResult,
     VcsMergeability,
     VcsPullRequestFile,
+    VcsCompare,
 } from "../ports/VcsTypes"
 
 /** The issue fields the sync use cases read. Structural (not the full Issue row)
@@ -179,6 +180,16 @@ export class VcsAppService {
     /** A PR's changed files (with per-file unified patches). */
     listPullRequestFiles(number: number): Promise<VcsPullRequestFile[]> {
         return this.vcs.listPullRequestFiles(number)
+    }
+
+    /** The diff and commits between two refs, plus how they relate.
+     *
+     *  `base…head` where the caller names both, so a review can be scoped to the
+     *  PUSH (last reviewed head → this head) rather than to the whole pull
+     *  request. Also the only way to find out that a branch was force-pushed,
+     *  which is the one fact that must stop a finding being carried forward. */
+    compareCommits(base: string, head: string): Promise<VcsCompare> {
+        return this.vcs.compareCommits(base, head)
     }
 
     // ─── PR merge (used by the merge route) ──────────────────────────────────

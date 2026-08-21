@@ -21,6 +21,9 @@ import {
     type VcsMergeability,
     type VcsPullRequest,
     type VcsPullRequestFile,
+    type VcsCompare,
+    type VcsCommitSummary,
+    type VcsCompareStatus,
     type VcsReview,
 } from "../ports/VcsTypes"
 
@@ -366,6 +369,64 @@ export class GithubVcsAppInstance implements VcsAppInstance {
         }))
     }
 
+    async compareCommits(base: string, head: string): Promise<VcsCompare> {
+        // One page, deliberately. GitHub caps `compare` at 300 files and 250
+        // commits and paginating past that does not lift the cap — it returns the
+        // same truncated diff with more commits attached. A range that big is not
+        // a push anyone wants scoped-reviewed anyway, so the honest move is to
+        // report the truncation and let the caller fall back to a full review.
+        const res = await this.client.fetch(
+            this.installationId,
+            this.path(`/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}?per_page=250`),
+        )
+        if (!res.ok) return this.fail(res, "compare commits")
+        const b = (await res.json()) as {
+            status?: string
+            ahead_by?: number
+            behind_by?: number
+            total_commits?: number
+            files?: {
+                filename: string
+                previous_filename?: string
+                status: string
+                patch?: string
+                additions: number
+                deletions: number
+            }[]
+            commits?: {
+                sha: string
+                commit: { message: string; author?: { name?: string; date?: string } }
+                author?: GithubActor | null
+            }[]
+        }
+
+        const commits: VcsCommitSummary[] = (b.commits ?? []).map((c) => ({
+            sha: c.sha,
+            message: c.commit?.message ?? "",
+            author: c.author?.login ?? c.commit?.author?.name ?? null,
+            committedAt: c.commit?.author?.date ?? null,
+        }))
+        const files = (b.files ?? []).map((f) => ({
+            filename: f.filename,
+            previousFilename: f.previous_filename,
+            status: f.status,
+            patch: f.patch,
+            additions: f.additions,
+            deletions: f.deletions,
+        }))
+
+        return {
+            status: compareStatus(b.status),
+            aheadBy: b.ahead_by ?? commits.length,
+            behindBy: b.behind_by ?? 0,
+            files,
+            commits,
+            // 300/250 are GitHub's own ceilings; hitting either means the range
+            // we were handed is not the range we got back.
+            truncated: files.length >= 300 || (b.total_commits ?? commits.length) > commits.length,
+        }
+    }
+
     async listPullRequestReviews(number: number): Promise<VcsReview[]> {
         const rows = await this.paginate<GithubReview>(`/pulls/${number}/reviews`, 3, "list PR reviews")
         return rows.map((r) => this.toReview(r))
@@ -503,5 +564,24 @@ export class GithubVcsAppInstance implements VcsAppInstance {
     }
     private toReview(r: GithubReview): VcsReview {
         return { id: r.id, body: r.body, url: r.html_url, author: this.toActor(r.user), state: r.state, submittedAt: r.submitted_at }
+    }
+}
+
+/** GitHub's compare `status` onto the neutral one. An unrecognised value maps to
+ *  "unknown" rather than to a guess: the whole reason a caller reads this field
+ *  is to refuse to carry findings across a rewritten history, and a wrong guess
+ *  there is precisely the failure it exists to prevent. */
+function compareStatus(raw: string | undefined): VcsCompareStatus {
+    switch (raw) {
+        case "identical":
+            return "identical"
+        case "ahead":
+            return "ahead"
+        case "behind":
+            return "behind"
+        case "diverged":
+            return "diverged"
+        default:
+            return "unknown"
     }
 }
