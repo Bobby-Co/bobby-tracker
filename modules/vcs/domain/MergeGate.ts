@@ -17,7 +17,15 @@ export interface MergePull {
 
 export interface MergeReview {
     status: "analysing" | "done" | "failed" | "cancelled" | null
-    result: { findings?: { severity: string }[] } | null
+    result: { findings?: { severity: string }[]; degraded?: boolean } | null
+}
+
+/** How this review compares with the one before it (0080), when there was one.
+ *  Purely for what the bar SAYS — the gate's decision is the findings, as it has
+ *  always been. */
+export interface MergeProgress {
+    /** Blockers the previous round had that this one does not. */
+    fixed: number
 }
 
 export type MergeBlockCode =
@@ -28,6 +36,7 @@ export type MergeBlockCode =
     | "review_pending"
     | "review_incomplete"
     | "critical"
+    | "review_partial"
 
 export interface MergeBlock {
     code: MergeBlockCode
@@ -67,8 +76,12 @@ export class MergePolicy {
         return findings.filter((f) => findingState(f.severity) === "critical").length
     }
 
-    /** Evaluate the merge gate for a PR + its review. */
-    evaluate(pull: MergePull, analysis: MergeReview | null): MergeGate {
+    /** Evaluate the merge gate for a PR + its review.
+     *
+     *  `progress` is optional and affects only the wording: "3 of 5 resolved,
+     *  2 remain" reads very differently from "2 blockers" to somebody who has
+     *  been fixing them, and the difference costs nothing to compute. */
+    evaluate(pull: MergePull, analysis: MergeReview | null, progress?: MergeProgress): MergeGate {
         const ok = (): MergeGate => ({ mergeable: true, block: null, criticalCount: 0 })
         const no = (code: MergeBlockCode, label: string, transient: boolean, criticalCount = 0): MergeGate => ({
             mergeable: false,
@@ -91,7 +104,21 @@ export class MergePolicy {
         // Rule #2 — a finished review that flagged blockers holds the merge.
         const criticalCount = this.criticalFindingCount(analysis)
         if (criticalCount > 0) {
-            return no("critical", `Review found ${criticalCount} blocker${criticalCount === 1 ? "" : "s"}`, false, criticalCount)
+            const fixed = progress?.fixed ?? 0
+            const label = fixed > 0
+                ? `${fixed} of ${fixed + criticalCount} blockers resolved — ${criticalCount} left`
+                : `Review found ${criticalCount} blocker${criticalCount === 1 ? "" : "s"}`
+            return no("critical", label, false, criticalCount)
+        }
+
+        // Rule #3 — a review whose grounded pass did not complete has not cleared
+        // anything. Its findings are the diff-level draft, so an EMPTY blocker
+        // list here means "we did not look", not "there is nothing wrong" — and
+        // merging on it would be merging on a review that never happened. This is
+        // the one rule that fires on an absence rather than a finding, which is
+        // exactly why it has to exist: every other gate reads what was found.
+        if (analysis.result?.degraded === true) {
+            return no("review_partial", "Review didn't complete — re-run before merging", true)
         }
 
         return ok()

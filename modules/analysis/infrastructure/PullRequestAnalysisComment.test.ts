@@ -196,3 +196,53 @@ describe("PR comment: run attribution", () => {
         expect(md).toContain("under the \\_sneaky\\_ \\<img src=x\\> profile")
     })
 })
+
+// ─── the comment carries the round history (0080) ───────────────────────────
+//
+// One comment that GROWS a history, not a new comment per push. A bot that
+// posts on every push is one people mute, and muting it ends the feature.
+describe("PR comment: rounds", () => {
+    const c = new PullRequestAnalysisComment()
+    const hist = (over: Record<string, unknown> = {}) => ({
+        round: 2, fixed: 3, remaining: 2, withheld: false,
+        previous: [{ headSha: "a3f1c02aaa", verdict: "request_changes", blockers: 5, fixed: 0 }],
+        ...over,
+    })
+
+    test("a first round says nothing about progress", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ round: 1, previous: [] }))
+        expect(md).not.toContain("Round")
+    })
+
+    test("a later round leads with what the push fixed", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
+        expect(md).toContain("**Round 2** — 3 of 5 blockers resolved, 2 remain")
+    })
+
+    test("the clearing round says so outright", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ fixed: 5, remaining: 0 }))
+        expect(md).toContain("all 5 blockers resolved")
+    })
+
+    test("a push that fixed nothing is told plainly, not silently", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null, hist({ fixed: 0 })))
+            .toContain("no blockers resolved since the last push")
+    })
+
+    // The rule the whole design rests on, restated where a developer reads it.
+    test("a withheld round warns instead of claiming progress", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ withheld: true }))
+        expect(md).toContain("didn't complete")
+        expect(md).not.toContain("resolved,")
+    })
+
+    test("earlier rounds are collapsed, not stacked", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
+        expect(md).toContain("<summary>Earlier rounds (1)</summary>")
+        expect(md).toContain("`a3f1c02`")
+    })
+
+    test("no history renders exactly as before", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null)).toBe(c.result(analysis(), ORIGIN, UI, 7, null, undefined))
+    })
+})

@@ -384,6 +384,16 @@ export interface PrAnalysis {
     duration_ms?: number
     /** Session-insight id → powers the deep-dive chat (analyser ADR-0055). */
     insight_id?: string
+    /** The grounded review pass did not complete, so this review is reduce's
+     *  diff-level draft rather than a full one.
+     *
+     *  It matters far beyond presentation: a blocker missing from a partial
+     *  review is indistinguishable from a blocker that was fixed, so a degraded
+     *  round is never allowed to resolve anything (see diffRounds), and the
+     *  merge gate will not read it as a clean bill of health. Absent on rows
+     *  written before the analyser reported it — which are treated as complete,
+     *  because that is what they were. */
+    degraded?: boolean
     /** The analyser build that produced this review — a short git SHA, with
      *  `-dirty` for an unclean tree.
      *

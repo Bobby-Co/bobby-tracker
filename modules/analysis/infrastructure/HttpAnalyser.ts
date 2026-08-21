@@ -288,6 +288,7 @@ export class HttpAnalyser implements Analyser {
                 // an undefined value, and the analyser rejects unknown fields —
                 // so "no profile" sends a body an older cell still accepts.
                 policy: input.policy,
+                previous_blockers: input.previous_blockers,
                 task_id: taskId,
                 callback,
             }),

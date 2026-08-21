@@ -9,7 +9,7 @@ import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
 import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
-import { getVcsAppService } from "@/modules/vcs"
+import { createSupabasePullRequestReadRepository, getVcsAppService } from "@/modules/vcs"
 import { createSupabaseSubscriptionsRepository, getSpendGate } from "@/modules/billing"
 import type { Analyser } from "./ports/Analyser"
 import { HttpAnalyser } from "./infrastructure/HttpAnalyser"
@@ -83,5 +83,9 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         // Read only to cap review DEPTH by plan. Control plane: a subscription
         // belongs to a team, same as the profile it caps.
         createSupabaseSubscriptionsRepository(controlDb),
+        // The PR mirror, for restarting a review when the head moved while one
+        // was running (0080). REGIONAL, with the pull requests it mirrors and
+        // the analyses beside them.
+        createSupabasePullRequestReadRepository(data),
     )
 }

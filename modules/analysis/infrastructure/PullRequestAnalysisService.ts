@@ -12,11 +12,28 @@ import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
-import type { PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
+import type { PullRequestAnalysisResultRow, PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
 import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
 import { compilePolicy, maxDepthForTier, type ReviewProfile } from "../domain/ReviewProfile"
+import { diffRounds } from "../domain/ReviewRounds"
+import { findingState } from "@/lib/shared/rendering/finding-state"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
+
+/** The mirrored pull request, as the continuation reads it. Declared here rather
+ *  than importing the vcs read repository: this service needs four fields to
+ *  restart a review, and taking a dependency on that module's port to get them
+ *  would couple analysis to the shape of the mirror. */
+export interface PrMirror {
+    findByNumber(projectId: string, prNumber: number): Promise<{
+        title: string
+        body: string | null
+        state: "open" | "closed"
+        merged: boolean
+        head_sha: string | null
+        base_sha: string | null
+    } | null>
+}
 
 /** The project fields PR analysis reads: id + the sync-readiness/provider wiring. */
 export type PrProject = {
@@ -61,6 +78,11 @@ export class PullRequestAnalysisService {
          *  for the same reason as `profiles`; absent means the profile's depth is
          *  taken at face value. */
         private readonly subscriptions?: SubscriptionsRepository,
+        /** The PR mirror, for restarting a review when the head moved mid-run
+         *  (0080). Optional so every existing caller constructs unchanged; without
+         *  it a coalesced push is simply not chased, which is the behaviour
+         *  before rounds existed. */
+        private readonly pulls?: PrMirror,
     ) {}
 
     /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
@@ -91,7 +113,24 @@ export class PullRequestAnalysisService {
         if (!payer || (await this.spend.check(payer))) return
 
         const existing = await this.store.findTracking(project.id, pr.number)
-        if (existing?.status === "analysing") return
+        if (existing?.status === "analysing") {
+            // A push landed while a review was running. This used to `return`
+            // outright, keeping no record — so the review finished describing an
+            // older head, the comment described code no longer in the pull
+            // request, and the merge gate judged that stale review, with nothing
+            // left to trigger a re-run. Record the head instead; the callback
+            // starts the next round for it.
+            //
+            // This also makes the running review its own debounce window. Ten
+            // pushes during one review collapse to one pending head, so the PR
+            // gets two reviews rather than ten, and the second covers the state
+            // that actually matters. No timer is involved, which is just as well
+            // — this stack has no scheduler to hang one on.
+            if (pr.headSha && pr.headSha !== existing.headSha) {
+                await tryOrNull(() => this.store.setPendingHead(project.id, pr.number, pr.headSha as string))
+            }
+            return
+        }
 
         // A finished review already covers this head. Every `pull_request` event
         // that isn't a code change — reopened, edited, labeled, review_requested —
@@ -197,6 +236,10 @@ export class PullRequestAnalysisService {
                 // analyser build understands as the default reviewer — including
                 // the ones deployed before policies existed.
                 policy: policy ?? undefined,
+                // What the last round flagged, so this one can check rather than
+                // rediscover. Best-effort: a re-review without it is simply the
+                // review we would have run before rounds existed.
+                previous_blockers: await this.previousBlockers(project.id, pr.number),
             },
             row.id,
             { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN },
@@ -242,6 +285,14 @@ export class PullRequestAnalysisService {
         const row = await this.store.findResultRow(taskId)
         if (!row) return
 
+        // The rounds BEFORE this one, so the comment can say what changed. Read
+        // before the new round is appended, which is what makes "previous" mean
+        // previous. Best-effort: a comment without history is the old comment,
+        // and that is a better outcome than no comment.
+        const history = status === "done" && result
+            ? await this.commentHistory(row.projectId, row.prNumber, result)
+            : undefined
+
         if (row.githubCommentId != null) {
             const project = await this.projects.findGithubSyncContext(row.projectId)
             if (project && Project.of(project).isSyncReady()) {
@@ -250,7 +301,7 @@ export class PullRequestAnalysisService {
                     const uiUrl = `${origin}/projects/${row.projectId}/pulls/${row.prNumber}`
                     const body =
                         status === "done" && result
-                            ? this.comment.result(result, origin, uiUrl, row.prNumber, row.reviewProfile)
+                            ? this.comment.result(result, origin, uiUrl, row.prNumber, row.reviewProfile, history)
                             : status === "cancelled"
                               ? this.comment.cancelled(origin, row.prNumber)
                               : this.comment.failed(origin, row.prNumber)
@@ -264,6 +315,106 @@ export class PullRequestAnalysisService {
         }
 
         await this.store.saveResult(taskId, status, result)
+
+        // The round: this review, at this head, kept so the NEXT one can say what
+        // changed instead of replacing the answer. Best-effort — history is worth
+        // less than the review it describes, and a failure to record it must not
+        // fail the callback that just delivered one.
+        if (status === "done" && row.headSha) {
+            await tryOrNull(() =>
+                this.store.appendRound({
+                    projectId: row.projectId,
+                    prNumber: row.prNumber,
+                    headSha: row.headSha as string,
+                    status,
+                    result,
+                    reviewProfile: row.reviewProfile,
+                }),
+            )
+        }
+
+        await this.continueIfMoved(row, origin)
+    }
+
+    /** The last round's blockers, shaped for the analyser. Capped: a review that
+     *  found twenty blockers does not need all twenty re-checked by name, and the
+     *  list competes for the same context the diff needs. */
+    private async previousBlockers(projectId: string, prNumber: number) {
+        const rounds = await tryOrNull(() => this.store.listRounds(projectId, prNumber, 1))
+        const last = rounds?.[0]
+        if (!last || last.degraded) return undefined // a partial round is not a baseline
+        const blockers = last.findings
+            .filter((f) => findingState(f.severity) === "critical")
+            .slice(0, 12)
+            .map((f) => ({ file: f.file, line: f.line, title: (f.title ?? f.detail ?? "").slice(0, 160) }))
+        return blockers.length > 0 ? blockers : undefined
+    }
+
+    /** What the comment needs to know about earlier rounds.
+     *
+     *  The delta itself is computed by the pure domain (diffRounds) from the two
+     *  finding lists — never asked of the model, and never derived twice. This
+     *  method only fetches and shapes. */
+    private async commentHistory(projectId: string, prNumber: number, result: PrAnalysis) {
+        const rounds = await tryOrNull(() => this.store.listRounds(projectId, prNumber, 6))
+        if (!rounds || rounds.length === 0) return undefined
+
+        const [previous, ...earlier] = rounds // newest first
+        const delta = diffRounds(
+            { headSha: "", findings: result.findings ?? [], degraded: result.degraded === true },
+            { headSha: previous.headSha, findings: previous.findings },
+            earlier.map((r) => ({ headSha: r.headSha, findings: r.findings })),
+        )
+        const remaining = (result.findings ?? []).filter((f) => findingState(f.severity) === "critical").length
+
+        return {
+            round: rounds.length + 1,
+            fixed: delta.counts.fixed,
+            remaining,
+            withheld: delta.withheld,
+            previous: rounds.map((r) => ({
+                headSha: r.headSha,
+                verdict: r.verdict,
+                blockers: r.findings.filter((f) => findingState(f.severity) === "critical").length,
+                fixed: 0,
+            })),
+        }
+    }
+
+    /** Start the next round when the pull request moved while this one ran.
+     *
+     *  Self-clocking: the finishing review is what triggers the next, so pushes
+     *  during a review coalesce to the latest head with no timer anywhere. The
+     *  pending head is cleared FIRST — a continuation that fails should leave the
+     *  PR needing another push, not spinning on a head it cannot review. */
+    private async continueIfMoved(row: PullRequestAnalysisResultRow, origin: string): Promise<void> {
+        const pending = row.pendingHeadSha
+        if (!pending || pending === row.headSha) return
+
+        await tryOrNull(() => this.store.clearPendingHead(row.projectId, row.prNumber))
+
+        if (!this.pulls) return
+
+        const project = await tryOrNull(() => this.projects.findGithubSyncContext(row.projectId))
+        if (!project) return
+
+        const pr = await tryOrNull(() => this.pulls!.findByNumber(row.projectId, row.prNumber))
+        // Only chase a pull request that is still open. A PR merged or closed
+        // during the review has nothing left to say, and re-reviewing it would
+        // post a comment onto a finished conversation.
+        if (!pr || pr.state !== "open" || pr.merged) return
+
+        await this.start(
+            project as PrProject,
+            {
+                number: row.prNumber,
+                title: pr.title,
+                body: pr.body,
+                baseSha: pr.base_sha,
+                headSha: pr.head_sha,
+            },
+            origin,
+        )
     }
 
     /** Cancel an in-flight run (PR closed); the analyser reports 'cancelled' back. */

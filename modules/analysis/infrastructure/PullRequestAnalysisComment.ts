@@ -196,6 +196,20 @@ const MD_BLOCKS: Record<BlockKind, (p: MdBlockProps) => string[]> = {
 }
 
 /** Builds the GitHub-comment body for a PR review. */
+/** What the comment needs to know about the rounds before this one (0080). */
+export interface CommentHistory {
+    /** 1-based ordinal of the round this comment is rendering. */
+    round: number
+    /** Blockers the previous round had that this one does not. */
+    fixed: number
+    /** Blockers this round still has. */
+    remaining: number
+    /** True when this round did not complete, so nothing may be called resolved. */
+    withheld: boolean
+    /** Earlier rounds, newest first: head, verdict, blocker count. */
+    previous: { headSha: string; verdict: string | null; blockers: number; fixed: number }[]
+}
+
 export class PullRequestAnalysisComment {
     private readonly marker = "<!-- bobby:pr-analysis -->"
 
@@ -230,9 +244,56 @@ export class PullRequestAnalysisComment {
      *  someone who knows the feature exists. The app-side panel is the opposite
      *  — it states the default outright, because that surface is where the
      *  question "did my profile take effect?" actually gets asked. */
-    result(r: PrAnalysis, origin: string, uiUrl?: string, prNumber?: number, profile?: ReviewRunProfile | null): string {
+    /** The one line that says whether the last push helped. */
+    private progress(h?: CommentHistory): string {
+        if (!h || h.round < 2) return ""
+        if (h.withheld) {
+            return `> ⚠️ **Round ${h.round}** — this review didn't complete, so nothing is counted as resolved. The findings below may be stale; re-run before relying on them.`
+        }
+        if (h.fixed === 0) return `> **Round ${h.round}** — no blockers resolved since the last push.`
+        if (h.remaining === 0) {
+            return `> ✅ **Round ${h.round}** — all ${h.fixed} blocker${h.fixed === 1 ? "" : "s"} resolved.`
+        }
+        return `> **Round ${h.round}** — ${h.fixed} of ${h.fixed + h.remaining} blockers resolved, ${h.remaining} remain.`
+    }
+
+    /** Earlier rounds, collapsed under a summary. */
+    private earlierRounds(h?: CommentHistory): string {
+        if (!h || h.previous.length === 0) return ""
+        const rows = h.previous.map((p) => {
+            const verdict = p.verdict ? mergeVerdictLabel(p.verdict) : "—"
+            const bits = [`${p.blockers} blocker${p.blockers === 1 ? "" : "s"}`]
+            if (p.fixed > 0) bits.push(`${p.fixed} fixed`)
+            return `| \`${p.headSha.slice(0, 7)}\` | ${verdict} | ${bits.join(" · ")} |`
+        })
+        return [
+            "<details>",
+            `<summary>Earlier rounds (${h.previous.length})</summary>`,
+            "",
+            "| Head | Verdict | Findings |",
+            "| --- | --- | --- |",
+            ...rows,
+            "",
+            "</details>",
+        ].join("\n")
+    }
+
+    result(
+        r: PrAnalysis,
+        origin: string,
+        uiUrl?: string,
+        prNumber?: number,
+        profile?: ReviewRunProfile | null,
+        history?: CommentHistory,
+    ): string {
         const name = (r.title ?? "").replace(/[\r\n]+/g, " ").trim() || (prNumber != null ? `#${prNumber}` : "")
         const out: string[] = [this.marker, `## PR Review${name ? ` (${name})` : ""}`, ""]
+
+        // Progress before the verdict. Somebody who has just pushed a fix reads
+        // the top of this comment to find out whether it worked, and making them
+        // diff two verdicts by eye is the thing rounds exist to stop.
+        const progress = this.progress(history)
+        if (progress) out.push(progress, "")
 
         // Walk the layout the analyser sent, or the classic one for the years of
         // stored reviews written before layouts existed. The two fixed section
@@ -283,6 +344,12 @@ export class PullRequestAnalysisComment {
         const under =
             profile?.kind === "profile" ? ` · under the ${mdEscape(profile.name)} profile` : ""
         out.push(`<sub>🔎 Reviewed by Ucelot${under}${dur}</sub>`, "", `<sub>Ucelot is AI-assisted and can make mistakes — verify findings before acting.</sub>`)
+
+        // Earlier rounds, collapsed. One comment that grows a history rather than
+        // a new comment per push: a bot that posts on every push is one people
+        // mute, and muting it is the end of the feature.
+        const earlier = this.earlierRounds(history)
+        if (earlier) out.push("", earlier)
         return out.join("\n")
     }
 

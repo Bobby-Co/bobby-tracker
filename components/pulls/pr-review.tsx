@@ -11,6 +11,7 @@ import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
 import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
 import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
+import type { DeltaFinding, RoundDelta } from "@/modules/analysis/domain/ReviewRounds"
 // Domain file directly, never the barrel — the barrel reaches infrastructure and
 // next/headers, which fails the browser build. See review-profile-panel.
 import { DEFAULT_LENSES, DIAL_SPECS, LENSES, lensActivity } from "@/modules/analysis/domain/ReviewProfile"
@@ -228,6 +229,110 @@ function PolicyCard({ profile, onClose }: { profile: Extract<ReviewRunProfile, {
     )
 }
 
+/** One round per push, oldest first — the panel's memory.
+ *
+ *  It exists because a re-review used to replace the last one, so a developer
+ *  who had just fixed three of five blockers saw a fresh verdict with no sign
+ *  that anything had moved. The strip is the difference between a verdict and a
+ *  conversation. */
+function RoundStrip({ rounds }: { rounds: RoundSummary[] }) {
+    if (rounds.length < 2) return null // one round is not a story
+    return (
+        <div className="flex gap-0 overflow-x-auto rounded-[10px] border border-[color:var(--c-border)]">
+            {rounds.map((r, i) => {
+                const last = i === rounds.length - 1
+                return (
+                    <div
+                        key={r.headSha + r.round}
+                        className={cn(
+                            "flex min-w-[9.5rem] flex-1 flex-col gap-1 border-r border-[color:var(--c-border)] px-3 py-2 last:border-r-0",
+                            last && "bg-[color:var(--c-primary-tint)]",
+                        )}
+                    >
+                        <span className={cn("font-mono text-[10.5px]", last ? "font-semibold text-[color:var(--c-primary)]" : "text-[color:var(--c-text-muted)]")}>
+                            {r.headSha.slice(0, 7)} · round {r.round}
+                        </span>
+                        <span className="text-[12px] font-semibold leading-4">{r.verdict ? verdictLabel(r.verdict) : "—"}</span>
+                        <span className="flex flex-wrap gap-1">
+                            {r.degraded && <DeltaChip kind="partial" />}
+                            {r.fixed > 0 && <DeltaChip kind="fixed" n={r.fixed} />}
+                            {r.blockers > 0 && <DeltaChip kind="blockers" n={r.blockers} />}
+                            {!r.degraded && r.blockers === 0 && <DeltaChip kind="clear" />}
+                        </span>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
+export interface RoundSummary {
+    headSha: string
+    round: number
+    verdict: string | null
+    blockers: number
+    fixed: number
+    degraded: boolean
+}
+
+/** `plural` is set only where the label is a NOUN. "blocker" pluralises; "new"
+ *  and "fixed" describe the findings and do not — appending an s to them
+ *  produced "2 news", which is how you can tell a label table was written as if
+ *  every word behaved the same way. */
+const DELTA_STYLE: Record<string, { label: string; plural?: string; cls: string }> = {
+    // Semantic, not decorative: these encode what happened to a finding between
+    // pushes, which is the one thing a returning developer wants to know first.
+    new:       { label: "new",        cls: "bg-[color:var(--c-info-bg)] text-[color:var(--c-info-fg)]" },
+    still_open:{ label: "still open", cls: "bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]" },
+    regressed: { label: "back again", cls: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]" },
+    fixed:     { label: "fixed",      cls: "bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" },
+    blockers:  { label: "blocker",    plural: "blockers", cls: "bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]" },
+    clear:     { label: "clear",      cls: "bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" },
+    partial:   { label: "partial",    cls: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]" },
+}
+
+function DeltaChip({ kind, n }: { kind: string; n?: number }) {
+    const style = DELTA_STYLE[kind]
+    if (!style) return null
+    const word = n != null && n !== 1 && style.plural ? style.plural : style.label
+    return (
+        <span className={cn("inline-flex shrink-0 items-center rounded-full px-1.5 py-[1px] text-[10px] font-semibold", style.cls)}>
+            {n != null ? `${n} ${word}` : word}
+        </span>
+    )
+}
+
+/** "3 of 5 blockers resolved, 2 remain" — the one sentence a developer who has
+ *  been fixing things wants before anything else. */
+function ProgressLine({ delta }: { delta: RoundDelta | null }) {
+    if (!delta) return null
+    if (delta.withheld) {
+        return (
+            <p className="rounded-[8px] border border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] px-3 py-1.5 text-[12px] text-[color:var(--c-warn)]">
+                This round didn&rsquo;t complete, so nothing is counted as resolved — the blockers below may be stale.
+            </p>
+        )
+    }
+    if (delta.counts.fixed === 0) return null
+    return (
+        <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-[color:var(--c-text-muted)]">
+            <DeltaChip kind="fixed" n={delta.counts.fixed} />
+            <span>since the last push</span>
+            {delta.counts.regressed > 0 && <DeltaChip kind="regressed" n={delta.counts.regressed} />}
+            {delta.counts.new > 0 && <DeltaChip kind="new" n={delta.counts.new} />}
+        </p>
+    )
+}
+
+/** The delta state for one finding, matched the same way diffRounds tagged it.
+ *  Compares the finding OBJECT, which is the same reference the delta was built
+ *  from — no second fingerprinting here, so the panel cannot disagree with the
+ *  arithmetic that produced the counts. */
+function deltaOf(delta: RoundDelta | null | undefined, f: PrFinding): DeltaFinding["delta"] | null {
+    if (!delta) return null
+    return delta.current.find((d) => d.finding === f)?.delta ?? null
+}
+
 function Placeholder({ tone, text }: { tone: "muted" | "amber" | "rose"; text: string }) {
     const cls =
         tone === "amber"
@@ -238,7 +343,15 @@ function Placeholder({ tone, text }: { tone: "muted" | "amber" | "rose"; text: s
     return <div className={cn("rounded-[12px] border px-4 py-6 text-center text-[13px]", cls)}>{text}</div>
 }
 
-export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null }) {
+export function PrReview({ analysis, rounds = [], delta = null }: {
+    analysis: PullRequestAnalysis | null
+    /** Oldest first. Fewer than two and the strip stays hidden — one round is
+     *  not a story, and an empty strip is worse than none. */
+    rounds?: RoundSummary[]
+    /** How this review compares with the round before it, or null on a first
+     *  review. Drives the per-finding chips and the progress line. */
+    delta?: RoundDelta | null
+}) {
     const status = analysis?.status ?? null
     const result = analysis?.result ?? null
     const profile = analysis?.review_profile ?? null
@@ -274,7 +387,9 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
 
     return (
         <Shell profile={profile}>
-            <Review r={result} projectId={analysis?.project_id ?? null} profile={profile} />
+            <RoundStrip rounds={rounds} />
+            <ProgressLine delta={delta} />
+            <Review r={result} projectId={analysis?.project_id ?? null} profile={profile} delta={delta} />
         </Shell>
     )
 }
@@ -325,6 +440,9 @@ interface BlockProps {
     b: ReportBlock
     r: PrAnalysis
     projectId: string | null
+    /** Round-over-round state, so a finding can say whether it is new or one you
+     *  have already seen. Null on a first review. */
+    delta?: RoundDelta | null
     /** The run's attribution snapshot, for blocks that report on the review
      *  itself rather than on the code. Null for a row written before 0079. */
     profile: ReviewRunProfile | null
@@ -409,7 +527,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         )
     },
 
-    finding_group: ({ b, r }) => {
+    finding_group: ({ b, r, delta }) => {
         const state = b.state ?? "review"
         const items = (r.findings ?? []).filter((f) => findingState(f.severity) === state)
         if (items.length === 0) return null
@@ -418,7 +536,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
             <Section title={b.title || style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
                 <div className="flex flex-col gap-2">
                     {items.map((f, i) => (
-                        <Finding key={i} f={f} />
+                        <Finding key={i} f={f} delta={deltaOf(delta, f)} />
                     ))}
                 </div>
             </Section>
@@ -613,7 +731,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
 // one, for the years of stored reviews written before layouts existed. Blocks
 // whose data is empty return null and simply take up no space, so a small PR
 // doesn't render as a column of empty boxes.
-function Review({ r, projectId, profile }: { r: PrAnalysis; projectId: string | null; profile: ReviewRunProfile | null }) {
+function Review({ r, projectId, profile, delta }: { r: PrAnalysis; projectId: string | null; profile: ReviewRunProfile | null; delta?: RoundDelta | null }) {
     return (
         <div className="flex flex-col gap-3">
             {layoutFor(r.report).map((b, i) => {
@@ -622,7 +740,7 @@ function Review({ r, projectId, profile }: { r: PrAnalysis; projectId: string | 
                 // kinds we don't know, but this render path is the one place a
                 // newer analyser's vocabulary reaches the browser.
                 if (!render) return null
-                return <Fragment key={i}>{render({ b, r, projectId, profile })}</Fragment>
+                return <Fragment key={i}>{render({ b, r, projectId, profile, delta: delta ?? null })}</Fragment>
             })}
 
             {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note.
@@ -842,7 +960,7 @@ function ChecksFooter({ checks, findings, profile, build }: { checks: PrChecks |
 // A rich finding card: severity + category + title + location on top, then the
 // detail, a collapsible syntax-highlighted diff of the changed code, the cited
 // evidence, and what the reviewer verified.
-function Finding({ f }: { f: PrFinding }) {
+function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | null }) {
     const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
     const title = (f.title && f.title.trim()) || f.detail
     const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())
@@ -860,6 +978,10 @@ function Finding({ f }: { f: PrFinding }) {
                         {catLabel}
                     </span>
                 )}
+                {/* Only NEW and BACK AGAIN earn a chip. Tagging every carried-over
+                    finding "still open" would put a badge on most of the list and
+                    say nothing — the interesting states are the ones that changed. */}
+                {(delta === "new" || delta === "regressed") && <DeltaChip kind={delta} />}
                 <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-[color:var(--c-text)]">{title}</span>
                 <code className="max-w-[42%] shrink-0 truncate font-mono text-[10.5px] text-[color:var(--c-text-muted)]" title={loc}>
                     {loc}

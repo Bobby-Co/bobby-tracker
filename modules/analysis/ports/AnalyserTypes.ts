@@ -361,6 +361,12 @@ export interface PrAnalyseInput {
      *  predates the field REJECTS a request carrying it. Send it only once the
      *  analyser side is deployed. */
     policy?: ReviewPolicyWire
+    /** The blockers the LAST review of this PR reported, at an earlier head
+     *  (0080). The reviewer is asked to CHECK each rather than rediscover it,
+     *  which is what makes re-reviewing a push affordable — confirming a named
+     *  defect at a known path is a read or two, finding it again is most of a
+     *  review. Omitted on a first review. */
+    previous_blockers?: { file: string; line?: number; title: string }[]
 }
 
 // ─── /verify ─────────────────────────────────────────────────────────────────

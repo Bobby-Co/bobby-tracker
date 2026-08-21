@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { PrReview } from "@/components/pulls/pr-review"
+import { PrReview, type RoundSummary } from "@/components/pulls/pr-review"
+import { diffRounds } from "@/modules/analysis/domain/ReviewRounds"
 import { CLASSIC_LAYOUT, type ReportBlock } from "@/lib/shared/report/registry"
 import type { PrAnalysis, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
 
@@ -306,6 +307,23 @@ export default function ReviewBlocksPreview() {
         updated_at: "",
     }
 
+    // Rounds (0080). The fixture's second round "fixes" the blocker the first one
+    // found and introduces one of its own, which is the case the strip exists for.
+    const ROUNDS: RoundSummary[] = [
+        { headSha: "a3f1c02aaa", round: 1, verdict: "request_changes", blockers: 2, fixed: 0, degraded: false },
+        { headSha: "7bd9e14bbb", round: 2, verdict: "request_changes", blockers: 1, fixed: 1, degraded: false },
+    ]
+    const delta = diffRounds(
+        { headSha: "7bd9e14bbb", findings: result.findings ?? [] },
+        {
+            headSha: "a3f1c02aaa",
+            findings: [
+                { file: "modules/projects/application/ProjectDeletionService.ts", line: 88, severity: "critical", category: "bug", title: "Unbound cell falls through to the home database", detail: "" },
+                { file: "lib/server/http/RequestContext.ts", line: 141, severity: "critical", category: "bug", title: "Binding is resolved lazily", detail: "" },
+            ],
+        },
+    )
+
     return (
         <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8">
             <header>
@@ -357,7 +375,7 @@ export default function ReviewBlocksPreview() {
                 {(layout.blocks ?? CLASSIC_LAYOUT).map((b) => b.kind).join(" · ")}
             </p>
 
-            <PrReview analysis={analysis} />
+            <PrReview analysis={analysis} rounds={ROUNDS} delta={delta} />
         </div>
     )
 }

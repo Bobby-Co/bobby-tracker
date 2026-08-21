@@ -8,7 +8,11 @@ import { test, expect, describe, mock, beforeAll, beforeEach } from "bun:test"
 import { Project as RealProject } from "@/modules/projects/domain/Project"
 import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 
-const store = { findTracking: mock(), upsertTracking: mock(), findResultRow: mock(), saveResult: mock() }
+const store = {
+    findTracking: mock(), upsertTracking: mock(), findResultRow: mock(), saveResult: mock(),
+    appendRound: mock(), listRounds: mock(), setPendingHead: mock(), clearPendingHead: mock(),
+}
+const pulls = { findByNumber: mock() }
 const projectsRepo = { findCell: mock(), findGithubSyncContext: mock(), findTeamId: mock(async () => "team-1") }
 const analyserRepo = { findReadiness: mock() }
 const analyser = { startPRAnalysis: mock(), cancelPRAnalysis: mock() }
@@ -33,6 +37,12 @@ const svc = () => new PullRequestAnalysisService(analyserFor as any, projectsRep
 
 beforeEach(() => {
     store.findTracking.mockReset().mockResolvedValue(null)
+    store.appendRound.mockReset().mockResolvedValue(undefined)
+    store.listRounds.mockReset().mockResolvedValue([])
+    store.setPendingHead.mockReset().mockResolvedValue(undefined)
+    store.clearPendingHead.mockReset().mockResolvedValue(undefined)
+    pulls.findByNumber.mockReset().mockResolvedValue(null)
+    projectsRepo.findGithubSyncContext.mockReset()
     store.upsertTracking.mockReset().mockResolvedValue({ id: "task-1" })
     projectsRepo.findCell.mockReset().mockResolvedValue("ashburn-0")
     analyserRepo.findReadiness.mockReset().mockResolvedValue({ enabled: true, status: "ready", graph_id: "G1" })
@@ -164,5 +174,108 @@ describe("start — an unreadable review profile", () => {
     test("a non-repository error still propagates", async () => {
         const profiles = { findForProject: mock(async () => { throw new TypeError("undefined is not a function") }) }
         await expect(withProfiles(profiles).start(project, pr, "https://app")).rejects.toThrow(TypeError)
+    })
+})
+
+// ─── pushes that land while a review is running (0080) ──────────────────────
+//
+// This used to `return` outright, keeping no record at all. A developer pushing
+// split work — three pushes a minute apart — had pushes two and three vanish:
+// the review finished describing head one, the comment described code no longer
+// in the pull request, the merge gate judged that stale review, and nothing was
+// left to trigger a re-run. Recording the head makes the running review its own
+// debounce window.
+describe("start — a push during an in-flight review", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svcWithPulls = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, undefined, undefined, pulls as any)
+
+    test("records the new head instead of dropping it", async () => {
+        store.findTracking.mockResolvedValue({ id: "t", status: "analysing", githubCommentId: 1, headSha: "head0", pendingHeadSha: null })
+        await svcWithPulls().start(project, { ...pr, headSha: "head1" }, "https://app")
+
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+        expect(store.setPendingHead).toHaveBeenCalledTimes(1)
+        expect(store.setPendingHead.mock.calls[0].slice(0, 3)).toEqual(["proj-1", 7, "head1"])
+    })
+
+    // The same head arriving again (reopened, labeled, edited) is not a move.
+    test("the same head is not recorded as pending", async () => {
+        store.findTracking.mockResolvedValue({ id: "t", status: "analysing", githubCommentId: 1, headSha: "head1", pendingHeadSha: null })
+        await svcWithPulls().start(project, { ...pr, headSha: "head1" }, "https://app")
+        expect(store.setPendingHead).not.toHaveBeenCalled()
+    })
+
+    // Ten pushes during one review must not become ten reviews: last write wins,
+    // and only the final head is ever reviewed.
+    test("several pushes coalesce to the latest head", async () => {
+        store.findTracking.mockResolvedValue({ id: "t", status: "analysing", githubCommentId: 1, headSha: "head0", pendingHeadSha: null })
+        const svc2 = svcWithPulls()
+        for (const sha of ["head1", "head2", "head3"]) {
+            await svc2.start(project, { ...pr, headSha: sha }, "https://app")
+        }
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+        expect(store.setPendingHead).toHaveBeenCalledTimes(3)
+        expect(store.setPendingHead.mock.calls[2][2]).toBe("head3")
+    })
+})
+
+describe("applyResult — rounds and the continuation", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svcWithPulls = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, undefined, undefined, pulls as any)
+
+    const doneRow = (over: Record<string, unknown> = {}) => ({
+        id: "task-1", projectId: "proj-1", prNumber: 7, githubCommentId: null,
+        reviewProfile: { kind: "default" }, headSha: "head1", pendingHeadSha: null, ...over,
+    })
+    const review = { summary: "s", impact: "i", findings: [], verdict: "approve", score: 10, score_max: 10 }
+
+    test("a completed review is recorded as a round", async () => {
+        store.findResultRow.mockResolvedValue(doneRow())
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", review as any, "https://app")
+
+        expect(store.appendRound).toHaveBeenCalledTimes(1)
+        expect(store.appendRound.mock.calls[0][0]).toMatchObject({ projectId: "proj-1", prNumber: 7, headSha: "head1" })
+    })
+
+    test("the next round starts when the PR moved while this one ran", async () => {
+        store.findResultRow.mockResolvedValue(doneRow({ pendingHeadSha: "head2" }))
+        projectsRepo.findGithubSyncContext.mockResolvedValue(project)
+        pulls.findByNumber.mockResolvedValue({
+            title: "T", body: null, state: "open", merged: false, head_sha: "head2", base_sha: "base2",
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", review as any, "https://app")
+
+        // Cleared BEFORE the restart: a continuation that fails should leave the
+        // PR needing another push, not spinning on a head it cannot review.
+        expect(store.clearPendingHead).toHaveBeenCalledTimes(1)
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    test("no continuation when the head did not move", async () => {
+        store.findResultRow.mockResolvedValue(doneRow({ pendingHeadSha: "head1" }))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", review as any, "https://app")
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+
+    // A PR merged or closed during the review has nothing left to say, and
+    // re-reviewing it would post onto a finished conversation.
+    test("a PR closed during the review is not chased", async () => {
+        store.findResultRow.mockResolvedValue(doneRow({ pendingHeadSha: "head2" }))
+        projectsRepo.findGithubSyncContext.mockResolvedValue(project)
+        pulls.findByNumber.mockResolvedValue({
+            title: "T", body: null, state: "closed", merged: true, head_sha: "head2", base_sha: "b",
+        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", review as any, "https://app")
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a failed review records no round", async () => {
+        store.findResultRow.mockResolvedValue(doneRow())
+        await svcWithPulls().applyResult("task-1", "failed", null, "https://app")
+        expect(store.appendRound).not.toHaveBeenCalled()
     })
 })

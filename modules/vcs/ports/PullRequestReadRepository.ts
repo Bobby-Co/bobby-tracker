@@ -2,13 +2,24 @@
 // pull_request_analyses + pr_comments). Distinct from PullRequestStore, which is
 // the service-role write/sync side. The PR tab routes read through this contract.
 
-import type { PrComment, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
+import type { PrComment, PrFinding, PullRequest, PullRequestAnalysis, ReviewRunProfile } from "@/lib/shared/types"
 
 /** The ownership fields for a mirrored comment (who authored it, from where). */
 export interface CommentOwnership {
     provenance: string
     author_user_id: string | null
     pr_number: number
+}
+
+/** One completed review of one head (0080), as the PR page reads it. */
+export interface PullRequestRound {
+    headSha: string
+    round: number
+    verdict: string | null
+    findings: PrFinding[]
+    degraded: boolean
+    reviewProfile: ReviewRunProfile | null
+    createdAt: string
 }
 
 export interface PullRequestReadRepository {
@@ -26,6 +37,11 @@ export interface PullRequestReadRepository {
 
     /** Just the review status for a PR (or null when absent). THROWS on failure. */
     findAnalysisStatus(projectId: string, prNumber: number): Promise<PullRequestAnalysis["status"] | null>
+
+    /** The review rounds for a PR, NEWEST FIRST, capped. Empty when the PR has
+     *  only ever been reviewed once — the surfaces read that as "no story yet"
+     *  rather than as an error. THROWS on query failure. */
+    listAnalysisRounds(projectId: string, prNumber: number, limit: number): Promise<PullRequestRound[]>
 
     /** The synced comment thread for a PR, oldest first. THROWS on query failure. */
     listComments(projectId: string, prNumber: number): Promise<PrComment[]>
