@@ -267,3 +267,55 @@ describe("PR comment: rounds", () => {
         expect(c.result(analysis(), ORIGIN, UI, 7, null)).toBe(c.result(analysis(), ORIGIN, UI, 7, null, undefined))
     })
 })
+
+// A re-review used to edit a bare spinner over the standing review — erasing the
+// only answer anyone had at the exact moment they most wanted it, and
+// misrepresenting the merge gate, which kept reading that review the whole time.
+describe("PR comment: the placeholder while a re-review runs", () => {
+    const c = new PullRequestAnalysisComment()
+    const inflight = (over: Record<string, unknown> = {}) => ({
+        commits: [{ sha: "dd75a2f000", subject: "feat(webhooks): sweep pending events out", author: "p", at: null }],
+        scope: "incremental" as const,
+        carried: 4,
+        standing: { round: 2, verdict: "request_changes", blockers: 1 },
+        ...over,
+    })
+
+    test("names the commits it is reviewing", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight())
+        expect(md).toContain("reviewing 1 new commit")
+        expect(md).toContain("`dd75a2f`")
+        expect(md).toContain("sweep pending events out")
+    })
+
+    test("says the standing round still stands, and that the gate reads it", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight())
+        expect(md).toContain("**Round 2 still stands**")
+        expect(md).toContain("1 blocker")
+        expect(md).toContain("merge gate")
+    })
+
+    test("an incremental round says it is reviewing the push, and what it carries", () => {
+        expect(c.loading(ORIGIN, "T", UI, inflight())).toContain("carrying 4 earlier findings forward")
+    })
+
+    test("a full round says nothing about carrying", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight({ scope: "full", carried: 0 }))
+        expect(md).not.toContain("carrying")
+        expect(md).toContain("tracing its impact")
+    })
+
+    // A first review has nothing standing behind it, and claiming otherwise would
+    // be worse than the spinner this replaces.
+    test("a first review says nothing about a standing round", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight({ standing: null, commits: [], carried: 0, scope: "full" }))
+        expect(md).not.toContain("still stands")
+        expect(md).toContain("reviewing this pull request")
+    })
+
+    test("a caller with no context renders the placeholder it always did", () => {
+        const md = c.loading(ORIGIN, "T", UI)
+        expect(md).toContain("Ucelot is reviewing this pull request")
+        expect(md).not.toContain("still stands")
+    })
+})

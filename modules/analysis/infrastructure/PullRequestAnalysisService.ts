@@ -320,18 +320,32 @@ export class PullRequestAnalysisService {
         )
 
         // Loading comment: edit the prior one on a re-run, else post fresh.
+        //
+        // It carries what we already know — which commits this round covers, how
+        // it is scoped, and what the LAST round said. Editing a bare spinner over
+        // a standing review was erasing the only answer anyone had at the exact
+        // moment they most wanted it, and misrepresenting the gate, which was
+        // still reading that review the whole time.
         const loadingUrl = `${origin}/projects/${project.id}/pulls/${pr.number}`
+        const inflight = {
+            commits: scope.commits,
+            scope: scope.scope,
+            carried: scope.carried.length,
+            standing: previous
+                ? { round: previous.round, verdict: previous.verdict, blockers: previous.findings.filter(isBlocker).length }
+                : null,
+        }
         let commentId = existing?.githubCommentId ?? null
         if (commentId != null) {
             try {
-                await vcs.updatePrComment(pr.number, commentId, this.comment.loading(origin, pr.title, loadingUrl))
+                await vcs.updatePrComment(pr.number, commentId, this.comment.loading(origin, pr.title, loadingUrl, inflight))
             } catch {
                 commentId = null
             }
         }
         if (commentId == null) {
             try {
-                const created = await vcs.postPrComment(pr.number, this.comment.loading(origin, pr.title, loadingUrl))
+                const created = await vcs.postPrComment(pr.number, this.comment.loading(origin, pr.title, loadingUrl, inflight))
                 commentId = created.id
             } catch {
                 return

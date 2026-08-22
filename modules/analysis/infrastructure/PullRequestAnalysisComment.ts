@@ -204,6 +204,15 @@ const MD_BLOCKS: Record<BlockKind, (p: MdBlockProps) => string[]> = {
  *  "what do I have to fix now". History belongs where it can be navigated, and a
  *  collapsed table in a comment is neither the latest review nor a usable
  *  archive. The link into the app carries anyone who wants more. */
+/** What the placeholder knows at dispatch: the commits this round covers, how it
+ *  is scoped, and the last completed round it is standing in front of. */
+export interface LoadingContext {
+    commits: ReviewRoundCommit[]
+    scope: "full" | "incremental"
+    carried: number
+    standing: { round: number; verdict: string | null; blockers: number } | null
+}
+
 export interface CommentHistory {
     /** 1-based ordinal of the round this comment is rendering. */
     round: number
@@ -226,16 +235,65 @@ export interface CommentHistory {
 export class PullRequestAnalysisComment {
     private readonly marker = "<!-- bobby:pr-analysis -->"
 
-    loading(origin: string, prName?: string, uiUrl?: string): string {
+    /** The placeholder, edited in over the previous review while the next one runs.
+     *
+     *  `inflight` is what we already know at DISPATCH — which commits this round
+     *  covers, whether it is scoped to the push, and what the last completed
+     *  round said. Without it this comment simply erased the standing review the
+     *  moment somebody pushed, which is both the least helpful moment to erase it
+     *  and a lie by omission: that review was still the one the merge gate was
+     *  reading. */
+    loading(origin: string, prName?: string, uiUrl?: string, inflight?: LoadingContext): string {
         const name = this.title(prName)
+        const commits = inflight?.commits ?? []
+        const headline =
+            commits.length > 0
+                ? `**Ucelot is reviewing ${commits.length} new commit${commits.length === 1 ? "" : "s"}…**`
+                : "**Ucelot is reviewing this pull request…**"
+
         const out = [
             this.marker,
             `## PR Review${name ? ` (${name})` : ""}`,
             "",
-            `<img align="absmiddle" src="${origin}/brand_loader.webp" width="26" alt="" /> **Ucelot is reviewing this pull request…**`,
+            `<img align="absmiddle" src="${origin}/brand_loader.webp" width="26" alt="" /> ${headline}`,
             "",
-            "Reading the diff and tracing its impact through the codebase — this comment fills in automatically when the review is ready.",
         ]
+
+        for (const c of commits.slice(0, 5)) {
+            out.push(`- \`${c.sha.slice(0, 7)}\` ${this.esc(c.subject)}`)
+        }
+        if (commits.length > 5) out.push(`- …and ${commits.length - 5} more`)
+        if (commits.length > 0) out.push("")
+
+        if (inflight?.scope === "incremental") {
+            const carried = inflight.carried
+            out.push(
+                `Reviewing the push rather than the whole pull request${
+                    carried > 0 ? `, carrying ${carried} earlier finding${carried === 1 ? "" : "s"} forward` : ""
+                }.`,
+                "",
+            )
+        } else {
+            out.push("Reading the diff and tracing its impact through the codebase.", "")
+        }
+
+        // The standing review, named rather than silently replaced. A reader who
+        // has just pushed a fix needs to know what is still open while they wait.
+        const standing = inflight?.standing
+        if (standing) {
+            const verdict = standing.verdict ? mergeVerdictLabel(standing.verdict) : "—"
+            const blockers =
+                standing.blockers > 0
+                    ? `${standing.blockers} blocker${standing.blockers === 1 ? "" : "s"}`
+                    : "no blockers"
+            out.push(
+                `> **Round ${standing.round} still stands** — ${verdict}, ${blockers}. ` +
+                    `It is what the merge gate is reading until this review finishes.`,
+                "",
+            )
+        }
+
+        out.push("This comment fills in automatically when the review is ready.")
         if (uiUrl) out.push("", "---", "", `**[View the full review in ucelot →](${uiUrl})**`)
         return out.join("\n")
     }

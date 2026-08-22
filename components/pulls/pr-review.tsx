@@ -10,7 +10,7 @@ import { severityLabel } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
 import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
-import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRoundCommit, ReviewRunProfile } from "@/lib/shared/types"
+import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRoundCommit, ReviewRunProfile, ReviewRunScope } from "@/lib/shared/types"
 import type { DeltaFinding, RoundDelta } from "@/modules/analysis/domain/ReviewRounds"
 // Domain file directly, never the barrel — the barrel reaches infrastructure and
 // next/headers, which fails the browser build. See review-profile-panel.
@@ -313,6 +313,68 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
     )
 }
 
+/** What is being reviewed RIGHT NOW, while it is being reviewed.
+ *
+ *  The panel used to replace the whole review with a spinner the moment a push
+ *  landed, which is the worst possible moment to take it away: the reader has
+ *  just pushed a fix and wants to know what it was answering. Worse, the review
+ *  it hid was still the truth — the merge gate was still reading it, and the
+ *  page was showing nothing.
+ *
+ *  So the last completed round stays on screen, and this says what is happening
+ *  above it. The commits come from the scope written at DISPATCH, so the panel
+ *  can name them before the reviewer has said a word about them. */
+function InFlightBanner({ scope, standing }: { scope: ReviewRunScope | null; standing: RoundSummary | null }) {
+    const commits = scope?.commits ?? []
+    const incremental = scope?.scope === "incremental"
+    const carried = scope?.carried?.length ?? 0
+
+    return (
+        <div className="flex flex-col gap-1.5 rounded-[10px] border border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] px-3 py-2 text-[12px] text-[color:var(--c-warn)]">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <Spinner />
+                <span className="font-semibold">
+                    {commits.length > 0
+                        ? `Reviewing ${commits.length} new commit${commits.length === 1 ? "" : "s"}`
+                        : "Ucelot is reviewing this pull request"}
+                </span>
+                {incremental && (
+                    <span className="opacity-85">
+                        — the push only{carried > 0 ? `, carrying ${carried} finding${carried === 1 ? "" : "s"} forward` : ""}
+                    </span>
+                )}
+                {scope && !incremental && <span className="opacity-85">— the whole pull request</span>}
+            </span>
+
+            {commits.length > 0 && (
+                <ul className="flex flex-col gap-0.5 pl-5">
+                    {commits.slice(0, 5).map((c) => (
+                        <li key={c.sha} className="flex items-baseline gap-2 opacity-90">
+                            <code className="shrink-0 font-mono text-[10.5px]">{c.sha.slice(0, 7)}</code>
+                            <span className="min-w-0 flex-1 truncate" title={c.subject}>{c.subject}</span>
+                        </li>
+                    ))}
+                    {commits.length > 5 && <li className="pl-1 opacity-75">…and {commits.length - 5} more</li>}
+                </ul>
+            )}
+
+            {standing && (
+                <span className="opacity-85">
+                    Round {standing.round} is below and still stands until this finishes — it is what the merge gate is reading.
+                </span>
+            )}
+        </div>
+    )
+}
+
+function Spinner() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 animate-spin" aria-hidden>
+            <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+        </svg>
+    )
+}
+
 /** The banner that appears when a reader has stepped back into history.
  *
  *  Loud on purpose. A stale review rendered without a frame around it is how
@@ -528,10 +590,26 @@ export function PrReview({ analysis, rounds = [], delta = null }: {
     const result = analysis?.result ?? null
     const profile = analysis?.review_profile ?? null
 
+    // Derived before the status branches, because the in-flight state needs them
+    // too: a re-review must not take the standing review off the page.
+    const archived = viewing != null ? (rounds.find((r) => r.round === viewing) ?? null) : null
+    const latest = rounds.length > 0 ? rounds[rounds.length - 1] : null
+
     if (status === "analysing") {
         return (
             <Shell profile={profile}>
-                <Placeholder tone="amber" text="Ucelot is reviewing this pull request… this panel fills in automatically." />
+                <RoundStrip rounds={rounds} selected={viewing} onSelect={setViewing} />
+                <InFlightBanner scope={analysis?.review_scope ?? null} standing={archived ?? latest} />
+                {archived ? (
+                    <>
+                        <ArchiveBanner round={archived} onBack={() => setViewing(null)} />
+                        <RoundSnapshot round={archived} />
+                    </>
+                ) : latest ? (
+                    <RoundSnapshot round={latest} />
+                ) : (
+                    <Placeholder tone="amber" text="Nothing has been reviewed yet — this panel fills in automatically." />
+                )}
             </Shell>
         )
     }
@@ -556,9 +634,6 @@ export function PrReview({ analysis, rounds = [], delta = null }: {
             </Shell>
         )
     }
-
-    const archived = viewing != null ? (rounds.find((r) => r.round === viewing) ?? null) : null
-    const latest = rounds.length > 0 ? rounds[rounds.length - 1] : null
 
     return (
         <Shell profile={profile}>
