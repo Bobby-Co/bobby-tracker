@@ -384,6 +384,20 @@ export interface PrAnalyseInput {
      *  does not touch X" is a conclusion it would otherwise draw about the pull
      *  request from a list that only ever described a commit range. */
     review_scope?: { kind: "incremental"; previous_head_sha?: string }
+    /** Every path the PULL REQUEST touches, with its status — paths only, no
+     *  patches (0081).
+     *
+     *  An incremental round sends a handful of files, and the reviewer's checkout
+     *  is the indexed default branch, so a file this pull request CREATED but
+     *  this push did not touch is invisible in both places. Left unsaid the
+     *  reviewer concludes it is absent: observed as "this API ships with no
+     *  routes or worker wired to it" about an API with both, in files the round
+     *  simply was not shown.
+     *
+     *  A manifest is not a diff. It costs one line per file and buys the
+     *  reviewer the SHAPE of the change, which is all it needs to stop reasoning
+     *  from an absence. Omitted on a full review, where the diff is the manifest. */
+    pr_files?: { path: string; status?: string }[]
 }
 
 // ─── /verify ─────────────────────────────────────────────────────────────────

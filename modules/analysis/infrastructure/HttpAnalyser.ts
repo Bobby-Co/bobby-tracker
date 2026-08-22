@@ -296,6 +296,7 @@ export class HttpAnalyser implements Analyser {
                 // that predates these fields REJECTS a request carrying them.
                 carried_findings: input.carried_findings,
                 review_scope: input.review_scope,
+                pr_files: input.pr_files,
                 task_id: taskId,
                 callback,
             }),

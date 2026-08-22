@@ -278,8 +278,9 @@ export class PullRequestAnalysisService {
         // listPullRequestFiles is base…head as GitHub computes it for the PR, and
         // it is the input every full review has ever had.
         let files: PrAnalyseFile[]
+        let manifest: { path: string; status?: string }[] = []
         if (decision.scope === "incremental") {
-            files = await this.cumulativePatches(vcs, pr.number, pushFiles)
+            ;({ files, manifest } = await this.cumulativePatches(vcs, pr.number, pushFiles))
         } else {
             try {
                 files = (await vcs.listPullRequestFiles(pr.number)).map(toAnalyseFile)
@@ -444,6 +445,10 @@ export class PullRequestAnalysisService {
                     carrying.scope === "incremental"
                         ? { kind: "incremental", previous_head_sha: carrying.prevHeadSha ?? undefined }
                         : undefined,
+                // What the pull request CONTAINS, so the reviewer stops
+                // concluding that files it was not shown do not exist. Omitted
+                // on a full round, where the diff is already the manifest.
+                pr_files: carrying.scope === "incremental" && manifest.length > 0 ? manifest : undefined,
             },
             row.id,
             callback,
@@ -736,7 +741,7 @@ export class PullRequestAnalysisService {
         vcs: VcsAppService,
         prNumber: number,
         pushFiles: PrAnalyseFile[],
-    ): Promise<PrAnalyseFile[]> {
+    ): Promise<{ files: PrAnalyseFile[]; manifest: { path: string; status?: string }[] }> {
         // An explicit catch, NOT tryOrNull: that helper only swallows
         // RepositoryError, and a provider failure here is a plain Error from the
         // adapter — it would propagate out of start(), leaving the loading
@@ -751,12 +756,12 @@ export class PullRequestAnalysisService {
                     `the reviewer gets this push's hunks only, and may not be able to see files an ` +
                     `earlier commit created. Cause: ${e instanceof Error ? e.message : String(e)}`,
             )
-            return pushFiles
+            return { files: pushFiles, manifest: [] }
         }
-        if (whole.length === 0) return pushFiles
+        if (whole.length === 0) return { files: pushFiles, manifest: [] }
 
         const byPath = new Map(whole.map((f) => [f.filename, f]))
-        return pushFiles.map((f) => {
+        const files = pushFiles.map((f) => {
             // Renames are looked up both ways: the push may name the new path
             // while the pull request's list still keys the old one, or the
             // reverse, depending on where in the range the rename happened.
@@ -770,6 +775,11 @@ export class PullRequestAnalysisService {
                 deletions: full.deletions,
             }
         })
+
+        // The manifest is the same read, so it costs nothing extra. Paths and
+        // status only — enough for the reviewer to know what the pull request
+        // contains, not enough to tempt it into reviewing any of it.
+        return { files, manifest: whole.map((f) => ({ path: f.filename, status: f.status })) }
     }
 
     /** The largest dependent count among the symbols this push changed, or null.
