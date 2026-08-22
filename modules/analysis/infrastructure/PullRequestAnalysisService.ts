@@ -476,8 +476,17 @@ export class PullRequestAnalysisService {
                     `This is what an analyser cell deployed before incremental review looks like.`,
             )
 
-            const fullFiles = await tryOrNull(() => vcs.listPullRequestFiles(pr.number))
-            if (!fullFiles || fullFiles.length === 0) throw e
+            // Explicit catch, not tryOrNull — the same trap as cumulativePatches:
+            // that helper rethrows anything that is not a RepositoryError, and a
+            // provider failure is a plain Error. Rethrowing it here would report
+            // the wrong cause for a wedged review.
+            let fullFiles: Awaited<ReturnType<VcsAppService["listPullRequestFiles"]>> = []
+            try {
+                fullFiles = await vcs.listPullRequestFiles(pr.number)
+            } catch {
+                throw e
+            }
+            if (fullFiles.length === 0) throw e
             const fallback: ReviewRunScope = {
                 ...scope,
                 scope: "full",

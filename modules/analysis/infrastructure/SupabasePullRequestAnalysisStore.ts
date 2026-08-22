@@ -22,7 +22,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     constructor(private readonly db: AnyDb) {}
 
     async findTracking(projectId: string, prNumber: number): Promise<PullRequestAnalysisTracking | null> {
-        const { data } = await this.db
+        const { data, error } = await this.db
             .from("pull_request_analyses")
             .select("id,status,github_comment_id,head_sha,pending_head_sha")
             .eq("project_id", projectId)
@@ -34,6 +34,18 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                 head_sha: string | null
                 pending_head_sha: string | null
             }>()
+        if (error) {
+            // null here means "this pull request has never been reviewed", and
+            // the caller acts on that: the same-head skip stops firing, so every
+            // `reopened`/`edited`/`labeled` event re-bills a review; the
+            // in-flight guard stops firing, so a push during a review starts a
+            // SECOND one instead of coalescing; and the comment id is lost, so
+            // each round posts a new comment instead of editing one.
+            console.error(
+                `[pr-review] could not read the tracking row for project ${projectId} pr ${prNumber} — ` +
+                    `this pull request will be treated as never reviewed. Cause: ${error.message}`,
+            )
+        }
         if (!data) return null
         return {
             id: data.id,
@@ -45,7 +57,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     }
 
     async upsertTracking(input: PullRequestAnalysisUpsert): Promise<{ id: string } | null> {
-        const { data } = await this.db
+        const { data, error } = await this.db
             .from("pull_request_analyses")
             .upsert(
                 {
@@ -69,11 +81,21 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             )
             .select("id")
             .single<{ id: string }>()
+        if (error) {
+            // The caller returns on null — AFTER the "analysing…" comment is up.
+            // So the pull request keeps a spinner nothing ever comes back to
+            // edit, and no analyser run is ever started. This is the loudest
+            // failure in the file and was the quietest.
+            console.error(
+                `[pr-review] could not write the tracking row for project ${input.projectId} pr ${input.prNumber} — ` +
+                    `NO REVIEW WILL RUN and the loading comment will never be replaced. Cause: ${error.message}`,
+            )
+        }
         return data ?? null
     }
 
     async findResultRow(taskId: string): Promise<PullRequestAnalysisResultRow | null> {
-        const { data } = await this.db
+        const { data, error } = await this.db
             .from("pull_request_analyses")
             .select("id,project_id,pr_number,github_comment_id,review_profile,review_scope,head_sha,pending_head_sha")
             .eq("id", taskId)
@@ -87,6 +109,16 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                 head_sha: string | null
                 pending_head_sha: string | null
             }>()
+        if (error) {
+            // The callback returns on null, having done nothing: no comment
+            // update, no stored result, no round. A review that ran, cost money
+            // and finished is discarded on the doorstep, and the pull request
+            // still shows "analysing".
+            console.error(
+                `[pr-review] could not read the tracking row for task ${taskId} — ` +
+                    `a COMPLETED review is being dropped. Cause: ${error.message}`,
+            )
+        }
         if (!data) return null
         return {
             id: data.id,
@@ -103,7 +135,20 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     async saveResult(taskId: string, status: string, result: PrAnalysis | null): Promise<void> {
         // This UPDATE also fires the 'pr_analysis_ready' feed notification (trigger
         // in migration 0049) → review email via notifications.
-        await this.db.from("pull_request_analyses").update({ status, result: result ?? null }).eq("id", taskId)
+        const { error } = await this.db
+            .from("pull_request_analyses")
+            .update({ status, result: result ?? null })
+            .eq("id", taskId)
+        if (error) {
+            // The review is gone. The comment on the pull request may already
+            // have been edited to show it, so the two surfaces now disagree, and
+            // the panel keeps rendering "analysing" forever because the status
+            // never moved off it.
+            console.error(
+                `[pr-review] could not store the ${status} result for task ${taskId} — ` +
+                    `the review is LOST and the panel will keep showing "analysing". Cause: ${error.message}`,
+            )
+        }
     }
 
     // ── rounds (0080) ───────────────────────────────────────────────────────
@@ -112,7 +157,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
         // The ordinal is derived here, under the unique (project, pr, round)
         // constraint, so two callbacks racing produce one insert and one
         // conflict rather than two rounds numbered the same.
-        const { data: last } = await this.db
+        const { data: last, error: lastErr } = await this.db
             .from("pull_request_analysis_rounds")
             .select("round")
             .eq("project_id", input.projectId)
@@ -120,6 +165,15 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             .order("round", { ascending: false })
             .limit(1)
             .maybeSingle<{ round: number }>()
+        if (lastErr) {
+            // Unread, the ordinal restarts at 1 and the unique (project, pr,
+            // round) constraint rejects the insert — so the round is lost to a
+            // constraint violation rather than to the read that actually failed.
+            console.error(
+                `[pr-review] could not read the last round number for project ${input.projectId} ` +
+                    `pr ${input.prNumber} — the insert below will collide. Cause: ${lastErr.message}`,
+            )
+        }
 
         const { error } = await this.db.from("pull_request_analysis_rounds").insert({
             project_id: input.projectId,
@@ -206,19 +260,37 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     }
 
     async setPendingHead(projectId: string, prNumber: number, headSha: string): Promise<void> {
-        await this.db
+        const { error } = await this.db
             .from("pull_request_analyses")
             .update({ pending_head_sha: headSha })
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
+        if (error) {
+            // The push is dropped. The running review finishes describing an
+            // older head, the comment describes code no longer in the pull
+            // request, the merge gate judges that, and nothing is left to
+            // trigger a re-run — the exact hole 0080 was written to close.
+            console.error(
+                `[pr-review] could not record the pending head ${headSha.slice(0, 7)} for project ${projectId} ` +
+                    `pr ${prNumber} — this push will NOT be reviewed. Cause: ${error.message}`,
+            )
+        }
     }
 
     async clearPendingHead(projectId: string, prNumber: number): Promise<void> {
-        await this.db
+        const { error } = await this.db
             .from("pull_request_analyses")
             .update({ pending_head_sha: null })
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
+        if (error) {
+            // Left set, the continuation re-triggers on every callback and the
+            // pull request reviews itself in a loop.
+            console.error(
+                `[pr-review] could not clear the pending head for project ${projectId} pr ${prNumber} — ` +
+                    `this pull request may re-review in a loop. Cause: ${error.message}`,
+            )
+        }
     }
 }
 
