@@ -140,7 +140,24 @@ export async function GET(request: Request) {
         "this read failing is why every round looks like a FIRST round — re-run 0081, then reload the schema cache",
     )
 
-    // 4. The write. The only check that catches a missing grant, a cross-plane
+    // 4. The analyser's own table, checked from here because nothing else does.
+    //
+    //    pr_review_index is written by the ANALYSER, into the cell's data plane,
+    //    and read by nothing in the tracker. So a tracker that is entirely
+    //    healthy says nothing about it — and it was missing from bangkok-0 for
+    //    the whole life of that project, costing every review its memory of the
+    //    previous ones, visible only in a container log nobody was tailing.
+    const memory = await db.from("pr_review_index").select("repo_id").limit(1)
+    add(
+        "read pr_review_index (analyser's review memory)",
+        memory.error,
+        memory.error?.code === "PGRST205"
+            ? "the table exists but PostgREST has not seen it — notify pgrst, 'reload schema';"
+            : "run migration 0045 against THIS cell's database — without it every review runs " +
+              "with no recall of what earlier reviews of the same files concluded",
+    )
+
+    // 5. The write. The only check that catches a missing grant, a cross-plane
     //    foreign key, or a schema cache that has not seen the table — none of
     //    which any read above can detect, and all three of which have shipped.
     const probe = await db.from("pull_request_analysis_rounds").insert({

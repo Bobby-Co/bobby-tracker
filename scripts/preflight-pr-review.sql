@@ -47,7 +47,12 @@ tables as (
            to_regclass('tracker.' || t.name) is not null as present
     from (values
         ('projects'), ('pull_requests'), ('pull_request_analyses'),
-        ('pull_request_analysis_rounds'), ('pr_comments'), ('review_profiles')
+        ('pull_request_analysis_rounds'), ('pr_comments'), ('review_profiles'),
+        -- Written by the ANALYSER into this cell's data plane and read by nothing
+        -- in the tracker, so a perfectly healthy tracker says nothing about it.
+        -- It was absent from a regional node for the life of a project, costing
+        -- every review its memory of the earlier ones.
+        ('pr_review_index')
     ) as t(name)
 ),
 
@@ -86,7 +91,7 @@ grants as (
     select g.tbl,
            has_table_privilege('service_role', 'tracker.' || g.tbl, 'SELECT') as can_select,
            has_table_privilege('service_role', 'tracker.' || g.tbl, 'INSERT') as can_insert
-    from (values ('pull_request_analyses'), ('pull_request_analysis_rounds')) as g(tbl)
+    from (values ('pull_request_analyses'), ('pull_request_analysis_rounds'), ('pr_review_index')) as g(tbl)
     where to_regclass('tracker.' || g.tbl) is not null
 ),
 
