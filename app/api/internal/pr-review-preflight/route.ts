@@ -1,6 +1,8 @@
 import { jsonError } from "@/lib/server/http/api"
-import { dataClientForProject } from "@/lib/server/regional"
+import { dataClientForCell } from "@/lib/server/regional"
 import { Supabase } from "@/lib/server/supabase"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { getRegionRegistry, type CellId } from "@/modules/regions"
 
 export const dynamic = "force-dynamic"
 
@@ -69,22 +71,55 @@ export async function GET(request: Request) {
             ...(error && remedy ? { remedy } : {}),
         })
 
-    // 1. Which cell, and therefore which database. Everything after this is read
-    //    against whatever this resolves to — which is the whole point.
+    // 1. Which cell, and therefore which database. Resolved through the SAME
+    //    repository the pipeline uses, not a query written here.
+    //
+    //    The first version of this hand-rolled `select("cell")` on projects. The
+    //    cell lives on TEAMS — projects has no such column — so the read errored,
+    //    the error was discarded, and it reported "home" for a project bound to
+    //    bangkok-0. A preflight written to expose swallowed errors, swallowing
+    //    one, and confidently naming the wrong database. Use the real resolver.
     let db
-    let cell = "unresolved"
+    let cell: CellId | null = null
+    let binding = "unresolved"
     try {
-        const control = Supabase.service()
-        const { data } = await control.from("projects").select("cell").eq("id", projectId).maybeSingle<{ cell: string | null }>()
-        cell = data?.cell ?? "home"
-        db = await dataClientForProject(projectId)
+        cell = await createSupabaseProjectsRepository(Supabase.service()).findCell(projectId)
+        db = dataClientForCell(cell)
         add("resolve cell", null)
     } catch (e) {
         add("resolve cell", { message: e instanceof Error ? e.message : String(e) })
         return Response.json({ project: projectId, cell, ok: false, checks }, { status: 200 })
     }
 
-    // 2. The reads, in the order start() makes them. Each returns null on failure
+    // 2. Does that cell actually HAVE a database? This is the split-brain check.
+    //
+    //    dataClientForCell falls back to the control database when a cell has no
+    //    BOBBY_SUPABASE_URL_<CELL> configured — deliberately, so an unprovisioned
+    //    cell is inert rather than broken. But the ANALYSER for that cell has its
+    //    own Supabase configuration and does not fall back. So a project bound to
+    //    a cell the tracker cannot reach has its review rows written HERE and its
+    //    analyser-side memory written THERE: one project, two databases, and
+    //    nothing in either saying so.
+    const registry = getRegionRegistry()
+    const hasDb = cell ? registry.hasDatabase(cell) : false
+    binding = !cell
+        ? "no team cell — control database (correct for a single-region team)"
+        : hasDb
+          ? `${cell} — its own database`
+          : `${cell} — NO DATABASE CONFIGURED, falling back to control`
+    if (cell && !hasDb) {
+        checks.push({
+            step: "cell has a database",
+            ok: false,
+            detail: `the team is bound to ${cell}, but BOBBY_SUPABASE_URL_${cell.toUpperCase().replace(/-/g, "_")} is unset, so the tracker writes to the CONTROL database`,
+            remedy:
+                "either set that cell's URL + service key on the tracker, or unbind the team — " +
+                "the analyser for this cell does NOT fall back, so review rows and analyser memory " +
+                "are landing in different databases",
+        })
+    }
+
+    // 3. The reads, in the order start() makes them. Each returns null on failure
     //    and the pipeline reads null as "nothing here" — so the error is the
     //    interesting part, not the data.
     const tracking = await db
@@ -105,7 +140,7 @@ export async function GET(request: Request) {
         "this read failing is why every round looks like a FIRST round — re-run 0081, then reload the schema cache",
     )
 
-    // 3. The write. The only check that catches a missing grant, a cross-plane
+    // 4. The write. The only check that catches a missing grant, a cross-plane
     //    foreign key, or a schema cache that has not seen the table — none of
     //    which any read above can detect, and all three of which have shipped.
     const probe = await db.from("pull_request_analysis_rounds").insert({
@@ -142,7 +177,8 @@ export async function GET(request: Request) {
     return Response.json(
         {
             project: projectId,
-            cell,
+            cell: cell ?? "(none)",
+            binding,
             ok,
             summary: ok
                 ? "this deployment can record rounds for this project — incremental review will engage"
