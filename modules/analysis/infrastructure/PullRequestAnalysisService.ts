@@ -225,7 +225,30 @@ export class PullRequestAnalysisService {
         // from them — the last reviewed head, whether it completed, which
         // profile judged it, and how much of it was already riding along.
         const rounds = (await tryOrNull(() => this.store.listRounds(project.id, pr.number, ROUND_WINDOW))) ?? []
-        const previous = rounds[0] ?? null
+
+        // The baseline is the newest COMPLETED round, not the newest round.
+        //
+        // "A degraded round is not a baseline" is a rule about what may be
+        // CARRIED from it — its findings are a draft, so inheriting them would
+        // manufacture progress. It was implemented as "give up and review
+        // everything", and that turned out to be actively harmful the moment a
+        // degraded round got retried: MR !4 rounds 10 and 11, same head, and the
+        // retry of a ONE-FILE push reviewed all nine files because the attempt it
+        // was retrying had failed. A bigger review, for a failure that had
+        // nothing to do with size, which then failed too.
+        //
+        // Skipping past it is both cheaper and more correct. Round 9's findings
+        // are a real baseline; the compare range simply starts from ITS head, so
+        // everything the pushes in between touched is re-judged exactly as the
+        // carry rule already requires.
+        const previous = rounds.find((r) => !r.degraded) ?? null
+        const skipped = rounds.findIndex((r) => !r.degraded)
+        if (skipped > 0) {
+            console.info(
+                `[pr-review] project=${project.id} pr=${pr.number} — skipping ${skipped} degraded round(s) ` +
+                    `to baseline on round ${previous?.round}, whose findings are a real one`,
+            )
+        }
 
         // The team's reviewer configuration. Best-effort on purpose: a profile
         // that can't be read must not stop the review, because the failure mode

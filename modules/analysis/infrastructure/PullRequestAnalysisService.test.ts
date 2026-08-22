@@ -794,3 +794,54 @@ describe("applyResult — a degraded review is retried, not shipped", () => {
         expect(analyser.startPRAnalysis.mock.calls[0][0].headSha).toBe("head2")
     })
 })
+
+// MR !4 rounds 10 and 11, same head: a degraded round was retried, and the retry
+// of a ONE-FILE push reviewed all nine files, because the attempt it was
+// retrying had failed. A bigger review for a failure that had nothing to do with
+// size — which then failed too.
+describe("start — a degraded round is skipped as a baseline, not escalated past", () => {
+    const finding = { file: "src/a.ts", severity: "review", category: "bug", title: "still open", detail: "d" }
+    const round = (n: number, degraded: boolean, head: string) => ({
+        headSha: head, round: n, status: "done", verdict: "comment", score: 7, scoreMax: 10,
+        findings: degraded ? [] : [finding], degraded, reviewProfile: { kind: "default" }, analyserBuild: null,
+        createdAt: "", scope: "incremental", scopeReason: null, prevHeadSha: null, baseSha: "base1",
+        commits: [], carriedCount: 0, reviewedFiles: 1, resolved: [],
+    })
+
+    beforeEach(() => {
+        vcsSvc.compareCommits.mockResolvedValue({
+            status: "ahead",
+            files: [{ filename: "src/touched.ts", status: "modified", patch: "@@\n+const x = 1", additions: 1, deletions: 0 }],
+            commits: [],
+            truncated: false,
+        })
+        vcsSvc.listPullRequestFiles.mockResolvedValue([
+            { filename: "src/touched.ts", status: "modified", patch: "@@\n+const x = 1", additions: 1, deletions: 0 },
+        ])
+    })
+
+    test("baselines on the newest COMPLETED round rather than reviewing everything", async () => {
+        // newest first: a degraded round sits on top of a good one
+        store.listRounds.mockResolvedValue([round(10, true, "head9"), round(9, false, "head8")])
+        await svc().start(project, pr, "https://app")
+
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.scope).toBe("incremental")
+        expect(scope.prevHeadSha).toBe("head8")
+        expect(scope.carried).toHaveLength(1)
+    })
+
+    // The compare starts from the completed round's head, so everything the
+    // pushes in between touched is re-judged by the ordinary carry rule.
+    test("the compare range starts at the completed round's head", async () => {
+        store.listRounds.mockResolvedValue([round(10, true, "head9"), round(9, false, "head8")])
+        await svc().start(project, pr, "https://app")
+        expect(vcsSvc.compareCommits.mock.calls[0][0]).toBe("head8")
+    })
+
+    test("nothing but degraded rounds is still a first review", async () => {
+        store.listRounds.mockResolvedValue([round(10, true, "head9"), round(9, true, "head8")])
+        await svc().start(project, pr, "https://app")
+        expect(store.upsertTracking.mock.calls[0][0].reviewScope.code).toBe("first_round")
+    })
+})
