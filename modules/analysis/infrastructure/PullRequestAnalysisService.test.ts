@@ -662,3 +662,61 @@ describe("start — an incremental round sends whole-PR content for the files it
         expect(store.upsertTracking.mock.calls[0][0].reviewScope.scope).toBe("incremental")
     })
 })
+
+// MR !4 round 9: the push documented fanout's return contract — exactly what a
+// carried finding was asking for — and the finding was CARRIED, because
+// fanout's definition line had not changed, only the comment above it. The
+// reviewer was shown the whole function and never asked about the finding.
+describe("start — the carry symbol test reads the files as SENT", () => {
+    const aboutFanout = {
+        file: "src/workers/webhook-worker.ts",
+        severity: "review",
+        category: "correctness",
+        title: "fanout return contract unverifiable",
+        detail: "treats fanout's return as a per-row count and sums them; cannot confirm the contract",
+    }
+
+    beforeEach(() => {
+        store.listRounds.mockResolvedValue([{
+            headSha: "head0", round: 8, status: "done", verdict: "comment", score: 7, scoreMax: 10,
+            findings: [aboutFanout], degraded: false, reviewProfile: { kind: "default" }, analyserBuild: null,
+            createdAt: "", scope: "incremental", scopeReason: null, prevHeadSha: null, baseSha: "base1",
+            commits: [], carriedCount: 3, reviewedFiles: 1, resolved: [],
+        }])
+        // The push edits only the comment above fanout — its definition line is
+        // untouched, so the push-only diff contains no changed export at all.
+        vcsSvc.compareCommits.mockResolvedValue({
+            status: "ahead",
+            files: [{
+                filename: "src/notifications/app/webhook-service.ts",
+                status: "modified",
+                patch: "@@ -31,2 +31,3 @@\n-/** Deliver one event. */\n+/** Deliver one event.\n+ *  RETURNS THE NUMBER OF DELIVERY ATTEMPTS. */\n",
+                additions: 2, deletions: 1,
+            }],
+            commits: [],
+            truncated: false,
+        })
+        // …but the file is SENT with its whole-PR patch, which defines fanout.
+        vcsSvc.listPullRequestFiles.mockResolvedValue([{
+            filename: "src/notifications/app/webhook-service.ts",
+            status: "added",
+            patch: "@@ -0,0 +1,60 @@\n+export async function fanout(tenantId: string): Promise<number> {\n+  return 0\n+}\n",
+            additions: 60, deletions: 0,
+        }])
+    })
+
+    test("a finding naming a symbol the reviewer can now SEE is re-judged, not carried", async () => {
+        await svc().start(project, pr, "https://app")
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.scope).toBe("incremental")
+        expect(scope.carried).toHaveLength(0)
+    })
+
+    // The scope decision still reads the PUSH — one file changed, not sixty.
+    test("widening the symbol test does not widen the scope", async () => {
+        await svc().start(project, pr, "https://app")
+        const scope = store.upsertTracking.mock.calls[0][0].reviewScope
+        expect(scope.reviewedFiles).toBe(1)
+        expect(scope.code).toBe("push_scoped")
+    })
+})

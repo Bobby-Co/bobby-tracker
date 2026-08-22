@@ -295,12 +295,30 @@ export class PullRequestAnalysisService {
         // absent from this diff AND none of the changed exported symbols appears
         // in its text; everything else goes back to the reviewer to re-judge,
         // which is the mechanism `previous_blockers` already is.
+        // The symbols for the CARRY test come from the files as SENT, not from the
+        // push-only diff the scope decision used. Those differ now that a
+        // reviewed file arrives with its whole-pull-request patch, and the
+        // difference is load-bearing.
+        //
+        // MR !4 round 9: the push documented fanout's return contract — exactly
+        // what a carried finding was asking for — and the finding rode along
+        // unexamined, because fanout's DEFINITION line had not changed, only the
+        // comment above it. The reviewer was shown the whole function and never
+        // asked about the finding that named it.
+        //
+        // The rule the sent files express is the right one: if the reviewer is
+        // looking at a symbol's full definition, a finding naming that symbol is
+        // its business. Broader than the push diff, and broader in the direction
+        // this rule leans everywhere else — a re-judgement costs a line in a
+        // checklist, a wrong carry costs a stale finding presented as live.
+        const reviewableSymbols = changedExportedSymbols(files)
+
         const partition: CarryPartition =
             decision.scope === "incremental" && previous
                 ? partitionForCarry({
                       previous: previous.findings,
                       changedFiles: [...changedPathSet(files)],
-                      changedSymbols,
+                      changedSymbols: reviewableSymbols,
                   })
                 : { carried: [], reJudge: previous?.findings ?? [], reasons: [] }
 
