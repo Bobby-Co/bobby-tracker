@@ -234,6 +234,13 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
               created_at?: string
               updated_at?: string
               last_commit?: { id?: string }
+              // GitLab ships the resolved three-way refs on the MR payload. The
+              // base is what `base…head` means for this MR, and the scope
+              // decision needs it: without a base, "the pull request's base
+              // moved" is a rule that can never fire, and a target branch that
+              // has moved under the MR would be reviewed incrementally as if
+              // nothing had happened.
+              diff_refs?: { base_sha?: string; head_sha?: string; start_sha?: string }
               merge_status?: string
           }
         | undefined
@@ -255,8 +262,8 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
         html_url: a?.url ?? null,
         head_ref: a?.source_branch ?? null,
         base_ref: a?.target_branch ?? null,
-        head_sha: a?.last_commit?.id ?? null,
-        base_sha: null,
+        head_sha: a?.diff_refs?.head_sha ?? a?.last_commit?.id ?? null,
+        base_sha: a?.diff_refs?.base_sha ?? null,
         additions: null,
         deletions: null,
         changed_files: null,
@@ -288,7 +295,13 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
     after(async () =>
         createPullRequestAnalysisService(await dataClientForProject(project.id)).start(
             prProject,
-            { number, title: a?.title ?? "", body: a?.description ?? null, baseSha: null, headSha: a?.last_commit?.id ?? null },
+            {
+                number,
+                title: a?.title ?? "",
+                body: a?.description ?? null,
+                baseSha: a?.diff_refs?.base_sha ?? null,
+                headSha: a?.diff_refs?.head_sha ?? a?.last_commit?.id ?? null,
+            },
             origin,
         ),
     )

@@ -121,7 +121,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             .limit(1)
             .maybeSingle<{ round: number }>()
 
-        await this.db.from("pull_request_analysis_rounds").insert({
+        const { error } = await this.db.from("pull_request_analysis_rounds").insert({
             project_id: input.projectId,
             pr_number: input.prNumber,
             head_sha: input.headSha,
@@ -147,16 +147,41 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             reviewed_files: input.reviewedFiles ?? null,
             resolved: input.resolved ?? [],
         })
+        if (error) {
+            // A round that fails to record is not cosmetic. The NEXT round reads
+            // this table to find its baseline, so a silent failure here makes
+            // every subsequent round look like a first round — permanently full,
+            // nothing carried, and no way to tell that from a working pipeline
+            // that simply chose full. An unapplied migration looks exactly like
+            // correct behaviour. Say so.
+            console.error(
+                `[pr-review] could not record round ${(last?.round ?? 0) + 1} for project ${input.projectId} ` +
+                    `pr ${input.prNumber} — the NEXT round will see no baseline and review everything. ` +
+                    `Cause: ${error.message}`,
+            )
+        }
     }
 
     async listRounds(projectId: string, prNumber: number, limit: number): Promise<ReviewRound[]> {
-        const { data } = await this.db
+        const { data, error } = await this.db
             .from("pull_request_analysis_rounds")
             .select("head_sha,round,status,verdict,score,score_max,findings,degraded,review_profile,analyser_build,created_at,scope,scope_reason,prev_head_sha,base_sha,commits,carried_count,reviewed_files,resolved")
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
             .order("round", { ascending: false })
             .limit(limit)
+        if (error) {
+            // Same trap as appendRound, from the read side: an empty list means
+            // "first review of this pull request", which is a full review with
+            // nothing carried. A query that fails — a column this build selects
+            // and the database does not have, most likely — is indistinguishable
+            // from that, and produces a pipeline that works exactly as it did
+            // before incremental review while reporting no error anywhere.
+            console.error(
+                `[pr-review] could not read the round history for project ${projectId} pr ${prNumber} — ` +
+                    `this round will be treated as the FIRST and will review everything. Cause: ${error.message}`,
+            )
+        }
         return (data ?? []).map((r: RoundRow) => ({
             headSha: r.head_sha,
             round: r.round,

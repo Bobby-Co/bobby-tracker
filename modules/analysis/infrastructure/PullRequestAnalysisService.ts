@@ -656,6 +656,12 @@ export class PullRequestAnalysisService {
         if (!base || !head || base === head) return null
         try {
             const cmp = await vcs.compareCommits(base, head)
+            if (cmp.commits.length === 0) {
+                console.warn(
+                    `[pr-review] compare ${base.slice(0, 7)}..${head.slice(0, 7)} returned no commits — ` +
+                        `the round will have no timeline and the scope decision has nothing to scope to.`,
+                )
+            }
             return {
                 status: cmp.status,
                 files: cmp.files,
@@ -667,7 +673,16 @@ export class PullRequestAnalysisService {
                 })),
                 truncated: cmp.truncated,
             }
-        } catch {
+        } catch (e) {
+            // Best-effort, but never SILENT. Falling back to a full review is the
+            // right behaviour and an invisible one: "the provider could not
+            // compare" and "the rules chose full" produce identical output, so
+            // without this line a broken compare looks like a working pipeline
+            // for as long as anyone cares to watch it.
+            console.warn(
+                `[pr-review] could not compare ${base.slice(0, 7)}..${head.slice(0, 7)} — this round reviews ` +
+                    `the whole pull request and carries nothing. Cause: ${e instanceof Error ? e.message : String(e)}`,
+            )
             return null
         }
     }

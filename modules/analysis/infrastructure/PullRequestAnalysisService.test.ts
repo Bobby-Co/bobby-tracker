@@ -166,8 +166,12 @@ describe("start — an unreadable review profile", () => {
         } finally {
             console.warn = original
         }
-        expect(warn).toHaveBeenCalledTimes(1)
-        const line = String(warn.mock.calls[0][0])
+        // Matched by content rather than by call COUNT: start() legitimately
+        // warns about other degradations on the same run (a compare it could not
+        // make, for one), and a test that counts them turns every new diagnostic
+        // into a failure here — which is how diagnostics stop getting added.
+        const line = warn.mock.calls.map((c) => String(c[0])).find((l) => l.includes("review profile"))
+        expect(line).toBeDefined()
         expect(line).toContain("proj-1")
         expect(line).toContain("review_profile_id")
         expect(line).toContain("DEFAULT")

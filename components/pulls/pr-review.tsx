@@ -346,6 +346,14 @@ function InFlightBanner({ scope, standing }: { scope: ReviewRunScope | null; sta
                 {scope && !incremental && <span className="opacity-85">— the whole pull request</span>}
             </span>
 
+            {/* Why it is reviewing everything, when it had a round to build on.
+                Without this the answer to "why is there no commit list?" is
+                indistinguishable from "the feature is not working" — and one of
+                those is a broken compare that nothing else would report. */}
+            {scope && !incremental && standing && (
+                <span className="opacity-85">{scope.reason}</span>
+            )}
+
             {commits.length > 0 && (
                 <ul className="flex flex-col gap-0.5 pl-5">
                     {commits.slice(0, 5).map((c) => (
@@ -445,7 +453,20 @@ function RoundSnapshot({ round }: { round: RoundSummary }) {
  *  scoped to the push — why. Collapsed, because it is provenance rather than
  *  the answer somebody came for. */
 function PushSummary({ round }: { round: RoundSummary | null }) {
-    if (!round || round.commits.length === 0) return null
+    if (!round) return null
+
+    // No commits recorded means the provider could not be asked what this round
+    // covered — which is also why it reviewed everything. Rendering nothing here
+    // would hide the one fact that explains the round.
+    if (round.commits.length === 0) {
+        if (!round.scopeReason || round.round === 1) return null
+        return (
+            <p className="rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-1.5 text-[11.5px] text-[color:var(--c-text-muted)]">
+                Reviewed the whole pull request — {round.scopeReason}
+            </p>
+        )
+    }
+
     const label = round.scope === "incremental" ? "Reviewed this push" : "Commits in this round"
     return (
         <Section title={label} count={round.commits.length} defaultOpen={false}>
