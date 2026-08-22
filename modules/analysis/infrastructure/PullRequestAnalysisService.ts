@@ -17,6 +17,7 @@ import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
 import { compilePolicy, maxDepthForTier, type ReviewProfile } from "../domain/ReviewProfile"
 import { diffRounds } from "../domain/ReviewRounds"
 import { changedExportedSymbols } from "../domain/DiffFacts"
+import { importedPullRequestFiles } from "../domain/ImportGraph"
 import { carriedFraction, changedPathSet, mergeRound, partitionForCarry, type CarryPartition } from "../domain/CarryForward"
 import { decideScope, roundsSinceFull, type Ancestry } from "../domain/ReviewScope"
 import type { ReviewRound } from "../ports/PullRequestAnalysisStore"
@@ -788,7 +789,27 @@ export class PullRequestAnalysisService {
         // The manifest is the same read, so it costs nothing extra. Paths and
         // status only — enough for the reviewer to know what the pull request
         // contains, not enough to tempt it into reviewing any of it.
-        return { files, manifest: whole.map((f) => ({ path: f.filename, status: f.status })) }
+        //
+        // With ONE exception: a file the push's diff imports, which the pull
+        // request itself adds, travels with its content. Paths alone stopped the
+        // reviewer asserting such a file was absent; they did not stop it
+        // ripgrepping for a symbol, finding nothing, and raising a finding about
+        // a contract it "could not verify". A tool result beats an instruction,
+        // so the file has to actually be there.
+        const bare = whole.map((f) => ({ path: f.filename, status: f.status }))
+        const imported = new Set(importedPullRequestFiles(files, bare))
+        const byName = new Map(whole.map((f) => [f.filename, f]))
+        const manifest = bare.map((m) =>
+            imported.has(m.path) && byName.get(m.path)?.patch
+                ? { ...m, patch: byName.get(m.path)!.patch }
+                : m,
+        )
+        if (imported.size > 0) {
+            console.info(
+                `[pr-review] sending ${imported.size} imported file(s) as context: ${[...imported].join(", ")}`,
+            )
+        }
+        return { files, manifest }
     }
 
     /** The largest dependent count among the symbols this push changed, or null.

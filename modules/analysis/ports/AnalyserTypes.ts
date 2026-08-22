@@ -397,7 +397,17 @@ export interface PrAnalyseInput {
      *  A manifest is not a diff. It costs one line per file and buys the
      *  reviewer the SHAPE of the change, which is all it needs to stop reasoning
      *  from an absence. Omitted on a full review, where the diff is the manifest. */
-    pr_files?: { path: string; status?: string }[]
+    pr_files?: {
+        path: string
+        status?: string
+        /** The file's whole-pull-request patch, present ONLY for files the
+         *  push's diff imports. Paths alone stopped the reviewer asserting a
+         *  file was absent, and did not stop it ripgrepping for a symbol,
+         *  finding nothing, and raising a finding about a contract it "could not
+         *  verify" — a tool result beats an instruction. So a dependency the
+         *  pull request itself adds travels with its content. */
+        patch?: string
+    }[]
 }
 
 // ─── /verify ─────────────────────────────────────────────────────────────────
