@@ -591,7 +591,7 @@ export class PullRequestAnalysisService {
                       degraded: result.degraded === true,
                       verdict: result.verdict,
                       score: result.score,
-                      history: rounds.map((r) => ({ round: r.round, findings: r.findings, score: r.score })),
+                      history: rounds.map((r) => ({ round: r.round, findings: r.findings, score: r.score, degraded: r.degraded })),
                   })
                 : null
 

@@ -125,6 +125,10 @@ export interface RoundSnapshot {
     /** What that round scored. Read only to keep a later round from scoring
      *  BETTER than the round whose findings it is still carrying. */
     score?: number | null
+    /** That round's grounded pass did not complete. Its score reflects the
+     *  INCOMPLETENESS, not the code, so it must not become a later round's
+     *  floor — see floorScore. */
+    degraded?: boolean
 }
 
 export interface MergeRoundInput {
@@ -304,9 +308,23 @@ function floorScore(produced: number | null | undefined, carried: PrFinding[], h
     if (produced == null || carried.length === 0) return produced
     let floor = produced
     for (const f of carried) {
+        // A POSITIVE note cannot hold a score down. Observed: a round carried one
+        // review-level finding and one `good`, and the `good` pulled the score to
+        // the floor exactly as hard as the real one — a compliment scoring the
+        // pull request 3/10.
+        if (findingState(f.severity) === "good") continue
+
         const at = f.provenance?.lastVerifiedRound
         const round = history.find((r) => r.round === at) ?? history[0]
-        if (round?.score != null && round.score < floor) floor = round.score
+        if (!round || round.score == null) continue
+
+        // A DEGRADED round's score is capped because the review did not finish,
+        // not because the code is bad. Inheriting it would carry that penalty
+        // forward into rounds that completed perfectly well, and it would never
+        // wash out — every later round carrying the finding inherits it again.
+        if (round.degraded) continue
+
+        if (round.score < floor) floor = round.score
     }
     return floor
 }

@@ -332,3 +332,58 @@ describe("mergeRound — the headline over the merged list", () => {
         })
     })
 })
+
+// MR !4 round 7: zero blockers, verdict "approve", and 3/10 on the readiness bar.
+// It carried one review-level finding and one `good` from a round that scored 3
+// because it was DEGRADED. Neither reason for that 3 had anything to do with the
+// code this round reviewed.
+describe("mergeRound — what may and may not floor a score", () => {
+    const carriedNote = f({
+        file: "src/workers/webhook-worker.ts",
+        severity: "review",
+        title: "Worker loop lacks idle backoff",
+        provenance: { firstSeenRound: 6, lastVerifiedRound: 6, carried: true },
+    })
+    const carriedGood = f({
+        file: "migrations/0011.sql",
+        severity: "good",
+        title: "Migration retains channel_id",
+        provenance: { firstSeenRound: 6, lastVerifiedRound: 6, carried: true },
+    })
+
+    test("a positive note does not hold the score down", () => {
+        const m = mergeRound({
+            produced: [], carried: [carriedGood], round: 7, headSha: "abc", score: 10,
+            history: [{ round: 6, findings: [carriedGood], score: 3 }],
+        })
+        expect(m.score).toBe(10)
+    })
+
+    // A degraded round scored low because the review did not finish, not because
+    // the code is bad. Inheriting that would never wash out — every later round
+    // carrying the finding would inherit it again.
+    test("a degraded round's score is not a floor", () => {
+        const m = mergeRound({
+            produced: [], carried: [carriedNote], round: 7, headSha: "abc", score: 9,
+            history: [{ round: 6, findings: [carriedNote], score: 3, degraded: true }],
+        })
+        expect(m.score).toBe(9)
+    })
+
+    test("a real finding from a COMPLETED round still floors it", () => {
+        const m = mergeRound({
+            produced: [], carried: [carriedNote], round: 7, headSha: "abc", score: 9,
+            history: [{ round: 6, findings: [carriedNote], score: 3, degraded: false }],
+        })
+        expect(m.score).toBe(3)
+    })
+
+    test("the round that produced round 7's number floors to nothing at all", () => {
+        const m = mergeRound({
+            produced: [], carried: [carriedNote, carriedGood], round: 7, headSha: "abc", score: 10,
+            history: [{ round: 6, findings: [carriedNote, carriedGood], score: 3, degraded: true }],
+        })
+        expect(m.score).toBe(10)
+        expect(m.findings).toHaveLength(2)
+    })
+})
