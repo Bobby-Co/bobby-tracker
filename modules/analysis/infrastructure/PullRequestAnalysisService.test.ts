@@ -550,3 +550,53 @@ describe("start — an analyser that refuses the incremental request", () => {
         expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
     })
 })
+
+// The seam, end to end: what the callback STORES must not say "approve" over a
+// findings list it just carried a blocker into.
+describe("applyResult — the stored headline matches the stored findings", () => {
+    const blocker = {
+        file: "migrations/0011_webhooks.sql", line: 20, severity: "critical", category: "blast_radius",
+        title: "Migration drops a column live code still reads",
+        detail: "outbox-repo.ts still selects channel_id",
+    }
+    const row = {
+        id: "task-1", projectId: "proj-1", prNumber: 4, githubCommentId: null,
+        reviewProfile: { kind: "default" }, headSha: "59cb144", pendingHeadSha: null,
+        reviewScope: {
+            scope: "incremental", code: "push_scoped", reason: "reviewing the 3 files this push changed",
+            prevHeadSha: "35fc8e7", baseSha: "base1", commits: [], reviewedFiles: 3,
+            carried: [blocker], reJudgedBlockers: [],
+        },
+    }
+
+    test("an approving reviewer over a carried blocker is stored as changes requested", async () => {
+        store.findResultRow.mockResolvedValue(row)
+        store.listRounds.mockResolvedValue([
+            { headSha: "35fc8e7", round: 1, findings: [blocker], degraded: false, score: 1, reviewProfile: null, baseSha: "base1", scope: "full" },
+        ])
+        const clean = { summary: "s", impact: "i", findings: [], verdict: "approve", verdict_reason: "no risks found", score: 10, score_max: 10 }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", clean as any, "https://app")
+
+        const saved = store.saveResult.mock.calls.at(-1)![2]
+        expect(saved.findings).toHaveLength(1)
+        expect(saved.verdict).toBe("request_changes")
+        expect(saved.verdict_reason).toContain("carried forward")
+        // 10/10 beside a blocker is the "degraded review scoring 10/10" this
+        // pipeline has been bitten by before.
+        expect(saved.score).toBe(1)
+    })
+
+    test("a clean incremental round with nothing carried keeps the reviewer's verdict", async () => {
+        store.findResultRow.mockResolvedValue({ ...row, reviewScope: { ...row.reviewScope, carried: [] } })
+        store.listRounds.mockResolvedValue([])
+        const clean = { summary: "s", impact: "i", findings: [], verdict: "approve", verdict_reason: "no risks found", score: 10, score_max: 10 }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svc().applyResult("task-1", "done", clean as any, "https://app")
+
+        const saved = store.saveResult.mock.calls.at(-1)![2]
+        expect(saved.verdict).toBe("approve")
+        expect(saved.verdict_reason).toBe("no risks found")
+        expect(saved.score).toBe(10)
+    })
+})

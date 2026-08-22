@@ -122,6 +122,9 @@ export function partitionForCarry(input: CarryInput): CarryPartition {
 export interface RoundSnapshot {
     round: number
     findings: PrFinding[]
+    /** What that round scored. Read only to keep a later round from scoring
+     *  BETTER than the round whose findings it is still carrying. */
+    score?: number | null
 }
 
 export interface MergeRoundInput {
@@ -135,6 +138,11 @@ export interface MergeRoundInput {
     /** This round's ordinal and the head it reviewed. */
     round: number
     headSha: string
+    /** The verdict and score the REVIEWER produced, before the merge. Both
+     *  describe only what it looked at, which on an incremental round is not the
+     *  list the surfaces end up rendering — see the note on `verdict` below. */
+    verdict?: string
+    score?: number | null
     /** This round's grounded pass did not complete. */
     degraded?: boolean
     /** The rounds before this one, NEWEST FIRST. Used only to date a finding
@@ -153,6 +161,30 @@ export interface MergedRound {
      *  see what their push fixed; never part of `findings`, so the gate stays
      *  clean. */
     resolved: PrFinding[]
+    /** The verdict for the MERGED list, which is not always the one the reviewer
+     *  produced.
+     *
+     *  The analyser derives its verdict deterministically from the findings it
+     *  raised — and on an incremental round those are only the push's. Carry two
+     *  findings in afterwards and the stored review says "approve" over a list
+     *  containing a critical: the merge gate blocks (it counts `findings`) while
+     *  every human-facing signal says the pull request is clean. That is the
+     *  same shape as every fail-open this pipeline has had, pointed the other
+     *  way — the truth is in the list, and the headline disagrees with it.
+     *
+     *  So the verdict is re-derived here, over the list that is actually stored.
+     *  Deterministic and one rule: a blocker in the list means changes are
+     *  requested. */
+    verdict?: string
+    /** The score for the merged list, floored by the rounds the carried findings
+     *  came from.
+     *
+     *  NOT recomputed — the analyser's formula lives there and mirroring it here
+     *  would be a second implementation to drift. What this can say honestly is
+     *  that a review carrying a finding cannot score better than the review that
+     *  raised it — the finding is still open, and nothing this round did to
+     *  other files changes that. */
+    score?: number | null
     counts: { produced: number; carried: number; resolved: number }
 }
 
@@ -237,11 +269,46 @@ export function mergeRound(input: MergeRoundInput): MergedRound {
                       }),
                   )
 
+    // 5. The headline, re-derived over the list that is actually stored.
+    //
+    //    Only when something was carried. A full round's verdict and score
+    //    describe exactly the findings it produced, so touching them there would
+    //    be inventing a disagreement with the analyser rather than resolving one.
+    const carriedAnything = carriedCount > 0
+    const verdict = carriedAnything && live.some(isBlocker) ? "request_changes" : input.verdict
+    const score = carriedAnything ? floorScore(input.score, input.carried, history) : input.score
+
     return {
         findings: live,
         resolved,
+        verdict,
+        score,
         counts: { produced: input.produced.length, carried: carriedCount, resolved: resolved.length },
     }
+}
+
+/** A finding that gates a merge. The same normaliser the gate and both surfaces
+ *  use, so none of the four can disagree about what a blocker is. */
+function isBlocker(f: PrFinding): boolean {
+    return findingState(f.severity) === "critical"
+}
+
+/** The score, floored by the rounds the carried findings were last verified in.
+ *
+ *  A review that is still carrying a finding cannot honestly score better than
+ *  the review that raised it. Deliberately a FLOOR rather than a recomputation:
+ *  the scoring formula lives in the analyser, and a second implementation here
+ *  would be one more thing to drift. Null in, null out — a round with no score
+ *  does not acquire one by carrying. */
+function floorScore(produced: number | null | undefined, carried: PrFinding[], history: RoundSnapshot[]): number | null | undefined {
+    if (produced == null || carried.length === 0) return produced
+    let floor = produced
+    for (const f of carried) {
+        const at = f.provenance?.lastVerifiedRound
+        const round = history.find((r) => r.round === at) ?? history[0]
+        if (round?.score != null && round.score < floor) floor = round.score
+    }
+    return floor
 }
 
 /** Copy a finding with provenance attached. Never mutates the input: the same

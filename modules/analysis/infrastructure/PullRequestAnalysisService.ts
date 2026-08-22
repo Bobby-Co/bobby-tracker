@@ -574,14 +574,37 @@ export class PullRequestAnalysisService {
                       round: roundNumber,
                       headSha: row.headSha ?? "",
                       degraded: result.degraded === true,
-                      history: rounds.map((r) => ({ round: r.round, findings: r.findings })),
+                      verdict: result.verdict,
+                      score: result.score,
+                      history: rounds.map((r) => ({ round: r.round, findings: r.findings, score: r.score })),
                   })
                 : null
 
         // Everything downstream — the comment, the stored result, the round —
         // reads THIS object. The analyser's own list is never persisted on its
         // own once a round can carry: the merge is the review.
-        const review: PrAnalysis | null = merged ? { ...(result as PrAnalysis), findings: merged.findings } : result
+        // The verdict and score come from the MERGE, not from the analyser, and on
+        // an incremental round they can differ. The analyser judged the push; the
+        // stored review is the push plus everything carried into it, and a
+        // headline that describes the smaller list would say "approve, 10/10"
+        // over a findings list containing a blocker. The gate would still hold —
+        // it counts `findings` — but every human-facing signal would say the
+        // pull request was clean, which is the same failure in nicer clothes.
+        const review: PrAnalysis | null = merged
+            ? {
+                  ...(result as PrAnalysis),
+                  findings: merged.findings,
+                  verdict: merged.verdict ?? result!.verdict,
+                  score: merged.score ?? result!.score,
+                  // The reviewer's own one-liner describes what IT looked at.
+                  // Keeping it beside a re-derived verdict is how "approve —
+                  // no risks found" ends up over a critical.
+                  verdict_reason:
+                      merged.verdict !== result!.verdict
+                          ? `${merged.counts.carried} finding${merged.counts.carried === 1 ? "" : "s"} carried forward from an earlier round still block this pull request.`
+                          : result!.verdict_reason,
+              }
+            : result
 
         const history = review && merged ? this.commentHistory(rounds, review, roundNumber, row.reviewScope) : undefined
 

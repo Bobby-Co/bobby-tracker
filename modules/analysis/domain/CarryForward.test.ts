@@ -260,3 +260,75 @@ describe("carriedFraction", () => {
         expect(carriedFraction([carried, fresh])).toBe(0.5)
     })
 })
+
+// The bug the first working incremental round produced: the analyser judged the
+// three files in the push, found them clean, and returned "approve" with 10/10.
+// The tracker then carried two findings in — one of them critical — and stored
+// that headline over them. The merge gate held, because it counts `findings`;
+// every human-facing signal said the pull request was clean.
+describe("mergeRound — the headline over the merged list", () => {
+    const blocker = f({ file: "migrations/0011.sql", title: "drops a column live code reads" })
+    const clean = { produced: [], carried: [blocker], round: 2, headSha: "abc" }
+
+    test("a carried blocker turns approve into changes requested", () => {
+        const m = mergeRound({ ...clean, verdict: "approve", score: 10 })
+        expect(m.verdict).toBe("request_changes")
+    })
+
+    test("a carried NOTE does not — only blockers gate a merge", () => {
+        const note = f({ file: "x.ts", severity: "review", title: "worth a look" })
+        const m = mergeRound({ produced: [], carried: [note], round: 2, headSha: "abc", verdict: "approve", score: 9 })
+        expect(m.verdict).toBe("approve")
+    })
+
+    // The verdict and score of a full round describe exactly the findings it
+    // produced. Touching them there would invent a disagreement rather than
+    // resolve one.
+    test("a full round's headline is passed through untouched", () => {
+        const m = mergeRound({ produced: [blocker], carried: [], round: 1, headSha: "abc", verdict: "approve", score: 10 })
+        expect(m.verdict).toBe("approve")
+        expect(m.score).toBe(10)
+    })
+
+    describe("the score floor", () => {
+        const carried = f({
+            file: "migrations/0011.sql",
+            title: "drops a column live code reads",
+            provenance: { firstSeenRound: 1, lastVerifiedRound: 1, carried: true },
+        })
+
+        test("cannot score better than the round that raised the finding", () => {
+            const m = mergeRound({
+                produced: [], carried: [carried], round: 2, headSha: "abc", verdict: "approve", score: 10,
+                history: [{ round: 1, findings: [carried], score: 1 }],
+            })
+            expect(m.score).toBe(1)
+        })
+
+        test("a worse round does not drag a better one down further", () => {
+            const m = mergeRound({
+                produced: [], carried: [carried], round: 2, headSha: "abc", score: 3,
+                history: [{ round: 1, findings: [carried], score: 8 }],
+            })
+            expect(m.score).toBe(3)
+        })
+
+        // A floor, not a recomputation: the formula lives in the analyser and a
+        // second implementation here would be one more thing to drift.
+        test("a round with no score does not acquire one by carrying", () => {
+            const m = mergeRound({
+                produced: [], carried: [carried], round: 2, headSha: "abc", score: null,
+                history: [{ round: 1, findings: [carried], score: 4 }],
+            })
+            expect(m.score).toBeNull()
+        })
+
+        test("an unscored history leaves the score alone", () => {
+            const m = mergeRound({
+                produced: [], carried: [carried], round: 2, headSha: "abc", score: 7,
+                history: [{ round: 1, findings: [carried] }],
+            })
+            expect(m.score).toBe(7)
+        })
+    })
+})
