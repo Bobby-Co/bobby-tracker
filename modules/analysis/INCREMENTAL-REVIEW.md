@@ -135,7 +135,8 @@ Take the **full** review when any of these hold:
 | A **migration** is in the diff | `migration` | Schema changes reach code the diff never mentions — see the `tasks.tenant_id` rename that broke `tasks-repo.ts` without appearing in it. |
 | The **review profile changed** since the last round | `profile_changed` | Different lenses, different blocking bar. Round *n* was judged by a different reviewer than round *n−1*. |
 | Changed symbols have **more than 25 dependents** in the graph | `blast_radius` | The "looks small, isn't" case. The changed-export scan plus `/neighbours` already answers this; it is a lookup, not an inference. |
-| **4 rounds** since the last full pass, or **75%** of the last round rode along unexamined | `periodic` / `carried_saturation` | Bounds how long a finding can ride along unexamined, and gives the pipeline a way to recover from a bad baseline. |
+| **4 rounds** since the last full pass | `periodic` | Bounds how long a finding can ride along unexamined, and gives the pipeline a way to recover from a bad baseline. |
+| **75%** of the last round rode along unexamined, **and at least 4 findings did** | `carried_saturation` | A review made mostly of assumptions is not a review. The absolute floor is not decoration — see below. |
 | The analyser refused the incremental request | `dispatch_refused` | Not a rule — a half-finished deploy. See below. |
 
 Otherwise: `push_scoped`.
@@ -375,6 +376,27 @@ reducer that thinks a push is the whole pull request produces the answer that
 ships on exactly the runs where nothing else checked it — and one that does not
 know about the carried findings would report them a second time.
 
+**The saturation rule needs an absolute floor, not just a fraction** — measured,
+not guessed. On MR !4 a round carried 2 of 2 findings, hit 100% saturation, and
+forced the next round full. Two findings riding along is not a review made of
+assumptions, and how long they may ride is already bounded by the rounds-since-full
+rule. Without a floor, any pull request whose findings sit in files the pushes do
+not touch alternates full/incremental forever and never gets two cheap rounds in
+a row — most of the benefit, spent on a rule meant to protect it. The fraction now
+applies only once at least four findings are carried.
+
+**The merge owns the headline, not just the list** — also measured. The first
+incremental round that worked returned verdict `approve`, score 10/10, "no errors
+or risks found", over a findings list the tracker had just carried a CRITICAL
+into. The analyser derives its verdict from the findings it raised, and on an
+incremental round those are only the push's. The gate held — it counts
+`result.findings` — so the strip correctly said "1 blocker" while every
+human-facing signal said the pull request was clean. The verdict is re-derived
+over the stored list (a blocker means changes requested, and `verdict_reason` is
+replaced with it), and the score is FLOORED by the score of the round each carried
+finding was last verified in. Floored rather than recomputed: the formula lives in
+the analyser and a second copy here would be one more thing to drift.
+
 **The delta's pairing** — a completing run saves its result and *then* appends a
 round for the same head, so the newest round IS the current review. The panel was
 diffing the review against itself, which made the progress line permanently read
@@ -389,7 +411,7 @@ changed. The route now pairs against the newest round whose head differs.
 scope rules. But a PR opened with fifty commits already on the branch gets one
 enormous first round, and nothing here makes that better.
 
-**Whether the thresholds are right.** 25 dependents, 4 rounds, 75% carried. Every
+**Whether the thresholds are right.** 25 dependents, 4 rounds, 75%-and-4 carried. Every
 round logs the rule that fired and every round records its scope, so
 `pr_rounds_scope_idx` answers "how often does incremental actually happen, and
 which rule blocks it?" over real traffic. Tune from that, not from this

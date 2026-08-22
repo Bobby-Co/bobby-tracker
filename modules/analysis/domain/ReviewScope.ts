@@ -81,8 +81,11 @@ export interface ScopeInput {
     profileId: string | null
     /** Rounds since the last FULL pass, not counting this one. */
     roundsSinceFull: number
-    /** What fraction of the previous round's findings rode along unexamined. */
+    /** What fraction of the previous round's findings rode along unexamined, and
+     *  how many that was. Both, because the fraction alone is a poor proxy on a
+     *  short list — see minCarriedForSaturation. */
     carriedFraction: number
+    carriedCount: number
     /** The largest dependent count among the symbols this push changed, or null
      *  when the graph could not be asked. Null does NOT force a full review: the
      *  count is an escalation signal, and treating an unavailable signal as an
@@ -103,12 +106,22 @@ export interface ScopeLimits {
     /** The share of a findings list that may be carried before the next round is
      *  forced full. A review that is mostly assumptions is not a review. */
     maxCarriedFraction: number
+    /** …but only once enough findings are riding along to be worth the six
+     *  minutes. Observed on MR !4: a round carried 2 of 2 findings, hit 100%
+     *  saturation, and forced the next round full. Two findings is not a review
+     *  made of assumptions, and how long those two may ride unexamined is
+     *  already bounded by maxRoundsSinceFull. Without a floor here, any pull
+     *  request whose findings sit in files the pushes do not touch alternates
+     *  full/incremental forever and never gets two cheap rounds in a row —
+     *  which is most of the benefit, gone to a rule meant to protect it. */
+    minCarriedForSaturation: number
 }
 
 export const SCOPE_LIMITS: ScopeLimits = {
     maxDependents: 25,
     maxRoundsSinceFull: 4,
     maxCarriedFraction: 0.75,
+    minCarriedForSaturation: 4,
 }
 
 /** Decide, and say why.
@@ -171,10 +184,10 @@ export function decideScope(input: ScopeInput): ScopeDecision {
         )
     }
 
-    if (input.carriedFraction >= limits.maxCarriedFraction) {
+    if (input.carriedCount >= limits.minCarriedForSaturation && input.carriedFraction >= limits.maxCarriedFraction) {
         return full(
             "carried_saturation",
-            `${Math.round(input.carriedFraction * 100)}% of the last round rode along unexamined`,
+            `${input.carriedCount} findings — ${Math.round(input.carriedFraction * 100)}% of the last round — rode along unexamined`,
         )
     }
 

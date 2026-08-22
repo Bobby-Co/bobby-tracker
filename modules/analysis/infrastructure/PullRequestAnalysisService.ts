@@ -266,6 +266,7 @@ export class PullRequestAnalysisService {
             profileId: profile?.id ?? null,
             roundsSinceFull: roundsSinceFull(rounds),
             carriedFraction: carriedFraction(previous?.findings ?? []),
+            carriedCount: (previous?.findings ?? []).filter((f) => f.provenance?.carried === true).length,
             // Only worth asking when incremental is on the table at all. A first
             // round goes full whatever the graph says, and five graph hops at
             // dispatch are five hops the developer waits through.

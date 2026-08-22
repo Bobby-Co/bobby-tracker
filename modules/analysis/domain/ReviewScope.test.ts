@@ -10,6 +10,7 @@ const base = (over: Partial<ScopeInput> = {}): ScopeInput => ({
     profileId: "p1",
     roundsSinceFull: 1,
     carriedFraction: 0.2,
+    carriedCount: 1,
     dependents: 3,
     ...over,
 })
@@ -78,7 +79,26 @@ describe("decideScope — the rules that force a full pass", () => {
     })
 
     test("a saturated carried list means the next round looks again", () => {
-        expect(decideScope(base({ carriedFraction: 0.9 }))).toMatchObject({ scope: "full", code: "carried_saturation" })
+        const d = decideScope(base({ carriedFraction: 0.9, carriedCount: 9 }))
+        expect(d).toMatchObject({ scope: "full", code: "carried_saturation" })
+        expect(d.reason).toContain("9 findings")
+    })
+
+    // Observed on MR !4: a round carried 2 of 2 findings, hit 100% saturation and
+    // forced the next round full. Two findings is not a review made of
+    // assumptions, and maxRoundsSinceFull already bounds how long they may ride.
+    // Without this floor, a pull request whose findings sit in untouched files
+    // alternates full/incremental forever and never gets two cheap rounds.
+    test("a short list is not 'saturated' just because all of it carried", () => {
+        expect(decideScope(base({ carriedFraction: 1, carriedCount: 2 })).scope).toBe("incremental")
+    })
+
+    test("the floor is a floor, not a replacement — a big list still trips it", () => {
+        expect(decideScope(base({ carriedFraction: 1, carriedCount: 4 }))).toMatchObject({ code: "carried_saturation" })
+    })
+
+    test("a big list that is mostly fresh does not trip it", () => {
+        expect(decideScope(base({ carriedFraction: 0.3, carriedCount: 6 })).scope).toBe("incremental")
     })
 
     test("the periodic rule bounds how long a finding rides along unexamined", () => {
