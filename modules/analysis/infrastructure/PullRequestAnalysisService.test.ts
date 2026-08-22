@@ -322,8 +322,10 @@ describe("start — deciding the scope", () => {
         const scope = store.upsertTracking.mock.calls[0][0].reviewScope
         expect(scope.scope).toBe("incremental")
         expect(scope.reviewedFiles).toBe(1)
-        // The whole PR is NOT re-fetched: that is the six minutes this saves.
-        expect(vcsSvc.listPullRequestFiles).not.toHaveBeenCalled()
+        // ONE file is reviewed, which is where the six minutes go. The pull
+        // request's file list is still fetched — to widen that one file to its
+        // whole-PR patch, so a file an earlier commit created is readable — but
+        // the other eleven are never sent, never opened, and never re-derived.
         expect(analyser.startPRAnalysis.mock.calls[0][0].files).toHaveLength(1)
     })
 
@@ -525,7 +527,10 @@ describe("start — an analyser that refuses the incremental request", () => {
         const retry = analyser.startPRAnalysis.mock.calls[1][0]
         expect(retry.review_scope).toBeUndefined()
         expect(retry.carried_findings).toBeUndefined()
-        expect(vcsSvc.listPullRequestFiles).toHaveBeenCalledTimes(1)
+        // Twice: once to widen the incremental files to their whole-PR patches,
+        // once for the full diff the retry sends.
+        expect(vcsSvc.listPullRequestFiles).toHaveBeenCalledTimes(2)
+        expect(retry.files.length).toBeGreaterThan(0)
     })
 
     // The row is what the callback merges from. A row still claiming to carry a
@@ -598,5 +603,62 @@ describe("applyResult — the stored headline matches the stored findings", () =
         expect(saved.verdict).toBe("approve")
         expect(saved.verdict_reason).toBe("no risks found")
         expect(saved.score).toBe(10)
+    })
+})
+
+// MR !4 round 4: three files in the push, zero findings, and an impact section
+// asserting the changed modules "do not exist in the checkout". They existed —
+// they were created earlier in the same pull request, and the reviewer's
+// checkout is the default branch.
+describe("start — an incremental round sends whole-PR content for the files it reviews", () => {
+    const blocker = {
+        file: "migrations/0011.sql", severity: "critical", category: "blast_radius",
+        title: "drops a column live code reads", detail: "outbox-repo still selects it",
+    }
+
+    beforeEach(() => {
+        store.listRounds.mockResolvedValue([{
+            headSha: "head0", round: 1, status: "done", verdict: "request_changes", score: 3, scoreMax: 10,
+            findings: [blocker], degraded: false, reviewProfile: { kind: "default" }, analyserBuild: null,
+            createdAt: "", scope: "full", scopeReason: null, prevHeadSha: null, baseSha: "base1",
+            commits: [], carriedCount: 0, reviewedFiles: 8, resolved: [],
+        }])
+        vcsSvc.compareCommits.mockResolvedValue({
+            status: "ahead",
+            files: [{ filename: "src/webhook-service.ts", status: "modified", patch: "@@ -60,1 +60,1 @@\n-old\n+new", additions: 1, deletions: 1 }],
+            commits: [],
+            truncated: false,
+        })
+        // The whole pull request: this file was CREATED by an earlier commit, so
+        // its base…head patch is its entire content.
+        vcsSvc.listPullRequestFiles.mockResolvedValue([
+            { filename: "src/webhook-service.ts", status: "added", patch: "@@ -0,0 +1,80 @@\n+export async function fanout() {}\n+…", additions: 80, deletions: 0 },
+            { filename: "migrations/0011.sql", status: "added", patch: "@@ +1,20 @@\n+drop column channel_id", additions: 20, deletions: 0 },
+        ])
+    })
+
+    test("the file arrives with its whole-PR patch, not the push's hunks", async () => {
+        await svc().start(project, pr, "https://app")
+        const sent = analyser.startPRAnalysis.mock.calls[0][0]
+        expect(sent.files).toHaveLength(1)
+        expect(sent.files[0].patch).toContain("export async function fanout")
+        expect(sent.files[0].status).toBe("added")
+    })
+
+    // The SCOPE is still the push. Widening the content must not widen the review.
+    test("only the push's files are sent — the migration is carried, not reviewed", async () => {
+        await svc().start(project, pr, "https://app")
+        const sent = analyser.startPRAnalysis.mock.calls[0][0]
+        expect(sent.files.map((f: { path: string }) => f.path)).toEqual(["src/webhook-service.ts"])
+        expect(store.upsertTracking.mock.calls[0][0].reviewScope).toMatchObject({ scope: "incremental", reviewedFiles: 1 })
+        expect(store.upsertTracking.mock.calls[0][0].reviewScope.carried).toHaveLength(1)
+    })
+
+    test("a provider that cannot list the pull request falls back to the push's patches", async () => {
+        vcsSvc.listPullRequestFiles.mockRejectedValue(new Error("rate limited"))
+        await svc().start(project, pr, "https://app")
+        const sent = analyser.startPRAnalysis.mock.calls[0][0]
+        expect(sent.files[0].patch).toContain("+new")
+        expect(store.upsertTracking.mock.calls[0][0].reviewScope.scope).toBe("incremental")
     })
 })

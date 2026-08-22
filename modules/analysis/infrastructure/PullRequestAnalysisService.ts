@@ -279,7 +279,7 @@ export class PullRequestAnalysisService {
         // it is the input every full review has ever had.
         let files: PrAnalyseFile[]
         if (decision.scope === "incremental") {
-            files = pushFiles
+            files = await this.cumulativePatches(vcs, pr.number, pushFiles)
         } else {
             try {
                 files = (await vcs.listPullRequestFiles(pr.number)).map(toAnalyseFile)
@@ -709,6 +709,67 @@ export class PullRequestAnalysisService {
             )
             return null
         }
+    }
+
+    /** The push's files, each carrying its WHOLE-PULL-REQUEST patch.
+     *
+     *  The scope stays the push — these are the only files sent, and the carry
+     *  rule still keys off what the push changed. What widens is each file's
+     *  CONTENT, and it has to.
+     *
+     *  The reviewer's checkout is the last-indexed working copy, which is the
+     *  default branch. A file this pull request CREATES has never existed in it.
+     *  On a full round that was invisible: the whole-PR patch of an added file is
+     *  its entire content, so the reviewer read it out of the diff. Send only the
+     *  push's hunks and a file created three commits ago is in neither the
+     *  checkout nor the diff — so the reviewer opens it, finds nothing, and
+     *  concludes the change targets files that do not exist. Observed on MR !4
+     *  round 4: three files in the push, zero findings, and an impact section
+     *  describing the pre-PR codebase with confidence.
+     *
+     *  One extra provider call per incremental round, and it buys back the
+     *  reviewer's ability to verify anything at all. It is also not the expensive
+     *  part — fetching a diff never was; READING twelve files was, and this still
+     *  sends three. Best-effort: on failure the push's own patches go, which is
+     *  the behaviour that produced the bug but is better than no review. */
+    private async cumulativePatches(
+        vcs: VcsAppService,
+        prNumber: number,
+        pushFiles: PrAnalyseFile[],
+    ): Promise<PrAnalyseFile[]> {
+        // An explicit catch, NOT tryOrNull: that helper only swallows
+        // RepositoryError, and a provider failure here is a plain Error from the
+        // adapter — it would propagate out of start(), leaving the loading
+        // comment up and no review behind it. Widening the content must not be
+        // able to cost the review.
+        let whole: Awaited<ReturnType<VcsAppService["listPullRequestFiles"]>>
+        try {
+            whole = await vcs.listPullRequestFiles(prNumber)
+        } catch (e) {
+            console.warn(
+                `[pr-review] could not read the pull request's full file list for pr ${prNumber} — ` +
+                    `the reviewer gets this push's hunks only, and may not be able to see files an ` +
+                    `earlier commit created. Cause: ${e instanceof Error ? e.message : String(e)}`,
+            )
+            return pushFiles
+        }
+        if (whole.length === 0) return pushFiles
+
+        const byPath = new Map(whole.map((f) => [f.filename, f]))
+        return pushFiles.map((f) => {
+            // Renames are looked up both ways: the push may name the new path
+            // while the pull request's list still keys the old one, or the
+            // reverse, depending on where in the range the rename happened.
+            const full = byPath.get(f.path) ?? (f.previous_path ? byPath.get(f.previous_path) : undefined)
+            if (!full?.patch) return f
+            return {
+                ...f,
+                patch: full.patch,
+                status: full.status,
+                additions: full.additions,
+                deletions: full.deletions,
+            }
+        })
     }
 
     /** The largest dependent count among the symbols this push changed, or null.
