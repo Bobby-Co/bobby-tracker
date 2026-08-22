@@ -695,7 +695,74 @@ export class PullRequestAnalysisService {
             )
         }
 
-        await this.continueIfMoved(row, origin)
+        // A degraded review is a FAILURE that produced output, and it is
+        // transient — the grounded pass ran out of turns, so the same head run
+        // again may well complete. Retried before the pending-head chase, but
+        // only when there is no newer head to go to: newer code always beats a
+        // second look at older code.
+        if (!(await this.retryIfDegraded(row, rounds, result, origin))) {
+            await this.continueIfMoved(row, origin)
+        }
+    }
+
+    /** Re-run a degraded review once, at the same head. Returns true when it did.
+     *
+     *  A degraded result is not a review. The grounded pass produced nothing
+     *  parseable, so what gets stored is the reduce step's diff-level draft: no
+     *  graph walk, no verified anchors, no enumerated callers. Shipping that as
+     *  the answer is bad on its own, and worse than that — it REPLACES whatever
+     *  complete review was there before. Observed on MR !4: a clean round 8
+     *  (7/10, no blockers) overwritten by a partial round 9 scoring 2/10.
+     *
+     *  Bounded to ONE retry per head, counted from the rounds already recorded at
+     *  that head rather than a flag, so a review that degrades every time costs
+     *  two runs and not an unbounded loop. If the retry also degrades, the
+     *  partial stands and every surface says so — which is the honest end state
+     *  and the one the merge gate refuses to pass.
+     *
+     *  The pending head wins over this. A newer push means the code under review
+     *  has moved, and re-reviewing the older head would spend six minutes on a
+     *  question nobody is asking any more. */
+    private async retryIfDegraded(
+        row: PullRequestAnalysisResultRow,
+        earlier: ReviewRound[],
+        result: PrAnalysis | null,
+        origin: string,
+    ): Promise<boolean> {
+        if (result?.degraded !== true || !row.headSha) return false
+        if (row.pendingHeadSha && row.pendingHeadSha !== row.headSha) return false
+        if (!this.pulls) return false
+
+        // `earlier` excludes the round just appended, so any degraded round it
+        // already holds at this head IS a previous attempt.
+        const attemptsHere = earlier.filter((r) => r.headSha === row.headSha && r.degraded).length
+        if (attemptsHere > 0) {
+            console.warn(
+                `[pr-review] project=${row.projectId} pr=${row.prNumber} degraded again at ` +
+                    `${row.headSha.slice(0, 7)} — leaving the partial review in place rather than looping`,
+            )
+            return false
+        }
+
+        const project = await tryOrNull(() => this.projects.findGithubSyncContext(row.projectId))
+        if (!project) return false
+        const pr = await tryOrNull(() => this.pulls!.findByNumber(row.projectId, row.prNumber))
+        if (!pr || pr.state !== "open" || pr.merged) return false
+
+        console.info(
+            `[pr-review] project=${row.projectId} pr=${row.prNumber} — the grounded pass did not complete; ` +
+                `re-running once at the same head (${row.headSha.slice(0, 7)}) rather than shipping the draft`,
+        )
+        await this.start(
+            project as PrProject,
+            { number: row.prNumber, title: pr.title, body: pr.body, baseSha: pr.base_sha, headSha: pr.head_sha },
+            origin,
+            // The head has not moved, so the run-once-per-head gate would skip
+            // this. It is a retry of a review that did not happen, not a repeat
+            // of one that did.
+            { force: true },
+        )
+        return true
     }
 
     /** The compare between two commits, or null when it cannot be had.

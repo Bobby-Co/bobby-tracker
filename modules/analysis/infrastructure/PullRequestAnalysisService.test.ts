@@ -720,3 +720,77 @@ describe("start — the carry symbol test reads the files as SENT", () => {
         expect(scope.code).toBe("push_scoped")
     })
 })
+
+// A degraded review is not a review — the grounded pass produced nothing
+// parseable, so what gets stored is the reduce step's diff-level draft. On MR !4
+// it overwrote a clean round 8 (7/10, no blockers) with a 2/10 partial.
+describe("applyResult — a degraded review is retried, not shipped", () => {
+    const svcWithPulls = () =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, undefined, undefined, pulls as any)
+
+    const row = (over: Record<string, unknown> = {}) => ({
+        id: "task-1", projectId: "proj-1", prNumber: 7, githubCommentId: null,
+        reviewProfile: { kind: "default" }, headSha: "head1", pendingHeadSha: null, reviewScope: null, ...over,
+    })
+    const partial = { summary: "s", impact: "i", findings: [], verdict: "comment", degraded: true }
+    const complete = { summary: "s", impact: "i", findings: [], verdict: "approve", degraded: false }
+
+    const openPr = () => {
+        projectsRepo.findGithubSyncContext.mockResolvedValue(project)
+        pulls.findByNumber.mockResolvedValue({ title: "T", body: null, state: "open", merged: false, head_sha: "head1", base_sha: "base1" })
+    }
+
+    test("re-runs once at the same head", async () => {
+        store.findResultRow.mockResolvedValue(row())
+        store.listRounds.mockResolvedValue([])
+        openPr()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", partial as any, "https://app")
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    // Without force the run-once-per-head gate would skip it — the head has not
+    // moved. It is a retry of a review that did not happen.
+    test("the retry is forced past the same-head skip", async () => {
+        store.findResultRow.mockResolvedValue(row())
+        store.listRounds.mockResolvedValue([])
+        store.findTracking.mockResolvedValue({ id: "t", status: "done", githubCommentId: 1, headSha: "head1" })
+        openPr()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", partial as any, "https://app")
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    test("a review that degrades twice at one head is left alone, not looped", async () => {
+        store.findResultRow.mockResolvedValue(row())
+        store.listRounds.mockResolvedValue([
+            { headSha: "head1", round: 1, findings: [], degraded: true, reviewProfile: null, baseSha: "base1", scope: "full" },
+        ])
+        openPr()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", partial as any, "https://app")
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a completed review is never retried", async () => {
+        store.findResultRow.mockResolvedValue(row())
+        store.listRounds.mockResolvedValue([])
+        openPr()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", complete as any, "https://app")
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+
+    // Newer code beats a second look at older code.
+    test("a newer push wins — the pending head is chased instead of retrying", async () => {
+        store.findResultRow.mockResolvedValue(row({ pendingHeadSha: "head2" }))
+        store.listRounds.mockResolvedValue([])
+        projectsRepo.findGithubSyncContext.mockResolvedValue(project)
+        pulls.findByNumber.mockResolvedValue({ title: "T", body: null, state: "open", merged: false, head_sha: "head2", base_sha: "base1" })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await svcWithPulls().applyResult("task-1", "done", partial as any, "https://app")
+        expect(store.clearPendingHead).toHaveBeenCalled()
+        expect(analyser.startPRAnalysis.mock.calls[0][0].headSha).toBe("head2")
+    })
+})
