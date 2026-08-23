@@ -845,3 +845,78 @@ describe("start — a degraded round is skipped as a baseline, not escalated pas
         expect(store.upsertTracking.mock.calls[0][0].reviewScope.code).toBe("first_round")
     })
 })
+
+// End-to-end on the REAL shape of MR !4 round 13: the push spans three commits,
+// webhook-service.ts is in it, and it imports fanout.ts and webhook-signature.ts
+// — both added earlier in the same pull request and therefore absent from the
+// reviewer's checkout. This asserts what actually crosses the wire, because
+// every previous confirmation of this was a review's prose and prose has been
+// wrong about it four times.
+describe("start — the wire payload actually carries the imported files", () => {
+    const SERVICE = "src/notifications/app/webhook-service.ts"
+    const FANOUT = "src/notifications/domain/fanout.ts"
+    const SIGNATURE = "src/shared/webhook-signature.ts"
+    const TEST = "src/shared/webhook-signature.test.ts"
+
+    // The real import block, verbatim from the sandbox.
+    const serviceImports =
+        '+import { post } from "../../infra/http/client.js"\n' +
+        '+import { deriveSecret, signatureHeaders } from "../../shared/webhook-signature.js"\n' +
+        '+import { afterAttempt, isDue, matches, shouldDisable, type Subscription } from "../domain/fanout.js"\n'
+
+    beforeEach(() => {
+        store.listRounds.mockResolvedValue([{
+            headSha: "b4da6ec", round: 8, status: "done", verdict: "comment", score: 7, scoreMax: 10,
+            findings: [], degraded: false, reviewProfile: { kind: "default" }, analyserBuild: null,
+            createdAt: "", scope: "incremental", scopeReason: null, prevHeadSha: null, baseSha: "base1",
+            commits: [], carriedCount: 3, reviewedFiles: 1, resolved: [],
+        }])
+        vcsSvc.compareCommits.mockResolvedValue({
+            status: "ahead",
+            files: [
+                { filename: SERVICE, status: "modified", patch: "@@ -30,1 +30,2 @@\n-old\n+new", additions: 2, deletions: 1 },
+                { filename: TEST, status: "added", patch: '@@ -0,0 +1,5 @@\n+import { verify } from "./webhook-signature.js"\n', additions: 5, deletions: 0 },
+            ],
+            commits: [],
+            truncated: false,
+        })
+        vcsSvc.listPullRequestFiles.mockResolvedValue([
+            { filename: SERVICE, status: "added", patch: "@@ -0,0 +1,80 @@\n" + serviceImports + "+export async function fanout() { return 0 }\n", additions: 80, deletions: 0 },
+            { filename: FANOUT, status: "added", patch: "@@ -0,0 +1,40 @@\n+export function afterAttempt() {}\n+export function shouldDisable() {}\n", additions: 40, deletions: 0 },
+            { filename: SIGNATURE, status: "added", patch: "@@ -0,0 +1,45 @@\n+export function verify() { return true }\n", additions: 45, deletions: 0 },
+            { filename: TEST, status: "added", patch: "@@ -0,0 +1,5 @@\n+import x\n", additions: 5, deletions: 0 },
+        ])
+    })
+
+    test("fanout.ts and webhook-signature.ts arrive in pr_files WITH their bodies", async () => {
+        await svc().start(project, pr, "https://app")
+        const sent = analyser.startPRAnalysis.mock.calls[0][0]
+
+        const byPath = new Map(sent.pr_files.map((f: { path: string; patch?: string }) => [f.path, f]))
+        expect(byPath.get(FANOUT)?.patch).toContain("export function afterAttempt")
+        expect(byPath.get(SIGNATURE)?.patch).toContain("export function verify")
+    })
+
+    test("files already in the push carry no duplicate body in the manifest", async () => {
+        await svc().start(project, pr, "https://app")
+        const sent = analyser.startPRAnalysis.mock.calls[0][0]
+        const byPath = new Map(sent.pr_files.map((f: { path: string; patch?: string }) => [f.path, f]))
+        // Both are reviewed files — they carry their patches in `files`, and
+        // repeating them here would send the same bytes twice.
+        expect(byPath.get(SERVICE)?.patch).toBeUndefined()
+        expect(byPath.get(TEST)?.patch).toBeUndefined()
+    })
+
+    test("the manifest still names every file the pull request touches", async () => {
+        await svc().start(project, pr, "https://app")
+        const paths = analyser.startPRAnalysis.mock.calls[0][0].pr_files.map((f: { path: string }) => f.path)
+        expect(paths.sort()).toEqual([FANOUT, SERVICE, SIGNATURE, TEST].sort())
+    })
+
+    test("and the round is still scoped to the push, not to the manifest", async () => {
+        await svc().start(project, pr, "https://app")
+        const sent = analyser.startPRAnalysis.mock.calls[0][0]
+        expect(sent.files.map((f: { path: string }) => f.path).sort()).toEqual([SERVICE, TEST].sort())
+        expect(sent.review_scope).toMatchObject({ kind: "incremental" })
+    })
+})
