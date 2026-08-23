@@ -48,10 +48,16 @@ tables as (
     from (values
         ('projects'), ('pull_requests'), ('pull_request_analyses'),
         ('pull_request_analysis_rounds'), ('pr_comments'), ('review_profiles'),
-        -- Written by the ANALYSER into this cell's data plane and read by nothing
-        -- in the tracker, so a perfectly healthy tracker says nothing about it.
-        -- It was absent from a regional node for the life of a project, costing
-        -- every review its memory of the earlier ones.
+        -- CONTROL PLANE ONLY. The analyser reads and writes it through its
+        -- SupabaseConfig.URL pair, which addresses control — stated outright in
+        -- that file's setRestHeaders comment. Nothing in the tracker reads it, so
+        -- a perfectly healthy tracker says nothing about it either way.
+        --
+        -- Expect MISSING on a regional node and ignore it there; on the CONTROL
+        -- database, missing means every review runs with no memory of the earlier
+        -- ones. It was applied to the wrong plane once already, on the reasoning
+        -- that per-project history "should" be regional — the plane is whatever
+        -- the writer uses, and the writer is the analyser.
         ('pr_review_index')
     ) as t(name)
 ),

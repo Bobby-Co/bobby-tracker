@@ -4,9 +4,9 @@ import { tryOrNull } from "@/lib/shared/kernel"
 import { Role } from "@/modules/access"
 import type { ProjectPatch } from "@/modules/projects"
 import { DUPLICATE_SENSITIVITIES } from "@/modules/issues"
+import { Supabase } from "@/lib/server/supabase"
 import { findIcon } from "@/lib/shared/icons/iconly"
 import { ICONLY_NAMES } from "@/lib/shared/icons/iconly-catalog"
-import { dataClientForCell } from "@/lib/server/regional"
 
 // Same gate as the label-icons route: only slugs the renderer can actually draw
 // (the 361-icon catalog, or a legacy path-based icon) are allowed to be stored.
@@ -134,19 +134,21 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
             console.error("[project delete] unknown cell — graph orphaned, delete it manually", id, graphId)
         }
         try {
-            // The CELL's database, not the control one.
+            // The CONTROL database, and this is not a guess.
             //
-            // pr_review_index is written by the ANALYSER, which uses its own
-            // Supabase configuration — the cell's data plane. This delete used
-            // Supabase.service() on the stated belief that the table "lives in
-            // the tracker DB", and for a project bound to a cell that is simply
-            // the wrong database: the delete succeeds, removes nothing, and the
-            // rows outlive the project with no way left to find them.
+            // The analyser reads and writes pr_review_index through its
+            // SupabaseConfig.URL pair — the control plane — and says so in
+            // setRestHeaders: "pr_memory and pr_insight … addressing the CONTROL
+            // plane". That is the design, and the tracker's delete has to address
+            // the same database or it removes nothing.
             //
-            // dataClientForCell(null) IS the control client, so a home-cell
-            // project behaves exactly as before.
-            const regional = dataClientForCell(cell)
-            const { error: prErr } = await regional.from("pr_review_index").delete().eq("repo_id", graphId)
+            // This briefly pointed at the cell's data client, on the reasoning
+            // that per-project review history "should" be regional. It reads
+            // well and it is wrong: the plane is whatever the writer uses, and
+            // the writer is the analyser. asia-full-schema.sql also carries the
+            // table, which made the regional reading look confirmed — it is a
+            // whole-schema snapshot, so its presence there means nothing.
+            const { error: prErr } = await Supabase.service().from("pr_review_index").delete().eq("repo_id", graphId)
             if (prErr) console.error("[project delete] pr_review_index cleanup failed", id, graphId, prErr.message)
         } catch (e) {
             console.error("[project delete] pr_review_index cleanup threw", id, graphId, e)
