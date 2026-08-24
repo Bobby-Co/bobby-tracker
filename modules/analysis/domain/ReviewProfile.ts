@@ -425,6 +425,10 @@ const DEPTH_RANK: Record<Depth, number> = { quick: 0, standard: 1, deep: 2 }
  *  folds an unrecognised id to Kit. */
 const TIER_MAX_DEPTH: Record<string, Depth> = {
     kit: "quick",
+    // Scout buys credits, seats and concurrency — not depth. Depth is the dial
+    // that actually costs money per review, so it stays the thing Prowler is
+    // for; a $5 tier unlocking what $19 unlocks would flatten the ladder.
+    scout: "quick",
     prowler: "standard",
     pride: "deep",
     apex: "deep",

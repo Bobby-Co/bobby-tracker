@@ -21,7 +21,12 @@ export { createSupabaseProjectAnalyserRepository } from "./infrastructure/Supaba
 export { IssueAnalysisService } from "./infrastructure/IssueAnalysisService"
 export { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysisService"
 export type { PrInput, PrProject } from "./infrastructure/PullRequestAnalysisService"
-export { createIssueAnalysisService, createPullRequestAnalysisService } from "./Composition"
+export {
+    createIssueAnalysisService,
+    createPullRequestAnalysisService,
+    createExhaustionSweep,
+    createRunQueue,
+} from "./Composition"
 
 // ─── review profiles — what kind of reviewer a team wants (0077) ─────────────
 // The DOMAIN (vocabulary, presets, sanitisation) is exported here for servers.
@@ -88,3 +93,12 @@ export type {
     NeighbourNode,
     NeighboursResult,
 } from "./ports/AnalyserTypes"
+
+// ─── run admission: the per-team concurrency bound on billable work ──────────
+export { RunAdmission } from "./application/RunAdmission"
+export type { TeamRunRegistry, ActiveRun, ActiveRunKind } from "./ports/TeamRunRegistry"
+export { createSupabaseTeamRunRegistry } from "./infrastructure/SupabaseTeamRunRegistry"
+export { ExhaustionSweep } from "./application/ExhaustionSweep"
+export { RunQueue } from "./application/RunQueue"
+export type { QueuedDispatcher, DrainResult } from "./application/RunQueue"
+export type { RunCanceller, SweepResult } from "./application/ExhaustionSweep"

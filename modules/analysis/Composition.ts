@@ -10,7 +10,7 @@ import { createServiceIssueSyncStore, IssuePrompt } from "@/modules/issues"
 import { createSupabaseProjectsRepository } from "@/modules/projects"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
 import { createSupabasePullRequestReadRepository, getVcsAppService } from "@/modules/vcs"
-import { createSupabaseSubscriptionsRepository, getSpendGate } from "@/modules/billing"
+import { createSupabaseSubscriptionsRepository, getRunAllowance, getSpendGate } from "@/modules/billing"
 import type { Analyser } from "./ports/Analyser"
 import { HttpAnalyser } from "./infrastructure/HttpAnalyser"
 import { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
@@ -20,6 +20,10 @@ import { PullRequestAnalysisComment } from "./infrastructure/PullRequestAnalysis
 import { createSupabaseReviewProfileRepository } from "./infrastructure/SupabaseReviewProfileRepository"
 import { IssueAnalysisService } from "./infrastructure/IssueAnalysisService"
 import { PullRequestAnalysisService } from "./infrastructure/PullRequestAnalysisService"
+import { RunAdmission } from "./application/RunAdmission"
+import { ExhaustionSweep } from "./application/ExhaustionSweep"
+import { RunQueue } from "./application/RunQueue"
+import { createSupabaseTeamRunRegistry } from "./infrastructure/SupabaseTeamRunRegistry"
 
 /** The Analyser serving one CELL (the HTTP-backed adapter today).
  *
@@ -48,6 +52,15 @@ function servicePlanes(dataDb?: SupabaseRlsClient) {
     return { dataDb: dataDb ?? controlDb, controlDb }
 }
 
+/** The per-team concurrency bound, over the planes this module's run rows live
+ *  in. Built here rather than in the billing composition root on purpose: billing
+ *  owns the ALLOWANCE (a tier attribute) but counting runs means reading `issues`
+ *  and `pull_request_analyses`, which are this module's tables — and importing
+ *  this module from billing's root would put a cycle between the two. */
+function runAdmission(controlDb: SupabaseRlsClient, dataDb: SupabaseRlsClient): RunAdmission {
+    return new RunAdmission(getRunAllowance(), createSupabaseTeamRunRegistry(controlDb, dataDb))
+}
+
 /** The issue auto-analysis service, bound to service-role collaborators. */
 export function createIssueAnalysisService(dataDb?: SupabaseRlsClient): IssueAnalysisService {
     const { dataDb: data, controlDb } = servicePlanes(dataDb)
@@ -62,6 +75,9 @@ export function createIssueAnalysisService(dataDb?: SupabaseRlsClient): IssueAna
         // The billing hard gate: a paused team analyses nothing, including via the
         // webhooks that reach this service with no session behind them.
         getSpendGate(),
+        // The burst bound. The gate above cannot see work that started since the
+        // analyser last flushed its meter; this can.
+        runAdmission(controlDb, data),
     )
 }
 
@@ -76,6 +92,7 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         getVcsAppService,
         new PullRequestAnalysisComment(),
         getSpendGate(),
+        runAdmission(controlDb, data),
         // Profiles are TEAM-owned and live in the control plane alongside teams
         // and billing, not with the project's regional content — a team cannot
         // span regions, so its reviewer configuration has one home.
@@ -87,5 +104,45 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         // was running (0080). REGIONAL, with the pull requests it mirrors and
         // the analyses beside them.
         createSupabasePullRequestReadRepository(data),
+    )
+}
+
+/** The exhaustion sweep — cancels a team's in-flight runs when it may no longer
+ *  spend. Fired by the usage-rollup trigger (0084) through
+ *  POST /api/internal/spend-sweep.
+ *
+ *  `dataDb` must be bound to the TEAM's cell: the runs it cancels, and the rows
+ *  it reads to find them, are regional. */
+export function createExhaustionSweep(dataDb?: SupabaseRlsClient): ExhaustionSweep {
+    const { dataDb: data, controlDb } = servicePlanes(dataDb)
+    const issues = createIssueAnalysisService(data)
+    const pulls = createPullRequestAnalysisService(data)
+    return new ExhaustionSweep(getSpendGate(), createSupabaseTeamRunRegistry(controlDb, data), {
+        cancelIssue: (issueId) => issues.cancel(issueId),
+        cancelPr: (projectId, prNumber) => pulls.cancel(projectId, prNumber),
+    })
+}
+
+/** The queue drain — starts what the concurrency cap deferred (0085).
+ *
+ *  `dataDb` must be bound to the team's cell, like the sweep: the queued rows and
+ *  the runs they become are regional. */
+export function createRunQueue(dataDb?: SupabaseRlsClient): RunQueue {
+    const { dataDb: data, controlDb } = servicePlanes(dataDb)
+    const issues = createIssueAnalysisService(data)
+    const pulls = createPullRequestAnalysisService(data)
+    return new RunQueue(
+        getSpendGate(),
+        getRunAllowance(),
+        createSupabaseTeamRunRegistry(controlDb, data),
+        createSupabaseProjectsRepository(controlDb),
+        {
+            // fromQueue: this issue is ALREADY marked 'queued', and without the
+            // flag ensure() would helpfully report it as queued and do nothing —
+            // the drain is the one caller for whom that state is the reason to
+            // proceed rather than to stop.
+            startIssue: (issueId, origin) => issues.ensure(issueId, origin, { fromQueue: true }).then(() => undefined),
+            startPr: (projectId, prNumber, origin) => pulls.startQueued(projectId, prNumber, origin),
+        },
     )
 }

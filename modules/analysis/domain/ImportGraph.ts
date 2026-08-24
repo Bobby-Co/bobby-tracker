@@ -128,3 +128,63 @@ export function importedPullRequestFiles(
     }
     return found
 }
+
+/** The pull request's files that IMPORT this push's files — the other direction.
+ *
+ *  ─── Why both directions ────────────────────────────────────────────────────
+ *
+ *  `importedPullRequestFiles` answers "what does this push depend on". It does
+ *  not answer "who, in this pull request, depends on the push" — and that is the
+ *  question the reviewer asks unprompted, every round, under the name blast
+ *  radius. When the answer is a file the pull request modified in an EARLIER
+ *  push, the reviewer reads it from the checkout, sees the pre-pull-request
+ *  version, and concludes the push's work is unreachable.
+ *
+ *  MR !6 round 11, verbatim:
+ *
+ *    "plansRouter is never mounted — the new endpoints are unreachable …
+ *     ripgrep for 'plansRouter' finds nothing outside plans.ts"
+ *
+ *  It was mounted, at server.ts:9 and :26, by the previous push. server.ts was
+ *  in the manifest as a bare path, so the reviewer knew the file existed and
+ *  read the only copy it had: main's. Same shape as the fanout case that
+ *  motivated the outbound scan — a tool result beat an instruction, and the file
+ *  has to actually be there.
+ *
+ *  Scanning is cheap because the caller already holds every patch: the whole
+ *  pull request was fetched to build the cumulative patches.
+ *
+ *  PURE — a text scan over patches and paths, no I/O, no model. */
+export function importersOfPullRequestFiles(
+    pushFiles: ImportingFile[],
+    manifest: ManifestFile[],
+    limit = 6,
+): string[] {
+    const inPush = new Set(pushFiles.map((f) => f.path.toLowerCase()))
+    const found: string[] = []
+
+    for (const m of manifest) {
+        if (inPush.has(m.path.toLowerCase())) continue
+        if (!m.patch) continue
+        for (const spec of specifiersIn(m.patch)) {
+            const base = resolveRelative(m.path, spec)
+            const stem = base.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, "")
+            let hit = false
+            for (const suffix of CANDIDATE_SUFFIXES) {
+                for (const candidate of [base + suffix, stem + suffix]) {
+                    if (inPush.has(candidate.toLowerCase())) {
+                        hit = true
+                        break
+                    }
+                }
+                if (hit) break
+            }
+            if (hit && !found.includes(m.path)) {
+                found.push(m.path)
+                break
+            }
+        }
+        if (found.length >= limit) return found
+    }
+    return found
+}

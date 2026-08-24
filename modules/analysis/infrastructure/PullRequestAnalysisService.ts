@@ -8,6 +8,7 @@ import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { PrAnalysis, PrFinding, ReviewRoundCommit, ReviewRunScope } from "@/lib/shared/types"
 import type { SpendGate, SubscriptionsRepository } from "@/modules/billing"
+import type { RunAdmission } from "../application/RunAdmission"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
@@ -17,7 +18,7 @@ import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
 import { compilePolicy, maxDepthForTier, type ReviewProfile } from "../domain/ReviewProfile"
 import { diffRounds } from "../domain/ReviewRounds"
 import { changedExportedSymbols } from "../domain/DiffFacts"
-import { importedPullRequestFiles } from "../domain/ImportGraph"
+import { importedPullRequestFiles, importersOfPullRequestFiles } from "../domain/ImportGraph"
 import { carriedFraction, changedPathSet, mergeRound, partitionForCarry, type CarryPartition } from "../domain/CarryForward"
 import { decideScope, roundsSinceFull, type Ancestry } from "../domain/ReviewScope"
 import type { ReviewRound } from "../ports/PullRequestAnalysisStore"
@@ -147,6 +148,11 @@ export class PullRequestAnalysisService {
         private readonly comment: PullRequestAnalysisComment,
         /** The billing hard gate — see IssueAnalysisService for why it is injected. */
         private readonly spend: SpendGate,
+        /** The per-team concurrency bound. REQUIRED, unlike the optional
+         *  collaborators below: those degrade to a sensible default when absent,
+         *  whereas an absent admission check degrades to no limit at all, which is
+         *  the exact failure it exists to prevent. */
+        private readonly admission: RunAdmission,
         /** The team's review profile, resolved per project (0077). Optional so the
          *  existing tests and any caller predating profiles construct unchanged;
          *  absent means every review runs under the built-in default. */
@@ -181,13 +187,29 @@ export class PullRequestAnalysisService {
         const cell = await this.projects.findCell(project.id)
         if (!cell) return
 
-        // Hard gate (0076): a paused team runs no reviews. Checked here, with the
-        // other readiness gates and BEFORE the "analysing…" comment is posted —
-        // bailing after that would leave a comment on the PR that nothing ever
-        // comes back to edit. This service is webhook-driven, so this is the only
-        // thing standing between a paused team and a review on every push.
+        // Hard gate (0076): a paused team, or one that has spent its monthly
+        // allowance, runs no reviews. Checked here, with the other readiness gates
+        // and BEFORE the "analysing…" comment is posted — bailing after that would
+        // leave a comment on the PR that nothing ever comes back to edit. This
+        // service is webhook-driven, so this is the only thing standing between a
+        // stopped team and a review on every push.
+        //
+        // The bail is silent to the PR (a review that was never promised needs no
+        // apology on someone's branch) but NOT silent in the logs: "no review
+        // appeared and no error was raised" is the hardest report to act on, and
+        // the reason is the whole answer.
         const payer = await tryOrNull(() => this.projects.findTeamId(project.id))
-        if (!payer || (await this.spend.check(payer))) return
+        if (!payer) {
+            console.warn("[pr-analysis] no owning team for project — skipping review", project.id)
+            return
+        }
+        const refusal = await this.spend.check(payer)
+        if (refusal) {
+            console.warn(
+                `[pr-analysis] team ${payer} cannot spend (${refusal.reason}) — skipping review of PR #${pr.number}`,
+            )
+            return
+        }
 
         const existing = await this.store.findTracking(project.id, pr.number)
         if (existing?.status === "analysing") {
@@ -209,6 +231,16 @@ export class PullRequestAnalysisService {
             return
         }
 
+        // Already waiting for a slot. Take the newer head rather than enqueueing a
+        // second review: by the time one frees, the head that matters is the
+        // latest, exactly as with the pending-head coalescing above.
+        if (existing?.status === "queued") {
+            if (pr.headSha && pr.headSha !== existing.headSha) {
+                await tryOrNull(() => this.enqueue(project.id, pr.number, pr.headSha, existing.githubCommentId ?? null))
+            }
+            return
+        }
+
         // A finished review already covers this head. Every `pull_request` event
         // that isn't a code change — reopened, edited, labeled, review_requested —
         // arrives with the SAME head_sha, so without this gate merely reopening or
@@ -216,6 +248,25 @@ export class PullRequestAnalysisService {
         // byte-for-byte identical. This is the skip migration 0042 provisioned
         // head_sha for. A `synchronize` moves the head and still re-runs.
         if (!opts.force && existing?.status === "done" && pr.headSha && existing.headSha === pr.headSha) return
+
+        // At the cap the review is QUEUED rather than dropped. Checked here — after
+        // the head gate, so a push that needed no review does not take a queue slot,
+        // and before the "analysing…" comment, so a waiting review does not leave a
+        // placeholder on the branch claiming work is under way.
+        //
+        // The row remembers head_sha, which is what makes the wait harmless: when a
+        // slot frees the drain reviews the head that is current then, not whichever
+        // push happened to arrive while the team was busy.
+        const crowded = await this.admission.check(payer)
+        if (crowded) {
+            console.info(
+                `[pr-analysis] team ${payer} at its concurrency cap — queueing review of PR #${pr.number}`,
+            )
+            await tryOrNull(() =>
+                this.enqueue(project.id, pr.number, pr.headSha, existing?.githubCommentId ?? null),
+            )
+            return
+        }
 
         // ─── what to review ─────────────────────────────────────────────────
         //
@@ -905,8 +956,23 @@ export class PullRequestAnalysisService {
         // a contract it "could not verify". A tool result beats an instruction,
         // so the file has to actually be there.
         const bare = whole.map((f) => ({ path: f.filename, status: f.status }))
-        const imported = new Set(importedPullRequestFiles(files, bare))
         const byName = new Map(whole.map((f) => [f.filename, f]))
+        // Both directions. Outbound answers "what does this push depend on";
+        // inbound answers "who in this pull request depends on it", which is the
+        // blast-radius question the reviewer asks unprompted. When the answer is
+        // a file an EARLIER push modified, the reviewer reads the checkout's
+        // pre-pull-request copy and reports the push's work as unreachable —
+        // MR !6 round 11 said "plansRouter is never mounted … ripgrep finds
+        // nothing", of a router mounted at server.ts:9 by the previous push.
+        //
+        // The patches are already in hand, so the scan costs nothing but the
+        // bytes it adds, and it adds them only for files that really do import
+        // what the push changed.
+        const withPatches = whole.map((f) => ({ path: f.filename, status: f.status, patch: f.patch }))
+        const imported = new Set([
+            ...importedPullRequestFiles(files, bare),
+            ...importersOfPullRequestFiles(files, withPatches),
+        ])
         const manifest = bare.map((m) =>
             imported.has(m.path) && byName.get(m.path)?.patch
                 ? { ...m, patch: byName.get(m.path)!.patch }
@@ -914,7 +980,7 @@ export class PullRequestAnalysisService {
         )
         if (imported.size > 0) {
             console.info(
-                `[pr-review] sending ${imported.size} imported file(s) as context: ${[...imported].join(", ")}`,
+                `[pr-review] sending ${imported.size} related file(s) as context: ${[...imported].join(", ")}`,
             )
         }
         return { files, manifest }
@@ -1013,6 +1079,50 @@ export class PullRequestAnalysisService {
             project as PrProject,
             {
                 number: row.prNumber,
+                title: pr.title,
+                body: pr.body,
+                baseSha: pr.base_sha,
+                headSha: pr.head_sha,
+            },
+            origin,
+        )
+    }
+
+    /** Park this review until a slot frees. See PullRequestAnalysisStore.enqueueTracking. */
+    private enqueue(
+        projectId: string,
+        prNumber: number,
+        headSha: string | null | undefined,
+        githubCommentId: number | null,
+    ): Promise<void> {
+        return this.store.enqueueTracking({
+            projectId,
+            prNumber,
+            headSha: headSha ?? null,
+            githubCommentId,
+        })
+    }
+
+    /** Start a review the queue has decided to run now (0085).
+     *
+     *  Rebuilt from the mirror rather than from anything the queue carried, which
+     *  is the same reconstruction continueIfMoved does and for the same reason: by
+     *  the time a slot frees the pull request may have moved, been closed, or been
+     *  merged, and the review that matters is of the head as it stands now. A PR
+     *  that is no longer open is dropped — re-reviewing it would post onto a
+     *  finished conversation. */
+    async startQueued(projectId: string, prNumber: number, origin: string): Promise<void> {
+        if (!this.pulls) return
+        const project = await tryOrNull(() => this.projects.findGithubSyncContext(projectId))
+        if (!project) return
+
+        const pr = await tryOrNull(() => this.pulls!.findByNumber(projectId, prNumber))
+        if (!pr || pr.state !== "open" || pr.merged) return
+
+        await this.start(
+            project as PrProject,
+            {
+                number: prNumber,
                 title: pr.title,
                 body: pr.body,
                 baseSha: pr.base_sha,

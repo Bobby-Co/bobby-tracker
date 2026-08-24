@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Supabase, type SupabaseRlsClient } from "@/lib/server/supabase"
+import { RepositoryError } from "@/lib/shared/kernel"
 import type { PrAnalysis, PrFinding, ReviewRoundCommit, ReviewRunProfile, ReviewRunScope } from "@/lib/shared/types"
 import type {
     PullRequestAnalysisResultRow,
@@ -54,6 +55,30 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             headSha: data.head_sha,
             pendingHeadSha: data.pending_head_sha ?? null,
         }
+    }
+
+    async enqueueTracking(input: {
+        projectId: string
+        prNumber: number
+        headSha: string | null
+        githubCommentId: number | null
+    }): Promise<void> {
+        // Only the queue's own columns. review_profile / review_profile_id /
+        // review_scope are left untouched: on a first queue there is nothing to
+        // write, and on a re-queue after an earlier review the old attribution is
+        // about to be overwritten by the dispatch anyway. Writing nulls here would
+        // blank a finished review's record for as long as the queue lasts.
+        const { error } = await this.db.from("pull_request_analyses").upsert(
+            {
+                project_id: input.projectId,
+                pr_number: input.prNumber,
+                github_comment_id: input.githubCommentId,
+                head_sha: input.headSha,
+                status: "queued",
+            },
+            { onConflict: "project_id,pr_number" },
+        )
+        if (error) throw new RepositoryError(error.message, { cause: error })
     }
 
     async upsertTracking(input: PullRequestAnalysisUpsert): Promise<{ id: string } | null> {

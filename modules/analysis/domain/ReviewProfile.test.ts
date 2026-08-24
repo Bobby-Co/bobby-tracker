@@ -237,15 +237,23 @@ describe("the tier vocabulary cannot drift", () => {
         const { TIER_IDS } = await import("@/modules/billing/domain/Tier")
         const floors = TIER_IDS.map((id) => maxDepthForTier(id))
         expect(floors).not.toContain(undefined)
-        // Kit is the only tier that should land on the floor by design; any other
-        // tier reading "quick" means it was forgotten rather than decided.
+        // Landing on the floor has to be DECIDED, not defaulted — a tier that
+        // reads "quick" because nobody added an entry looks identical to one that
+        // reads "quick" on purpose. Both entries here are on purpose: Kit is
+        // free, and Scout (0087) buys credits, seats and concurrency rather than
+        // depth, which is the dial that costs money per review and is what
+        // Prowler is for.
         const onFloor = TIER_IDS.filter((id) => maxDepthForTier(id) === "quick")
-        expect(onFloor).toEqual(["kit"])
+        expect(onFloor).toEqual(["kit", "scout"])
     })
 
-    test("the ladder is monotonic — a higher plan never buys less depth", () => {
+    test("the ladder is monotonic — a higher plan never buys less depth", async () => {
+        const { TIER_IDS } = await import("@/modules/billing/domain/Tier")
         const rank = { quick: 0, standard: 1, deep: 2 } as const
-        const ladder = ["kit", "prowler", "pride", "apex"].map((t) => rank[maxDepthForTier(t)])
+        // Read from TIER_IDS rather than a hand-written list: a hardcoded ladder
+        // silently stops covering a tier the moment one is added, which is
+        // exactly when this check matters.
+        const ladder = TIER_IDS.map((t) => rank[maxDepthForTier(t)])
         for (let i = 1; i < ladder.length; i++) {
             expect(ladder[i]).toBeGreaterThanOrEqual(ladder[i - 1])
         }

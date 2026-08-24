@@ -11,6 +11,7 @@ import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
 const store = {
     findTracking: mock(), upsertTracking: mock(), findResultRow: mock(), saveResult: mock(),
     appendRound: mock(), listRounds: mock(), setPendingHead: mock(), clearPendingHead: mock(),
+    enqueueTracking: mock(),
 }
 const pulls = { findByNumber: mock() }
 const projectsRepo = { findCell: mock(), findGithubSyncContext: mock(), findTeamId: mock(async () => "team-1") }
@@ -32,8 +33,14 @@ beforeAll(async () => {
 
 // The billing hard gate (0076): null means the team may spend.
 const spend = { check: mock(async () => null as null | { reason: string; message: string }) }
+// Admission (the per-team concurrency bound) defaults to PERMISSIVE here: these
+// tests are about the review lifecycle, and a cap that refused by default would
+// make every one of them pass for the wrong reason. The bound's own behaviour is
+// pinned in modules/analysis/application/RunAdmission.test.ts.
+const admission = { check: mock(async () => null) }
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any)
+const svc = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, admission as any)
 
 beforeEach(() => {
     store.findTracking.mockReset().mockResolvedValue(null)
@@ -41,6 +48,12 @@ beforeEach(() => {
     store.listRounds.mockReset().mockResolvedValue([])
     store.setPendingHead.mockReset().mockResolvedValue(undefined)
     store.clearPendingHead.mockReset().mockResolvedValue(undefined)
+    store.enqueueTracking.mockReset().mockResolvedValue(undefined)
+    // Both gates default to PERMISSIVE, and both are RESET here: before the
+    // queue existed no test changed them, so nothing in this file reset them
+    // and a test that did would have leaked into every test after it.
+    spend.check.mockReset().mockResolvedValue(null)
+    admission.check.mockReset().mockResolvedValue(null)
     pulls.findByNumber.mockReset().mockResolvedValue(null)
     projectsRepo.findGithubSyncContext.mockReset()
     store.upsertTracking.mockReset().mockResolvedValue({ id: "task-1" })
@@ -123,6 +136,59 @@ describe("start — run-once-per-head idempotency", () => {
 // total silence: the resulting review is byte-identical to one where no profile
 // was ever assigned, so a broken profile and a working one that found nothing
 // look the same on the page AND in the logs. These pin the warning.
+describe("start — the concurrency cap queues instead of dropping", () => {
+    test("at the cap the review is QUEUED, and no placeholder comment is posted — "
+        + "a waiting review must not leave a comment on the branch claiming work "
+        + "is under way", async () => {
+        admission.check.mockResolvedValue({ reason: "too_many_runs", message: "full" })
+        await svc().start(project, pr, "https://app")
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+        expect(vcsSvc.postPrComment).not.toHaveBeenCalled()
+        expect(store.enqueueTracking).toHaveBeenCalledWith({
+            projectId: "proj-1",
+            prNumber: 7,
+            headSha: "head1",
+            githubCommentId: null,
+        })
+    })
+
+    test("the queued row remembers the head, so the drain reviews what is current "
+        + "when a slot frees rather than the push that happened to arrive first", async () => {
+        store.findTracking.mockResolvedValue({ id: "t", status: "queued", githubCommentId: 5, headSha: "head0" })
+        await svc().start(project, pr, "https://app")
+        expect(store.enqueueTracking).toHaveBeenCalledWith({
+            projectId: "proj-1",
+            prNumber: 7,
+            headSha: "head1",
+            githubCommentId: 5,
+        })
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a push at the SAME head as the queued row changes nothing", async () => {
+        store.findTracking.mockResolvedValue({ id: "t", status: "queued", githubCommentId: 5, headSha: "head1" })
+        await svc().start(project, pr, "https://app")
+        expect(store.enqueueTracking).not.toHaveBeenCalled()
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a head already reviewed is NOT queued — the cap is checked after the "
+        + "head gate, so a push needing no review never takes a queue slot", async () => {
+        store.findTracking.mockResolvedValue({ id: "t", status: "done", githubCommentId: 1, headSha: "head1" })
+        admission.check.mockResolvedValue({ reason: "too_many_runs", message: "full" })
+        await svc().start(project, pr, "https://app")
+        expect(store.enqueueTracking).not.toHaveBeenCalled()
+    })
+
+    test("an exhausted balance still drops the review rather than queueing it", async () => {
+        spend.check.mockResolvedValue({ reason: "exhausted", message: "out" })
+        admission.check.mockResolvedValue(null)
+        await svc().start(project, pr, "https://app")
+        expect(store.enqueueTracking).not.toHaveBeenCalled()
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+    })
+})
+
 describe("start — an unreadable review profile", () => {
     const boom = () => {
         const e = new Error("column projects.review_profile_id does not exist")
@@ -137,7 +203,7 @@ describe("start — an unreadable review profile", () => {
 
     const withProfiles = (profiles: unknown) =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, profiles as any)
+        new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, admission as any, profiles as any)
 
     test("the review still runs, as the default reviewer", async () => {
         const profiles = { findForProject: mock(async () => { throw new RepositoryError(boom().message) }) }
@@ -194,7 +260,7 @@ describe("start — an unreadable review profile", () => {
 // debounce window.
 describe("start — a push during an in-flight review", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const svcWithPulls = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, undefined, undefined, pulls as any)
+    const svcWithPulls = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, admission as any, undefined, undefined, pulls as any)
 
     test("records the new head instead of dropping it", async () => {
         store.findTracking.mockResolvedValue({ id: "t", status: "analysing", githubCommentId: 1, headSha: "head0", pendingHeadSha: null })
@@ -228,7 +294,7 @@ describe("start — a push during an in-flight review", () => {
 
 describe("applyResult — rounds and the continuation", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const svcWithPulls = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, undefined, undefined, pulls as any)
+    const svcWithPulls = () => new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, admission as any, undefined, undefined, pulls as any)
 
     const doneRow = (over: Record<string, unknown> = {}) => ({
         id: "task-1", projectId: "proj-1", prNumber: 7, githubCommentId: null,
@@ -727,7 +793,7 @@ describe("start — the carry symbol test reads the files as SENT", () => {
 describe("applyResult — a degraded review is retried, not shipped", () => {
     const svcWithPulls = () =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, undefined, undefined, pulls as any)
+        new PullRequestAnalysisService(analyserFor as any, projectsRepo as any, analyserRepo as any, store as any, vcsFor as any, new PullRequestAnalysisComment(), spend as any, admission as any, undefined, undefined, pulls as any)
 
     const row = (over: Record<string, unknown> = {}) => ({
         id: "task-1", projectId: "proj-1", prNumber: 7, githubCommentId: null,

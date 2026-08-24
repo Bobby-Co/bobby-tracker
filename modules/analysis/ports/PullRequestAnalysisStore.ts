@@ -129,6 +129,22 @@ export interface PullRequestAnalysisStore {
     findTracking(projectId: string, prNumber: number): Promise<PullRequestAnalysisTracking | null>
     /** Upsert the tracking row (conflict on project_id,pr_number); returns its id. */
     upsertTracking(input: PullRequestAnalysisUpsert): Promise<{ id: string } | null>
+
+    /** Park a review as 'queued' — the team was at its concurrency cap (0085).
+     *
+     *  Separate from upsertTracking, and deliberately NOT it, because a queued
+     *  review has not chosen a profile or a scope yet: those are resolved at
+     *  dispatch so the row describes what actually ran, which is exactly why
+     *  `reviewProfile` above is not optional. This writes only what the queue
+     *  needs — the head to review when a slot frees, and the placeholder comment
+     *  to reuse if one already exists — and leaves the attribution columns alone
+     *  for the dispatch that follows to fill in. */
+    enqueueTracking(input: {
+        projectId: string
+        prNumber: number
+        headSha: string | null
+        githubCommentId: number | null
+    }): Promise<void>
     /** The tracking row by task id (its own id), for the terminal callback. */
     findResultRow(taskId: string): Promise<PullRequestAnalysisResultRow | null>
     /** Persist the terminal status + structured review (fires the pr_analysis_ready

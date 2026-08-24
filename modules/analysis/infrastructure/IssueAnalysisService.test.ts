@@ -48,8 +48,14 @@ beforeAll(async () => {
 
 // The billing hard gate (0076): null means the team may spend.
 const spend = { check: mock(async () => null as null | { reason: string; message: string }) }
+// Admission (the per-team concurrency bound) defaults to PERMISSIVE: these tests
+// are about the one-shot/idempotency rules, and a cap that refused by default
+// would make them pass for the wrong reason. Its own behaviour is pinned in
+// modules/analysis/application/RunAdmission.test.ts.
+const admission = { check: mock(async () => null) }
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any, spend as any)
+const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any, spend as any, admission as any)
 
 beforeEach(() => {
     store.findAnalysisRow.mockReset().mockResolvedValue(null)
@@ -60,6 +66,7 @@ beforeEach(() => {
     projectsRepo.findCell.mockReset().mockResolvedValue("ashburn-0")
     projectsRepo.findTeamId.mockReset().mockResolvedValue("team-1")
     spend.check.mockReset().mockResolvedValue(null)
+    admission.check.mockReset().mockResolvedValue(null)
     analyserFor.mockClear()
     analyserRepo.findByProjectId.mockReset().mockResolvedValue(null)
     analyserRepo.findGraphId.mockReset().mockResolvedValue("G1")
@@ -131,8 +138,80 @@ describe("ensure — one-shot idempotency + gates", () => {
         store.findAnalysisRow.mockResolvedValue(analysisRow)
         analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
         spend.check.mockResolvedValue({ reason: "suspended", message: "paused" })
-        expect(await svc().ensure("iss-1", "https://app")).toBe("paused")
+        expect(await svc().ensure("iss-1", "https://app")).toEqual({ reason: "suspended", message: "paused" })
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a team OUT OF CREDITS is refused the same way, and the gate's own "
+        + "message is carried out intact — 'paused' and 'exhausted' send the user "
+        + "to different screens, so the route must be able to tell them apart", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        spend.check.mockResolvedValue({ reason: "exhausted", message: "used all 2,000" })
+        expect(await svc().ensure("iss-1", "https://app")).toEqual({
+            reason: "exhausted",
+            message: "used all 2,000",
+        })
+        expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a team at its concurrency cap has the run QUEUED, not refused — being "
+        + "busy is a wait, not a failure, and the user asked for this work", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        admission.check.mockResolvedValue({ reason: "too_many_runs", message: "already running 2" })
+        expect(await svc().ensure("iss-1", "https://app")).toBe("queued")
+        expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("a queued run is marked 'queued' with NO start time — the staleness rule "
+        + "keys off analysis_started_at, and a run that has not started must not "
+        + "look like one that has", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        admission.check.mockResolvedValue({ reason: "too_many_runs", message: "full" })
+        await svc().ensure("iss-1", "https://app")
+        expect(store.updateSyncFields).toHaveBeenCalledWith("iss-1", {
+            analysis_status: "queued",
+            analysis_started_at: null,
+        })
+    })
+
+    test("asking again about an already-queued issue does not enqueue it twice", async () => {
+        store.findAnalysisRow.mockResolvedValue({ ...analysisRow, analysis_status: "queued" })
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        expect(await svc().ensure("iss-1", "https://app")).toBe("queued")
+        expect(store.updateSyncFields).not.toHaveBeenCalled()
+        expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("the DRAIN gets past that guard — for it, 'queued' is the reason to "
+        + "proceed rather than a reason to stop", async () => {
+        store.findAnalysisRow.mockResolvedValue({ ...analysisRow, analysis_status: "queued" })
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        expect(await svc().ensure("iss-1", "https://app", { fromQueue: true })).toBe("started")
+        expect(analyser.startIssueAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    test("a drained run that finds the team STILL at the cap goes back in the "
+        + "queue rather than overshooting it", async () => {
+        store.findAnalysisRow.mockResolvedValue({ ...analysisRow, analysis_status: "queued" })
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        admission.check.mockResolvedValue({ reason: "too_many_runs", message: "full" })
+        expect(await svc().ensure("iss-1", "https://app", { fromQueue: true })).toBe("queued")
+        expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
+    })
+
+    test("an exhausted balance still REFUSES rather than queueing — a queue that "
+        + "cannot drain is worse than an honest no", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        spend.check.mockResolvedValue({ reason: "exhausted", message: "out of credits" })
+        expect(await svc().ensure("iss-1", "https://app")).toEqual({
+            reason: "exhausted",
+            message: "out of credits",
+        })
+        expect(store.updateSyncFields).not.toHaveBeenCalled()
     })
 
     test("an unresolvable team fails CLOSED — billing work to nobody is worse "
@@ -140,7 +219,8 @@ describe("ensure — one-shot idempotency + gates", () => {
         store.findAnalysisRow.mockResolvedValue(analysisRow)
         analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
         projectsRepo.findTeamId.mockResolvedValue(null)
-        expect(await svc().ensure("iss-1", "https://app")).toBe("paused")
+        const outcome = await svc().ensure("iss-1", "https://app")
+        expect(typeof outcome).toBe("object")
         expect(analyser.startIssueAnalysis).not.toHaveBeenCalled()
     })
 
