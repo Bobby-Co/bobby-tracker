@@ -142,18 +142,26 @@ export async function GET(request: Request) {
 
     // 4. The analyser's own table, checked from here because nothing else does.
     //
-    //    pr_review_index is written by the ANALYSER, into the cell's data plane,
-    //    and read by nothing in the tracker. So a tracker that is entirely
-    //    healthy says nothing about it — and it was missing from bangkok-0 for
-    //    the whole life of that project, costing every review its memory of the
-    //    previous ones, visible only in a container log nobody was tailing.
-    const memory = await db.from("pr_review_index").select("repo_id").limit(1)
+    //    pr_review_index is written by the ANALYSER and read by nothing in the
+    //    tracker, so a tracker that is entirely healthy says nothing about it. It
+    //    was missing from bangkok-0 for the whole life of that project, costing
+    //    every review its memory of the previous ones, visible only in a
+    //    container log nobody was tailing.
+    //
+    //    CONTROL, not `db`. The analyser addresses it through its
+    //    SupabaseConfig.URL pair, which points at control — stated outright in
+    //    that file's setRestHeaders comment. Reading it from the cell's data
+    //    plane checks a database the writer never touches: on a regional cell
+    //    that reports a missing table for a table that is present and working,
+    //    and sends you to run 0045 against the wrong database. The plane is
+    //    whatever the WRITER addresses, not where the data conceptually belongs.
+    const memory = await Supabase.service().from("pr_review_index").select("repo_id").limit(1)
     add(
-        "read pr_review_index (analyser's review memory)",
+        "read pr_review_index (analyser's review memory, CONTROL plane)",
         memory.error,
         memory.error?.code === "PGRST205"
             ? "the table exists but PostgREST has not seen it — notify pgrst, 'reload schema';"
-            : "run migration 0045 against THIS cell's database — without it every review runs " +
+            : "run migration 0045 against the CONTROL database — without it every review runs " +
               "with no recall of what earlier reviews of the same files concluded",
     )
 
