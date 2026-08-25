@@ -1,6 +1,6 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
-import { AccountDeletionPlanner, getAccountIdentityStore, type TeamFacts } from "@/modules/account"
+import { AccountDeletionPlanner, createAccountMailer, getAccountIdentityStore, type TeamFacts } from "@/modules/account"
 import { BetaEmail, getBetaWaitlist } from "@/modules/beta"
 import type { TeamRole } from "@/lib/shared/types"
 
@@ -146,6 +146,13 @@ export async function DELETE() {
     const email = BetaEmail.of(user.email)
     if (email) await tryOrNull(() => getBetaWaitlist().remove(email))
 
+    // Read off the identity BEFORE it is destroyed. Both of these live only in
+    // auth.users, and the next statement deletes that row — after it there is no
+    // address to send a receipt to and no name to address it with.
+    const farewellTo = user.email ?? null
+    const farewellName =
+        (user.user_metadata?.full_name as string | undefined) ?? (user.user_metadata?.name as string | undefined) ?? null
+
     // Last, and only once everything above succeeded: the identity. After this
     // there is no id left to find anything by.
     try {
@@ -153,6 +160,24 @@ export async function DELETE() {
     } catch (e) {
         console.error("[account] identity deletion failed:", (e as Error).message)
         return jsonError("identity_error", "your data was removed but the login could not be deleted — contact support", 500)
+    }
+
+    // The receipt, sent only once the deletion has actually succeeded — a
+    // farewell for an account that failed to delete would be a lie. It names the
+    // teams because this mail is the only record the person will ever have of
+    // what the button did, and they can no longer sign in to look.
+    //
+    // AFTER the response would be better (the user is waiting on a 204), but
+    // `after()` is the Workers-safe way to do that and this route runs the
+    // deletion inline anyway; the mailer swallows its own failures, so the worst
+    // case is a slightly slower 204, never a failed delete.
+    if (farewellTo) {
+        await createAccountMailer().sendFarewell({
+            to: farewellTo,
+            name: farewellName,
+            teamsDeleted: plan.toDelete.map((t) => t.name),
+            teamsLeft: plan.toLeave.map((t) => t.name),
+        })
     }
 
     return new Response(null, { status: 204 })

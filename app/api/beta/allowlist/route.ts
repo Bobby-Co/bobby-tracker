@@ -1,5 +1,5 @@
 import { ApiContext, jsonError, forbidden } from "@/lib/server/http/api"
-import { EnvBetaStaff, getBetaEnrollmentService, getBetaWaitlist } from "@/modules/beta"
+import { EnvBetaStaff, createBetaMailer, getBetaEnrollmentService, getBetaWaitlist } from "@/modules/beta"
 
 // The beta list, as a staff surface.
 //
@@ -63,6 +63,14 @@ export async function POST(request: Request) {
         // null means the input wasn't an address at all — a caller mistake, not
         // an empty result.
         if (!entry) return jsonError("bad_request", "that doesn't look like an email address", 400)
+
+        // Tell the invitee. This is the whole point of enrolling: the row lives
+        // in a table they cannot see, on a screen they will never visit, so
+        // without this the invitation is silent until they happen to sign in
+        // again. The mailer swallows its own failures — an enrolment that
+        // succeeded must not be reported as a failure because mail was down.
+        await createBetaMailer().sendAccessGranted({ to: entry.email, note })
+
         return Response.json({ entry })
     } catch (e) {
         return jsonError("db_error", (e as Error).message, 500)

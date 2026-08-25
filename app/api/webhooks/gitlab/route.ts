@@ -335,8 +335,12 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
     // commit forever. ACK rather than error: GitHub/GitLab redelivery cannot fix a
     // pause, and a failed webhook would just retry until it gave up.
     const payer = await tryOrNull(() => createSupabaseProjectsRepository(svc).findTeamId(project.id))
-    if (!payer || (await getSpendGate().check(payer))) {
-        console.warn("[gitlab webhook] team paused or unresolved — skipping incremental index", project.id)
+    const refusal = payer ? await getSpendGate().check(payer) : null
+    if (!payer || refusal) {
+        console.warn(
+            `[gitlab webhook] ${payer ? `team ${payer} cannot spend (${refusal?.reason})` : "team unresolved"}` +
+                ` — skipping incremental index for project ${project.id}`,
+        )
         return ack()
     }
     const graphId = analyser.graph_id

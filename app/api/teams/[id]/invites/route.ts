@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { ApiContext, forbidden, jsonError, repoRead } from "@/lib/server/http/api"
 import { Role } from "@/modules/access"
-import { Email, Invite, createInviteNotifier } from "@/modules/teams"
+import { Email, Invite, createTeamMailer } from "@/modules/teams"
 import { TEAM_ROLES, type TeamRole } from "@/lib/shared/types"
 
 // GET /api/teams/[id]/invites — pending (unaccepted) invites (admins). RLS on
@@ -57,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const acceptUrl = inviteVo.acceptUrl(request, token)
     after(async () => {
         try {
-            await createInviteNotifier().sendInvite({ to: email, teamName: teamName ?? "a team", inviterName, acceptUrl, role: inviteRole })
+            await createTeamMailer().sendInvite({ to: email, teamName: teamName ?? "a team", inviterName, acceptUrl, role: inviteRole })
         } catch (e) {
             console.error("[team invite] email send failed", id, email, e)
         }

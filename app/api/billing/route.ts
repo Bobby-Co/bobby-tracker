@@ -23,7 +23,10 @@ export async function GET() {
     // an in-flight backfill) is treated as Kit — the safe free-tier floor — with a
     // period anchored to the current month.
     const tier = sub?.tier ?? "kit"
-    const periodStart = sub?.period_start ?? startOfMonthUtc()
+    // The window being billed (0088), falling back to the calendar month for a
+    // free team. NOT the legacy `period_start` column, which is never advanced —
+    // see SpendGate for the difference between the two.
+    const periodStart = sub?.current_period_start ?? Balance.currentPeriodStart()
 
     // Balance comes from the maintained rollup (single-row lookups), not a scan of
     // the event log — so it stays O(1) however much usage a team accrues.
@@ -47,6 +50,7 @@ export async function GET() {
 
     const balance = new Balance({
         tier,
+        status: sub?.status ?? "active",
         allowanceOverride: sub?.monthly_points ?? null,
         used: period?.points ?? 0,
         periodStart,
@@ -60,6 +64,14 @@ export async function GET() {
         // paused state and the resume control.
         suspended: subject?.status === "suspended" || sub?.status === "suspended",
         slot: subject?.slot ?? null,
+        // Whether this team has ever checked out. Drives which control the plan
+        // ladder offers: a team with a Stripe customer changes plans through the
+        // billing portal (where Stripe handles proration and cancellation), a
+        // team without one goes through checkout to create a subscription.
+        hasBillingAccount: !!sub?.stripe_customer_id,
+        currentPeriodStart: sub?.current_period_start ?? null,
+        currentPeriodEnd: sub?.current_period_end ?? null,
+        cancelAtPeriodEnd: sub?.cancel_at_period_end ?? false,
         balance: balance.toJSON(),
         breakdown,
         recent,
@@ -69,7 +81,3 @@ export async function GET() {
     })
 }
 
-function startOfMonthUtc(): string {
-    const now = new Date()
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
-}

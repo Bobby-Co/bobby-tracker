@@ -181,6 +181,9 @@ function OnboardingInner() {
                 contact_email: email.trim(),
                 role,
                 company_size: size,
+                // Carried into the metadata so the welcome email can name the
+                // workspace without the send path having to resolve a team.
+                team_name: teamName.trim(),
                 onboarded: true,
             },
         })
@@ -189,6 +192,15 @@ function OnboardingInner() {
             setSaving(false)
             return
         }
+
+        // The welcome email. Fired here because this is the only moment that
+        // means "they've actually arrived" — and deliberately NOT awaited: the
+        // route is idempotent (it claims a one-time mark server-side), the mail
+        // is not worth a second of staring at a spinner, and a mail server
+        // having a bad day must not strand anyone on the last step of
+        // onboarding. Failures are the route's problem, not this screen's.
+        void apiMutate("/api/account/welcome", { method: "POST" }).catch(() => {})
+
         // Onboarded — hand off to where they were headed if they're on the
         // whitelist, otherwise to the coming-soon waitlist.
         router.replace(new BetaAccess().isAllowed(user) ? next : "/waitlist")

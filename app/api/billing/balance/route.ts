@@ -16,7 +16,10 @@ export async function GET() {
     if (subErr) return subErr
 
     const tier = sub?.tier ?? "kit"
-    const periodStart = sub?.period_start ?? startOfMonthUtc()
+    // The window being billed (0088), falling back to the calendar month for a
+    // free team. NOT the legacy `period_start` column, which is never advanced —
+    // see SpendGate for the difference between the two.
+    const periodStart = sub?.current_period_start ?? Balance.currentPeriodStart()
 
     // Through the billing subject (0076), not the team — see PeriodUsageReader.
     const { data: period, error: usedErr } = await repoRead(() => ctx.periodUsage.forTeam(teamId, periodStart))
@@ -24,6 +27,7 @@ export async function GET() {
 
     const balance = new Balance({
         tier,
+        status: sub?.status ?? "active",
         allowanceOverride: sub?.monthly_points ?? null,
         used: period?.points ?? 0,
         periodStart,
@@ -31,7 +35,3 @@ export async function GET() {
     return Response.json({ balance: balance.toJSON() })
 }
 
-function startOfMonthUtc(): string {
-    const now = new Date()
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
-}
