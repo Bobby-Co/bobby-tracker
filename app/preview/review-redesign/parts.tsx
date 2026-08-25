@@ -205,7 +205,14 @@ export function Rounds() {
     const [sel, setSel] = useState(rounds.length - 1)
 
     return (
-        <div className="flex w-full gap-1.5">
+        // min-h, not h. The row's natural height is set by whichever card is open, and
+        // mid-animation NEITHER is fully open — the collapsing detail and the
+        // expanding one are both half-height at the midpoint, so the row dips below
+        // its resting height and springs back. That is the glitch. A floor holds it
+        // still through the transition; it is a MINIMUM rather than a fixed height so
+        // a longer commit subject or a larger font can still push it taller instead
+        // of being clipped.
+        <div className="flex w-full gap-1.5 min-h-[78px]">
             {rounds.map((r, i) => {
                 const open = i === sel
                 const current = i === rounds.length - 1
