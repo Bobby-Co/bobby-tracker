@@ -299,3 +299,82 @@ function RailHeading({ icon, children }: { icon: IconName; children: React.React
         </h4>
     )
 }
+
+/** In flight — queued or running. The standing round stays on the page, because
+ *  it is what the merge gate is still reading. */
+export function InFlight({ queued }: { queued?: boolean }) {
+    return (
+        <div className="flex flex-col gap-1 rounded-[12px] border border-amber-200 bg-amber-50/60 px-4 py-3 text-amber-800">
+            <span className="flex items-center gap-2 text-[13px] font-semibold">
+                <span className={cn("h-2 w-2 rounded-full bg-amber-500", !queued && "animate-pulse")} />
+                {queued ? "Queued — waiting for a review slot" : "Reviewing 1 new commit"}
+            </span>
+            <span className="text-[12px] opacity-85">
+                The round below still stands until this finishes — it is what the merge gate is reading.
+            </span>
+        </div>
+    )
+}
+
+/** Viewing an earlier round. Says so plainly, because a stale review presented
+ *  as current is the worst thing this panel can do. */
+export function ArchiveBanner({ round }: { round: number }) {
+    return (
+        <div className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[color:var(--c-border-strong)] bg-[color:var(--c-surface-2)] px-4 py-2.5 text-[12px]">
+            <Icon name="chat" size={13} className="text-[color:var(--c-text-muted)]" />
+            <span className="font-semibold text-[color:var(--c-text)]">Viewing round {round}</span>
+            <span className="text-[color:var(--c-text-muted)]">— the review as it stood then. Some of it may since have been fixed.</span>
+            <button type="button" className="ml-auto rounded-full border border-[color:var(--c-border)] px-2.5 py-[3px] text-[11.5px] font-medium hover:bg-[color:var(--c-surface)]">
+                Back to current
+            </button>
+        </div>
+    )
+}
+
+/** Degraded — the grounded pass did not land, so this is reduce's draft. Never
+ *  silent: an unfinished review that looks finished is how a blocker gets missed. */
+export function DegradedNote() {
+    return (
+        <div className="flex items-start gap-2 rounded-[12px] border border-amber-200 bg-amber-50/60 px-4 py-3 text-[12px] leading-[1.6] text-amber-800">
+            <Icon name="alert" size={14} className="mt-[2px]" />
+            <span>
+                <b>Partial review.</b> The grounded pass did not complete, so this is the diff-level draft — read it as
+                unfinished rather than as a clean bill of health.
+            </span>
+        </div>
+    )
+}
+
+/** A terminal state that produced nothing. */
+export function EmptyState({ kind }: { kind: "failed" | "cancelled" | "none" }) {
+    const copy = {
+        failed: { icon: "x" as IconName, text: "Ucelot couldn't complete the review this time.", tone: "text-rose-700 border-rose-200 bg-rose-50/60" },
+        cancelled: { icon: "x" as IconName, text: "The review was cancelled — the pull request closed before it finished.", tone: "text-[color:var(--c-text-muted)] border-[color:var(--c-border)]" },
+        none: { icon: "chat" as IconName, text: "No review yet for this pull request.", tone: "text-[color:var(--c-text-muted)] border-[color:var(--c-border)]" },
+    }[kind]
+    return (
+        <div className={cn("flex items-center gap-2 rounded-[12px] border px-4 py-3 text-[12.5px]", copy.tone)}>
+            <Icon name={copy.icon} size={14} />
+            {copy.text}
+        </div>
+    )
+}
+
+/** What this round changed relative to the last one. */
+export function ProgressLine({ fixed, added }: { fixed: number; added: number }) {
+    return (
+        <p className="flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--c-text-muted)]">
+            {fixed > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-[2px] font-semibold text-emerald-700">
+                    <Icon name="check" size={11} /> {fixed} fixed
+                </span>
+            )}
+            since the last push
+            {added > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-[2px] font-semibold text-amber-700">
+                    {added} new
+                </span>
+            )}
+        </p>
+    )
+}
