@@ -176,3 +176,43 @@ export function Claims({ items }: { items: { claim: string; verdict?: string; re
         </div>
     )
 }
+
+
+/** Rail variants. History and dependencies are CONTEXT — what happened here
+ *  before, what moved underneath — not things a reader acts on, so they belong
+ *  with confidence and the checks rather than in the column where findings are.
+ *
+ *  A narrower column needs different chrome, not smaller type: the bordered box
+ *  and the table columns come off, the content stays. */
+export function TimelineRail({ items }: { items: BlockItem[] }) {
+    return (
+        <ol className="relative ml-[3px] border-l border-[color:var(--c-border)] pl-3">
+            {items.map((it, i) => (
+                <li key={i} className="relative pb-3 last:pb-0">
+                    <span className="absolute -left-[16.5px] top-[6px] h-1.5 w-1.5 rounded-full bg-[color:var(--c-border-strong)] ring-[3px] ring-[color:var(--c-surface)]" />
+                    <code className="font-mono text-[10.5px] text-[color:var(--c-text-dim)]">{it.when}</code>
+                    <p className="text-[11.5px] leading-[1.5] text-[color:var(--c-text)]">{it.label}</p>
+                    {it.detail && <p className="mt-0.5 text-[11px] leading-[1.5] text-[color:var(--c-text-dim)]">{it.detail}</p>}
+                </li>
+            ))}
+        </ol>
+    )
+}
+
+export function DependencyRail({ items }: { items: BlockItem[] }) {
+    return (
+        <ul className="flex flex-col gap-2">
+            {items.map((it, i) => (
+                <li key={i} className="min-w-0">
+                    <div className="flex flex-wrap items-baseline gap-x-1.5">
+                        <code className="font-mono text-[11px] font-semibold text-[color:var(--c-text)]">{it.label}</code>
+                        <code className="font-mono text-[10.5px] text-[color:var(--c-text-dim)]">
+                            {it.from} <span className="opacity-60">→</span> {it.to}
+                        </code>
+                    </div>
+                    <p className="text-[11px] leading-[1.5] text-[color:var(--c-text-dim)]">{it.detail}</p>
+                </li>
+            ))}
+        </ul>
+    )
+}

@@ -87,9 +87,9 @@ export function FindingRow({ f, rail }: { f: PrFinding; rail?: boolean }) {
 }
 
 /** Metadata, as a quiet rail rather than as five more drawers. */
-export function MetaRail({ r }: { r: PrAnalysis }) {
+export function MetaRail({ r, extra }: { r: PrAnalysis; extra?: React.ReactNode }) {
     return (
-        <aside className="flex flex-col gap-5 text-[12px]">
+        <aside className="flex flex-col divide-y divide-[color:var(--c-border)] text-[12px] [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
             <div>
                 <RailHeading icon="target">Confidence</RailHeading>
                 <Meters r={r} />
@@ -108,6 +108,8 @@ export function MetaRail({ r }: { r: PrAnalysis }) {
                     ))}
                 </ul>
             </div>
+
+            {extra}
 
             <div>
                 <RailHeading icon="nodes">Checked</RailHeading>
@@ -291,7 +293,7 @@ export function Meters({ r }: { r: PrAnalysis }) {
 
 /** A rail heading: glyph, then label. The glyph is what makes the rail
  *  scannable at a glance — three identical uppercase words are not. */
-function RailHeading({ icon, children }: { icon: IconName; children: React.ReactNode }) {
+export function RailHeading({ icon, children }: { icon: IconName; children: React.ReactNode }) {
     return (
         <h4 className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
             <Icon name={icon} size={12} />

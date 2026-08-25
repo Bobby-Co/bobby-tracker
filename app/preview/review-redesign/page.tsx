@@ -5,7 +5,7 @@ import { PrReview } from "@/components/pulls/pr-review"
 import { cn } from "@/components/ui/cn"
 import type { PullRequestAnalysis } from "@/lib/shared/types"
 import { REVIEW, REVIEW_MANY } from "./fixture"
-import { Callout, Checklist, Claims, DependencyList, RiskMatrix, SectionHead, SpecTable, Timeline } from "./blocks"
+import { Callout, Checklist, Claims, DependencyRail, RiskMatrix, SectionHead, SpecTable, TimelineRail } from "./blocks"
 import { Icon } from "./glyphs"
 import {
     ArchiveBanner,
@@ -18,6 +18,7 @@ import {
     MetaRail,
     MoreDetail,
     ProgressLine,
+    RailHeading,
     Rounds,
     ScoreBar,
     SEV,
@@ -165,7 +166,7 @@ export default function ReviewStatesPreview() {
                             {on.verdict && <VerdictBand r={r} />}
                             {on.risks && <RiskMatrix items={RISKS} />}
 
-                            <div className={cn("grid gap-6", on.rail && "lg:grid-cols-[minmax(0,1fr)_220px]")}>
+                            <div className={cn("grid gap-6", on.rail && "lg:grid-cols-[minmax(0,1fr)_252px]")}>
                                 <div className="flex min-w-0 flex-col gap-5">
                                     {on.summary && (
                                         <ul className="flex max-w-[72ch] list-disc flex-col gap-1 pl-4 text-[13px] leading-[1.7] text-[color:var(--c-text-muted)]">
@@ -188,17 +189,48 @@ export default function ReviewStatesPreview() {
                                         })}
 
                                     {on.contracts && <SpecTable items={CONTRACTS} />}
-                                    {on.timeline && <Timeline items={HISTORY} />}
-                                    {on.deps && <DependencyList items={DEPS} />}
                                     {on.claims && <Claims items={r.fix_claims ?? []} />}
                                     {on.checklist && <Checklist items={r.checklist ?? []} />}
                                     {on.more && <MoreDetail r={r} />}
 
-                                    {!on.summary && !on.findings && !on.contracts && !on.timeline && !on.deps && !on.claims && !on.checklist && !on.more && (
+                                    {!on.rail && on.timeline && (
+                                        <div>
+                                            <SectionHead icon="chat" count={HISTORY.length}>History</SectionHead>
+                                            <TimelineRail items={HISTORY} />
+                                        </div>
+                                    )}
+                                    {!on.rail && on.deps && (
+                                        <div>
+                                            <SectionHead icon="nodes" count={DEPS.length}>Dependencies</SectionHead>
+                                            <DependencyRail items={DEPS} />
+                                        </div>
+                                    )}
+
+                                    {!on.summary && !on.findings && !on.contracts && !on.claims && !on.checklist && !on.more && !(on.timeline && !on.rail) && !(on.deps && !on.rail) && (
                                         <EmptyState kind="none" />
                                     )}
                                 </div>
-                                {on.rail && <MetaRail r={r} />}
+                                {on.rail && (
+                                    <MetaRail
+                                        r={r}
+                                        extra={
+                                            <>
+                                                {on.timeline && (
+                                                    <div>
+                                                        <RailHeading icon="chat">History</RailHeading>
+                                                        <TimelineRail items={HISTORY} />
+                                                    </div>
+                                                )}
+                                                {on.deps && (
+                                                    <div>
+                                                        <RailHeading icon="nodes">Dependencies</RailHeading>
+                                                        <DependencyRail items={DEPS} />
+                                                    </div>
+                                                )}
+                                            </>
+                                        }
+                                    />
+                                )}
                             </div>
                         </>
                     )}
