@@ -86,8 +86,12 @@ deploy:
       # comment, and requiring it here would refuse to deploy over a variable
       # nothing reads. NEXT_PUBLIC_BETA_ALLOWED_EMAILS is absent too — it has a
       # `?? ""` fallback and is the legacy path BETA_ADMIN_EMAILS replaced.
+      # NEXT_PUBLIC_AUTH_COOKIE_DOMAIN is NOT here. Empty is a valid setting for
+      # it — .env.local.example says so outright, and it is what production has
+      # been running — so requiring a value would refuse to deploy the
+      # configuration that is already live.
       for v in NEXT_PUBLIC_APP_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
-               NEXT_PUBLIC_AUTH_COOKIE_DOMAIN NEXT_PUBLIC_GITHUB_APP_SLUG \
+               NEXT_PUBLIC_GITHUB_APP_SLUG \
                CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
         [ -n "$(eval echo \$$v)" ] || missing="$missing $v"
       done
