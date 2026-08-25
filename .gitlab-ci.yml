@@ -81,9 +81,14 @@ deploy:
     # impossible.
     - |
       missing=""
+      # The five the client bundle actually READS, plus the two the deploy needs.
+      # NEXT_PUBLIC_GITHUB_CLIENT_ID is deliberately absent: it survives only in a
+      # comment, and requiring it here would refuse to deploy over a variable
+      # nothing reads. NEXT_PUBLIC_BETA_ALLOWED_EMAILS is absent too — it has a
+      # `?? ""` fallback and is the legacy path BETA_ADMIN_EMAILS replaced.
       for v in NEXT_PUBLIC_APP_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
                NEXT_PUBLIC_AUTH_COOKIE_DOMAIN NEXT_PUBLIC_GITHUB_APP_SLUG \
-               NEXT_PUBLIC_GITHUB_CLIENT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+               CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
         [ -n "$(eval echo \$$v)" ] || missing="$missing $v"
       done
       if [ -n "$missing" ]; then
