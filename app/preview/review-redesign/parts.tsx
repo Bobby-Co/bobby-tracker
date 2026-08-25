@@ -9,9 +9,9 @@ import { Icon, type IconName } from "./glyphs"
 // chosen.
 
 export const SEV = {
-    critical: { dot: "bg-[color:var(--c-error)]", text: "text-[color:var(--c-error)]", chip: "bg-[color:var(--c-error-bg)] text-[color:var(--c-error)] ring-[color:var(--c-error)]/30", label: "Blocker", icon: "alert" as IconName },
-    review: { dot: "bg-[color:var(--c-warn)]", text: "text-[color:var(--c-warn)]", chip: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)] ring-[color:var(--c-warn)]/30", label: "Worth a look", icon: "search" as IconName },
-    good: { dot: "bg-[color:var(--c-success)]", text: "text-[color:var(--c-success)]", chip: "bg-[color:var(--c-success-bg)] text-[color:var(--c-success)] ring-[color:var(--c-success)]/30", label: "Good", icon: "check" as IconName },
+    critical: { dot: "bg-[color:var(--c-error)]", text: "text-[color:var(--c-error)]", chip: "bg-[color:var(--c-error-bg)] text-[color:var(--c-error)] ring-[color:var(--c-error)]/30", label: "Blocker", icon: "alert" as IconName, rail: "border-[color:var(--c-error)]/45" },
+    review: { dot: "bg-[color:var(--c-warn)]", text: "text-[color:var(--c-warn)]", chip: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)] ring-[color:var(--c-warn)]/30", label: "Worth a look", icon: "search" as IconName, rail: "border-[color:var(--c-warn)]/45" },
+    good: { dot: "bg-[color:var(--c-success)]", text: "text-[color:var(--c-success)]", chip: "bg-[color:var(--c-success-bg)] text-[color:var(--c-success)] ring-[color:var(--c-success)]/30", label: "Good", icon: "check" as IconName, rail: "border-[color:var(--c-success)]/45" },
 } as const
 
 export type Sev = keyof typeof SEV
@@ -400,5 +400,83 @@ export function ProgressLine({ fixed, added }: { fixed: number; added: number })
                 </span>
             )}
         </p>
+    )
+}
+
+/** How a finding group announces itself.
+ *
+ *  The headings are the panel's spine — they are what makes triage possible
+ *  without reading — and they were the dimmest thing on the page: small, grey,
+ *  uppercase, indistinguishable from each other except by four words. Four ways
+ *  to fix that, because the right amount of emphasis is a judgement.
+ */
+export type HeadStyle = "quiet" | "toned" | "rule" | "rail" | "band"
+
+export function GroupHead({
+    sev,
+    title,
+    count,
+    style,
+}: {
+    sev: Sev
+    title: string
+    count: number
+    style: HeadStyle
+}) {
+    const s = SEV[sev]
+    const label = (
+        <>
+            <Icon name={s.icon} size={13} className={style === "quiet" ? s.text : undefined} />
+            <span>{title}</span>
+            <span
+                className={cn(
+                    "rounded-full px-1.5 text-[10px] font-bold normal-case tracking-normal tabular-nums",
+                    style === "quiet" || style === "rule"
+                        ? "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]"
+                        : "bg-[color:var(--c-surface)]/70",
+                )}
+            >
+                {count}
+            </span>
+        </>
+    )
+
+    const base = "flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.07em]"
+
+    if (style === "quiet") {
+        return <h3 className={cn(base, "mb-2 text-[color:var(--c-text-dim)]")}>{label}</h3>
+    }
+    // Toned: the label takes its severity's colour instead of grey. One line of
+    // change, and the heading stops being furniture.
+    if (style === "toned") {
+        return <h3 className={cn(base, "mb-2", s.text)}>{label}</h3>
+    }
+    // Rule: the same, with a hairline running to the edge — the heading reads as
+    // a section BREAK rather than as the first line of the group.
+    if (style === "rule") {
+        return (
+            <h3 className={cn(base, "mb-2.5 text-[color:var(--c-text-muted)]")}>
+                {label}
+                <span className="ml-1 h-px flex-1 bg-[color:var(--c-border)]" />
+            </h3>
+        )
+    }
+    // Band: a tinted row. Loudest, and the one that risks bringing the boxes back.
+    if (style === "band") {
+        return (
+            <h3 className={cn(base, "mb-2.5 rounded-[7px] px-2.5 py-1.5", s.chip)}>{label}</h3>
+        )
+    }
+    // Rail handles its own heading inside GroupRail below.
+    return <h3 className={cn(base, "mb-2", s.text)}>{label}</h3>
+}
+
+/** The "rail" treatment: a coloured bar down the whole group, so the findings
+ *  are visibly bound to the heading that owns them and severity is legible from
+ *  the edge of the column without reading a word. */
+export function GroupRail({ sev, children, on }: { sev: Sev; children: React.ReactNode; on: boolean }) {
+    if (!on) return <>{children}</>
+    return (
+        <div className={cn("border-l-2 pl-3.5", SEV[sev].rail)}>{children}</div>
     )
 }

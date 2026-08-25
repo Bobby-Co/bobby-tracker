@@ -17,6 +17,9 @@ import {
     Meters,
     MetaRail,
     MoreDetail,
+    GroupHead,
+    GroupRail,
+    type HeadStyle,
     ProgressLine,
     RailHeading,
     Rounds,
@@ -80,6 +83,7 @@ export default function ReviewStatesPreview() {
         checklist: false, rail: true, more: true, footer: true,
     })
     const [compare, setCompare] = useState(false)
+    const [head, setHead] = useState<HeadStyle>("toned")
 
     const r = many ? REVIEW_MANY : REVIEW
     const toggle = (k: BlockKey) => setOn((o) => ({ ...o, [k]: !o[k] }))
@@ -125,6 +129,12 @@ export default function ReviewStatesPreview() {
                     <Pill on={degraded} onClick={() => setDegraded((v) => !v)}>degraded</Pill>
                     <Pill on={archived} onClick={() => setArchived((v) => !v)}>viewing round 1</Pill>
                     <Pill on={compare} onClick={() => setCompare((v) => !v)}>compare with current UI</Pill>
+                </Group>
+
+                <Group label="Heading">
+                    {(["quiet", "toned", "rule", "rail", "band"] as HeadStyle[]).map((h) => (
+                        <Pill key={h} on={head === h} onClick={() => setHead(h)}>{h}</Pill>
+                    ))}
                 </Group>
 
                 <Group label="Blocks">
@@ -180,10 +190,12 @@ export default function ReviewStatesPreview() {
                                             if (!items.length) return null
                                             return (
                                                 <div key={g.key}>
-                                                    <SectionHead icon={SEV[g.key].icon} count={items.length}>{g.title}</SectionHead>
-                                                    <div className="divide-y divide-[color:var(--c-border)]">
-                                                        {items.map((f, i) => <FindingRow key={i} f={f} />)}
-                                                    </div>
+                                                    <GroupRail sev={g.key} on={head === "rail"}>
+                                                        <GroupHead sev={g.key} title={g.title} count={items.length} style={head} />
+                                                        <div className="divide-y divide-[color:var(--c-border)]">
+                                                            {items.map((f, i) => <FindingRow key={i} f={f} />)}
+                                                        </div>
+                                                    </GroupRail>
                                                 </div>
                                             )
                                         })}
