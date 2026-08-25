@@ -58,13 +58,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
 
     // Hard gate (0076). The visitor isn't the payer — the project's TEAM is — so a
-    // paused team means no analysis here either, however the request arrived. The
-    // message stays vague on purpose: a public reporter is not owed the
-    // maintainer's billing state.
+    // paused team, or one out of credits, means no analysis here either, however
+    // the request arrived. The message stays vague on purpose, and the gate's own
+    // text is withheld: a public reporter is not owed the maintainer's billing
+    // state.
     const payer = await tryOrNull(() => createSupabaseProjectsRepository(svc).findTeamId(issue.project_id))
     if (!payer) return jsonError("placement_unavailable", "This project is unavailable.", 503)
     if (await getSpendGate().check(payer)) {
-        return jsonError("unavailable", "Analysis is paused for this project.", 402)
+        return jsonError("unavailable", "Analysis isn't available for this project right now.", 402)
     }
 
     try {

@@ -32,13 +32,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
     if (status === "no_issue") return jsonError("not_found", "issue not found", 404)
-    // Paused team (0076) — a billing state, not a missing index, so it gets its
-    // own answer rather than being folded into "needs_indexing" and sending the
-    // user off to re-run an index that would not have helped.
-    if (status === "paused") {
-        return jsonError("suspended", "This team is paused, so analysis is off. Resume it in Team → Settings.", 402)
-    }
+    // A billing stop (0076) — paused, or the monthly allowance is spent. Not a
+    // missing index, so it gets its own answer rather than being folded into
+    // "needs_indexing" and sending the user off to re-run an index that would not
+    // have helped. The gate wrote the message; it knows which of the two it was
+    // and what the way out is.
+    if (typeof status === "object") return jsonError(status.reason, status.message, 402)
 
+    // 'queued' arrives here as a normal 200, not an error: the team was at its
+    // concurrency cap, the request was ACCEPTED, and the run starts when a slot
+    // frees (0085). The client already does the right thing with it — anything
+    // that isn't 'done' means "a run is coming", so it keeps waiting for the row
+    // to land by realtime or poll.
+    //
     // Return the cached suggestion if the run already completed (status 'done').
     // Fail-safe: a read error folds to null, matching the old maybeSingle.
     const suggestion = await tryOrNull(() => suggestions.findLatest(id))

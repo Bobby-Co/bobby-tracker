@@ -534,7 +534,7 @@ export interface Issue {
     /** Lifecycle of the durable, analyser-owned analysis run: 'analysing' →
      *  'done' | 'failed' | 'cancelled'. Null for issues that never triggered
      *  an analysis. */
-    analysis_status: "analysing" | "done" | "failed" | "cancelled" | null
+    analysis_status: "queued" | "analysing" | "done" | "failed" | "cancelled" | null
     issue_number: number
     /** When this issue was filed via the AI composer flow rather than
      *  the bare new-issue form. Surfaces an "AI" badge in lists. */

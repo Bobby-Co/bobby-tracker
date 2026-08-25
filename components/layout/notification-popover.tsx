@@ -36,6 +36,9 @@ const KIND_STYLE: Record<NotificationKind, { tone: Tone; icon: ReactNode }> = {
     // celebratory pairing in the tray, and it can only ever fire once per project.
     kb_ready:          { tone: "emerald", icon: <RocketIcon /> },
     kb_updated:        { tone: "blue",    icon: <RefreshIcon /> },
+    // The only failure state in the tray — rose, so it can't be skimmed past
+    // in a list whose every other row is good news.
+    kb_failed:         { tone: "rose",    icon: <BellIcon /> },
     pr_analysis_ready: { tone: "violet",  icon: <CheckGlyph /> },
     pr_opened:         { tone: "indigo",  icon: <PrGlyph /> },
 }

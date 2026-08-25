@@ -63,11 +63,13 @@ export async function POST(request: Request) {
     const ownerTeamId = await gate.ownerTeamId(sess.session.id)
 
     // Hard gate (0076). The visitor is anonymous and the publishing team pays, so
-    // a paused team stops public composition too — otherwise the one entry point
-    // with no session behind it is the one that keeps spending. Deliberately terse
-    // to the visitor: the maintainer's billing state is not theirs to read.
+    // a paused team — or one that has spent its allowance — stops public
+    // composition too; otherwise the one entry point with no session behind it is
+    // the one that keeps spending. Deliberately terse to the visitor, and it does
+    // NOT pass the gate's own message on: that names the allowance and the way to
+    // raise it, which is the maintainer's billing state and not theirs to read.
     if (ownerTeamId && (await getSpendGate().check(ownerTeamId))) {
-        return jsonError("unavailable", "This form is paused right now.", 402)
+        return jsonError("unavailable", "AI-assisted drafting isn't available on this form right now.", 402)
     }
 
     const isGroupBacked = !!sess.session.group_id

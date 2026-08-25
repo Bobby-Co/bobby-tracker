@@ -12,7 +12,8 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "stripe:setup": "bun run scripts/stripe-setup.ts"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.19.11",
@@ -26,6 +27,7 @@
     "react-markdown": "^9.0.1",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.0",
+    "stripe": "22.5.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

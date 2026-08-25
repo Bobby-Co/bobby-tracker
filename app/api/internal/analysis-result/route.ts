@@ -1,7 +1,8 @@
 import { jsonError } from "@/lib/server/http/api"
 import { dataClientByProbe } from "@/lib/server/regional"
 import { trace } from "@/lib/server/trace"
-import { createIssueAnalysisService } from "@/modules/analysis"
+import { after } from "next/server"
+import { createIssueAnalysisService, createRunQueue } from "@/modules/analysis"
 import type { IssueAnalysis } from "@/modules/analysis"
 
 export const dynamic = "force-dynamic"
@@ -42,12 +43,38 @@ export async function POST(request: Request) {
         // that we probe. `issues` is regional and the task id IS the issue id.
         const id = taskId
         trace("callback.received", { taskId, status, hasResult: !!result })
+        // project_id comes back from the probe itself rather than a second read:
+        // the drain below needs it to find the owning team, and this query is
+        // already being made to locate the region.
+        let projectId: string | null = null
         const regional = await dataClientByProbe(request, async (db) => {
-            const { data } = await db.from("issues").select("id").eq("id", id).maybeSingle<{ id: string }>()
+            const { data } = await db
+                .from("issues")
+                .select("id, project_id")
+                .eq("id", id)
+                .maybeSingle<{ id: string; project_id: string }>()
+            if (data) projectId = data.project_id
             return !!data
         })
-        await createIssueAnalysisService(regional).applyResult(taskId, status, result, new URL(request.url).origin)
+        const origin = new URL(request.url).origin
+        await createIssueAnalysisService(regional).applyResult(taskId, status, result, origin)
         trace("callback.applied", { taskId, status })
+
+        // A slot just freed, so start whatever the concurrency cap deferred (0085).
+        // AFTER the response: the analyser is waiting on this callback and has no
+        // interest in how long the next team's queue takes to move. `after()` and
+        // not a floating promise — a detached promise does not survive on Workers.
+        if (projectId) {
+            const pid: string = projectId
+            after(async () => {
+                try {
+                    const drained = await createRunQueue(regional).drainForProject(pid, origin)
+                    if (drained.started) trace("callback.drained", { taskId, started: drained.started })
+                } catch (e) {
+                    console.warn("[run-queue] drain after issue callback failed:", (e as Error).message)
+                }
+            })
+        }
     } catch (err) {
         const e = err as { message?: string }
         return jsonError("apply_failed", e?.message ?? "apply failed", 500)

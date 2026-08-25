@@ -86,8 +86,9 @@ import {
     createSupabaseSubscriptionsRepository,
     createSupabaseUsageRepository,
     createSupabaseUsageSubjectStore,
-    PeriodUsageReader,
-    SpendGate,
+    createSupabaseInvoicesRepository,
+    getPeriodUsageReader,
+    getSpendGate,
 } from "@/modules/billing"
 import { getRegionRegistry, type CellId } from "@/modules/regions"
 import { Supabase } from "@/lib/server/supabase"
@@ -284,6 +285,13 @@ export class RequestContext {
         return createSupabaseUsageRepository(this.controlDb)
     }
 
+    /** The team's mirrored Stripe invoices (0086). Control plane, alongside the
+     *  subscription they belong to — an invoice is a property of a paying team,
+     *  not of a region. */
+    get invoices() {
+        return createSupabaseInvoicesRepository(this.controlDb)
+    }
+
     /** The durable billing identities behind teams (0076): who a team's spend
      *  belongs to, which survives the team and the account being deleted. Control
      *  plane — a billing identity is a property of an email, not of a region. */
@@ -291,18 +299,32 @@ export class RequestContext {
         return createSupabaseUsageSubjectStore(this.controlDb)
     }
 
-    /** May this team spend? The hard gate behind suspension — every route that
-     *  dispatches billable work to the analyser asks first (enforced by
-     *  lib/server/http/spend-gate.test.ts). */
+    /** May this team spend? The hard gate behind suspension and the monthly
+     *  allowance — every route that dispatches billable work to the analyser asks
+     *  first (enforced by lib/server/http/spend-gate.test.ts).
+     *
+     *  Delegated to the billing composition root rather than built from this
+     *  request's clients ON PURPOSE. The gate sums a billing subject's spend
+     *  across every team it has ever been bound to, including deleted ones, and
+     *  RLS hides those (`usage_subjects` has no policy; `prowl_usage_period` is
+     *  member-scoped). An RLS-scoped gate therefore undercounts to zero after a
+     *  team is deleted and recreated — the allowance reset 0076 exists to close.
+     *  See modules/billing/application/SpendGate.ts. */
     get spendGate() {
-        return new SpendGate(this.usageSubjects, this.subscriptions)
+        return getSpendGate()
     }
 
     /** This period's spend for a team, resolved through its billing subject —
      *  the ONE place that decides what a team's balance means, so the sidebar
-     *  pill and the billing page can never disagree. */
+     *  pill and the billing page can never disagree.
+     *
+     *  Service-role for the same reason as `spendGate`, and it must match it: a
+     *  pill that reads "1,200 left" while the gate refuses the next call is the
+     *  same bug this class was factored out to prevent, just spread across two
+     *  clients instead of two call sites. Every caller has already passed
+     *  `requireTeam` for the team it asks about. */
     get periodUsage() {
-        return new PeriodUsageReader(this.usageSubjects, this.usage)
+        return getPeriodUsageReader()
     }
 
     // ─── control plane: identity, teams, billing policy ──────────────────────

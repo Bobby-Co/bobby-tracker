@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/server/http/api"
 import { dataClientByProbe } from "@/lib/server/regional"
-import { createPullRequestAnalysisService } from "@/modules/analysis"
+import { after } from "next/server"
+import { createPullRequestAnalysisService, createRunQueue } from "@/modules/analysis"
 import type { PrAnalysis } from "@/lib/shared/types"
 
 export const dynamic = "force-dynamic"
@@ -38,15 +39,33 @@ export async function POST(request: Request) {
 
     try {
         const id = taskId
+        // See the issue callback: project_id rides along on the probe so the drain
+        // can resolve the owning team without a second read.
+        let projectId: string | null = null
         const regional = await dataClientByProbe(request, async (db) => {
             const { data } = await db
                 .from("pull_request_analyses")
-                .select("id")
+                .select("id, project_id")
                 .eq("id", id)
-                .maybeSingle<{ id: string }>()
+                .maybeSingle<{ id: string; project_id: string }>()
+            if (data) projectId = data.project_id
             return !!data
         })
-        await createPullRequestAnalysisService(regional).applyResult(taskId, status, result, new URL(request.url).origin)
+        const origin = new URL(request.url).origin
+        await createPullRequestAnalysisService(regional).applyResult(taskId, status, result, origin)
+
+        // A slot just freed — start whatever the cap deferred (0085). After the
+        // response, for the same reason as the issue callback.
+        if (projectId) {
+            const pid: string = projectId
+            after(async () => {
+                try {
+                    await createRunQueue(regional).drainForProject(pid, origin)
+                } catch (e) {
+                    console.warn("[run-queue] drain after PR callback failed:", (e as Error).message)
+                }
+            })
+        }
     } catch (err) {
         const e = err as { message?: string }
         return jsonError("apply_failed", e?.message ?? "apply failed", 500)

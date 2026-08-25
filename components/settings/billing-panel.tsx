@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { apiMutate } from "@/lib/client/http/api-client"
 import { cn } from "@/components/ui/cn"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { useTeam } from "@/lib/client/auth/team-context"
@@ -74,9 +76,41 @@ function daysUntil(iso: string): number {
 
 export function BillingPanel() {
     const { activeTeam } = useTeam()
+    const params = useSearchParams()
     const path = activeTeam ? `/api/billing?t=${activeTeam.id}` : "/api/billing"
-    const { data, error, loading } = useApi<BillingSummary>(path)
+    const { data, error, loading, refetch } = useApi<BillingSummary>(path)
 
+    // Landing here straight from a completed payment. Do NOT trust the parameter
+    // as proof of anything — the buyer controls that URL — but do take it as a
+    // reason to go and ask Stripe, because it is the one moment we know a payment
+    // may just have happened.
+    //
+    // This is what closes the webhook gap. A delivery that was missed, rejected
+    // for a mismatched secret, or aimed at an environment that was not listening
+    // leaves the customer charged and entitled to nothing; the person it happened
+    // to then reloads this page, which is exactly when the check should run.
+    const justPaid = params.get("checkout") === "complete" || params.get("changed") === "1"
+    const [settling, setSettling] = useState(justPaid)
+    const reconciled = useRef(false)
+
+    useEffect(() => {
+        if (!justPaid || reconciled.current || !activeTeam) return
+        reconciled.current = true
+        void (async () => {
+            try {
+                await apiMutate("/api/billing/reconcile", { method: "POST", body: { force: true } })
+            } catch {
+                // A failed reconcile is not worth an error banner: the webhook may
+                // simply have got there first, in which case the page below is
+                // already right. The manual control stays available either way.
+            } finally {
+                await refetch()
+                setSettling(false)
+            }
+        })()
+    }, [justPaid, activeTeam, refetch])
+
+    if (settling) return <PanelSkeleton />
     if (loading && !data) return <PanelSkeleton />
     if (error) {
         return (
@@ -96,6 +130,7 @@ export function BillingPanel() {
             <PlanHero balance={b} status={data.status} canManage={canManage} />
             <StatTiles balance={b} calls={calls} />
             <UsageBar breakdown={data.breakdown} total={b.used} />
+            <SyncFromStripe onDone={refetch} />
         </div>
     )
 }
@@ -124,7 +159,7 @@ function PlanHero({ balance: b, status, canManage }: { balance: BalanceJSON; sta
                     </div>
                     <h3 className="mt-1 text-[26px] font-extrabold leading-none tracking-[-0.02em]">{b.tierName}</h3>
                     <Link
-                        href="/settings/billing/plans"
+                        href="/billing/plans"
                         className="mt-2 inline-flex items-center gap-0.5 text-[12px] font-bold text-[color:var(--c-accent)] hover:text-[color:var(--c-primary-hover)]"
                     >
                         {canManage ? "Change plan" : "View plans"}
@@ -305,3 +340,51 @@ function FlameGlyph() { return <G><path d="M8 2.5c2.2 2.8 3.8 4.4 3.8 7A3.8 3.8 
 function PulseGlyph() { return <G><path d="M2.5 8h2.5l1.5-3.5L9 12l1.5-4H13.5" /></G> }
 function CalendarGlyph() { return <G><rect x="2.6" y="3.4" width="10.8" height="10" rx="1.6" /><path d="M2.6 6.4h10.8M5.5 2.4v2M10.5 2.4v2" /></G> }
 function Chevron() { return <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden><path d="m6 4 4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg> }
+
+/** "I paid and nothing happened."
+ *
+ *  The manual half of the safety net. The automatic check runs on return from
+ *  checkout, but the person affected by a missed webhook is often looking at this
+ *  page long after that — they closed the tab, or paid on another device, or the
+ *  webhook failed hours later on a renewal. Giving them a button costs nothing and
+ *  turns a support ticket into a click.
+ *
+ *  Quiet on purpose: it is not a control anybody should need, and dressing it up
+ *  would imply the plan on this page is routinely wrong. */
+function SyncFromStripe({ onDone }: { onDone: () => Promise<void> | void }) {
+    const [state, setState] = useState<"idle" | "busy" | "changed" | "same">("idle")
+
+    const run = async () => {
+        setState("busy")
+        try {
+            const result = await apiMutate<{ changed: boolean }>("/api/billing/reconcile", {
+                method: "POST",
+                body: { force: true },
+            })
+            await onDone()
+            setState(result.changed ? "changed" : "same")
+        } catch {
+            setState("same")
+        }
+    }
+
+    return (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
+            <p className="text-[11.5px] text-[color:var(--c-text-dim)]">
+                {state === "changed"
+                    ? "Updated — your plan now matches your payment."
+                    : state === "same"
+                      ? "Everything here already matches Stripe."
+                      : "Paid recently and this looks out of date?"}
+            </p>
+            <button
+                type="button"
+                onClick={run}
+                disabled={state === "busy"}
+                className="text-[11.5px] font-semibold text-[color:var(--c-text-muted)] underline underline-offset-2 transition-colors hover:text-[color:var(--c-text)] disabled:opacity-50"
+            >
+                {state === "busy" ? "Checking…" : "Check with Stripe"}
+            </button>
+        </div>
+    )
+}

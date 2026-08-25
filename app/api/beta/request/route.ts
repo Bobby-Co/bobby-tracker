@@ -1,5 +1,5 @@
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { BetaEmail, getBetaWaitlist } from "@/modules/beta"
+import { BetaEmail, createBetaMailer, getBetaWaitlist } from "@/modules/beta"
 
 // POST /api/beta/request → { ok }
 //
@@ -24,7 +24,13 @@ export async function POST() {
         null
 
     try {
-        await getBetaWaitlist().record(email, { userId: user.id, displayName })
+        // `record` is idempotent — pressing the button again keeps the original
+        // position — and it reports whether this call actually added the row.
+        // The mail is gated on that, so a second press confirms nothing twice.
+        const added = await getBetaWaitlist().record(email, { userId: user.id, displayName })
+        if (added) {
+            await createBetaMailer().sendWaitlistJoined({ to: email.value, name: displayName })
+        }
         return Response.json({ ok: true })
     } catch (e) {
         console.error("[beta/request] record failed:", (e as Error).message)
