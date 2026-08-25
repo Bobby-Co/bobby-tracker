@@ -83,7 +83,10 @@ export default function ReviewStatesPreview() {
         checklist: false, rail: true, more: true, footer: true,
     })
     const [compare, setCompare] = useState(false)
-    const [head, setHead] = useState<HeadStyle>("toned")
+    // rail is the pick. The bar answers "how far do the blockers go" from the edge
+    // of the column, without reading a word — which is the question the headings
+    // are there to serve. The others stay switchable so it can be argued with.
+    const [head, setHead] = useState<HeadStyle>("rail")
 
     const r = many ? REVIEW_MANY : REVIEW
     const toggle = (k: BlockKey) => setOn((o) => ({ ...o, [k]: !o[k] }))
