@@ -80,6 +80,14 @@ const ROUND_WINDOW = 8
  *  this is already large enough that the other rules will have caught it. Each
  *  probe is a graph hop with no model in it, but it is still a network call at
  *  dispatch, and the review is what the developer is waiting on. */
+/** How many bytes of manifest patch one request may carry.
+ *
+ *  The analyser reconstructs a worktree from these, so more is better right up
+ *  until the request itself becomes the problem. Two megabytes covers an
+ *  ordinary pull request several times over and still bounds the pathological
+ *  one — a vendored dependency bump, a lockfile, a generated client. */
+const MANIFEST_PATCH_BUDGET_BYTES = 2_000_000
+
 const DEPENDENT_PROBES = 5
 
 /** The provider's file shape onto the analyser's. */
@@ -969,20 +977,60 @@ export class PullRequestAnalysisService {
         // bytes it adds, and it adds them only for files that really do import
         // what the push changed.
         const withPatches = whole.map((f) => ({ path: f.filename, status: f.status, patch: f.patch }))
-        const imported = new Set([
+
+        // EVERY file's patch, not only the import-related ones.
+        //
+        // The analyser now builds a git worktree from what arrives here and
+        // points the reviewer's file tools at it, so a patch is no longer just
+        // prompt text — it is the difference between a file existing on disk for
+        // ripgrep and not. Import edges were the right selector while this was
+        // context; they are the wrong one now, and MR !7 round 3 shows why: it
+        // blocked on "No migration creates idempotency_records" for a migration
+        // that had been on the branch since the first commit. A .sql file is
+        // neither imported by nor an importer of the TypeScript in that push, so
+        // under an import-based rule it would still arrive as a bare path and
+        // still be missing from the tree.
+        //
+        // It does not cost the prompt: the analyser caps what it inlines at a
+        // few files (importedBodies), and everything beyond that is read from
+        // the worktree only if the reviewer goes looking. It costs the request
+        // body, which is why there is a budget below.
+        //
+        // Ordered so that if the budget does bite, the files most likely to be
+        // reached for survive: import-related first, then the rest.
+        const related = new Set([
             ...importedPullRequestFiles(files, bare),
             ...importersOfPullRequestFiles(files, withPatches),
         ])
-        const manifest = bare.map((m) =>
-            imported.has(m.path) && byName.get(m.path)?.patch
-                ? { ...m, patch: byName.get(m.path)!.patch }
-                : m,
+        const ordered = [...bare].sort(
+            (a, b) => Number(related.has(b.path)) - Number(related.has(a.path)),
         )
-        if (imported.size > 0) {
-            console.info(
-                `[pr-review] sending ${imported.size} related file(s) as context: ${[...imported].join(", ")}`,
-            )
-        }
+
+        // A file in the PUSH already carries its patch in `files`; repeating it
+        // here would send the same bytes twice, and the analyser's tree builder
+        // prefers the reviewed copy anyway.
+        const inPush = new Set(files.map((f) => f.path))
+
+        let budget = MANIFEST_PATCH_BUDGET_BYTES
+        let carried = 0
+        let dropped = 0
+        const manifest = ordered.map((m) => {
+            if (inPush.has(m.path)) return m
+            const patch = byName.get(m.path)?.patch
+            if (!patch) return m
+            if (patch.length > budget) {
+                dropped++
+                return m
+            }
+            budget -= patch.length
+            carried++
+            return { ...m, patch }
+        })
+
+        console.info(
+            `[pr-review] manifest: ${carried}/${bare.length} file(s) carry their patch ` +
+                `(${related.size} import-related, ${dropped} over budget)`,
+        )
         return { files, manifest }
     }
 
