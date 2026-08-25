@@ -4,8 +4,8 @@ import { useState } from "react"
 import { PrReview } from "@/components/pulls/pr-review"
 import { cn } from "@/components/ui/cn"
 import type { PullRequestAnalysis } from "@/lib/shared/types"
-import { REVIEW } from "./fixture"
-import { FindingRow, MetaRail, MoreDetail, SEV, sevOf, VerdictBand } from "./parts"
+import { REVIEW, REVIEW_MANY } from "./fixture"
+import { FindingRow, Footer, MetaRail, MoreDetail, Rounds, SEV, sevOf, VerdictBand } from "./parts"
 
 // Three ways to render one review, so a direction can be chosen by looking
 // rather than by describing.
@@ -34,8 +34,8 @@ const ANALYSIS: PullRequestAnalysis = {
 
 /** A — Brief. Verdict at full size, findings flat and ranked, metadata in a
  *  rail, and ONE disclosure for everything that is reference. */
-function Brief() {
-    const findings = [...(REVIEW.findings ?? [])].sort(
+function Brief({ r }: { r: typeof REVIEW }) {
+    const findings = [...(r.findings ?? [])].sort(
         (a, b) => ["critical", "review", "good"].indexOf(sevOf(a)) - ["critical", "review", "good"].indexOf(sevOf(b)),
     )
     const groups = [
@@ -47,10 +47,16 @@ function Brief() {
         <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5 shadow-[var(--shadow-card)] sm:p-6">
             <div className="mb-4 flex items-center gap-2">
                 <h2 className="text-[14px] font-bold tracking-[-0.005em]">Ucelot · PR review</h2>
-                <span className="ml-auto text-[11px] text-[color:var(--c-text-dim)]">round 2 · 41.2s</span>
+                <span className="ml-auto rounded-full border border-[color:var(--c-border)] px-2 py-[2px] text-[11px] text-[color:var(--c-text-muted)]">
+                    Payments — strict
+                </span>
             </div>
 
-            <VerdictBand r={REVIEW} />
+            <div className="mb-4">
+                <Rounds />
+            </div>
+
+            <VerdictBand r={r} />
 
             <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px]">
                 <div className="min-w-0">
@@ -72,10 +78,12 @@ function Brief() {
                             </div>
                         )
                     })}
-                    <MoreDetail r={REVIEW} />
+                    <MoreDetail r={r} />
                 </div>
-                <MetaRail r={REVIEW} />
+                <MetaRail r={r} />
             </div>
+
+            <Footer r={r} />
         </section>
     )
 }
@@ -133,7 +141,8 @@ function Thread() {
 }
 
 const OPTIONS = [
-    { key: "brief", label: "A — Brief", note: "Verdict at full size, findings ranked and flat, metadata in a rail, one disclosure for reference. Twelve drawers become one." },
+    { key: "brief", label: "A — Brief (8 findings)", note: "The pick. Verdict at full size, findings grouped by what you can do about them, metadata in a rail, one disclosure for reference. Shown at a realistic finding count, because three flatters any layout." },
+    { key: "brief3", label: "A — Brief (3 findings)", note: "The same layout on the small review the other options use, for a like-for-like comparison." },
     { key: "thread", label: "B — Thread", note: "One rail, severity as a dot, no boxes. Reads like a colleague's comments; the metadata becomes a single quiet footer line." },
     { key: "current", label: "Current", note: "What ships today: twelve stacked <details> boxes, each with the same border, header and chevron." },
 ] as const
@@ -168,7 +177,8 @@ export default function ReviewRedesignPreview() {
             </div>
             <p className="max-w-[70ch] text-[12.5px] leading-[1.6] text-[color:var(--c-text-muted)]">{opt.note}</p>
 
-            {key === "brief" && <Brief />}
+            {key === "brief" && <Brief r={REVIEW_MANY} />}
+            {key === "brief3" && <Brief r={REVIEW} />}
             {key === "thread" && <Thread />}
             {key === "current" && <PrReview analysis={ANALYSIS} rounds={[]} delta={null} />}
         </div>

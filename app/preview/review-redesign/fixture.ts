@@ -64,3 +64,57 @@ export const REVIEW: PrAnalysis = {
     insight_id: "ins_preview",
     analyser_build: "af71ce4",
 }
+
+/** The same review with a realistic FINDING COUNT. Three findings flatter any
+ *  layout; the argument for grouped headings is that they keep working at eight,
+ *  so the proposal should be judged at eight. */
+export const REVIEW_MANY: PrAnalysis = {
+    ...REVIEW,
+    findings: [
+        ...(REVIEW.findings ?? []),
+        {
+            file: "modules/projects/infrastructure/SupabaseProjectsRepository.ts",
+            line: 212,
+            severity: "critical",
+            category: "bug",
+            title: "findCell reads the control plane for a regional project",
+            detail: "The repository is constructed with the service client, which is bound to control. A regional project resolves to null and takes the unguarded path above.",
+            evidence: [{ file: "modules/projects/infrastructure/SupabaseProjectsRepository.ts", line: 212, kind: "code", note: "service client, not the cell's" }],
+        },
+        {
+            file: "app/api/projects/[id]/route.ts",
+            line: 151,
+            severity: "review",
+            category: "convention",
+            title: "Cleanup swallows its error",
+            detail: "The pr_review_index delete logs and continues. Every other teardown step in this handler propagates.",
+            evidence: [{ file: "app/api/projects/[id]/route.ts", line: 151, kind: "code", note: "console.error then fall through" }],
+        },
+        {
+            file: "modules/projects/application/ProjectDeletionService.ts",
+            line: 96,
+            severity: "review",
+            category: "perf",
+            title: "Purge runs unbatched",
+            detail: "Deletes every regional row in one statement; a large project holds the table for the duration.",
+            evidence: [{ file: "modules/projects/application/ProjectDeletionService.ts", line: 96, kind: "code", note: "no limit" }],
+        },
+        {
+            file: "supabase/migrations/0062_project_cells.sql",
+            line: 1,
+            severity: "review",
+            category: "data",
+            title: "Backfill leaves pre-0062 projects null",
+            detail: "The migration adds the column but does not populate it, which is the precondition for the blocker above.",
+            evidence: [{ file: "supabase/migrations/0062_project_cells.sql", line: 1, kind: "code", note: "add column, no update" }],
+        },
+        {
+            file: "lib/server/http/RequestContext.ts",
+            line: 141,
+            severity: "good",
+            category: "good",
+            title: "Binding is lazy and explicit",
+            detail: "The context binds on first regional read rather than at construction, so an unbound project is detectable.",
+        },
+    ],
+}

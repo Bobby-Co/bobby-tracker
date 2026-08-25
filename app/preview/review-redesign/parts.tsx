@@ -174,3 +174,71 @@ export function MoreDetail({ r }: { r: PrAnalysis }) {
         </details>
     )
 }
+
+/** The round strip, as a row of cards rather than a segmented bar — so a round
+ *  reads as a thing that happened, and the current one is visibly current. */
+export function Rounds() {
+    const rounds = [
+        { sha: "a3f1c02", n: 1, verdict: "Changes requested", blockers: 2, fixed: 0, carried: 0, msg: "feat(console): saved views" },
+        { sha: "7bd9e14", n: 2, verdict: "Changes requested", blockers: 1, fixed: 1, carried: 1, msg: "fix(console): validate the saved-view name" },
+    ]
+    return (
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+            {rounds.map((r, i) => {
+                const current = i === rounds.length - 1
+                return (
+                    <button
+                        key={r.sha}
+                        type="button"
+                        className={cn(
+                            "min-w-[220px] flex-1 rounded-[10px] border px-3 py-2.5 text-left transition-colors",
+                            // The CURRENT round is the one the merge gate reads,
+                            // so it must be the one that draws the eye. An earlier
+                            // round is history: reachable, quieter.
+                            current
+                                ? "border-[color:var(--c-border-strong)] bg-[color:var(--c-surface-2)]"
+                                : "border-[color:var(--c-border)] opacity-65 hover:opacity-100",
+                        )}
+                    >
+                        <div className="flex items-baseline gap-2">
+                            <code className="font-mono text-[11px] text-[color:var(--c-text-muted)]">{r.sha}</code>
+                            <span className="text-[11px] text-[color:var(--c-text-dim)]">round {r.n}</span>
+                            {current && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-[color:var(--c-text-muted)]">current</span>}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
+                            {r.fixed > 0 && <span className="rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10px] font-semibold text-emerald-700">{r.fixed} fixed</span>}
+                            {r.blockers > 0 && <span className="rounded-full bg-rose-50 px-1.5 py-[1px] text-[10px] font-semibold text-rose-700">{r.blockers} blocker{r.blockers === 1 ? "" : "s"}</span>}
+                            {r.carried > 0 && <span className="rounded-full bg-[color:var(--c-surface-3,#f1f1f1)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">{r.carried} carried</span>}
+                        </div>
+                        <p className="mt-1 truncate text-[11px] text-[color:var(--c-text-dim)]">{r.msg}</p>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/** The footer: diligence, attribution and the one action, on one line each. */
+export function Footer({ r }: { r: PrAnalysis }) {
+    const lenses = ["correctness & bugs", "blast radius", "test gaps", "conventions", "layering drift", "history & regressions", "security", "api contract"]
+    return (
+        <div className="mt-5 flex flex-col gap-3 border-t border-[color:var(--c-border)] pt-4">
+            <p className="text-[11px] leading-[1.7] text-[color:var(--c-text-dim)]">
+                <span className="text-[color:var(--c-text-muted)]">Lenses</span> {lenses.join(" · ")}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+                <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] px-3.5 py-1.5 text-[12px] font-medium text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)]"
+                >
+                    Deep dive with Ucelot
+                </button>
+                <span className="ml-auto text-[11px] text-[color:var(--c-text-dim)]">
+                    Reviewed in {((r.duration_ms ?? 0) / 1000).toFixed(1)}s · build {r.analyser_build}
+                </span>
+            </div>
+            <p className="text-[10.5px] text-[color:var(--c-text-dim)]">Ucelot is AI-assisted and can make mistakes — verify findings before acting.</p>
+        </div>
+    )
+}
