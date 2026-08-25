@@ -45,6 +45,22 @@ default:
 verify:
   stage: verify
   script:
+    # NEXT_PUBLIC_APP_URL is needed to RUN THE TESTS, not only to build. The
+    # email layout builds its one <img> from it (lib/server/email/layout.ts:280,
+    # via appUrl at :559) and falls back to a lettermark when it is absent, so
+    # two tests fail on its own rendering. Locally nobody notices: `bun test`
+    # loads .env.local by itself, and .env.local is gitignored, so the suite is
+    # green on every laptop and red on the first runner that ever sees it.
+    #
+    # Checked here rather than left to fail as two confusing assertions about
+    # <img> counts, which is how this first presented and cost an afternoon.
+    - |
+      if [ -z "$NEXT_PUBLIC_APP_URL" ]; then
+        echo "NEXT_PUBLIC_APP_URL is unset — set it under Settings → CI/CD → Variables." >&2
+        echo "The email tests render a real asset URL from it; without it they fail on" >&2
+        echo "the lettermark fallback rather than on anything you changed." >&2
+        exit 1
+      fi
     - bunx tsc --noEmit -p tsconfig.json
     - bun test modules/ lib/
   rules:
