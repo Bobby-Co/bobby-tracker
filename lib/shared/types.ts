@@ -230,7 +230,11 @@ export interface PullRequestAnalysis {
     pr_number: number
     github_comment_id: number | null
     head_sha: string | null
-    status: "analysing" | "done" | "failed" | "cancelled" | null
+    /** "queued" is written by enqueueTracking when a review is waiting for a
+     *  slot (SupabasePullRequestAnalysisStore). It was missing here, so the
+     *  panel's in-flight branch never matched it and a pull request waiting to
+     *  be reviewed rendered "No review yet". */
+    status: "queued" | "analysing" | "done" | "failed" | "cancelled" | null
     result: PrAnalysis | null
     /** The profile this run used, for queries ("what did this profile review?").
      *  Null for a default-reviewer run. See ReviewRunProfile for why this is a

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import { notFound, useParams } from "next/navigation"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { useAuth } from "@/lib/client/auth/auth-context"
@@ -26,10 +27,43 @@ interface PullView {
     delta?: RoundDelta | null
 }
 
+/** How often to re-read while a review is actually running. */
+const ACTIVE_POLL_MS = 5_000
+
+/** And while nothing is, so a push that STARTS one is noticed too. */
+const IDLE_POLL_MS = 30_000
+
 export default function PullDetailPage() {
     const { id, number } = useParams<{ id: string; number: string }>()
     const { user } = useAuth()
-    const { data, loading, error, refetch } = useApi<PullView>(`/api/projects/${id}/pulls/${number}`)
+    // Two speeds, because two different things are being waited for.
+    //
+    // While a review runs, this page is a progress indicator that never
+    // progressed: the analyser answers over a callback the browser knows nothing
+    // about, so a finished review sat behind a manual refresh. Five seconds
+    // against a review that takes three to six minutes is responsive without
+    // being chatty.
+    //
+    // The slower beat matters too, and is the easier one to leave out: a push
+    // while somebody is reading moves this from done to analysing, and nothing
+    // client-side would notice. Polling ONLY while analysing can never catch
+    // that, because the transition into analysing is the thing being missed.
+    //
+    // useApi pauses on a hidden tab and fires once on return, so a page left
+    // open in a background tab costs nothing.
+    const path = `/api/projects/${id}/pulls/${number}`
+    const [refreshMs, setRefreshMs] = useState(IDLE_POLL_MS)
+    const { data, loading, error, refreshing, refetch } = useApi<PullView>(path, { refreshMs })
+
+    // Derived from the last answer rather than declared once: a review that
+    // starts while the page is open has to speed it up, and one that finishes
+    // has to slow it down again.
+    const status = data?.analysis?.status ?? null
+    useEffect(() => {
+        setRefreshMs(status === "analysing" || status === "queued" ? ACTIVE_POLL_MS : IDLE_POLL_MS)
+    }, [status])
+
+
 
     const pull = data?.pull ?? null
     if (!loading && data && !pull) notFound()

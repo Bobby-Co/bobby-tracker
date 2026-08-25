@@ -16,7 +16,7 @@ export interface MergePull {
 }
 
 export interface MergeReview {
-    status: "analysing" | "done" | "failed" | "cancelled" | null
+    status: "queued" | "analysing" | "done" | "failed" | "cancelled" | null
     result: { findings?: { severity: string }[]; degraded?: boolean } | null
 }
 
@@ -96,7 +96,13 @@ export class MergePolicy {
 
         // Rule #1 — the review must have finished (GitHub stays the manual override).
         if (!analysis || analysis.status == null) return no("no_review", "Awaiting review", true)
-        if (analysis.status === "analysing") return no("review_pending", "Review in progress…", true)
+        // Queued is PENDING, not finished-badly. It fell through to the branch
+        // below and told the reader "Review didn't finish — merge on GitHub",
+        // which is both untrue and the one message that points them around the
+        // gate — for a review that had not yet started.
+        if (analysis.status === "analysing" || analysis.status === "queued") {
+            return no("review_pending", "Review in progress…", true)
+        }
         if (analysis.status !== "done") {
             return no("review_incomplete", "Review didn't finish — merge on GitHub", false)
         }

@@ -35,6 +35,7 @@ export function PrStateChip({ pr }: { pr: Pick<PullRequest, "state" | "merged" |
 type ReviewStatus = PullRequestAnalysis["status"]
 
 export const REVIEW_META: Record<Exclude<ReviewStatus, null>, { dot: string; chip: string; label: string }> = {
+    queued:    { dot: "bg-amber-400",               chip: "bg-amber-50 text-amber-700",   label: "Queued" },
     analysing: { dot: "bg-amber-500 animate-pulse", chip: "bg-amber-50 text-amber-700",   label: "Reviewing" },
     done:      { dot: "bg-emerald-500",             chip: "bg-emerald-50 text-emerald-700", label: "Reviewed" },
     failed:    { dot: "bg-rose-500",                chip: "bg-rose-50 text-rose-700",       label: "Review failed" },

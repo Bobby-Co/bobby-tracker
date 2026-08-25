@@ -14,8 +14,15 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 interface ApiState<T> {
     data: T | null
+    /** A failure with NOTHING to show. A refresh that fails while data is on
+     *  screen does not set this — see the fetch effect for why. */
     error: string | null
+    /** True only while there is nothing to render yet. A refetch over existing
+     *  data leaves it false, so a poll cannot flash a skeleton. */
     loading: boolean
+    /** True while a refresh runs UNDER existing data. For a subtle indicator;
+     *  never for hiding content. */
+    refreshing: boolean
     /** Re-run the request. */
     refetch: () => void
 }
@@ -38,7 +45,21 @@ export function useApi<T>(path: string | null, opts: Options = {}): ApiState<T> 
     const [data, setData] = useState<T | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [loading, setLoading] = useState<boolean>(Boolean(path) && enabled)
+    const [refreshing, setRefreshing] = useState(false)
     const [nonce, setNonce] = useState(0)
+
+    // What is currently on screen, readable synchronously inside the fetch.
+    // setState is async, so the effect cannot ask "do we already have something
+    // to show?" any other way — and that question decides whether a failure is
+    // an ERROR or merely a refresh that did not land.
+    const dataRef = useRef<T | null>(null)
+
+    // And WHICH path it belongs to. Navigating between two pull requests keeps
+    // this hook mounted, so without it the previous page's data would make the
+    // next one look like a refresh rather than a first load — and a failure on
+    // the new path would then be swallowed while the old page's content stayed
+    // on screen.
+    const dataPath = useRef<string | null>(null)
 
     const refetch = useCallback(() => setNonce((n) => n + 1), [])
 
@@ -54,8 +75,13 @@ export function useApi<T>(path: string | null, opts: Options = {}): ApiState<T> 
 
         const id = ++reqId.current
         const controller = new AbortController()
-        setLoading(true)
-        setError(null)
+        // Loading means "nothing to render"; refreshing means "something is on
+        // screen and being replaced". Conflating them is what makes a polled
+        // page flicker: every tick would unmount the content it just drew.
+        const first = dataRef.current === null || dataPath.current !== path
+        setLoading(first)
+        setRefreshing(!first)
+        if (first) setError(null)
 
         ;(async () => {
             try {
@@ -71,18 +97,37 @@ export function useApi<T>(path: string | null, opts: Options = {}): ApiState<T> 
                         body?.error?.message ??
                         body?.message ??
                         `Request failed (${res.status})`
-                    setError(msg)
-                    setData(null)
+                    // Only a failure with nothing behind it is the page's error.
+                    // A poll that 500s once must not replace a review someone is
+                    // reading with a banner, and must not blank it either: the
+                    // data on screen was true a moment ago and is still the best
+                    // thing we have.
+                    if (first) {
+                        setError(msg)
+                        setData(null)
+                        dataRef.current = null
+                        dataPath.current = null
+                    }
                 } else {
+                    dataRef.current = body as T
+                    dataPath.current = path
                     setData(body as T)
                     setError(null)
                 }
             } catch (e) {
                 if (controller.signal.aborted || id !== reqId.current) return
-                setError(e instanceof Error ? e.message : "Network error")
-                setData(null)
+                // Same rule: a dropped connection mid-poll is not a page error.
+                if (first) {
+                    setError(e instanceof Error ? e.message : "Network error")
+                    setData(null)
+                    dataRef.current = null
+                    dataPath.current = null
+                }
             } finally {
-                if (id === reqId.current) setLoading(false)
+                if (id === reqId.current) {
+                    setLoading(false)
+                    setRefreshing(false)
+                }
             }
         })()
 
@@ -111,5 +156,5 @@ export function useApi<T>(path: string | null, opts: Options = {}): ApiState<T> 
         }
     }, [path, enabled, refreshMs, refetch])
 
-    return { data, error, loading, refetch }
+    return { data, error, loading, refreshing, refetch }
 }

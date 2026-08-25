@@ -324,7 +324,7 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
  *  So the last completed round stays on screen, and this says what is happening
  *  above it. The commits come from the scope written at DISPATCH, so the panel
  *  can name them before the reviewer has said a word about them. */
-function InFlightBanner({ scope, standing }: { scope: ReviewRunScope | null; standing: RoundSummary | null }) {
+function InFlightBanner({ scope, standing, queued }: { scope: ReviewRunScope | null; standing: RoundSummary | null; queued?: boolean }) {
     const commits = scope?.commits ?? []
     const incremental = scope?.scope === "incremental"
     const carried = scope?.carried?.length ?? 0
@@ -334,9 +334,11 @@ function InFlightBanner({ scope, standing }: { scope: ReviewRunScope | null; sta
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <Spinner />
                 <span className="font-semibold">
-                    {commits.length > 0
-                        ? `Reviewing ${commits.length} new commit${commits.length === 1 ? "" : "s"}`
-                        : "Ucelot is reviewing this pull request"}
+                    {queued
+                        ? "Queued — waiting for a review slot"
+                        : commits.length > 0
+                          ? `Reviewing ${commits.length} new commit${commits.length === 1 ? "" : "s"}`
+                          : "Ucelot is reviewing this pull request"}
                 </span>
                 {incremental && (
                     <span className="opacity-85">
@@ -616,11 +618,14 @@ export function PrReview({ analysis, rounds = [], delta = null }: {
     const archived = viewing != null ? (rounds.find((r) => r.round === viewing) ?? null) : null
     const latest = rounds.length > 0 ? rounds[rounds.length - 1] : null
 
-    if (status === "analysing") {
+    // Queued belongs here, not with the terminal states: a review that has not
+    // started yet is still coming, and the standing round must stay on the page
+    // for the same reason it does while one runs.
+    if (status === "analysing" || status === "queued") {
         return (
             <Shell profile={profile}>
                 <RoundStrip rounds={rounds} selected={viewing} onSelect={setViewing} />
-                <InFlightBanner scope={analysis?.review_scope ?? null} standing={archived ?? latest} />
+                <InFlightBanner scope={analysis?.review_scope ?? null} standing={archived ?? latest} queued={status === "queued"} />
                 {archived ? (
                     <>
                         <ArchiveBanner round={archived} onBack={() => setViewing(null)} />

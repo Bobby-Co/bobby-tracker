@@ -42,6 +42,16 @@ describe("mergeGate — review gate", () => {
         const g = mergeGate(openPull, { status: null, result: null })
         expect(g.block?.code).toBe("no_review")
     })
+    // A review waiting for a slot has not started, let alone failed. It used to
+    // fall through to "Review didn't finish — merge on GitHub", which is untrue
+    // and is the one message that points the reader AROUND the gate.
+    test("queued review → 'review_pending', transient, not 'didn't finish'", () => {
+        const g = mergeGate(openPull, { status: "queued", result: null })
+        expect(g.block?.code).toBe("review_pending")
+        expect(g.block?.transient).toBe(true)
+        expect(g.block?.label).not.toContain("didn't finish")
+    })
+
     test("in-progress review → 'review_pending', transient", () => {
         const g = mergeGate(openPull, { status: "analysing", result: null })
         expect(g.block?.code).toBe("review_pending")
