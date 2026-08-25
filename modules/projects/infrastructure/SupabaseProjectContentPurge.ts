@@ -18,6 +18,13 @@ const BY_PROJECT_ID = [
     "pr_comments",
     "pull_requests",
     "pull_request_analyses",
+    // The review ROUNDS behind each analysis (0080). Added late, and its absence
+    // is the second half of the same mistake: 0080 gave the table a foreign key
+    // to `projects` that a regional node cannot keep, and neither the key nor
+    // its replacement — this list — was updated. So on a regional node the
+    // rounds were unreachable (the key rejected every insert) and, had they
+    // written, unremovable (nothing here deleted them).
+    "pull_request_analysis_rounds",
     "mind_context",
     "issue_embeddings",
 ] as const

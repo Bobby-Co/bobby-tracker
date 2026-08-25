@@ -17,6 +17,31 @@ import { callbackOrigin } from "../domain/CallbackOrigin"
 import { analysisIsAbandoned } from "../domain/AnalysisRun"
 import { trace } from "@/lib/server/trace"
 
+/** What `ensure` decided. The string cases are progress states; a SpendRefusal is
+ *  a billing stop, and it carries its own user-facing message so the route does
+ *  not have to guess which of the two reasons applied. */
+export type EnsureOutcome =
+    | "started"
+    /** Admitted, but the team is at its tier's concurrency cap, so the run has
+     *  not been dispatched yet. Not a failure and NOT a refusal: the request was
+     *  accepted, and the finishing of some other run is what will start it. */
+    | "queued"
+    | "in_flight"
+    | "done"
+    | "not_ready"
+    | "no_issue"
+    | SpendRefusal
+
+/** A project whose owning team cannot be resolved. Shaped as a refusal because
+ *  that is what it is — nothing may be billed to nobody — and it keeps the caller
+ *  from needing a sixth case for a state it can do nothing about. */
+const UNRESOLVED_PAYER: SpendRefusal = {
+    reason: "suspended",
+    message: "This project isn't linked to a team that can run analysis.",
+}
+import type { SpendGate, SpendRefusal } from "@/modules/billing"
+import type { RunAdmission } from "../application/RunAdmission"
+
 /** Resolves the app/bot VcsAppService for a project, or null when it isn't linked
  *  to a VCS. Injected so the service stays provider-agnostic. */
 type VcsAppServiceResolver = (project: VcsProviderBinding) => VcsAppService | null
@@ -30,6 +55,13 @@ export class IssueAnalysisService {
         private readonly vcsFor: VcsAppServiceResolver,
         private readonly comment: IssueAnalysisComment,
         private readonly prompt: IssuePrompt,
+        /** The billing hard gate. Injected rather than reached for, so a host that
+         *  meters differently swaps it at the composition root. */
+        private readonly spend: SpendGate,
+        /** The per-team concurrency bound. Separate from `spend` because it stops
+         *  a different failure — a burst that outruns the ledger rather than a
+         *  budget that has run out. */
+        private readonly admission: RunAdmission,
     ) {}
 
     // ensure kicks off the SINGLE analysis run for an issue and is the one entry
@@ -41,7 +73,8 @@ export class IssueAnalysisService {
     async ensure(
         issueId: string,
         origin: string,
-    ): Promise<"started" | "in_flight" | "done" | "not_ready" | "no_issue"> {
+        opts: { fromQueue?: boolean } = {},
+    ): Promise<EnsureOutcome> {
         const issue = await this.issues.findAnalysisRow(issueId)
         trace("ensure.lookup", {
             issueId,
@@ -62,6 +95,17 @@ export class IssueAnalysisService {
             trace("ensure.inFlight", { issueId, startedAt: issue.analysis_started_at })
             return "in_flight"
         }
+        // Already waiting for a slot. Asking again does not move it up the queue,
+        // and must not enqueue it twice — the same one-shot rule as above, for the
+        // state before dispatch rather than after it.
+        //
+        // The DRAIN is the one caller allowed past this, because it is calling
+        // about a run it has already decided to start: for it, 'queued' is the
+        // reason it is here rather than a reason to stop.
+        if (issue.analysis_status === "queued" && !opts.fromQueue) {
+            trace("ensure.queued", { issueId, already: true })
+            return "queued"
+        }
         const cached = await this.issues.countSuggestions(issueId)
         trace("ensure.suggestions", { issueId, cached })
         if (cached > 0) return "done"
@@ -78,6 +122,60 @@ export class IssueAnalysisService {
         const cell = await this.projects.findCell(issue.project_id)
         trace("ensure.cell", { issueId, projectId: issue.project_id, cell })
         if (!cell) return "not_ready"
+
+        // Hard gate (0076): a paused team — or one that has spent its monthly
+        // allowance — analyses nothing. Enforced HERE, not only at the routes,
+        // because this service is also reached from the GitHub and GitLab webhooks
+        // — the paths with no session behind them, which would otherwise keep
+        // analysing every inbound issue indefinitely. An unresolvable team is
+        // refused too: fail closed, since the alternative is billing work to
+        // nobody.
+        //
+        // The refusal is RETURNED rather than flattened to a token, because the
+        // two reasons need different words and only the gate knows the numbers
+        // (what the allowance was, when it resets) that make the message useful.
+        const payer = await tryOrNull(() => this.projects.findTeamId(issue.project_id))
+        if (!payer) {
+            trace("ensure.refused", { issueId, projectId: issue.project_id, payer: null })
+            return UNRESOLVED_PAYER
+        }
+        const refusal = await this.spend.check(payer)
+        if (refusal) {
+            trace("ensure.refused", { issueId, projectId: issue.project_id, payer, reason: refusal.reason })
+            return refusal
+        }
+
+        // Burst bound. Checked AFTER the budget (a team with no credits should
+        // hear about the credits, not the queue) and BEFORE the row is marked
+        // 'analysing' — marking first would count this run against its own cap.
+        //
+        // The window between counting and marking is not zero, so two dispatches
+        // that arrive together can both pass at the boundary. That is acceptable
+        // for a safety bound: it can overshoot the cap by the number of truly
+        // simultaneous requests, not by the size of a scripted burst, because
+        // every one of those is serialised behind this read.
+        // At the cap the request is ACCEPTED and the work deferred, rather than
+        // refused. Pressing "Investigate" on a third issue is not an error; it is
+        // a wait, and reporting it as a failure taught users that the product was
+        // broken when it was busy.
+        //
+        // Nothing about the spend bound weakens. The run is not dispatched, costs
+        // nothing while it waits, and passes this same gate again when the drain
+        // picks it up — so a queue built against the last of a team's credits
+        // stops draining the moment the balance goes, which refusing never gave us.
+        //
+        // analysis_started_at is deliberately left NULL: it means "when this run
+        // started", the staleness rule for 'analysing' is built on it, and a
+        // queued run has not started. Order in the queue comes from updated_at.
+        const crowded = await this.admission.check(payer)
+        if (crowded) {
+            trace("ensure.queueing", { issueId, projectId: issue.project_id, payer })
+            await this.issues.updateSyncFields(issueId, {
+                analysis_status: "queued",
+                analysis_started_at: null,
+            })
+            return "queued"
+        }
 
         // Stamped with the status, and the reason they must be written together:
         // the status alone cannot distinguish a run in progress from one that

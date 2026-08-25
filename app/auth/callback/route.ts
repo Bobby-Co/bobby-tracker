@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { Supabase } from "@/lib/server/supabase"
 import { BetaAccess } from "@/lib/shared/BetaAccess"
 import { createProviderTokenRepository } from "@/modules/vcs"
+import { getBetaEnrollmentService } from "@/modules/beta"
 
 // Supabase OAuth callback. Exchanges the `code` query param for a session,
 // captures the GitHub provider token (so the app can later list private
@@ -190,8 +191,41 @@ export async function GET(request: Request) {
 
     // Beta gate: onboarded users who aren't on the whitelist land on the
     // coming-soon page instead of the app.
+    //
+    // The enrolment list is a table (0074), and the gate below reads a flag on
+    // the user. This is where the two meet: look the signing-in address up and,
+    // on a hit, stamp `whitelisted: true` into their metadata. Sign-in is the
+    // natural moment — it's the one point where an invitation sent yesterday
+    // becomes access today, with no session to invalidate.
     if (user && !new BetaAccess().isAllowed(user)) {
-        return NextResponse.redirect(new URL("/waitlist", url.origin))
+        let admitted = false
+        try {
+            admitted = await getBetaEnrollmentService().admit({
+                id: user.id,
+                email: user.email,
+                stamped: false, // isAllowed() already said no
+            })
+        } catch (e) {
+            // Fail closed: an un-enrolled user lands on the waitlist, which is
+            // where they'd be anyway. Logged because the alternative reading —
+            // "this person really isn't invited" — is wrong and unfalsifiable
+            // from the outside.
+            console.error("[auth/callback] beta admit failed:", (e as Error).message)
+        }
+
+        if (!admitted) return NextResponse.redirect(new URL("/waitlist", url.origin))
+
+        // The stamp is on the USER; the session cookie written a moment ago
+        // still carries the old metadata. Without this refresh the browser gate
+        // reads `whitelisted: false`, bounces to /waitlist, and only recovers on
+        // the next token refresh — a redirect loop that fixes itself in an hour.
+        // Route handlers can set cookies, so the refreshed session persists.
+        const { error: refreshErr } = await supabase.auth.refreshSession()
+        if (refreshErr) {
+            // Non-fatal: /waitlist asks POST /api/beta/access and refreshes for
+            // itself, so the user still gets in — just via one extra hop.
+            console.warn("[auth/callback] session refresh after beta admit failed:", refreshErr.message)
+        }
     }
 
     return NextResponse.redirect(new URL(next, url.origin))

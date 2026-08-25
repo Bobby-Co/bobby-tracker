@@ -25,10 +25,19 @@ export async function GET() {
     const tier = sub?.tier ?? "kit"
     const periodStart = sub?.period_start ?? startOfMonthUtc()
 
-    // Balance comes from the maintained rollup (single-row lookup), not a scan of
+    // Balance comes from the maintained rollup (single-row lookups), not a scan of
     // the event log — so it stays O(1) however much usage a team accrues.
-    const { data: period, error: usedErr } = await repoRead(() => ctx.usage.currentPeriodUsage(teamId, periodStart))
+    //
+    // Read against the team's BILLING IDENTITY rather than the team itself (0076):
+    // the balance is the subject's, summed across every team it has ever been
+    // bound to, so a team that replaced a deleted one continues its predecessor's
+    // period instead of starting fresh. A team with no subject yet — one created
+    // before 0076, before the lazy backfill on the create path has reached it —
+    // falls back to its own rollup row, which is exactly what it used to read.
+    const { data: period, error: usedErr } = await repoRead(() => ctx.periodUsage.forTeam(teamId, periodStart))
     if (usedErr) return usedErr
+
+    const { data: subject } = await repoRead(() => ctx.usageSubjects.findForTeam(teamId))
 
     const { data: breakdown, error: bdErr } = await repoRead(() => ctx.usage.breakdownSince(teamId, periodStart))
     if (bdErr) return bdErr
@@ -46,6 +55,11 @@ export async function GET() {
     return Response.json({
         role,
         status: sub?.status ?? "active",
+        // Suspended means: data kept, nothing may be spent, and the team's free
+        // slot is released for another team (0076). The UI reads this to show the
+        // paused state and the resume control.
+        suspended: subject?.status === "suspended" || sub?.status === "suspended",
+        slot: subject?.slot ?? null,
         balance: balance.toJSON(),
         breakdown,
         recent,

@@ -6,6 +6,7 @@ import { AnalyserPanel } from "@/components/projects/analyser-panel"
 import { AutoUpdatePanel } from "@/components/projects/auto-update-panel"
 import { DuplicateSensitivityPanel } from "@/components/projects/duplicate-sensitivity-panel"
 import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-effort"
+import { ReviewProfilePanel } from "@/components/projects/review-profile-panel"
 import { VerifyPanel } from "@/components/projects/verify-panel"
 import { KnowledgeSkeleton } from "@/components/projects/knowledge-skeleton"
 import type { Project, ProjectAnalyser } from "@/lib/shared/types"
@@ -29,7 +30,7 @@ import { ProjectAnalyser as ProjectAnalyserModel } from "@/modules/analysis/doma
 // inferred.
 
 type KnowledgeData = {
-    project: Pick<Project, "id" | "repo_url" | "repo_full_name"> | null
+    project: Pick<Project, "id" | "repo_url" | "repo_full_name" | "team_id"> | null
     analyser: ProjectAnalyser | null
 }
 
@@ -76,6 +77,12 @@ export default function KnowledgePage() {
                 prerequisite — and unlike the panels above it works whether or
                 not a graph exists, since issue embeddings are independent of
                 repo indexing. */}
+            {/* Which reviewer this project's pull requests get (0077). Here rather
+                than under Settings for the same reason the effort default is: it
+                is a property of how this project THINKS, not of its identity. It
+                works with or without an indexed graph — a profile a project can't
+                use yet is still a choice worth recording. */}
+            <ReviewProfilePanel projectId={id} teamId={project?.team_id ?? null} />
             <DuplicateSensitivityPanel projectId={id} />
             <VerifyPanel
                 projectId={id}

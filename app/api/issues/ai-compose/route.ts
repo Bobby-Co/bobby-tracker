@@ -33,6 +33,12 @@ export async function POST(request: Request) {
     // RLS made it so; AccessService also applies the group-level gate.
     const { ctx, teamId, user, error } = await new ApiContext().requireProjectAccess(project_id)
     if (error) return error
+
+    // Hard gate: a paused team may read everything and run nothing (0076). Sits
+    // after the access guard because a pause is a billing state, not a permission
+    // — the 402 tells the client to offer resume/plan, not sign-in.
+    const spendErr = await new ApiContext().requireSpend(ctx, teamId)
+    if (spendErr) return spendErr
     if (!paragraph.trim() && images.length === 0) {
         return jsonError("bad_request", "Provide a paragraph or at least one image.", 400)
     }

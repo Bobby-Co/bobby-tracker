@@ -4,6 +4,7 @@
 // transport that produces/consumes them lives in infrastructure/HttpAnalyser.
 
 import type { AnalyseEffort } from "../domain/ProjectAnalyser"
+import type { ReviewPolicyWire } from "../domain/ReviewProfile"
 export type { AnalyseEffort }
 
 /** Thrown by the Analyser adapter on any transport/protocol failure. */
@@ -353,6 +354,60 @@ export interface PrAnalyseInput {
     projectId?: string
     /** Relay routing (X-Bobby-User); ignored when no worker is connected. */
     userId?: string
+    /** The team's compiled review profile (analyser ADR-0065). OMITTED means the
+     *  default reviewer, which is what every caller sent before profiles existed
+     *  — so this is purely additive. It stays optional for a second reason worth
+     *  knowing: the analyser decodes with DisallowUnknownFields, so a cell that
+     *  predates the field REJECTS a request carrying it. Send it only once the
+     *  analyser side is deployed. */
+    policy?: ReviewPolicyWire
+    /** The blockers the LAST review of this PR reported, at an earlier head
+     *  (0080). The reviewer is asked to CHECK each rather than rediscover it,
+     *  which is what makes re-reviewing a push affordable — confirming a named
+     *  defect at a known path is a read or two, finding it again is most of a
+     *  review. Omitted on a first review. */
+    previous_blockers?: { file: string; line?: number; title: string }[]
+    /** Findings the tracker is CARRYING FORWARD this round — already reported at
+     *  an earlier head, in files this diff does not touch (0081).
+     *
+     *  The reviewer is told not to re-report them, which is the opposite of more
+     *  work: without this it walks the graph into an untouched file, rediscovers
+     *  a defect the last round already found, and spends one of nine turns
+     *  reporting a duplicate the merge would then have to reconcile. Omitted on
+     *  a full review, where there is nothing being carried. */
+    carried_findings?: { file: string; line?: number; title: string }[]
+    /** What the `files` list MEANS this round (0081).
+     *
+     *  Absent — the default, and every request before this existed — the files
+     *  are the whole pull request. Present with kind "incremental" they are the
+     *  diff of one PUSH, and the reviewer needs to know that, because "the diff
+     *  does not touch X" is a conclusion it would otherwise draw about the pull
+     *  request from a list that only ever described a commit range. */
+    review_scope?: { kind: "incremental"; previous_head_sha?: string }
+    /** Every path the PULL REQUEST touches, with its status — paths only, no
+     *  patches (0081).
+     *
+     *  An incremental round sends a handful of files, and the reviewer's checkout
+     *  is the indexed default branch, so a file this pull request CREATED but
+     *  this push did not touch is invisible in both places. Left unsaid the
+     *  reviewer concludes it is absent: observed as "this API ships with no
+     *  routes or worker wired to it" about an API with both, in files the round
+     *  simply was not shown.
+     *
+     *  A manifest is not a diff. It costs one line per file and buys the
+     *  reviewer the SHAPE of the change, which is all it needs to stop reasoning
+     *  from an absence. Omitted on a full review, where the diff is the manifest. */
+    pr_files?: {
+        path: string
+        status?: string
+        /** The file's whole-pull-request patch, present ONLY for files the
+         *  push's diff imports. Paths alone stopped the reviewer asserting a
+         *  file was absent, and did not stop it ripgrepping for a symbol,
+         *  finding nothing, and raising a finding about a contract it "could not
+         *  verify" — a tool result beats an instruction. So a dependency the
+         *  pull request itself adds travels with its content. */
+        patch?: string
+    }[]
 }
 
 // ─── /verify ─────────────────────────────────────────────────────────────────

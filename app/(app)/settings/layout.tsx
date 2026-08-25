@@ -13,6 +13,7 @@ const TABS = [
     { href: "/settings/appearance", label: "Appearance" },
     { href: "/settings/mcp", label: "AI Assistant" },
     { href: "/settings/billing", label: "Usage & Billing" },
+    { href: "/settings/account", label: "Account" },
 ]
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {

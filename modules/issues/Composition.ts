@@ -3,6 +3,9 @@
 // createIssueEmbedder lives here rather than beside the class it builds.
 
 import { getAnalyser } from "@/modules/analysis"
+import { getSpendGate } from "@/modules/billing"
+import { createSupabaseProjectsRepository } from "@/modules/projects"
+import { Supabase } from "@/lib/server/supabase"
 import type { SupabaseRlsClient } from "@/lib/server/supabase"
 import { IssueEmbedder } from "./application/IssueEmbedder"
 import { createServiceEmbeddingIndex } from "./infrastructure/SupabaseEmbeddingIndex"
@@ -16,5 +19,14 @@ import { createServiceEmbeddingIndex } from "./infrastructure/SupabaseEmbeddingI
  *  rather than an error, which is why the parameter is worth threading through
  *  every caller. */
 export function createIssueEmbedder(dataDb?: SupabaseRlsClient): IssueEmbedder {
-    return new IssueEmbedder(getAnalyser(), createServiceEmbeddingIndex(dataDb))
+    // The billing hard gate, as a predicate: resolve the project's team on the
+    // CONTROL plane (`projects` lives there), then ask whether it may spend. Kept
+    // here rather than inside IssueEmbedder so the issues module keeps knowing
+    // nothing about billing.
+    const canSpend = async (projectId: string): Promise<boolean> => {
+        const teamId = await createSupabaseProjectsRepository(Supabase.service()).findTeamId(projectId)
+        if (!teamId) return false
+        return !(await getSpendGate().check(teamId))
+    }
+    return new IssueEmbedder(getAnalyser(), createServiceEmbeddingIndex(dataDb), canSpend)
 }

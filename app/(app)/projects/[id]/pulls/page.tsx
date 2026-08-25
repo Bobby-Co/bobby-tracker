@@ -97,15 +97,18 @@ export default function PullsPage() {
             </div>
 
             {data?.syncing && pulls.length === 0 ? (
-                <div className="rounded-[16px] border border-amber-200 bg-amber-50 px-4 py-8 text-center text-[13px] text-amber-900">
+                /* Built from the --c-warn token pair, not raw amber-*: the pair
+                   inverts with the theme (tint+ink on light, ink+tint on dark),
+                   where a literal amber-50 stays a cream card on the dark app. */
+                <div className="rounded-[16px] border border-[color:var(--c-warn)]/25 bg-[color:var(--c-warn-bg)] px-4 py-8 text-center text-[13px] text-[color:var(--c-warn)]">
                     <p className="font-semibold">Syncing pull requests from GitHub…</p>
-                    <p className="mt-1 text-[12.5px] text-amber-800">
+                    <p className="mt-1 text-[12.5px] text-[color:var(--c-text-muted)]">
                         This runs in the background. Give it a moment, then refresh.
                     </p>
                     <button
                         type="button"
                         onClick={refetch}
-                        className="mt-3 inline-flex items-center rounded-[10px] bg-amber-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-amber-950"
+                        className="mt-3 inline-flex items-center rounded-[10px] bg-[color:var(--c-warn)] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--c-warn-bg)] transition-opacity hover:opacity-90"
                     >
                         Refresh
                     </button>

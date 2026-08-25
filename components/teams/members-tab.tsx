@@ -5,15 +5,49 @@ import { useAuth } from "@/lib/client/auth/auth-context"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { cn } from "@/components/ui/cn"
+import { Modal } from "@/components/ui/modal"
 import { TEAM_ROLES, type TeamInvite, type TeamMemberView, type TeamRole, type TeamWithRole } from "@/lib/shared/types"
 
-export function MembersTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boolean }) {
+export function MembersTab({
+    team,
+    isAdmin,
+    onTeamChanged,
+}: {
+    team: TeamWithRole
+    isAdmin: boolean
+    /** Called after the caller's own role changes (an ownership transfer), so the
+     *  page can re-read the team it is rendering the tabs from. */
+    onTeamChanged?: () => void
+}) {
     const { user } = useAuth()
     const membersQ = useApi<{ members: TeamMemberView[] }>(`/api/teams/${team.id}/members`)
     const invitesQ = useApi<{ invites: TeamInvite[] }>(isAdmin ? `/api/teams/${team.id}/invites` : null, { enabled: isAdmin })
 
     const members = membersQ.data?.members ?? []
     const invites = invitesQ.data?.invites ?? []
+
+    // Transferring is owner-only and demotes the caller, so it gets a modal
+    // naming the person rather than a role dropdown you can hit by accident.
+    const [transferTo, setTransferTo] = useState<TeamMemberView | null>(null)
+    const [transferring, setTransferring] = useState(false)
+    const isOwner = team.role === "owner"
+
+    async function transfer(userId: string) {
+        setTransferring(true)
+        try {
+            await apiMutate(`/api/teams/${team.id}/transfer`, { method: "POST", body: { userId } })
+        } catch (e) {
+            if (!(e instanceof ApiError)) throw e
+            alert(e.message)
+        } finally {
+            setTransferring(false)
+            setTransferTo(null)
+        }
+        // The caller is an admin now, so the whole tab's affordances change —
+        // refetch the team as well as the roster.
+        membersQ.refetch()
+        onTeamChanged?.()
+    }
 
     async function changeRole(userId: string, role: TeamRole) {
         try {
@@ -78,6 +112,16 @@ export function MembersTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boo
                                     ) : (
                                         <span className="rounded-full bg-[color:var(--c-surface-2)] px-2 py-0.5 text-[11px] font-semibold capitalize text-[color:var(--c-text-muted)]">{m.role}</span>
                                     )}
+                                    {isOwner && !isSelf && !team.is_personal && m.role !== "owner" && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setTransferTo(m)}
+                                            title="Transfer ownership"
+                                            className="rounded-[8px] border border-[color:var(--c-border)] px-2.5 py-1 text-[12px] font-medium text-[color:var(--c-text-muted)] transition-colors hover:border-[color:var(--c-border-strong)] hover:text-[color:var(--c-text)]"
+                                        >
+                                            Make owner
+                                        </button>
+                                    )}
                                     {(isAdmin || isSelf) && !(m.role === "owner" && members.filter((x) => x.role === "owner").length === 1) && (
                                         <button
                                             type="button"
@@ -94,6 +138,39 @@ export function MembersTab({ team, isAdmin }: { team: TeamWithRole; isAdmin: boo
                     </ul>
                 )}
             </section>
+
+            <Modal
+                open={!!transferTo}
+                onClose={() => !transferring && setTransferTo(null)}
+                title="Transfer ownership"
+                description={`${transferTo?.name ?? transferTo?.email ?? "This member"} becomes the owner of ${team.name}.`}
+            >
+                <div className="flex flex-col gap-3">
+                    <p className="text-[12.5px] leading-relaxed text-[color:var(--c-text-muted)]">
+                        You stay in the team as an admin, and can leave afterwards if you want to. Only an owner can
+                        transfer a team, so you can&rsquo;t undo this yourself — the new owner would have to hand it
+                        back.
+                    </p>
+                    <div className="flex justify-end gap-2 pt-1">
+                        <button
+                            type="button"
+                            onClick={() => setTransferTo(null)}
+                            disabled={transferring}
+                            className="h-8 rounded-[8px] border border-[color:var(--c-border)] px-3 text-[12.5px]"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => transferTo && transfer(transferTo.user_id)}
+                            disabled={transferring}
+                            className="btn-primary"
+                        >
+                            {transferring ? "Transferring…" : "Transfer"}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
 
             {isAdmin && invites.length > 0 && (
                 <section>

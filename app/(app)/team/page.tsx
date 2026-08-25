@@ -8,6 +8,7 @@ import { useTeam } from "@/lib/client/auth/team-context"
 import { MembersTab } from "@/components/teams/members-tab"
 import { GroupsTab } from "@/components/teams/groups-tab"
 import { SettingsTab } from "@/components/teams/settings-tab"
+import { ReviewProfilesTab } from "@/components/teams/review-profiles-tab"
 
 // Team management: the Members tab (roster, roles, email invites) and the Groups
 // tab (people-groups + which projects each may access). Acts on the ACTIVE team
@@ -22,10 +23,10 @@ export default function TeamPage() {
 }
 
 function TeamPageInner() {
-    const { activeTeam, loading } = useTeam()
+    const { activeTeam, loading, refetch } = useTeam()
     const params = useSearchParams()
     const raw = params.get("tab")
-    const tab = raw === "groups" || raw === "settings" ? raw : "members"
+    const tab = raw === "groups" || raw === "settings" || raw === "reviews" ? raw : "members"
 
     if (loading && !activeTeam) {
         return (
@@ -66,12 +67,14 @@ function TeamPageInner() {
             <nav className="mt-5 flex items-center gap-1 border-b border-[color:var(--c-border)]">
                 <TabLink href="/team?tab=members" active={tab === "members"} label="Members" />
                 <TabLink href="/team?tab=groups" active={tab === "groups"} label="Groups" />
+                <TabLink href="/team?tab=reviews" active={tab === "reviews"} label="Reviews" />
                 <TabLink href="/team?tab=settings" active={tab === "settings"} label="Settings" />
             </nav>
 
             <div className="mt-6">
-                {tab === "members" && <MembersTab team={activeTeam} isAdmin={isAdmin} />}
+                {tab === "members" && <MembersTab team={activeTeam} isAdmin={isAdmin} onTeamChanged={refetch} />}
                 {tab === "groups" && <GroupsTab team={activeTeam} isAdmin={isAdmin} />}
+                {tab === "reviews" && <ReviewProfilesTab team={activeTeam} isAdmin={isAdmin} />}
                 {tab === "settings" && <SettingsTab team={activeTeam} />}
             </div>
         </div>

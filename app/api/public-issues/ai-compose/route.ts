@@ -1,5 +1,6 @@
 import { jsonError } from "@/lib/server/http/api"
 import { Supabase } from "@/lib/server/supabase"
+import { getSpendGate } from "@/modules/billing"
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
 import { EmbeddingText } from "@/modules/issues"
 import { getPublicSessionService } from "@/modules/public"
@@ -60,6 +61,14 @@ export async function POST(request: Request) {
     // costs a lookup — the same "authorize before paying" order this route's
     // header comment already sets out.
     const ownerTeamId = await gate.ownerTeamId(sess.session.id)
+
+    // Hard gate (0076). The visitor is anonymous and the publishing team pays, so
+    // a paused team stops public composition too — otherwise the one entry point
+    // with no session behind it is the one that keeps spending. Deliberately terse
+    // to the visitor: the maintainer's billing state is not theirs to read.
+    if (ownerTeamId && (await getSpendGate().check(ownerTeamId))) {
+        return jsonError("unavailable", "This form is paused right now.", 402)
+    }
 
     const isGroupBacked = !!sess.session.group_id
     if (!isGroupBacked) {

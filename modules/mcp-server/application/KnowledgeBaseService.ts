@@ -29,6 +29,7 @@ import type {
     NeighboursInput,
     NeighboursResult,
 } from "@/modules/analysis"
+import type { SpendGate } from "@/modules/billing"
 import { McpToolError } from "../domain/McpTool"
 
 /** One project exposed over MCP, as the tools describe it. `indexed` is false
@@ -144,6 +145,8 @@ export class KnowledgeBaseService {
         private readonly projectAnalyser: ProjectAnalyserRepository,
         private readonly analyserFor: AnalyserResolver,
         private readonly userId: string,
+        /** The billing hard gate: a paused team serves no MCP requests either. */
+        private readonly spend: SpendGate,
     ) {}
 
     /** Every MCP-enabled project the caller can access, across all their teams.
@@ -226,6 +229,25 @@ export class KnowledgeBaseService {
         // result rather than an error, the worst outcome for an agent to act on.
         const cell = await this.projects.findCell(hit.projectId)
         if (!cell) throw new McpToolError(`"${hit.repoFullName || hit.name}" is not available right now.`)
+
+        // Hard gate (0076). Every MCP tool that costs anything — locate, ask,
+        // neighbours — funnels through this resolver, so a stopped team is refused
+        // here once rather than in each tool. MCP matters more than the UI paths
+        // do: an agent will happily retry in a loop, and nobody is watching, which
+        // is exactly how an exhausted allowance would otherwise become an
+        // unbounded bill.
+        //
+        // The gate's message is passed through verbatim. Unlike the public forms,
+        // the caller here is the team's own agent, and an agent that is told WHY
+        // it was refused can stop and say so instead of retrying.
+        const payer = await this.projects.findTeamId(hit.projectId)
+        if (!payer) {
+            throw new McpToolError(`"${hit.repoFullName || hit.name}" isn't linked to a team that can run analysis.`)
+        }
+        const refusal = await this.spend.check(payer)
+        if (refusal) {
+            throw new McpToolError(`"${hit.repoFullName || hit.name}" is unavailable in Ucelot. ${refusal.message}`)
+        }
 
         return { ...hit, graphId, cell }
     }

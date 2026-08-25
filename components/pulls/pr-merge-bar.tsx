@@ -36,14 +36,20 @@ export function PrMergeBar({
     projectId,
     pull,
     analysis,
+    progress,
     onMerged,
 }: {
     projectId: string
     pull: PullRequest
     analysis: PullRequestAnalysis | null
+    /** What the last push fixed (0080). Affects only what the bar SAYS —
+     *  "3 of 5 resolved, 2 left" reads very differently from "2 blockers" to
+     *  somebody who has been working through them. The DECISION is still the
+     *  findings, and the server enforces the same gate regardless. */
+    progress?: { fixed: number }
     onMerged: () => void
 }) {
-    const gate = new MergePolicy().evaluate(pull, analysis)
+    const gate = new MergePolicy().evaluate(pull, analysis, progress)
 
     // Already merged is its own terminal, celebratory state — not a "blocked"
     // one. Show it and stop.

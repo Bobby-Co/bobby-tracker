@@ -25,6 +25,7 @@ import {
     type BoardDemoHandle,
 } from "@/components/timeline/timeline-grid-playful"
 import { useScriptedCursor, type Step } from "@/components/ui/scripted-cursor"
+import { rowToLaneAbs } from "@/lib/client/timeline/grid"
 import type { Issue, ProjectLabelIcon } from "@/lib/shared/types"
 
 export function DemoStyles() {
@@ -445,7 +446,7 @@ function mockIssue(
         duplicate_of_issue_id: null,
         starts_at: midnight(opts.startDay),
         ends_at: midnight(opts.startDay + opts.days),
-        lane_y: opts.lane,
+        lane_y: rowToLaneAbs(opts.lane),
         color: null,
         analyse_effort: null,
         created_at: new Date(Date.now() - DAY).toISOString(),

@@ -2,6 +2,8 @@
 // in the supabase CLI codegen toolchain just for Phase 2; regenerate with
 // `supabase gen types typescript --schema tracker` once the schema settles.
 
+import type { Report } from "./report/registry"
+
 export type IssueStatus = "open" | "in_progress" | "blocked" | "done" | "archived" | "duplicated"
 export type IssuePriority = "low" | "medium" | "high" | "urgent"
 export type AnalyserStatus = "disabled" | "pending" | "indexing" | "ready" | "failed"
@@ -142,6 +144,86 @@ export interface GithubInstallation {
  *  place and the run cancelled (migration 0042). `id` doubles as the analyser
  *  task_id. One row per (project, pr_number). `result` (migration 0043) is the
  *  persisted structured review so the detail page can render it natively. */
+/** The reviewer configuration a run actually used, as it crossed the wire
+ *  (migration 0079). Structurally the ReviewPolicyWire that
+ *  modules/analysis/domain/ReviewProfile.ts compiles — restated here with plain
+ *  `string` dials rather than imported, because lib/shared deliberately depends
+ *  on nothing outside lib/shared. The literal unions there are assignable to
+ *  this, so the service still hands over a compiled policy without a cast, and a
+ *  renderer reading a dial value this build doesn't know shows it verbatim
+ *  instead of failing to compile. */
+export interface ReviewRunPolicy {
+    strictness: string
+    evidence: string
+    blocking: string
+    positivity: string
+    verbosity: string
+    voice: string
+    depth: string
+    lenses: string[]
+    instructions?: string
+    path_rules?: { glob: string; text: string }[]
+}
+
+/** Which reviewer produced a review (migration 0079). Snapshotted onto the run
+ *  at dispatch rather than read back through projects.review_profile_id, which
+ *  says what the NEXT review will use — re-labelling old reviews every time the
+ *  assignment moves is worse than not labelling them at all.
+ *
+ *  A discriminated union because "the built-in default ran" and "we don't know
+ *  what ran" are genuinely different answers, and only the second one is a gap.
+ *  `null` on the row is that gap: a run from before attribution existed. */
+export type ReviewRunProfile =
+    | { kind: "default" }
+    | { kind: "profile"; id: string | null; name: string; preset: string | null; policy: ReviewRunPolicy }
+
+/** One commit a review round covered (migration 0081). Recorded so the surfaces
+ *  can say WHICH push produced which review rather than showing a bare sha, and
+ *  so the round strip doubles as the series of pushes. `files` is the paths that
+ *  commit touched, best-effort — providers report it per compare, not per commit,
+ *  so it is empty when only the range's file list was available. */
+export interface ReviewRoundCommit {
+    sha: string
+    subject: string
+    author: string | null
+    at: string | null
+    files?: string[]
+}
+
+/** Why a round reviewed what it reviewed, and what it carried (migration 0081).
+ *
+ *  Written on the TRACKING row at dispatch and read back by the callback, which
+ *  is the only way the two halves can agree: the scope is decided where the diff
+ *  is fetched, and the merge happens where the result lands. Carrying the
+ *  decision through the round row instead would mean re-deriving it after the
+ *  fact from a head that has since moved. */
+export interface ReviewRunScope {
+    scope: "full" | "incremental"
+    /** The rule that fired, as a stable code — `reason` is its prose. */
+    code: string
+    reason: string
+    /** The head the LAST round reviewed; the left-hand side of the compare. Null
+     *  on a first review. */
+    prevHeadSha: string | null
+    baseSha: string | null
+    /** The commits between prevHeadSha (or the base, on a first round) and this
+     *  head. */
+    commits: ReviewRoundCommit[]
+    /** How many files were actually sent to the reviewer. */
+    reviewedFiles: number
+    /** Findings this round inherits WITHOUT re-examining, verbatim from the last
+     *  round. Empty on a full review. Kept in full rather than by id: the merge
+     *  has to produce one findings list, and a reference to a row that could be
+     *  read differently later is exactly the drift this avoids. */
+    carried: PrFinding[]
+    /** The BLOCKERS sent back to the reviewer to re-judge. Only the blockers,
+     *  and only so the callback can put them back if the round turns out to have
+     *  been degraded: a partial review read nothing, so its silence about a
+     *  blocker is an absence rather than a judgement, and dropping one on it
+     *  would be the same fail-open in a new place. */
+    reJudgedBlockers: PrFinding[]
+}
+
 export interface PullRequestAnalysis {
     id: string
     project_id: string
@@ -150,6 +232,15 @@ export interface PullRequestAnalysis {
     head_sha: string | null
     status: "analysing" | "done" | "failed" | "cancelled" | null
     result: PrAnalysis | null
+    /** The profile this run used, for queries ("what did this profile review?").
+     *  Null for a default-reviewer run. See ReviewRunProfile for why this is a
+     *  plain uuid with no foreign key behind it. */
+    review_profile_id: string | null
+    /** What ran, in full. Null only for runs that predate migration 0079. */
+    review_profile: ReviewRunProfile | null
+    /** What this run was SCOPED to, and what it carried (migration 0081). Null
+     *  on rows written before incremental review — which were all full reviews. */
+    review_scope: ReviewRunScope | null
     created_at: string
     updated_at: string
 }
@@ -276,6 +367,31 @@ export interface PrFinding {
      *  snippet in the UI; `lang` is the fenced-block language (usually "diff"). */
     snippet?: string
     lang?: string
+    /** Round provenance (migration 0081). Stamped by the TRACKER when a round is
+     *  merged, never sent by the analyser — see PrFindingProvenance for why a
+     *  snapshot alone cannot answer what this records. Absent on every finding
+     *  written before incremental review existed. */
+    provenance?: PrFindingProvenance
+}
+
+/** Where a finding came from, and whether anyone looked at it this round.
+ *
+ *  Two adjacent round snapshots containing the same finding are
+ *  INDISTINGUISHABLE without this: one may be a defect the reviewer re-opened
+ *  the code to confirm, the other a finding carried forward untouched because
+ *  its file was not in the push. Once the reviewer stops reading every file that
+ *  distinction is the difference between a live finding and an assumption, so it
+ *  is recorded rather than inferred. */
+export interface PrFindingProvenance {
+    /** The round that first reported it. */
+    firstSeenRound: number
+    /** The last round that actually read the code behind it. */
+    lastVerifiedRound: number
+    /** True when THIS round inherited it without examining it. */
+    carried: boolean
+    /** The head whose round dropped it — set only on a finding stored in a
+     *  round's `resolved` list, never on a live one. */
+    resolvedBy?: string
 }
 
 /** Per-dimension calibrated confidence (analyser ADR-0057). `level` is the
@@ -343,6 +459,31 @@ export interface PrAnalysis {
     duration_ms?: number
     /** Session-insight id → powers the deep-dive chat (analyser ADR-0055). */
     insight_id?: string
+    /** The grounded review pass did not complete, so this review is reduce's
+     *  diff-level draft rather than a full one.
+     *
+     *  It matters far beyond presentation: a blocker missing from a partial
+     *  review is indistinguishable from a blocker that was fixed, so a degraded
+     *  round is never allowed to resolve anything (see diffRounds), and the
+     *  merge gate will not read it as a clean bill of health. Absent on rows
+     *  written before the analyser reported it — which are treated as complete,
+     *  because that is what they were. */
+    degraded?: boolean
+    /** The analyser build that produced this review — a short git SHA, with
+     *  `-dirty` for an unclean tree.
+     *
+     *  Rides the result JSON, so it needed no migration. Absent on every review
+     *  written before the analyser started stamping it, and that absence is
+     *  read as "unknown" rather than filled in: findings, layout, lenses and
+     *  gating all move between builds, so a guessed build is worse than none. */
+    analyser_build?: string
+    /** The review's LAYOUT — which blocks render, in what order (analyser
+     *  ADR-0066). It ACCOMPANIES the fields above rather than replacing them:
+     *  the blocks reference this data, because the analyser's gate rewrites
+     *  `findings` after the review pass and a layout carrying its own copy would
+     *  drift from it. Absent on every row written before blocks existed, which
+     *  both renderers read as "use the classic layout". */
+    report?: Report | null
 }
 
 /** Shape returned by GET /api/github/repos — a flattened subset of the
@@ -685,6 +826,7 @@ export interface ProjectGroupWithMembers extends ProjectGroup {
 export type NotificationKind =
     | "kb_ready"          // first successful index of a project
     | "kb_updated"        // every index after that
+    | "kb_failed"         // an index run ended in 'failed' (migration 0078)
     | "pr_analysis_ready" // Bobby's PR review finished
     | "pr_opened"         // a new PR landed on a synced repo
 

@@ -97,3 +97,69 @@ describe("defaultMergeMethod — GitHub preference order", () => {
         expect(defaultMergeMethod({ merge: false, squash: false, rebase: false })).toBeNull()
     })
 })
+
+// ─── a partial review has not cleared anything (0080) ───────────────────────
+//
+// This is the only gate that fires on an ABSENCE. Every other rule reads what
+// the review found; this one reads that it did not finish looking — because an
+// empty blocker list from a degraded review means "we did not look", and the
+// analyser degrading silently is precisely how a pull request with three
+// injections once scored 10/10.
+describe("MergePolicy: a degraded review", () => {
+    const policy = new MergePolicy()
+    const open = { merged: false, state: "open" as const, draft: false }
+
+    test("holds the merge even with no blockers", () => {
+        const gate = policy.evaluate(open, { status: "done", result: { findings: [], degraded: true } })
+        expect(gate.mergeable).toBe(false)
+        expect(gate.block?.code).toBe("review_partial")
+    })
+
+    test("says re-running will clear it", () => {
+        const gate = policy.evaluate(open, { status: "done", result: { findings: [], degraded: true } })
+        expect(gate.block?.transient).toBe(true)
+        expect(gate.block?.label).toContain("re-run")
+    })
+
+    // Blockers still take precedence: a partial review that DID find something
+    // must report the finding, not the incompleteness.
+    test("a blocker it did find still leads", () => {
+        const gate = policy.evaluate(open, {
+            status: "done",
+            result: { findings: [{ severity: "critical" }], degraded: true },
+        })
+        expect(gate.block?.code).toBe("critical")
+    })
+
+    test("a complete review with no blockers still merges", () => {
+        expect(policy.evaluate(open, { status: "done", result: { findings: [] } }).mergeable).toBe(true)
+    })
+
+    // Rows written before the analyser reported it are treated as complete,
+    // because that is what they were.
+    test("a legacy row without the flag is not treated as partial", () => {
+        expect(policy.evaluate(open, { status: "done", result: { findings: [] } }).mergeable).toBe(true)
+    })
+})
+
+describe("MergePolicy: progress wording", () => {
+    const policy = new MergePolicy()
+    const open = { merged: false, state: "open" as const, draft: false }
+    const twoBlockers = { status: "done" as const, result: { findings: [{ severity: "critical" }, { severity: "critical" }] } }
+
+    test("counts progress when the previous round had more", () => {
+        const gate = policy.evaluate(open, twoBlockers, { fixed: 3 })
+        expect(gate.block?.label).toBe("3 of 5 blockers resolved — 2 left")
+    })
+
+    test("falls back to the plain count with no progress to report", () => {
+        expect(policy.evaluate(open, twoBlockers).block?.label).toBe("Review found 2 blockers")
+        expect(policy.evaluate(open, twoBlockers, { fixed: 0 }).block?.label).toBe("Review found 2 blockers")
+    })
+
+    // Wording only — the decision is still the findings.
+    test("progress never changes mergeability", () => {
+        expect(policy.evaluate(open, twoBlockers, { fixed: 99 }).mergeable).toBe(false)
+        expect(policy.evaluate(open, twoBlockers, { fixed: 99 }).criticalCount).toBe(2)
+    })
+})

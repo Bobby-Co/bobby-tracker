@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Modal } from "@/components/ui/modal"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { useApi } from "@/lib/client/hooks/use-api"
@@ -29,6 +30,11 @@ export function NewTeamModal({
     const [pickedRegion, setPickedRegion] = useState("")
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState<string | null>(null)
+    // Set when the server says both free team slots are in use (402). This isn't
+    // an error the user can fix in this form, so the modal stops asking for a name
+    // and offers the two things that actually resolve it.
+    const [planRequired, setPlanRequired] = useState(false)
+    const router = useRouter()
 
     // Only fetch while open — this mounts alongside the top bar on every page.
     const regionsQ = useApi<{ regions: RegionOption[] }>(open ? "/api/regions" : null)
@@ -41,6 +47,7 @@ export function NewTeamModal({
         setName("")
         setPickedRegion("")
         setErr(null)
+        setPlanRequired(false)
     }
 
     async function submit(e: React.FormEvent) {
@@ -60,7 +67,8 @@ export function NewTeamModal({
             reset()
             onClose()
         } catch (e) {
-            if (e instanceof ApiError) setErr(e.message ?? "Couldn't create team")
+            if (e instanceof ApiError && e.code === "plan_required") setPlanRequired(true)
+            else if (e instanceof ApiError) setErr(e.message ?? "Couldn't create team")
             else setErr("Network error")
         } finally {
             setBusy(false)
@@ -75,6 +83,34 @@ export function NewTeamModal({
             description="Teams own projects, members and billing."
             size={regions.length > 1 ? "lg" : "md"}
         >
+            {planRequired ? (
+                <div className="flex flex-col gap-3">
+                    <p className="text-[13px] font-semibold text-[color:var(--c-text)]">
+                        Both of your free teams are in use
+                    </p>
+                    <p className="text-[12.5px] leading-relaxed text-[color:var(--c-text-muted)]">
+                        Every account gets two free teams — this one and one more. To run another, put it on a plan,
+                        or pause a team you&rsquo;re not using: a paused team keeps everything and gives its slot
+                        back.
+                    </p>
+                    <div className="flex justify-end gap-2 pt-1">
+                        <button
+                            type="button"
+                            onClick={() => { reset(); onClose() }}
+                            className="h-8 rounded-[8px] border border-[color:var(--c-border)] px-3 text-[12.5px]"
+                        >
+                            Not now
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { reset(); onClose(); router.push("/settings/billing") }}
+                            className="btn-primary"
+                        >
+                            Choose a plan
+                        </button>
+                    </div>
+                </div>
+            ) : (
             <form onSubmit={submit} className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1">
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
@@ -121,6 +157,7 @@ export function NewTeamModal({
                     </button>
                 </div>
             </form>
+            )}
         </Modal>
     )
 }

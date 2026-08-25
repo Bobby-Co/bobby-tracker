@@ -11,6 +11,11 @@ export interface OutboxEntry {
     issueId: string
     patch: SchedulePatch
     queuedAt: number
+    /** Bumped on every enqueue for this issue. A flush clears the entry
+     *  by (id, seq) so a gesture made WHILE its PATCH was in flight is
+     *  never thrown away — dropping it is what made a tile snap back to
+     *  where it was a couple of seconds after the drag. */
+    seq: number
 }
 
 const STORAGE_PREFIX = "bobby-tracker:schedule-outbox:"
@@ -29,6 +34,7 @@ const STORAGE_PREFIX = "bobby-tracker:schedule-outbox:"
 // help) while 5xx and network errors leave it pending.
 export class ScheduleOutbox {
     private entries: Map<string, OutboxEntry> = new Map()
+    private seq = 0
     private readonly storageKey: string
 
     constructor(projectId: string) {
@@ -44,7 +50,9 @@ export class ScheduleOutbox {
             const arr = JSON.parse(raw) as OutboxEntry[]
             for (const e of arr) {
                 if (e && typeof e.issueId === "string" && e.patch) {
-                    this.entries.set(e.issueId, e)
+                    // Entries written before seq existed (or by another tab)
+                    // get a fresh one, so ordering stays local-monotonic.
+                    this.entries.set(e.issueId, { ...e, seq: ++this.seq })
                 }
             }
         } catch {
@@ -76,6 +84,7 @@ export class ScheduleOutbox {
             issueId,
             patch: { ...existing, ...patch },
             queuedAt: Date.now(),
+            seq: ++this.seq,
         })
         this.persist()
     }
@@ -84,9 +93,16 @@ export class ScheduleOutbox {
         return this.entries.get(issueId) ?? null
     }
 
-    remove(issueId: string): void {
+    /** Clear an entry. Pass the `seq` that was sent to make it
+     *  conditional: if the issue was edited again since, the newer patch
+     *  stays queued and this is a no-op. Returns whether it removed. */
+    remove(issueId: string, seq?: number): boolean {
+        const entry = this.entries.get(issueId)
+        if (!entry) return false
+        if (seq != null && entry.seq !== seq) return false
         this.entries.delete(issueId)
         this.persist()
+        return true
     }
 
     snapshot(): OutboxEntry[] {

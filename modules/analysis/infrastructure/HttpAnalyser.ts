@@ -284,6 +284,19 @@ export class HttpAnalyser implements Analyser {
                 head_sha: input.headSha,
                 files: input.files,
                 max_budget_usd: input.maxBudgetUsd,
+                // Omitted entirely when there is no profile: JSON.stringify drops
+                // an undefined value, and the analyser rejects unknown fields —
+                // so "no profile" sends a body an older cell still accepts.
+                policy: input.policy,
+                previous_blockers: input.previous_blockers,
+                // Both omitted on a full review, and JSON.stringify drops an
+                // undefined value — so a full round sends exactly the body it
+                // sent before incremental review existed, which matters because
+                // the analyser decodes with DisallowUnknownFields and a cell
+                // that predates these fields REJECTS a request carrying them.
+                carried_findings: input.carried_findings,
+                review_scope: input.review_scope,
+                pr_files: input.pr_files,
                 task_id: taskId,
                 callback,
             }),

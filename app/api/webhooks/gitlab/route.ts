@@ -1,3 +1,4 @@
+import { getSpendGate } from "@/modules/billing"
 import { after } from "next/server"
 import { getAnalyser, createIssueAnalysisService, createPullRequestAnalysisService, createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/shared/kernel"
@@ -233,6 +234,13 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
               created_at?: string
               updated_at?: string
               last_commit?: { id?: string }
+              // GitLab ships the resolved three-way refs on the MR payload. The
+              // base is what `base…head` means for this MR, and the scope
+              // decision needs it: without a base, "the pull request's base
+              // moved" is a rule that can never fire, and a target branch that
+              // has moved under the MR would be reviewed incrementally as if
+              // nothing had happened.
+              diff_refs?: { base_sha?: string; head_sha?: string; start_sha?: string }
               merge_status?: string
           }
         | undefined
@@ -254,8 +262,8 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
         html_url: a?.url ?? null,
         head_ref: a?.source_branch ?? null,
         base_ref: a?.target_branch ?? null,
-        head_sha: a?.last_commit?.id ?? null,
-        base_sha: null,
+        head_sha: a?.diff_refs?.head_sha ?? a?.last_commit?.id ?? null,
+        base_sha: a?.diff_refs?.base_sha ?? null,
         additions: null,
         deletions: null,
         changed_files: null,
@@ -287,7 +295,13 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
     after(async () =>
         createPullRequestAnalysisService(await dataClientForProject(project.id)).start(
             prProject,
-            { number, title: a?.title ?? "", body: a?.description ?? null, baseSha: null, headSha: a?.last_commit?.id ?? null },
+            {
+                number,
+                title: a?.title ?? "",
+                body: a?.description ?? null,
+                baseSha: a?.diff_refs?.base_sha ?? null,
+                headSha: a?.diff_refs?.head_sha ?? a?.last_commit?.id ?? null,
+            },
             origin,
         ),
     )
@@ -315,6 +329,16 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
         return ack()
     }
 
+
+    // Hard gate (0076). A paused team must not spend, and a push webhook is the
+    // one billable path with nobody watching — it would keep indexing on every
+    // commit forever. ACK rather than error: GitHub/GitLab redelivery cannot fix a
+    // pause, and a failed webhook would just retry until it gave up.
+    const payer = await tryOrNull(() => createSupabaseProjectsRepository(svc).findTeamId(project.id))
+    if (!payer || (await getSpendGate().check(payer))) {
+        console.warn("[gitlab webhook] team paused or unresolved — skipping incremental index", project.id)
+        return ack()
+    }
     const graphId = analyser.graph_id
     after(async () => {
         try {

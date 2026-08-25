@@ -7,6 +7,7 @@ import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { useScheduleSync } from "@/lib/client/timeline/use-schedule-sync"
 import { pastelFor as pastelById } from "@/lib/client/timeline/palette"
 import {
+    ABS_LANES,
     CELL,
     MIN_DURATION_DAYS,
     addDays,
@@ -14,6 +15,7 @@ import {
     boardOrigin,
     cellToSchedule,
     issueToCell,
+    rowToLaneAbs,
 } from "@/lib/client/timeline/grid"
 import type {
     Issue,
@@ -22,20 +24,27 @@ import type {
     ProjectStatusColor,
 } from "@/lib/shared/types"
 
-// The playful board stores lanes as ABSOLUTE integer rows straight in
-// `lane_y`, so it's infinite vertically (a tile can go above row 0 or far
-// below) — mirroring the unbounded, absolute time columns. This differs from
-// the shared normalized [0,1] model in grid.ts, so these wrappers reuse
-// grid.ts only for the column/date math and swap in absolute-lane handling.
-// (Safe: this component + its mock preview are self-contained.)
+// The playful board works in ABSOLUTE integer rows — a lane keeps its
+// identity across window resizes, mirroring the unbounded absolute time
+// columns — where TimelineGrid derives its lane count from the viewport
+// height. Both persist the same `lane_y` fraction, so these wrappers pin
+// the board to grid.ts's fixed ABS_LANES virtual board on the way in and
+// out. Writing a raw row would be rejected by the column's 0..1 CHECK
+// (and dropped by the outbox as a 4xx), so every lane crossing this
+// boundary goes through rowToLaneAbs.
 function cellOf(issue: Issue, originMs: number): { col: number; row: number; days: number } | null {
-    const c = issueToCell(issue, originMs, 2) // rows arg only affects lane, which we override
-    if (!c) return null
-    return { col: c.col, days: c.days, row: Math.round(issue.lane_y ?? 0) }
+    return issueToCell(issue, originMs, ABS_LANES)
 }
 function scheduleOf(col: number, row: number, days: number, originMs: number) {
-    const s = cellToSchedule(col, row, days, originMs, 2)
-    return { starts_at: s.starts_at, ends_at: s.ends_at, lane_y: row }
+    return cellToSchedule(col, row, days, originMs, ABS_LANES)
+}
+// Columns are unbounded, rows are not: `lane_y` can only express a row on
+// the ABS_LANES board. Clamping the GESTURE (rather than the write) is what
+// keeps the two in step — a tile stops at the last lane under the cursor
+// instead of being dropped somewhere storage can't hold and springing back
+// when the server's copy is read again.
+function clampRow(row: number, span = 1): number {
+    return Math.max(0, Math.min(ABS_LANES - span, Math.round(row)))
 }
 
 // TimelineGridPlayful — a softer, "sticker board" reimagining of the
@@ -87,7 +96,20 @@ export function TimelineGridPlayful({
      *  inert if omitted — the board's own gestures never touch it. */
     demoRef?: React.RefObject<BoardDemoHandle | null>
 }) {
-    const { local, commitSchedule } = useScheduleSync(projectId, issues, onPersisted, persist)
+    // The drag / resize gesture in flight. Neighbours are pushed clear of
+    // it live (see `displace`) so tiles can never end up overlapping.
+    // Declared up here (with the tray drag below it) so useScheduleSync can
+    // be told when a gesture is running: server data that lands mid-drag is
+    // parked until release, so a background refetch can never shift the
+    // board under the cursor.
+    const [active, setActive] = useState<Active | null>(null)
+    // The tray brick currently being dragged + the cursor position, so a
+    // cursor-following ghost can be drawn at the viewport level.
+    const [trayDrag, setTrayDrag] = useState<{ id: string; x: number; y: number; dx: number; dy: number } | null>(null)
+
+    const { local, commitSchedule, syncError } = useScheduleSync(
+        projectId, issues, onPersisted, persist, active != null || trayDrag != null,
+    )
 
     // Wall clock, mounted post-hydration so SSR and first client
     // paint agree (see issue-timeline for the same pattern).
@@ -263,6 +285,13 @@ export function TimelineGridPlayful({
     }
 
     // Screen point -> grid cell, accounting for pan + zoom.
+    // Where a drop would land: the cell under the cursor, row-clamped like
+    // the placement itself so the dashed slot never promises a lane that
+    // can't be saved.
+    function screenToSlot(clientX: number, clientY: number): { col: number; row: number } | null {
+        const cp = screenToCell(clientX, clientY)
+        return cp ? { col: cp.col, row: clampRow(cp.row) } : null
+    }
     function screenToCell(clientX: number, clientY: number): { col: number; row: number } | null {
         const vp = viewportRef.current
         if (!vp) return null
@@ -312,9 +341,6 @@ export function TimelineGridPlayful({
 
     // "Armed" tray brick — click-to-place flow (see onViewportPointerUp).
     const [armed, setArmed] = useState<string | null>(null)
-    // The drag / resize gesture in flight. Neighbours are pushed clear of
-    // it live (see `displace`) so tiles can never end up overlapping.
-    const [active, setActive] = useState<Active | null>(null)
     // True only while the demo handle is driving the gesture in cell space —
     // then the parent owns the tile's cell, because there is no drag transform
     // moving it. Always false for a real drag. See `demoRef`.
@@ -350,9 +376,6 @@ export function TimelineGridPlayful({
     const [grabbing, setGrabbing] = useState(false)
     // Snapped target cell shown while dragging a tray brick onto the board.
     const [dropPreview, setDropPreview] = useState<{ col: number; row: number } | null>(null)
-    // The tray brick currently being dragged + the cursor position, so a
-    // cursor-following ghost can be drawn at the viewport level.
-    const [trayDrag, setTrayDrag] = useState<{ id: string; x: number; y: number; dx: number; dy: number } | null>(null)
     // Placement animation: a plain overlay tile that morphs from the drop
     // rect to the slot rect (position + width). Kept OUT of the brick /
     // framer (which overrides width) so a plain CSS transition works. Only
@@ -367,7 +390,7 @@ export function TimelineGridPlayful({
     function trayHoverPreview(x: number, y: number) {
         const over = document.elementFromPoint(x, y)
         if (over && over.closest("[data-ui]")) setDropPreview(null)
-        else setDropPreview(screenToCell(x, y))
+        else setDropPreview(screenToSlot(x, y))
     }
     function onTrayDragStart(id: string, x: number, y: number, dx: number, dy: number) {
         setTrayDrag({ id, x, y, dx, dy })
@@ -392,17 +415,18 @@ export function TimelineGridPlayful({
     function placeAt(issueId: string, col: number, row: number, days = 1) {
         const span = tileSpan(issueId)
         const vcols = tileVCols(issueId, days)
-        // No clamps — the cell is under the cursor (in view); origin/cols
-        // re-derive and the camera compensates. (See endInteract.)
+        // Columns need no clamp — the cell is under the cursor (in view);
+        // origin/cols re-derive and the camera compensates (see endInteract).
+        // The row is pinned to the storable lane range.
         const c = col
-        const r = row
+        const r = clampRow(row, span)
         // Shove any tiles this placement lands on out of the way, so a tray
         // drop / click-to-place can never overlap an existing brick.
         const map = new Map(cells)
         map.set(issueId, { col: c, row: r, days, span, vcols })
         const pushed = pushNeighbours(map, { id: issueId, kind: "move", col: c, row: r, days, span, vcols })
         commitSchedule(issueId, scheduleOf(c, r, days, originMs))
-        for (const [bid, nextRow] of pushed) commitSchedule(bid, { lane_y: nextRow })
+        for (const [bid, nextRow] of pushed) commitSchedule(bid, { lane_y: rowToLaneAbs(nextRow) })
         return { c, r }
     }
 
@@ -412,7 +436,7 @@ export function TimelineGridPlayful({
         const cp = screenToCell(clientX, clientY)
         if (!cp) return
         const c = cp.col
-        const r = cp.row
+        const r = clampRow(cp.row, tileSpan(issueId))
         const vp = viewportRef.current?.getBoundingClientRect()
         const issue = local.find((i) => i.id === issueId)
         if (vp && issue) {
@@ -427,7 +451,7 @@ export function TimelineGridPlayful({
                 toW: cz, toH: cz, bg: p.bg, fg: p.fg, iconName, title: issue.title, go: false,
             })
         }
-        placeAt(issueId, cp.col, cp.row, 1)
+        placeAt(issueId, c, r, 1)
     }
     // Drive the placement overlay: flip to the slot rect a frame after it
     // mounts (so CSS animates), then clear it. In an effect so the toggle
@@ -492,7 +516,7 @@ export function TimelineGridPlayful({
         if (armed) {
             const t = e.target as HTMLElement
             if (t.closest("[data-brick]") || t.closest("[data-ui]")) setDropPreview(null)
-            else setDropPreview(screenToCell(e.clientX, e.clientY))
+            else setDropPreview(screenToSlot(e.clientX, e.clientY))
         }
     }
     function onViewportPointerUp(e: React.PointerEvent<HTMLDivElement>) {
@@ -567,7 +591,7 @@ export function TimelineGridPlayful({
             })
         }
         for (const [bid, nextRow] of finalDisplace) {
-            commitSchedule(bid, { lane_y: nextRow })
+            commitSchedule(bid, { lane_y: rowToLaneAbs(nextRow) })
         }
         setActive(null)
     }
@@ -817,6 +841,20 @@ export function TimelineGridPlayful({
                     })}
                 </div>
             </div>
+
+            {/* A patch the server refused. Retrying can't fix it, so the
+                queue drops it — say so, rather than letting the board show a
+                plan the database doesn't have. */}
+            {syncError && (
+                <div
+                    data-ui
+                    role="status"
+                    className="pointer-events-none absolute bottom-[70px] right-5 z-30 flex items-center gap-2 rounded-full bg-[color:var(--c-surface)]/95 py-1.5 pl-2 pr-3.5 text-[11.5px] font-extrabold text-rose-700 shadow-[var(--shadow-pop)] ring-1 ring-rose-200 backdrop-blur"
+                >
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-rose-100 text-[11px] text-rose-700">!</span>
+                    {syncError} — reload for the saved plan
+                </div>
+            )}
 
             {/* Zoom controls — nothing to offer on a locked camera. */}
             {!lockCamera && (
@@ -1094,7 +1132,10 @@ function pushNeighbours(cells: Map<string, Footprint>, active: Active): Map<stri
         for (const [bid, B] of work) {
             if (bid === active.id || B === A) continue
             if (timeOverlap(A, B) && laneOverlap(A, B)) {
-                const nextRow = A.row + A.span
+                // Clamped to the last storable lane: past it the shove has
+                // nowhere to go, and a row the DB can't hold would come back
+                // as an overlap on the next read anyway.
+                const nextRow = Math.min(A.row + A.span, ABS_LANES - B.span)
                 if (nextRow > B.row) {
                     B.row = nextRow
                     out.set(bid, nextRow)
@@ -1452,7 +1493,10 @@ function Brick({
         const cur = pointToCell(pt.x, pt.y)
         if (!cur) return
         const col = cur.col - grab.current.dc
-        const row = cur.row - grab.current.dr
+        // Rows are bounded by what `lane_y` can store, so the tile stops at
+        // the last lane rather than following the cursor somewhere the save
+        // can't reach (see clampRow).
+        const row = clampRow(cur.row - grab.current.dr, rowSpan)
         x.set((col - slot!.col) * cell)
         y.set((row - slot!.row) * cell)
         target.current = { col, row }

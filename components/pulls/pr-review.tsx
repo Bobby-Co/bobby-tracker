@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -9,7 +9,12 @@ import { cn } from "@/components/ui/cn"
 import { severityLabel } from "@/lib/shared/rendering/badge"
 import { findingState } from "@/lib/shared/rendering/finding-state"
 import { apiMutate } from "@/lib/client/http/api-client"
-import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis } from "@/lib/shared/types"
+import { layoutFor, type BlockKind, type BlockState, type BlockTone, type ReportBlock } from "@/lib/shared/report/registry"
+import type { PrAnalysis, PrChecks, PrConfidenceDimension, PrConfidences, PrFinding, PullRequestAnalysis, ReviewRoundCommit, ReviewRunProfile, ReviewRunScope } from "@/lib/shared/types"
+import type { DeltaFinding, RoundDelta } from "@/modules/analysis/domain/ReviewRounds"
+// Domain file directly, never the barrel — the barrel reaches infrastructure and
+// next/headers, which fails the browser build. See review-profile-panel.
+import { DEFAULT_LENSES, DIAL_SPECS, LENSES, lensActivity } from "@/modules/analysis/domain/ReviewProfile"
 
 // Md renders markdown with GFM + syntax highlighting (rehype-highlight → the
 // `.prose-tracker .hljs-*` theme in globals.css). Used for summary/impact/detail
@@ -112,7 +117,7 @@ function VerdictIcon({ v }: { v: string }) {
     )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, profile }: { children: React.ReactNode; profile?: ReviewRunProfile | null }) {
     return (
         <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -123,10 +128,458 @@ function Shell({ children }: { children: React.ReactNode }) {
                     </svg>
                 </span>
                 <h2 className="text-[14px] font-bold tracking-[-0.005em]">Ucelot · PR review</h2>
+                {/* In the HEADER, not the footer, and rendered for every status
+                    including "analysing": the attribution is written when the run
+                    is dispatched, so the answer to "which reviewer is this?" is
+                    available from the moment the spinner appears — which is
+                    exactly when somebody who just changed the setting is looking. */}
+                <ProfileTag profile={profile ?? null} />
             </div>
             {children}
         </section>
     )
+}
+
+// Which reviewer produced this review (0079), and — on click — the settings it
+// actually ran with.
+//
+// The dials are shown from the run's own SNAPSHOT rather than fetched from the
+// profile, and that is the entire point of the control. A profile that has been
+// edited since, reassigned since, or deleted since would otherwise describe this
+// review as something it never was; what is rendered here is the policy that
+// crossed the wire, so "did my setting take effect?" is answerable from the
+// review itself instead of by trusting that the plumbing worked.
+function ProfileTag({ profile }: { profile: ReviewRunProfile | null }) {
+    const [open, setOpen] = useState(false)
+
+    // A run from before attribution existed. Claiming "Default" here would be a
+    // guess dressed as a fact — the one thing this control exists to avoid.
+    if (!profile) return null
+
+    const isDefault = profile.kind === "default"
+    return (
+        <div className="relative ml-auto">
+            <button
+                type="button"
+                onClick={() => !isDefault && setOpen((o) => !o)}
+                aria-expanded={isDefault ? undefined : open}
+                title={isDefault ? "This review ran under the built-in reviewer" : "What this profile was set to for this review"}
+                className={cn(
+                    "inline-flex max-w-[220px] items-center gap-1 rounded-full border border-[color:var(--c-border)] px-2 py-[3px] text-[11px] text-[color:var(--c-text-muted)]",
+                    isDefault ? "cursor-default" : "cursor-pointer hover:border-[color:var(--c-border-strong)]",
+                )}
+            >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+                    <path d="M1 14h6M9 8h6M17 16h6" />
+                </svg>
+                <span className="truncate">{isDefault ? "Default reviewer" : profile.name}</span>
+                {!isDefault && <span aria-hidden className="text-[color:var(--c-text-dim)]">{open ? "▴" : "▾"}</span>}
+            </button>
+
+            {open && profile.kind === "profile" && <PolicyCard profile={profile} onClose={() => setOpen(false)} />}
+        </div>
+    )
+}
+
+function PolicyCard({ profile, onClose }: { profile: Extract<ReviewRunProfile, { kind: "profile" }>; onClose: () => void }) {
+    const p = profile.policy
+    // Labels come from the same catalogue the settings form is built from, so the
+    // two surfaces can never disagree about what "strict" is called. A value this
+    // build doesn't know is shown verbatim rather than dropped — an unfamiliar
+    // dial is still evidence of what ran.
+    const dials = DIAL_SPECS.map((spec) => {
+        const value = String((p as unknown as Record<string, unknown>)[spec.key] ?? "")
+        return { key: spec.key, label: spec.label, value: spec.options.find((o) => o.value === value)?.label ?? value }
+    }).filter((d) => d.value)
+
+    const lensLabels = (p.lenses ?? []).map((k) => LENSES.find((l) => l.key === k)?.label ?? k.replace(/_/g, " "))
+
+    return (
+        <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-[280px] rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-3 text-left shadow-[var(--shadow-card)]">
+            <div className="flex items-start gap-2">
+                <div className="min-w-0">
+                    <p className="truncate text-[12.5px] font-semibold">{profile.name}</p>
+                    <p className="mt-0.5 text-[11px] text-[color:var(--c-text-dim)]">Settings used for this review</p>
+                </div>
+                <button type="button" onClick={onClose} aria-label="Close" className="ml-auto text-[color:var(--c-text-dim)] hover:text-[color:var(--c-text)]">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <dl className="mt-2.5 flex flex-col gap-1">
+                {dials.map((d) => (
+                    <div key={d.key} className="flex items-baseline justify-between gap-3">
+                        <dt className="text-[11px] text-[color:var(--c-text-muted)]">{d.label}</dt>
+                        <dd className="truncate text-[11px] font-medium">{d.value}</dd>
+                    </div>
+                ))}
+            </dl>
+
+            <div className="mt-2.5 border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-muted)]">
+                {/* An empty lens list is meaningful — every optional lens off —
+                    so it gets a sentence rather than a blank row. */}
+                <p>{lensLabels.length ? `Lenses: ${lensLabels.join(", ")}.` : "No optional lenses."}</p>
+                {p.instructions ? <p className="mt-1">Team instructions applied.</p> : null}
+                {p.path_rules?.length ? <p className="mt-1">{p.path_rules.length} path rule{p.path_rules.length === 1 ? "" : "s"} applied.</p> : null}
+            </div>
+        </div>
+    )
+}
+
+/** One completed review of one head, as the panel reads it — a SNAPSHOT.
+ *
+ *  Every round holds its own complete findings list, which is what makes the
+ *  selector below a row read rather than a replay engine: switching to round 2
+ *  renders round 2's stored answer, not a state rebuilt from a chain of diffs
+ *  that might have drifted from what the merge gate actually saw that day. */
+export interface RoundSummary {
+    headSha: string
+    round: number
+    verdict: string | null
+    score: number | null
+    scoreMax: number | null
+    findings: PrFinding[]
+    degraded: boolean
+    scope: "full" | "incremental"
+    scopeReason: string | null
+    commits: ReviewRoundCommit[]
+    carriedCount: number
+    resolved: PrFinding[]
+    createdAt: string
+    /** Blockers the previous round had that this one does not — precomputed by
+     *  the route from `resolved`, so the strip does not re-derive it. */
+    fixed: number
+    blockers: number
+}
+
+/** One round per push, oldest first — the panel's memory, and a SELECTOR.
+ *
+ *  It exists because a re-review used to replace the last one, so a developer
+ *  who had just fixed three of five blockers saw a fresh verdict with no sign
+ *  that anything had moved. Choosing a round renders the review exactly as it
+ *  stood at that head — its verdict, its score, its findings, including the ones
+ *  later fixed. That is the point: a reader can see what the review said BEFORE
+ *  their fix, which is the only way to check that the fix addressed what was
+ *  actually reported rather than what they remembered being reported. */
+function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; selected: number | null; onSelect: (round: number | null) => void }) {
+    if (rounds.length < 2) return null // one round is not a story
+    const latest = rounds[rounds.length - 1].round
+    return (
+        <div className="flex gap-0 overflow-x-auto rounded-[10px] border border-[color:var(--c-border)]">
+            {rounds.map((r) => {
+                const isLatest = r.round === latest
+                const isSelected = (selected ?? latest) === r.round
+                const commit = r.commits[r.commits.length - 1]
+                return (
+                    <button
+                        key={r.headSha + r.round}
+                        type="button"
+                        onClick={() => onSelect(isLatest ? null : r.round)}
+                        aria-pressed={isSelected}
+                        title={r.scopeReason ?? undefined}
+                        className={cn(
+                            "flex min-w-[10.5rem] flex-1 cursor-pointer flex-col gap-1 border-r border-[color:var(--c-border)] px-3 py-2 text-left transition-colors last:border-r-0",
+                            "hover:bg-[color:var(--c-surface-2)]",
+                            isSelected && "bg-[color:var(--c-primary-tint)] hover:bg-[color:var(--c-primary-tint)]",
+                        )}
+                    >
+                        <span className={cn("font-mono text-[10.5px]", isSelected ? "font-semibold text-[color:var(--c-primary)]" : "text-[color:var(--c-text-muted)]")}>
+                            {r.headSha.slice(0, 7)} · round {r.round}
+                            {isLatest && " · current"}
+                        </span>
+                        <span className="text-[12px] font-semibold leading-4">{r.verdict ? verdictLabel(r.verdict) : "—"}</span>
+                        <span className="flex flex-wrap gap-1">
+                            {r.degraded && <DeltaChip kind="partial" />}
+                            {r.fixed > 0 && <DeltaChip kind="fixed" n={r.fixed} />}
+                            {r.blockers > 0 && <DeltaChip kind="blockers" n={r.blockers} />}
+                            {!r.degraded && r.blockers === 0 && <DeltaChip kind="clear" />}
+                            {r.carriedCount > 0 && <DeltaChip kind="carried" n={r.carriedCount} />}
+                        </span>
+                        {/* The commit under the round, so the strip doubles as the
+                            series of pushes: a bare sha says which head, this says
+                            which CHANGE the review was answering. */}
+                        {commit && (
+                            <span className="truncate text-[10.5px] leading-4 text-[color:var(--c-text-dim)]" title={commit.subject}>
+                                {commit.subject}
+                            </span>
+                        )}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/** What is being reviewed RIGHT NOW, while it is being reviewed.
+ *
+ *  The panel used to replace the whole review with a spinner the moment a push
+ *  landed, which is the worst possible moment to take it away: the reader has
+ *  just pushed a fix and wants to know what it was answering. Worse, the review
+ *  it hid was still the truth — the merge gate was still reading it, and the
+ *  page was showing nothing.
+ *
+ *  So the last completed round stays on screen, and this says what is happening
+ *  above it. The commits come from the scope written at DISPATCH, so the panel
+ *  can name them before the reviewer has said a word about them. */
+function InFlightBanner({ scope, standing }: { scope: ReviewRunScope | null; standing: RoundSummary | null }) {
+    const commits = scope?.commits ?? []
+    const incremental = scope?.scope === "incremental"
+    const carried = scope?.carried?.length ?? 0
+
+    return (
+        <div className="flex flex-col gap-1.5 rounded-[10px] border border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] px-3 py-2 text-[12px] text-[color:var(--c-warn)]">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <Spinner />
+                <span className="font-semibold">
+                    {commits.length > 0
+                        ? `Reviewing ${commits.length} new commit${commits.length === 1 ? "" : "s"}`
+                        : "Ucelot is reviewing this pull request"}
+                </span>
+                {incremental && (
+                    <span className="opacity-85">
+                        — the push only{carried > 0 ? `, carrying ${carried} finding${carried === 1 ? "" : "s"} forward` : ""}
+                    </span>
+                )}
+                {scope && !incremental && <span className="opacity-85">— the whole pull request</span>}
+            </span>
+
+            {/* Why it is reviewing everything, when it had a round to build on.
+                Without this the answer to "why is there no commit list?" is
+                indistinguishable from "the feature is not working" — and one of
+                those is a broken compare that nothing else would report. */}
+            {scope && !incremental && standing && (
+                <span className="opacity-85">{scope.reason}</span>
+            )}
+
+            {commits.length > 0 && (
+                <ul className="flex flex-col gap-0.5 pl-5">
+                    {commits.slice(0, 5).map((c) => (
+                        <li key={c.sha} className="flex items-baseline gap-2 opacity-90">
+                            <code className="shrink-0 font-mono text-[10.5px]">{c.sha.slice(0, 7)}</code>
+                            <span className="min-w-0 flex-1 truncate" title={c.subject}>{c.subject}</span>
+                        </li>
+                    ))}
+                    {commits.length > 5 && <li className="pl-1 opacity-75">…and {commits.length - 5} more</li>}
+                </ul>
+            )}
+
+            {standing && (
+                <span className="opacity-85">
+                    Round {standing.round} is below and still stands until this finishes — it is what the merge gate is reading.
+                </span>
+            )}
+        </div>
+    )
+}
+
+function Spinner() {
+    return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="shrink-0 animate-spin" aria-hidden>
+            <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+        </svg>
+    )
+}
+
+/** The banner that appears when a reader has stepped back into history.
+ *
+ *  Loud on purpose. A stale review rendered without a frame around it is how
+ *  somebody acts on a blocker that was fixed two pushes ago. */
+function ArchiveBanner({ round, onBack }: { round: RoundSummary; onBack: () => void }) {
+    return (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border border-[color:var(--c-info-fg)]/25 bg-[color:var(--c-info-bg)] px-3 py-2 text-[12px] text-[color:var(--c-info-fg)]">
+            <span className="font-semibold">Viewing round {round.round}</span>
+            <span className="opacity-80">
+                — the review as it stood at <code className="font-mono">{round.headSha.slice(0, 7)}</code>. Some of it may since have been fixed.
+            </span>
+            <button type="button" onClick={onBack} className="ml-auto shrink-0 cursor-pointer font-semibold underline underline-offset-2">
+                Back to the current review
+            </button>
+        </div>
+    )
+}
+
+/** An earlier round, rendered from its own stored snapshot.
+ *
+ *  Deliberately thinner than the live review: a round stores its verdict, score
+ *  and findings, not the narrative blocks around them. Rendering a summary here
+ *  would mean either storing a second copy of the whole result or reconstructing
+ *  prose that nobody wrote — and the question this view answers is "what did the
+ *  review say I had to fix", which the findings answer on their own. */
+function RoundSnapshot({ round }: { round: RoundSummary }) {
+    const groups: BlockState[] = ["critical", "review", "good"]
+    return (
+        <div className="flex flex-col gap-3">
+            {round.verdict && (
+                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(round.verdict))}>
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
+                        <VerdictIcon v={round.verdict} />
+                        {verdictLabel(round.verdict)}
+                    </span>
+                </div>
+            )}
+            {typeof round.score === "number" && round.scoreMax ? <ScoreBar value={round.score} max={round.scoreMax} /> : null}
+            <PushSummary round={round} />
+            {groups.map((state) => {
+                const items = round.findings.filter((f) => findingState(f.severity) === state)
+                if (items.length === 0) return null
+                const style = GROUP_STYLE[state]
+                return (
+                    <Section key={state} title={style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
+                        <div className="flex flex-col gap-2">
+                            {items.map((f, i) => (
+                                <Finding key={i} f={f} />
+                            ))}
+                        </div>
+                    </Section>
+                )
+            })}
+            {round.resolved.length > 0 && (
+                <Section title="Resolved by this push" count={round.resolved.length} countTone="bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" defaultOpen={false}>
+                    <div className="flex flex-col gap-2">
+                        {round.resolved.map((f, i) => (
+                            <Finding key={i} f={f} />
+                        ))}
+                    </div>
+                </Section>
+            )}
+        </div>
+    )
+}
+
+/** What a round actually looked at: the commits behind it, and — when it was
+ *  scoped to the push — why. Collapsed, because it is provenance rather than
+ *  the answer somebody came for. */
+function PushSummary({ round }: { round: RoundSummary | null }) {
+    if (!round) return null
+
+    // No commits recorded means the provider could not be asked what this round
+    // covered — which is also why it reviewed everything. Rendering nothing here
+    // would hide the one fact that explains the round.
+    if (round.commits.length === 0) {
+        if (!round.scopeReason || round.round === 1) return null
+        return (
+            <p className="rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-1.5 text-[11.5px] text-[color:var(--c-text-muted)]">
+                Reviewed the whole pull request — {round.scopeReason}
+            </p>
+        )
+    }
+
+    const label = round.scope === "incremental" ? "Reviewed this push" : "Commits in this round"
+    return (
+        <Section title={label} count={round.commits.length} defaultOpen={false}>
+            <ul className="flex flex-col gap-1">
+                {round.commits.slice(0, 20).map((c) => (
+                    <li key={c.sha} className="flex items-baseline gap-2 text-[12px]">
+                        <code className="shrink-0 font-mono text-[10.5px] text-[color:var(--c-text-muted)]">{c.sha.slice(0, 7)}</code>
+                        <span className="min-w-0 flex-1 truncate text-[color:var(--c-text)]" title={c.subject}>
+                            {c.subject}
+                        </span>
+                        {c.author && <span className="shrink-0 text-[10.5px] text-[color:var(--c-text-dim)]">{c.author}</span>}
+                    </li>
+                ))}
+            </ul>
+            {round.scopeReason && <p className="mt-2 text-[11px] leading-4 text-[color:var(--c-text-dim)]">{round.scopeReason}</p>}
+        </Section>
+    )
+}
+
+/** The "N carried" chip, expanded.
+ *
+ *  Without this a cheap round looks like a lazy one and the reader has no way to
+ *  tell the difference. It names which findings rode along, when each was last
+ *  actually verified, and states the rule that made carrying them safe — so
+ *  somebody deciding whether to trust a two-minute review can check the
+ *  reasoning rather than the vibe. */
+function CarriedNote({ findings }: { findings: PrFinding[] }) {
+    const carried = findings.filter((f) => f.provenance?.carried === true)
+    if (carried.length === 0) return null
+    return (
+        <Section title="Carried forward" count={carried.length} countTone="bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]" defaultOpen={false}>
+            <p className="mb-2 text-[11.5px] leading-5 text-[color:var(--c-text-muted)]">
+                This round reviewed only what the push changed. These findings were reported earlier, their files were not touched, and no symbol
+                they name was changed elsewhere — so they are still there, and nothing needed to be asked.
+            </p>
+            <ul className="flex flex-col gap-1.5">
+                {carried.map((f, i) => (
+                    <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
+                        <span className={cn("shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide", severityClasses(f.severity))}>
+                            {severityLabel(f.severity)}
+                        </span>
+                        <span className="min-w-0 flex-1 text-[color:var(--c-text)]">{(f.title && f.title.trim()) || f.detail}</span>
+                        <span className="shrink-0 text-[10.5px] text-[color:var(--c-text-dim)]">
+                            first seen round {f.provenance?.firstSeenRound ?? "?"} · last verified round {f.provenance?.lastVerifiedRound ?? "?"}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </Section>
+    )
+}
+
+/** `plural` is set only where the label is a NOUN. "blocker" pluralises; "new"
+ *  and "fixed" describe the findings and do not — appending an s to them
+ *  produced "2 news", which is how you can tell a label table was written as if
+ *  every word behaved the same way. */
+const DELTA_STYLE: Record<string, { label: string; plural?: string; cls: string }> = {
+    // Semantic, not decorative: these encode what happened to a finding between
+    // pushes, which is the one thing a returning developer wants to know first.
+    new:       { label: "new",        cls: "bg-[color:var(--c-info-bg)] text-[color:var(--c-info-fg)]" },
+    still_open:{ label: "still open", cls: "bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]" },
+    regressed: { label: "back again", cls: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]" },
+    fixed:     { label: "fixed",      cls: "bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" },
+    blockers:  { label: "blocker",    plural: "blockers", cls: "bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]" },
+    clear:     { label: "clear",      cls: "bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" },
+    partial:   { label: "partial",    cls: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]" },
+    // Neutral, not a warning. A carried finding is not a defect in the review —
+    // it is a finding the round proved it did not need to re-open. Colouring it
+    // like a problem would teach readers to distrust the cheap rounds, which are
+    // the ones this whole feature exists to make possible.
+    carried:   { label: "carried",    cls: "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]" },
+}
+
+function DeltaChip({ kind, n }: { kind: string; n?: number }) {
+    const style = DELTA_STYLE[kind]
+    if (!style) return null
+    const word = n != null && n !== 1 && style.plural ? style.plural : style.label
+    return (
+        <span className={cn("inline-flex shrink-0 items-center rounded-full px-1.5 py-[1px] text-[10px] font-semibold", style.cls)}>
+            {n != null ? `${n} ${word}` : word}
+        </span>
+    )
+}
+
+/** "3 of 5 blockers resolved, 2 remain" — the one sentence a developer who has
+ *  been fixing things wants before anything else. */
+function ProgressLine({ delta }: { delta: RoundDelta | null }) {
+    if (!delta) return null
+    if (delta.withheld) {
+        return (
+            <p className="rounded-[8px] border border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] px-3 py-1.5 text-[12px] text-[color:var(--c-warn)]">
+                This round didn&rsquo;t complete, so nothing is counted as resolved — the blockers below may be stale.
+            </p>
+        )
+    }
+    if (delta.counts.fixed === 0) return null
+    return (
+        <p className="flex flex-wrap items-center gap-1.5 text-[12px] text-[color:var(--c-text-muted)]">
+            <DeltaChip kind="fixed" n={delta.counts.fixed} />
+            <span>since the last push</span>
+            {delta.counts.regressed > 0 && <DeltaChip kind="regressed" n={delta.counts.regressed} />}
+            {delta.counts.new > 0 && <DeltaChip kind="new" n={delta.counts.new} />}
+        </p>
+    )
+}
+
+/** The delta state for one finding, matched the same way diffRounds tagged it.
+ *  Compares the finding OBJECT, which is the same reference the delta was built
+ *  from — no second fingerprinting here, so the panel cannot disagree with the
+ *  arithmetic that produced the counts. */
+function deltaOf(delta: RoundDelta | null | undefined, f: PrFinding): DeltaFinding["delta"] | null {
+    if (!delta) return null
+    return delta.current.find((d) => d.finding === f)?.delta ?? null
 }
 
 function Placeholder({ tone, text }: { tone: "muted" | "amber" | "rose"; text: string }) {
@@ -139,27 +592,58 @@ function Placeholder({ tone, text }: { tone: "muted" | "amber" | "rose"; text: s
     return <div className={cn("rounded-[12px] border px-4 py-6 text-center text-[13px]", cls)}>{text}</div>
 }
 
-export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null }) {
+export function PrReview({ analysis, rounds = [], delta = null }: {
+    analysis: PullRequestAnalysis | null
+    /** Oldest first. Fewer than two and the strip stays hidden — one round is
+     *  not a story, and an empty strip is worse than none. */
+    rounds?: RoundSummary[]
+    /** How this review compares with the round before it, or null on a first
+     *  review. Drives the per-finding chips and the progress line. */
+    delta?: RoundDelta | null
+}) {
+    // Which round the reader is looking at. `null` is the LIVE review rather
+    // than "the latest round", and the difference matters: the live row carries
+    // the narrative blocks a round snapshot does not store, so defaulting to a
+    // round number would quietly downgrade the default view.
+    const [viewing, setViewing] = useState<number | null>(null)
+
     const status = analysis?.status ?? null
     const result = analysis?.result ?? null
+    const profile = analysis?.review_profile ?? null
+
+    // Derived before the status branches, because the in-flight state needs them
+    // too: a re-review must not take the standing review off the page.
+    const archived = viewing != null ? (rounds.find((r) => r.round === viewing) ?? null) : null
+    const latest = rounds.length > 0 ? rounds[rounds.length - 1] : null
 
     if (status === "analysing") {
         return (
-            <Shell>
-                <Placeholder tone="amber" text="Ucelot is reviewing this pull request… this panel fills in automatically." />
+            <Shell profile={profile}>
+                <RoundStrip rounds={rounds} selected={viewing} onSelect={setViewing} />
+                <InFlightBanner scope={analysis?.review_scope ?? null} standing={archived ?? latest} />
+                {archived ? (
+                    <>
+                        <ArchiveBanner round={archived} onBack={() => setViewing(null)} />
+                        <RoundSnapshot round={archived} />
+                    </>
+                ) : latest ? (
+                    <RoundSnapshot round={latest} />
+                ) : (
+                    <Placeholder tone="amber" text="Nothing has been reviewed yet — this panel fills in automatically." />
+                )}
             </Shell>
         )
     }
     if (status === "failed") {
         return (
-            <Shell>
+            <Shell profile={profile}>
                 <Placeholder tone="rose" text="Ucelot couldn't complete the review this time." />
             </Shell>
         )
     }
     if (status === "cancelled") {
         return (
-            <Shell>
+            <Shell profile={profile}>
                 <Placeholder tone="muted" text="The review was cancelled (the PR was closed before it finished)." />
             </Shell>
         )
@@ -173,145 +657,376 @@ export function PrReview({ analysis }: { analysis: PullRequestAnalysis | null })
     }
 
     return (
-        <Shell>
-            <Review r={result} projectId={analysis?.project_id ?? null} />
+        <Shell profile={profile}>
+            <RoundStrip rounds={rounds} selected={viewing} onSelect={setViewing} />
+            {archived ? (
+                <>
+                    <ArchiveBanner round={archived} onBack={() => setViewing(null)} />
+                    <RoundSnapshot round={archived} />
+                </>
+            ) : (
+                <>
+                    <ProgressLine delta={delta} />
+                    <PushSummary round={latest} />
+                    <CarriedNote findings={result.findings ?? []} />
+                    <Review r={result} projectId={analysis?.project_id ?? null} profile={profile} delta={delta} />
+                </>
+            )}
         </Shell>
     )
 }
 
-// Finding groups by traffic-light state, issues first. Each becomes a
-// collapsible section so a long review stays scannable.
-const GROUPS: { key: "critical" | "review" | "good"; title: string; tone: string; open: boolean }[] = [
-    { key: "critical", title: "Blockers", tone: "bg-rose-100 text-rose-700", open: true },
-    { key: "review", title: "Worth a review", tone: "bg-amber-100 text-amber-700", open: true },
-    { key: "good", title: "Looks good", tone: "bg-emerald-100 text-emerald-700", open: false },
-]
+// Finding group titles + tones by traffic-light state. The analyser sends the
+// state; how a state LOOKS is ours, which is the whole reason nothing on the
+// wire is a colour.
+const GROUP_STYLE: Record<BlockState, { title: string; tone: string; open: boolean }> = {
+    critical: { title: "Blockers", tone: "bg-rose-100 text-rose-700", open: true },
+    review: { title: "Worth a review", tone: "bg-amber-100 text-amber-700", open: true },
+    good: { title: "Looks good", tone: "bg-emerald-100 text-emerald-700", open: false },
+}
 
-function Review({ r, projectId }: { r: PrAnalysis; projectId: string | null }) {
-    const findings = r.findings ?? []
-    const grouped = GROUPS.map((g) => ({ ...g, items: findings.filter((f) => findingState(f.severity) === g.key) }))
-    const counts = Object.fromEntries(grouped.map((g) => [g.key, g.items.length]))
+// Semantic tone → the app's token pairs. The markdown renderer maps the same
+// five words to badge tones; neither knows about the other's palette.
+//
+// Built from --c-* pairs rather than `rose-50`/`amber-50` literals, and that is
+// not a style preference. A callout's BODY goes through Md, which wraps it in
+// .prose-tracker and colours it with --c-text — a theme-aware value. Pair that
+// with a fixed light background and dark mode renders near-white text on a
+// near-white card. This is the same trap 5379f1d cleaned up across the app: a
+// literal that only works in one theme, sitting next to a token that works in
+// both.
+const TONE_CLASSES: Record<BlockTone, string> = {
+    neutral: "border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] text-[color:var(--c-text)]",
+    info: "border-[color:var(--c-info-fg)]/25 bg-[color:var(--c-info-bg)] text-[color:var(--c-info-fg)]",
+    // --c-output-* rather than --c-success-*: the success token is a FILL green
+    // (#16a34a) and only reaches 3.2:1 as text on its own pale tint, under the
+    // 4.5:1 floor. The output pair is the app's green TEXT pair and clears 7:1
+    // in both themes.
+    good: "border-[color:var(--c-output-fg)]/30 bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]",
+    warn: "border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]",
+    critical: "border-[color:var(--c-rose-fg)]/30 bg-[color:var(--c-rose-bg)] text-[color:var(--c-rose-fg)]",
+}
 
-    return (
-        <div className="flex flex-col gap-3">
-            {r.verdict && (
-                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(r.verdict))}>
-                    <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
-                        <VerdictIcon v={r.verdict} />
-                        {verdictLabel(r.verdict)}
-                    </span>
-                    {r.verdict_reason && <span className="text-[12.5px] leading-5 opacity-90">— {r.verdict_reason}</span>}
-                </div>
-            )}
+// Risk severity → text colour, for the likelihood/impact axes. Tokens for the
+// same reason as above: these sit on the page surface, which inverts.
+const RISK_CLASSES: Record<string, string> = {
+    high: "text-[color:var(--c-rose-fg)]", // 8.0 light / 9.1 dark
+    medium: "text-[color:var(--c-warn)]", // 5.0 / 10.7
+    low: "text-[color:var(--c-output-fg)]", // 7.7 / 11.7 — see the note above
+}
 
-            {/* Merge-readiness headline: the analyser's score + bar, or a plain
-                "not ready" placeholder when it didn't send one (never faked). */}
-            {typeof r.score === "number" && r.score_max ? (
-                <ScoreBar value={r.score} max={r.score_max} />
-            ) : (
-                <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-2.5">
-                    <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">Merge readiness</span>
-                    <span className="text-[12px] text-[color:var(--c-text-muted)]">· not ready</span>
-                </div>
-            )}
+/** What every block renderer gets. `r` is the canonical review — reference
+ *  blocks read it, which is what keeps them in step with the analyser's gate
+ *  rewriting `findings` after the fact. `b` is the block's own payload. */
+interface BlockProps {
+    b: ReportBlock
+    r: PrAnalysis
+    projectId: string | null
+    /** Round-over-round state, so a finding can say whether it is new or one you
+     *  have already seen. Null on a first review. */
+    delta?: RoundDelta | null
+    /** The run's attribution snapshot, for blocks that report on the review
+     *  itself rather than on the code. Null for a row written before 0079. */
+    profile: ReviewRunProfile | null
+}
 
-            {/* Finding tally, so the reader orients before scrolling. */}
-            {(counts.critical > 0 || counts.review > 0 || counts.good > 0) && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {counts.critical > 0 && <Tally n={counts.critical} label="blocker" tone="bg-rose-100 text-rose-700" />}
-                    {counts.review > 0 && <Tally n={counts.review} label="to review" tone="bg-amber-100 text-amber-700" />}
-                    {counts.good > 0 && <Tally n={counts.good} label="good" tone="bg-emerald-100 text-emerald-700" />}
-                </div>
-            )}
+// The renderer table. Typed as a Record over BlockKind ON PURPOSE: adding a kind
+// to the registry without adding a renderer here is then a TYPE error, not a
+// blank space someone notices in production. The GitHub-comment renderer is
+// keyed the same way, so the two surfaces cannot drift apart silently.
+const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
+    verdict_banner: ({ r }) =>
+        !r.verdict ? null : (
+            <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(r.verdict))}>
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
+                    <VerdictIcon v={r.verdict} />
+                    {verdictLabel(r.verdict)}
+                </span>
+                {r.verdict_reason && <span className="text-[12.5px] leading-5 opacity-90">— {r.verdict_reason}</span>}
+            </div>
+        ),
 
-            {/* Per-dimension confidence as 3-stage meters, coloured by level. */}
-            {r.confidences ? (
-                <ConfidenceMeters c={r.confidences} />
-            ) : (
-                r.confidence && (
-                    <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
-                        confidence: {r.confidence}
-                    </span>
-                )
-            )}
+    // Merge-readiness headline: the analyser's score + bar, or a plain "not
+    // ready" placeholder when it didn't send one (never faked).
+    score: ({ r }) =>
+        typeof r.score === "number" && r.score_max ? (
+            <ScoreBar value={r.score} max={r.score_max} />
+        ) : (
+            <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-2.5">
+                <span className="text-[12.5px] font-semibold text-[color:var(--c-text)]">Merge readiness</span>
+                <span className="text-[12px] text-[color:var(--c-text-muted)]">· not ready</span>
+            </div>
+        ),
 
-            {r.summary?.trim() && (
+    // Finding tally, so the reader orients before scrolling.
+    tally: ({ r }) => {
+        const f = r.findings ?? []
+        const n = (s: BlockState) => f.filter((x) => findingState(x.severity) === s).length
+        const [crit, rev, good] = [n("critical"), n("review"), n("good")]
+        if (crit + rev + good === 0) return null
+        return (
+            <div className="flex flex-wrap items-center gap-1.5">
+                {crit > 0 && <Tally n={crit} label="blocker" tone="bg-rose-100 text-rose-700" />}
+                {rev > 0 && <Tally n={rev} label="to review" tone="bg-amber-100 text-amber-700" />}
+                {good > 0 && <Tally n={good} label="good" tone="bg-emerald-100 text-emerald-700" />}
+            </div>
+        )
+    },
+
+    // Per-dimension confidence as 3-stage meters, coloured by level. `dims`
+    // lets a profile lead with the dimension it cares about — a security-first
+    // review shows security first — and falls back to the canonical order.
+    meters: ({ b, r }) =>
+        r.confidences ? (
+            <ConfidenceMeters c={r.confidences} dims={b.dims} />
+        ) : r.confidence ? (
+            <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
+                confidence: {r.confidence}
+            </span>
+        ) : null,
+
+    prose: ({ b, r }) => {
+        if (b.role === "summary") {
+            return !r.summary?.trim() ? null : (
                 <blockquote className="border-l-2 border-amber-300 pl-3 text-[13.5px] leading-6 text-[color:var(--c-text)]">
                     <Md>{r.summary}</Md>
                 </blockquote>
-            )}
-
-            {(r.impact?.trim() || (r.impact_files && r.impact_files.length > 0)) && (
-                <Section title="Impact">
-                    {r.impact?.trim() && <Md className="text-[13px] leading-6">{r.impact}</Md>}
-                    {r.impact_files && r.impact_files.length > 0 && (
-                        <ul className="mt-1.5 flex flex-col gap-1.5">
-                            {r.impact_files.map((f, i) => (
-                                <li key={i} className="text-[12.5px] leading-5">
-                                    <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
-                                    <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+            )
+        }
+        if (b.role === "impact") {
+            return !r.impact?.trim() ? null : (
+                <Section title={b.title || "Impact"}>
+                    <Md className="text-[13px] leading-6">{r.impact}</Md>
                 </Section>
-            )}
+            )
+        }
+        // "note" — the one prose role that carries its own text, for a lens that
+        // wants to say something no canonical field holds.
+        return !b.body?.trim() ? null : (
+            <Section title={b.title || "Note"}>
+                <Md className="text-[13px] leading-6">{b.body}</Md>
+            </Section>
+        )
+    },
 
-            {grouped.map((g) =>
-                g.items.length === 0 ? null : (
-                    <Section key={g.key} title={g.title} count={g.items.length} countTone={g.tone} defaultOpen={g.open}>
-                        <div className="flex flex-col gap-2">
-                            {g.items.map((f, i) => (
-                                <Finding key={i} f={f} />
-                            ))}
-                        </div>
-                    </Section>
-                ),
-            )}
-
-            {r.fix_claims && r.fix_claims.length > 0 && (
-                <Section title="Fix claims" count={r.fix_claims.length}>
-                    <div className="flex flex-col gap-2">
-                        {r.fix_claims.map((c, i) => (
-                            <div key={i} className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-2.5">
-                                <div className="flex items-start justify-between gap-2">
-                                    <span className="min-w-0 flex-1 text-[12.5px] font-medium">{c.claim}</span>
-                                    <span className={cn("shrink-0 rounded-full px-2 py-[1px] text-[10.5px] font-semibold", verdictClasses(c.verdict))}>
-                                        {c.verdict || "unclear"}
-                                    </span>
-                                </div>
-                                {c.reason && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{c.reason}</p>}
-                            </div>
-                        ))}
-                    </div>
-                </Section>
-            )}
-
-            {r.checklist && r.checklist.length > 0 && (
-                <Section title="Nice to check" count={r.checklist.length} defaultOpen={false}>
-                    <ul className="flex flex-col gap-1.5">
-                        {r.checklist.map((c, i) => (
-                            <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
-                                <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[color:var(--c-text-dim)]" aria-hidden />
-                                <span>{c}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </Section>
-            )}
-
-            {r.checks && <ChecksFooter checks={r.checks} />}
-
-            {(r.duration_ms != null || (r.insight_id && projectId)) && (
-                <div className="flex items-center justify-between gap-3 pt-1">
-                    {r.insight_id && projectId ? <DeepDiveButton insightId={r.insight_id} projectId={projectId} /> : <span />}
-                    {r.duration_ms != null && (
-                        <p className="text-[11px] text-[color:var(--c-text-dim)]">Reviewed in {(r.duration_ms / 1000).toFixed(1)}s</p>
-                    )}
+    finding_group: ({ b, r, delta }) => {
+        const state = b.state ?? "review"
+        const items = (r.findings ?? []).filter((f) => findingState(f.severity) === state)
+        if (items.length === 0) return null
+        const style = GROUP_STYLE[state] ?? GROUP_STYLE.review
+        return (
+            <Section title={b.title || style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
+                <div className="flex flex-col gap-2">
+                    {items.map((f, i) => (
+                        <Finding key={i} f={f} delta={deltaOf(delta, f)} />
+                    ))}
                 </div>
-            )}
+            </Section>
+        )
+    },
 
-            {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note. */}
+    file_impact_list: ({ b, r }) => {
+        const files = r.impact_files ?? []
+        if (files.length === 0) return null
+        return (
+            <Section title={b.title || "Affected files"} count={files.length}>
+                <ul className="flex flex-col gap-1.5">
+                    {files.map((f, i) => (
+                        <li key={i} className="text-[12.5px] leading-5">
+                            <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
+                            <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    claims_table: ({ b, r }) => {
+        const claims = r.fix_claims ?? []
+        if (claims.length === 0) return null
+        return (
+            <Section title={b.title || "Fix claims"} count={claims.length}>
+                <div className="flex flex-col gap-2">
+                    {claims.map((c, i) => (
+                        <div key={i} className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] p-2.5">
+                            <div className="flex items-start justify-between gap-2">
+                                <span className="min-w-0 flex-1 text-[12.5px] font-medium">{c.claim}</span>
+                                <span className={cn("shrink-0 rounded-full px-2 py-[1px] text-[10.5px] font-semibold", verdictClasses(c.verdict))}>
+                                    {c.verdict || "unclear"}
+                                </span>
+                            </div>
+                            {c.reason && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{c.reason}</p>}
+                        </div>
+                    ))}
+                </div>
+            </Section>
+        )
+    },
+
+    checklist: ({ b, r }) => {
+        const items = r.checklist ?? []
+        if (items.length === 0) return null
+        return (
+            <Section title={b.title || "Nice to check"} count={items.length} defaultOpen={false}>
+                <ul className="flex flex-col gap-1.5">
+                    {items.map((c, i) => (
+                        <li key={i} className="flex items-start gap-2 text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
+                            <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[color:var(--c-text-dim)]" aria-hidden />
+                            <span>{c}</span>
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    checks_footer: ({ r, profile }) => (
+        <ChecksFooter checks={r.checks ?? null} findings={r.findings ?? []} profile={profile} build={r.analyser_build} />
+    ),
+
+    deep_dive_cta: ({ r, projectId }) =>
+        r.duration_ms == null && !(r.insight_id && projectId) ? null : (
+            <div className="flex items-center justify-between gap-3 pt-1">
+                {r.insight_id && projectId ? <DeepDiveButton insightId={r.insight_id} projectId={projectId} /> : <span />}
+                {r.duration_ms != null && (
+                    <p className="text-[11px] text-[color:var(--c-text-dim)]">Reviewed in {(r.duration_ms / 1000).toFixed(1)}s</p>
+                )}
+            </div>
+        ),
+
+    // ── inline blocks: these carry their own payload, because no canonical
+    //    field holds it and the analyser's gate has no opinion about it ──
+
+    callout: ({ b }) =>
+        !b.body?.trim() && !b.title?.trim() ? null : (
+            <div className={cn("rounded-[10px] border px-3 py-2.5", TONE_CLASSES[b.tone ?? "neutral"])}>
+                {b.title && <p className="text-[12.5px] font-bold leading-5">{b.title}</p>}
+                {b.body && <div className="mt-0.5 text-[12.5px] leading-5 text-[color:var(--c-text)] opacity-90"><Md>{b.body}</Md></div>}
+            </div>
+        ),
+
+    spec_table: ({ b }) => {
+        const rows = b.rows ?? []
+        if (rows.length === 0) return null
+        const cols = b.columns ?? []
+        return (
+            <Section title={b.title || "Details"} count={rows.length}>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-[12px]">
+                        {cols.length > 0 && (
+                            <thead>
+                                <tr>
+                                    {cols.map((c, i) => (
+                                        <th key={i} className="whitespace-nowrap border-b border-[color:var(--c-border)] pb-1.5 pr-3 text-[10.5px] font-semibold uppercase tracking-wide text-[color:var(--c-text-muted)]">
+                                            {c}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                        )}
+                        <tbody>
+                            {rows.map((row, i) => (
+                                <tr key={i}>
+                                    {row.map((cell, j) => (
+                                        <td key={j} className="border-b border-[color:var(--c-border)] py-1.5 pr-3 align-top leading-5 text-[color:var(--c-text-muted)]">
+                                            {cell}
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Section>
+        )
+    },
+
+    timeline: ({ b }) => {
+        const items = b.items ?? []
+        if (items.length === 0) return null
+        return (
+            <Section title={b.title || "History"} count={items.length} defaultOpen={false}>
+                <ul className="flex flex-col gap-2">
+                    {items.map((it, i) => (
+                        <li key={i} className="flex items-baseline gap-2 text-[12.5px] leading-5">
+                            {it.when && <code className="shrink-0 font-mono text-[10.5px] text-[color:var(--c-text-dim)]">{it.when}</code>}
+                            <span className="min-w-0">
+                                <span className="font-medium">{it.label}</span>
+                                {it.detail && <span className="text-[color:var(--c-text-muted)]"> — {it.detail}</span>}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    dependency_list: ({ b }) => {
+        const items = b.items ?? []
+        if (items.length === 0) return null
+        return (
+            <Section title={b.title || "Dependencies"} count={items.length}>
+                <ul className="flex flex-col gap-1.5">
+                    {items.map((it, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
+                            <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{it.label}</code>
+                            {(it.from || it.to) && (
+                                <span className="font-mono text-[11px] text-[color:var(--c-text-dim)]">
+                                    {it.from || "—"} → {it.to || "—"}
+                                </span>
+                            )}
+                            {it.detail && <span className="text-[color:var(--c-text-muted)]">{it.detail}</span>}
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+
+    risk_matrix: ({ b }) => {
+        const items = b.items ?? []
+        if (items.length === 0) return null
+        const axis = (v?: string) => RISK_CLASSES[v ?? ""] ?? "text-[color:var(--c-text-muted)]"
+        return (
+            <Section title={b.title || "Risks"} count={items.length}>
+                <ul className="flex flex-col gap-2">
+                    {items.map((it, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] leading-5">
+                            <span className="min-w-0 flex-1 font-medium">{it.label}</span>
+                            <span className="shrink-0 text-[11px]">
+                                <span className={axis(it.likelihood)}>{it.likelihood || "—"}</span>
+                                <span className="text-[color:var(--c-text-dim)]"> likelihood · </span>
+                                <span className={axis(it.impact)}>{it.impact || "—"}</span>
+                                <span className="text-[color:var(--c-text-dim)]"> impact</span>
+                            </span>
+                            {it.detail && <p className="w-full text-[12px] text-[color:var(--c-text-muted)]">{it.detail}</p>}
+                        </li>
+                    ))}
+                </ul>
+            </Section>
+        )
+    },
+}
+
+// Renders the review by walking the layout the analyser sent — or the classic
+// one, for the years of stored reviews written before layouts existed. Blocks
+// whose data is empty return null and simply take up no space, so a small PR
+// doesn't render as a column of empty boxes.
+function Review({ r, projectId, profile, delta }: { r: PrAnalysis; projectId: string | null; profile: ReviewRunProfile | null; delta?: RoundDelta | null }) {
+    return (
+        <div className="flex flex-col gap-3">
+            {layoutFor(r.report).map((b, i) => {
+                const render = BLOCKS[b.kind]
+                // Belt to the registry filter's braces: layoutFor already drops
+                // kinds we don't know, but this render path is the one place a
+                // newer analyser's vocabulary reaches the browser.
+                if (!render) return null
+                return <Fragment key={i}>{render({ b, r, projectId, profile, delta: delta ?? null })}</Fragment>
+            })}
+
+            {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note.
+                Outside the layout on purpose: it is not the analyser's to omit. */}
             <p className="pt-1 text-[10.5px] leading-4 text-[color:var(--c-text-dim)]">
                 Ucelot is AI-assisted and can make mistakes — verify findings before acting.
             </p>
@@ -402,12 +1117,16 @@ function ScoreBar({ value, max }: { value: number; max: number }) {
 
 // Confidence meters: each dimension as a 3-stage bar (low→high), filled +
 // labelled in its level's tone. Basis is the hover title.
+// The FILL stays a literal — it is a saturated block, legible on either ground.
+// The LABEL takes the token pairs: `text-amber-600` on the dark surface measured
+// 1.39:1, well under the 4.5:1 floor, because a bare Tailwind colour cannot
+// invert with the theme. Same trap as the callout tones above.
 function meterTone(level: string): { fill: string; text: string } {
     return level === "high"
-        ? { fill: "bg-emerald-500", text: "text-emerald-600" }
+        ? { fill: "bg-emerald-500", text: "text-[color:var(--c-output-fg)]" }
         : level === "medium"
-          ? { fill: "bg-amber-500", text: "text-amber-600" }
-          : { fill: "bg-rose-500", text: "text-rose-600" }
+          ? { fill: "bg-amber-500", text: "text-[color:var(--c-warn)]" }
+          : { fill: "bg-rose-500", text: "text-[color:var(--c-rose-fg)]" }
 }
 function Meter({ label, dim }: { label: string; dim: PrConfidenceDimension }) {
     const idx = dim.level === "high" ? 3 : dim.level === "medium" ? 2 : 1
@@ -424,12 +1143,29 @@ function Meter({ label, dim }: { label: string; dim: PrConfidenceDimension }) {
         </div>
     )
 }
-function ConfidenceMeters({ c }: { c: PrConfidences }) {
+// The three dimensions, and the canonical order they read in when nobody asks
+// for another. A `meters` block's `dims` both ORDERS and SUBSETS them, which is
+// how a security-first profile gets security at the top without the renderer
+// knowing anything about profiles.
+const METER_DIMS = ["correctness", "load_perf", "security"] as const
+const METER_LABEL: Record<(typeof METER_DIMS)[number], string> = {
+    correctness: "correctness",
+    load_perf: "load / perf",
+    security: "security",
+}
+
+function ConfidenceMeters({ c, dims }: { c: PrConfidences; dims?: string[] }) {
+    const wanted = dims?.length
+        ? (dims.filter((d) => (METER_DIMS as readonly string[]).includes(d)) as (typeof METER_DIMS)[number][])
+        : [...METER_DIMS]
+    // An all-unknown `dims` would otherwise render an empty box; fall back rather
+    // than silently dropping the confidence the review did calibrate.
+    const shown = wanted.length > 0 ? wanted : [...METER_DIMS]
     return (
         <div className="flex flex-col gap-1.5">
-            <Meter label="correctness" dim={c.correctness} />
-            <Meter label="load / perf" dim={c.load_perf} />
-            <Meter label="security" dim={c.security} />
+            {shown.map((d) => (
+                <Meter key={d} label={METER_LABEL[d]} dim={c[d]} />
+            ))}
         </div>
     )
 }
@@ -437,26 +1173,76 @@ function ConfidenceMeters({ c }: { c: PrConfidences }) {
 // The KB-verification tally (ADR-0057) — the diligence behind the review,
 // rendered as a terse "Checked N callers · M precedents · …" line. Zero counts
 // are omitted; nothing to show → nothing rendered.
-function ChecksFooter({ checks }: { checks: PrChecks }) {
+//
+// Since 0079 it also carries the LENS LINE, and that is the more important half.
+// A profile whose lenses find nothing produces a review byte-identical to the
+// default reviewer's, so "I set a security profile and the output looks the
+// same" is indistinguishable from "the profile silently never applied" — a
+// confusion this feature caused in practice before the line existed. Naming the
+// lenses that ran answers it on the page, with no digging.
+function ChecksFooter({ checks, findings, profile, build }: { checks: PrChecks | null; findings: PrFinding[]; profile: ReviewRunProfile | null; build?: string }) {
     const parts: string[] = []
-    if (checks.callers) parts.push(`${checks.callers} caller${checks.callers === 1 ? "" : "s"}`)
-    if (checks.precedents) parts.push(`${checks.precedents} precedent${checks.precedents === 1 ? "" : "s"}`)
-    if (checks.tests) parts.push(`${checks.tests} test${checks.tests === 1 ? "" : "s"}`)
-    if (checks.failure_probes) parts.push(`${checks.failure_probes} failure probe${checks.failure_probes === 1 ? "" : "s"}`)
-    if (checks.git_reads) parts.push(`${checks.git_reads} history read${checks.git_reads === 1 ? "" : "s"}`)
-    if (parts.length === 0 && !checks.dropped) return null
+    if (checks?.callers) parts.push(`${checks.callers} caller${checks.callers === 1 ? "" : "s"}`)
+    if (checks?.precedents) parts.push(`${checks.precedents} precedent${checks.precedents === 1 ? "" : "s"}`)
+    if (checks?.tests) parts.push(`${checks.tests} test${checks.tests === 1 ? "" : "s"}`)
+    if (checks?.failure_probes) parts.push(`${checks.failure_probes} failure probe${checks.failure_probes === 1 ? "" : "s"}`)
+    if (checks?.git_reads) parts.push(`${checks.git_reads} history read${checks.git_reads === 1 ? "" : "s"}`)
+
+    // Which lenses ran is only knowable from the run's own snapshot. A row with
+    // no attribution (pre-0079) gets NO lens line rather than a guessed one —
+    // the same rule the profile chip follows, and for the same reason: a wrong
+    // answer here is worse than none, because the whole point is to be trusted.
+    const lenses = profile
+        ? lensActivity(
+              profile.kind === "profile" ? (profile.policy.lenses ?? []) : DEFAULT_LENSES,
+              findings.map((f) => f.category).filter((c): c is string => !!c),
+          )
+        : []
+
+    if (parts.length === 0 && !checks?.dropped && lenses.length === 0 && !build) return null
     return (
-        <p className="border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-dim)]">
-            {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
-            {checks.dropped ? <span className="text-[color:var(--c-text-muted)]">{parts.length > 0 ? " · " : ""}{checks.dropped} ungrounded dropped</span> : null}
-        </p>
+        <div className="flex flex-col gap-1 border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-dim)]">
+            {(parts.length > 0 || checks?.dropped) && (
+                <p>
+                    {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
+                    {checks?.dropped ? <span className="text-[color:var(--c-text-muted)]">{parts.length > 0 ? " · " : ""}{checks.dropped} ungrounded dropped</span> : null}
+                </p>
+            )}
+            {build ? (
+                <p title="The analyser build that produced this review. Findings, layout and gating all move between builds, so this is what makes a stored review reproducible.">
+                    <span className="text-[color:var(--c-text-muted)]">Analyser</span>{" "}
+                    <code className="font-mono text-[10.5px] text-[color:var(--c-text-muted)]">{build}</code>
+                </p>
+            ) : null}
+            {lenses.length > 0 && (
+                <p title="The lenses this review ran. A number is how many findings that lens accounts for; a lens with no number ran and found nothing.">
+                    <span className="text-[color:var(--c-text-muted)]">Lenses</span>{" "}
+                    {lenses.map((l, i) => (
+                        <Fragment key={l.key}>
+                            {i > 0 && " · "}
+                            {/* EVERY lens name gets the readable muted token, and
+                                the count — not the label — carries the emphasis.
+                                Dimming the lenses that found nothing was the
+                                obvious first cut and exactly backwards: "security
+                                ran and found nothing" is the sentence this line
+                                exists to say, and it was landing in the lowest-
+                                contrast text on the card (2.4:1). */}
+                            <span className="text-[color:var(--c-text-muted)]">
+                                {l.label.toLowerCase()}
+                                {l.findings > 0 ? <span className="font-semibold text-[color:var(--c-text)]"> {l.findings}</span> : null}
+                            </span>
+                        </Fragment>
+                    ))}
+                </p>
+            )}
+        </div>
     )
 }
 
 // A rich finding card: severity + category + title + location on top, then the
 // detail, a collapsible syntax-highlighted diff of the changed code, the cited
 // evidence, and what the reviewer verified.
-function Finding({ f }: { f: PrFinding }) {
+function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | null }) {
     const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
     const title = (f.title && f.title.trim()) || f.detail
     const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())
@@ -474,6 +1260,15 @@ function Finding({ f }: { f: PrFinding }) {
                         {catLabel}
                     </span>
                 )}
+                {/* Only NEW and BACK AGAIN earn a chip. Tagging every carried-over
+                    finding "still open" would put a badge on most of the list and
+                    say nothing — the interesting states are the ones that changed. */}
+                {(delta === "new" || delta === "regressed") && <DeltaChip kind={delta} />}
+                {/* Carried findings are the one case where a chip on a
+                    still-open finding earns its place: it is the difference
+                    between "somebody read this code again this round" and "this
+                    rode along because nothing it depends on moved". */}
+                {f.provenance?.carried === true && <DeltaChip kind="carried" />}
                 <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-[color:var(--c-text)]">{title}</span>
                 <code className="max-w-[42%] shrink-0 truncate font-mono text-[10.5px] text-[color:var(--c-text-muted)]" title={loc}>
                     {loc}

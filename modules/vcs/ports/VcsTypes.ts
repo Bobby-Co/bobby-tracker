@@ -76,6 +76,46 @@ export interface VcsPullRequestFile {
     deletions: number
 }
 
+/** One commit in a compared range. `message` is the FULL commit message; the
+ *  surfaces take the subject from it, because a provider that returns only a
+ *  subject and one that returns the whole body should not produce two different
+ *  round records. */
+export interface VcsCommitSummary {
+    sha: string
+    message: string
+    /** The author's provider login where the provider resolves one, else the
+     *  name from the commit itself, else null. */
+    author: string | null
+    /** ISO-8601, or null when the provider omits it. */
+    committedAt: string | null
+}
+
+/** How one ref relates to another, as the provider reports it.
+ *
+ *  `unknown` is a real answer, not a failure: some providers do not compute it,
+ *  and a caller that needs the relationship PROVED must treat "unknown" the same
+ *  way it treats "diverged" rather than assuming the convenient reading. */
+export type VcsCompareStatus = "identical" | "ahead" | "behind" | "diverged" | "unknown"
+
+/** The diff and the commits between two refs — `base…head`.
+ *
+ *  Distinct from listPullRequestFiles, which always compares the pull request's
+ *  base against its head. This one compares whatever two commits you name, which
+ *  is what makes "review the push, not the pull request" expressible at all. */
+export interface VcsCompare {
+    /** From the BASE's point of view: "ahead" means head is ahead of base, i.e.
+     *  base IS an ancestor of head and nothing was rewritten. */
+    status: VcsCompareStatus
+    aheadBy: number
+    behindBy: number
+    files: VcsPullRequestFile[]
+    commits: VcsCommitSummary[]
+    /** The provider truncated the range (GitHub caps compare at 300 files / 250
+     *  commits). A truncated file list is NOT a complete picture of the push, so
+     *  a caller scoping a review to it must fall back. */
+    truncated: boolean
+}
+
 /** A PR review summary. Only reviews with a non-empty body read as comments. */
 export interface VcsReview {
     id: number

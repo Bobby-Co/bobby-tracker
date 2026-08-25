@@ -1,0 +1,321 @@
+import { test, expect, describe } from "bun:test"
+import { PullRequestAnalysisComment } from "./PullRequestAnalysisComment"
+import { BLOCK_KINDS, CLASSIC_LAYOUT, type ReportBlock } from "@/lib/shared/report/registry"
+import type { PrAnalysis } from "@/lib/shared/types"
+
+// The GitHub comment is now assembled by walking a LAYOUT rather than a fixed
+// field list. That is a refactor of how it's built, not of what it says, so the
+// tests that matter here are the ones pinning it to what it said before —
+// especially for the years of stored reviews that carry no layout at all.
+
+const ORIGIN = "https://ucelot.test"
+const UI = "https://ucelot.test/projects/p1/pulls/7"
+
+function analysis(over: Partial<PrAnalysis> = {}): PrAnalysis {
+    return {
+        title: "Add the widget",
+        summary: "- adds a widget\n- wires it to the bus",
+        impact: "- callers of renderWidget may need updating",
+        impact_files: [{ file: "bus.ts", reason: "calls renderWidget" }],
+        findings: [
+            { file: "a.ts", line: 12, severity: "critical", category: "bug", title: "Nil deref", detail: "x may be null", snippet: "- old\n+ new", lang: "diff" },
+            { file: "b.ts", line: 4, severity: "review", category: "convention", title: "Bare error", detail: "wrap it" },
+            { file: "c.ts", severity: "good", category: "good", title: "Good test", detail: "covers the edge" },
+        ],
+        fix_claims: [{ claim: "fixes the crash", verdict: "likely", reason: "guards the path" }],
+        checklist: ["give the empty-config path a glance"],
+        confidences: {
+            correctness: { level: "medium", basis: "read 3 callers" },
+            load_perf: { level: "low", basis: "nothing perf-critical" },
+            security: { level: "low", basis: "no untrusted input" },
+        },
+        checks: { precedents: 2, callers: 3, tests: 1, git_reads: 1, failure_probes: 1 },
+        verdict: "request_changes",
+        verdict_reason: "one blocker",
+        score: 4,
+        score_max: 10,
+        duration_ms: 12_300,
+        insight_id: "ins_1",
+        ...over,
+    }
+}
+
+describe("PR comment: layout-driven rendering", () => {
+    const c = new PullRequestAnalysisComment()
+
+    test("a legacy review with no layout renders the classic comment", () => {
+        const body = c.result(analysis(), ORIGIN, UI, 7)
+
+        // The frame.
+        expect(body).toStartWith("<!-- bobby:pr-analysis -->")
+        expect(body).toContain("## PR Review (Add the widget)")
+        expect(body).toContain("_one blocker_")
+        expect(body).toContain("### Quick Summary")
+        expect(body).toContain("**Merge Readiness**")
+        expect(body).toContain("**Analysis rubrics**")
+        expect(body).toContain("**About this PR**")
+        expect(body).toContain("### Ucelot Notes")
+        expect(body).toContain("Bug: Nil deref")
+        expect(body).toContain("Convention: Bare error")
+        expect(body).toContain("fixes the crash")
+        expect(body).toContain("View the full review in ucelot")
+        expect(body).toContain("Ucelot is AI-assisted and can make mistakes")
+    })
+
+    test("an explicit classic layout renders identically to no layout at all", () => {
+        // The guarantee that makes phase 0 safe: the classic block list IS the
+        // old fixed order, so a review carrying it and a legacy row without one
+        // must produce the same bytes.
+        const withLayout = c.result(analysis({ report: { version: 1, blocks: CLASSIC_LAYOUT } }), ORIGIN, UI, 7)
+        const withNone = c.result(analysis(), ORIGIN, UI, 7)
+        expect(withLayout).toBe(withNone)
+    })
+
+    test("the changed-code section follows the findings, not the fix claims", () => {
+        const body = c.result(analysis(), ORIGIN, UI, 7)
+        const snippets = body.indexOf("Changed code")
+        const claims = body.indexOf("Fix claims")
+        expect(snippets).toBeGreaterThan(-1)
+        expect(claims).toBeGreaterThan(-1)
+        expect(snippets).toBeLessThan(claims)
+    })
+
+    test("app-only blocks stay app-only", () => {
+        // The checklist and the diligence ledger have never appeared on GitHub.
+        // Adding them is a product call; this pins that it hasn't happened by
+        // accident on the way through the registry.
+        const body = c.result(analysis(), ORIGIN, UI, 7)
+        expect(body).not.toContain("give the empty-config path a glance")
+        expect(body).not.toContain("Checked 3 callers")
+    })
+
+    test("sections appear where their blocks land, not at fixed positions", () => {
+        // Findings first, summary after — the headings follow.
+        const report = {
+            version: 1,
+            blocks: [
+                { kind: "verdict_banner" },
+                { kind: "finding_group", state: "critical" },
+                { kind: "prose", role: "summary" },
+            ] as ReportBlock[],
+        }
+        const body = c.result(analysis({ report }), ORIGIN, UI, 7)
+        expect(body.indexOf("### Ucelot Notes")).toBeLessThan(body.indexOf("### Quick Summary"))
+    })
+
+    test("a layout of kinds this tracker doesn't know still renders the frame", () => {
+        const report = { version: 99, blocks: [{ kind: "hologram" }, { kind: "verdict_banner" }] as unknown as ReportBlock[] }
+        const body = c.result(analysis({ report }), ORIGIN, UI, 7)
+        expect(body).toContain("## PR Review (Add the widget)")
+        expect(body).toContain("Ucelot is AI-assisted")
+        expect(body).not.toContain("hologram")
+    })
+
+    test("an empty review renders a comment, not a skeleton of empty sections", () => {
+        const bare: PrAnalysis = { summary: "", impact: "", verdict: "approve", verdict_reason: "looks safe" }
+        const body = c.result(bare, ORIGIN, UI, 7)
+        expect(body).toContain("looks safe")
+        expect(body).not.toContain("### Ucelot Notes")
+        expect(body).not.toContain("Changed code")
+    })
+
+    test("inline blocks render their own payload", () => {
+        const report = {
+            version: 1,
+            blocks: [
+                { kind: "callout", tone: "critical", title: "Untrusted input reaches exec", body: "See `a.ts:12`." },
+                { kind: "spec_table", title: "Contract changes", columns: ["Symbol", "Before", "After"], rows: [["getBase", "T", "T | null"]] },
+                { kind: "dependency_list", items: [{ label: "left-pad", from: "1.0.0", to: "2.0.0", detail: "major bump" }] },
+            ] as ReportBlock[],
+        }
+        const body = c.result(analysis({ report }), ORIGIN, UI, 7)
+        expect(body).toContain("See `a.ts:12`.")
+        expect(body).toContain("| Symbol | Before | After |")
+        expect(body).toContain("| getBase | T | T \\| null |") // pipes escaped, or the table breaks
+        expect(body).toContain("left-pad")
+    })
+})
+
+describe("PR comment: registry coverage", () => {
+    test("every registered kind is renderable without throwing", () => {
+        // The Record<BlockKind, …> typing already makes a MISSING renderer a
+        // compile error. This covers the other half: that each one survives a
+        // block with nothing in it, which is what a model will eventually send.
+        const c = new PullRequestAnalysisComment()
+        for (const kind of BLOCK_KINDS) {
+            const report = { version: 1, blocks: [{ kind }] as ReportBlock[] }
+            expect(() => c.result(analysis({ report }), ORIGIN, UI, 7)).not.toThrow()
+            expect(() => c.result({ summary: "", impact: "", report }, ORIGIN, UI, 7)).not.toThrow()
+        }
+    })
+})
+
+// ─── run attribution in the footer (0079) ───────────────────────────────────
+//
+// The comment names the profile a review ran under so the answer sits beside the
+// review on GitHub, not only in the app. What these pin is the ASYMMETRY: a
+// profile is named, the built-in default is not. Saying "default reviewer" on
+// every comment of every team that never opened the setting is noise, while its
+// absence is only ever read by somebody who knows the feature exists.
+describe("PR comment: run attribution", () => {
+    const c = new PullRequestAnalysisComment()
+
+    test("a profile run names the profile in the footer", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, {
+            kind: "profile",
+            id: "p-1",
+            name: "Payments strict",
+            preset: "gatekeeper",
+            policy: { strictness: "thorough", evidence: "strict", blocking: "any", positivity: "sparing", verbosity: "explanatory", voice: "neutral", depth: "deep", lenses: [] },
+        })
+        expect(md).toContain("under the Payments strict profile")
+    })
+
+    test("a default run says nothing about profiles", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, { kind: "default" })
+        expect(md).toContain("Reviewed by Ucelot")
+        expect(md).not.toContain("profile")
+    })
+
+    test("a run with no attribution renders exactly as before", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null)).toBe(c.result(analysis(), ORIGIN, UI, 7))
+    })
+
+    test("a profile name can't inject markup into a comment Ucelot signs", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, {
+            kind: "profile",
+            id: "p-2",
+            name: "_sneaky_ <img src=x>",
+            preset: null,
+            policy: { strictness: "balanced", evidence: "standard", blocking: "any", positivity: "sparing", verbosity: "normal", voice: "neutral", depth: "standard", lenses: [] },
+        })
+        // The escaped forms, not the raw ones: `\<` is a literal angle bracket to
+        // GFM, so the name reads as typed instead of opening a tag. (A bare
+        // `<img` check would be meaningless here — the badge markup around it
+        // legitimately contains one.)
+        expect(md).toContain("under the \\_sneaky\\_ \\<img src=x\\> profile")
+    })
+})
+
+// ─── the comment carries the round history (0080) ───────────────────────────
+//
+// One comment that GROWS a history, not a new comment per push. A bot that
+// posts on every push is one people mute, and muting it ends the feature.
+describe("PR comment: rounds", () => {
+    const c = new PullRequestAnalysisComment()
+    const hist = (over: Record<string, unknown> = {}) => ({
+        round: 2, fixed: 3, remaining: 2, withheld: false, scope: "full" as const, carried: 0,
+        commits: [{ sha: "a3f1c02aaa", subject: "fix(console): validate the saved-view name", author: "phongpak", at: null }],
+        ...over,
+    })
+
+    test("a first round says nothing about progress", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ round: 1, commits: [] }))
+        expect(md).not.toContain("Round")
+    })
+
+    test("a later round leads with what the push fixed", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
+        expect(md).toContain("**Round 2** — 3 of 5 blockers resolved, 2 remain")
+    })
+
+    test("the clearing round says so outright", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ fixed: 5, remaining: 0 }))
+        expect(md).toContain("all 5 blockers resolved")
+    })
+
+    test("a push that fixed nothing is told plainly, not silently", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null, hist({ fixed: 0 })))
+            .toContain("no blockers resolved since the last push")
+    })
+
+    // The rule the whole design rests on, restated where a developer reads it.
+    test("a withheld round warns instead of claiming progress", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ withheld: true }))
+        expect(md).toContain("didn't complete")
+        expect(md).not.toContain("resolved,")
+    })
+
+    // The round TABLE is deliberately gone (0081). A pull-request comment is read
+    // on a phone, in a notification, between other things; it answers "what do I
+    // have to fix now", and history belongs where it can be navigated.
+    test("the comment carries no round table — the app does that", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
+        expect(md).not.toContain("Earlier rounds")
+        expect(md).toContain("View the full review in ucelot")
+    })
+
+    test("the commits behind the round are collapsed under one summary", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist())
+        expect(md).toContain("<summary><b>Commits in this pull request · 1</b></summary>")
+        expect(md).toContain("`a3f1c02`")
+        expect(md).toContain("validate the saved-view name")
+    })
+
+    test("an incremental round says it reviewed the push, and how much rode along", () => {
+        const md = c.result(analysis(), ORIGIN, UI, 7, null, hist({ scope: "incremental", carried: 11 }))
+        expect(md).toContain("<summary><b>Reviewed this push · 1</b></summary>")
+        expect(md).toContain("11 findings carried forward from an earlier round")
+    })
+
+    // Stating zero would read as an apology for a full review.
+    test("a full round says nothing about carrying", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null, hist())).not.toContain("carried forward")
+    })
+
+    test("no history renders exactly as before", () => {
+        expect(c.result(analysis(), ORIGIN, UI, 7, null)).toBe(c.result(analysis(), ORIGIN, UI, 7, null, undefined))
+    })
+})
+
+// A re-review used to edit a bare spinner over the standing review — erasing the
+// only answer anyone had at the exact moment they most wanted it, and
+// misrepresenting the merge gate, which kept reading that review the whole time.
+describe("PR comment: the placeholder while a re-review runs", () => {
+    const c = new PullRequestAnalysisComment()
+    const inflight = (over: Record<string, unknown> = {}) => ({
+        commits: [{ sha: "dd75a2f000", subject: "feat(webhooks): sweep pending events out", author: "p", at: null }],
+        scope: "incremental" as const,
+        carried: 4,
+        standing: { round: 2, verdict: "request_changes", blockers: 1 },
+        ...over,
+    })
+
+    test("names the commits it is reviewing", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight())
+        expect(md).toContain("reviewing 1 new commit")
+        expect(md).toContain("`dd75a2f`")
+        expect(md).toContain("sweep pending events out")
+    })
+
+    test("says the standing round still stands, and that the gate reads it", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight())
+        expect(md).toContain("**Round 2 still stands**")
+        expect(md).toContain("1 blocker")
+        expect(md).toContain("merge gate")
+    })
+
+    test("an incremental round says it is reviewing the push, and what it carries", () => {
+        expect(c.loading(ORIGIN, "T", UI, inflight())).toContain("carrying 4 earlier findings forward")
+    })
+
+    test("a full round says nothing about carrying", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight({ scope: "full", carried: 0 }))
+        expect(md).not.toContain("carrying")
+        expect(md).toContain("tracing its impact")
+    })
+
+    // A first review has nothing standing behind it, and claiming otherwise would
+    // be worse than the spinner this replaces.
+    test("a first review says nothing about a standing round", () => {
+        const md = c.loading(ORIGIN, "T", UI, inflight({ standing: null, commits: [], carried: 0, scope: "full" }))
+        expect(md).not.toContain("still stands")
+        expect(md).toContain("reviewing this pull request")
+    })
+
+    test("a caller with no context renders the placeholder it always did", () => {
+        const md = c.loading(ORIGIN, "T", UI)
+        expect(md).toContain("Ucelot is reviewing this pull request")
+        expect(md).not.toContain("still stands")
+    })
+})

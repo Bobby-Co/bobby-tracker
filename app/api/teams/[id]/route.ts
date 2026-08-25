@@ -37,9 +37,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ team: { ...data, role } as TeamWithRole })
 }
 
-// DELETE /api/teams/[id] — owners only; personal teams are protected by RLS
-// (teams_owner_delete uses `not is_personal`). Cascades resources — a heavy op
-// the UI should confirm.
+// DELETE /api/teams/[id] — owners only; personal teams can't be deleted (they
+// are recreated on the owner's next request, so it reads as a broken button).
+// Cascades resources — a heavy op the UI should confirm.
+//
+// The personal-team rule used to be enforced by RLS alone (teams_owner_delete
+// used `not is_personal`). 0067 dropped those policies and this context now
+// queries with a service-role client, which means the database stopped saying no
+// — the check below is the rule again rather than a belt-and-braces echo of it.
+// Deleting an account is the one path allowed past it, and it goes through
+// modules/account, not here.
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     const { ctx, user, error } = await new ApiContext().requireUser()
@@ -47,6 +54,23 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     const role = await ctx.access.teamRole(id, user.id)
     if (!role) return jsonError("not_found", "team not found", 404)
     if (role !== "owner") return forbidden("only the team owner can delete a team")
+    if (await ctx.teams.isPersonal(id)) {
+        return jsonError("bad_request", "your personal team can't be deleted", 400)
+    }
+
+    // A team on a paid plan is not deletable while it is paid (0076). Deleting it
+    // would silently abandon a subscription that keeps billing, and the recovery
+    // — "where did my paid team go?" — is not one the app can offer afterwards.
+    // Cancelling the plan first is the deliberate step; the team then falls to Kit
+    // or to suspension, and can be deleted from there.
+    const { data: sub } = await repoRead(() => ctx.subscriptions.findByTeam(id))
+    if (sub && sub.tier !== "kit") {
+        return jsonError(
+            "plan_active",
+            "This team is on a paid plan. Cancel the plan before deleting the team.",
+            409,
+        )
+    }
 
     // Bind before the purge below: ProjectDeletionService clears REGIONAL content,
     // and the data plane throws until a region is bound. Every project here belongs
@@ -71,6 +95,12 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
         // the team while some projects' content survived.
         if (pErr) return pErr
     }
+
+    // Release the billing identity, don't delete it (0076): the subject keeps the
+    // team's usage, so recreating a team reattaches to the same balance instead of
+    // handing out a fresh monthly allowance. This is the "usage stays even when
+    // the team goes" half of the free-team quota.
+    await tryOrNull(() => ctx.usageSubjects.unbind(id))
 
     const { error: dbErr } = await repoRead(() => ctx.teams.delete(id))
     if (dbErr) return dbErr

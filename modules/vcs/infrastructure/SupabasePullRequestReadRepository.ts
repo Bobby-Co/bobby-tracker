@@ -4,8 +4,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { RepositoryError } from "@/lib/shared/kernel"
-import type { PrComment, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
-import type { CommentOwnership, PullRequestReadRepository } from "../ports/PullRequestReadRepository"
+import type { PrComment, PrFinding, PullRequest, PullRequestAnalysis, ReviewRoundCommit, ReviewRunProfile } from "@/lib/shared/types"
+import type { CommentOwnership, PullRequestReadRepository, PullRequestRound } from "../ports/PullRequestReadRepository"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyDb = SupabaseClient<any, any, any>
@@ -33,6 +33,33 @@ export class SupabasePullRequestReadRepository implements PullRequestReadReposit
             .returns<Pick<PullRequestAnalysis, "pr_number" | "status">[]>()
         if (error) throw new RepositoryError(error.message, { cause: error })
         return data ?? []
+    }
+
+    async listAnalysisRounds(projectId: string, prNumber: number, limit: number): Promise<PullRequestRound[]> {
+        const { data, error } = await this.db
+            .from("pull_request_analysis_rounds")
+            .select("head_sha,round,verdict,score,score_max,findings,degraded,review_profile,created_at,scope,scope_reason,commits,carried_count,resolved")
+            .eq("project_id", projectId)
+            .eq("pr_number", prNumber)
+            .order("round", { ascending: false })
+            .limit(limit)
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return (data ?? []).map((r: RoundRow) => ({
+            headSha: r.head_sha,
+            round: r.round,
+            verdict: r.verdict,
+            score: r.score,
+            scoreMax: r.score_max,
+            findings: (r.findings ?? []) as PrFinding[],
+            degraded: r.degraded === true,
+            reviewProfile: r.review_profile ?? null,
+            createdAt: r.created_at,
+            scope: r.scope === "incremental" ? "incremental" : "full",
+            scopeReason: r.scope_reason ?? null,
+            commits: (r.commits ?? []) as ReviewRoundCommit[],
+            carriedCount: r.carried_count ?? 0,
+            resolved: (r.resolved ?? []) as PrFinding[],
+        }))
     }
 
     async findByNumber(projectId: string, prNumber: number): Promise<PullRequest | null> {
@@ -95,4 +122,21 @@ export class SupabasePullRequestReadRepository implements PullRequestReadReposit
 /** Composition seam: bind a PullRequestReadRepository to a specific client. */
 export function createSupabasePullRequestReadRepository(db: AnyDb): PullRequestReadRepository {
     return new SupabasePullRequestReadRepository(db)
+}
+
+interface RoundRow {
+    head_sha: string
+    round: number
+    verdict: string | null
+    score: number | null
+    score_max: number | null
+    findings: unknown
+    degraded: boolean
+    review_profile: ReviewRunProfile | null
+    created_at: string
+    scope: string | null
+    scope_reason: string | null
+    commits: unknown
+    carried_count: number | null
+    resolved: unknown
 }

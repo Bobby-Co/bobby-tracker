@@ -93,6 +93,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 headSha: pull.head_sha,
             },
             origin,
+            // Explicit user request: bypass the "already reviewed this head" skip
+            // that keeps webhook chatter (reopened/edited/labeled) from re-running
+            // a finished review. A button that did nothing would be a bug.
+            { force: true },
         )
     } catch (e) {
         return jsonError("review_failed", e instanceof Error ? e.message : "couldn't start the review", 502)

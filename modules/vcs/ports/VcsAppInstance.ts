@@ -22,6 +22,7 @@ import type {
     VcsMergeability,
     VcsPullRequest,
     VcsPullRequestFile,
+    VcsCompare,
     VcsReview,
 } from "./VcsTypes"
 
@@ -66,6 +67,14 @@ export interface VcsAppInstance {
     // ─── pull requests ──────────────────────────────────────────────────────
     listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]>
     listPullRequestFiles(number: number): Promise<VcsPullRequestFile[]>
+    /** The diff and commits between two arbitrary refs, `base…head`.
+     *
+     *  listPullRequestFiles answers "what does this pull request change"; this
+     *  answers "what did this PUSH change", which is a different question and
+     *  the only one an incremental review can be scoped to. It also reports the
+     *  ANCESTRY of the two refs, which is what lets a caller refuse to carry
+     *  anything across a force-push. */
+    compareCommits(base: string, head: string): Promise<VcsCompare>
     listPullRequestReviews(number: number): Promise<VcsReview[]>
     getMergeMethods(): Promise<VcsMergeMethods>
     getMergeability(number: number): Promise<VcsMergeability>

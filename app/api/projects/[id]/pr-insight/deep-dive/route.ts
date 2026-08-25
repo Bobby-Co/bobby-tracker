@@ -12,8 +12,14 @@ import { tryOrNull } from "@/lib/shared/kernel"
 // Body: { insight_id: string }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, error } = await new ApiContext().requireProjectAccess(id)
+    const { ctx, teamId, error } = await new ApiContext().requireProjectAccess(id)
     if (error) return error
+
+    // Hard gate: a paused team may read everything and run nothing (0076). Sits
+    // after the access guard because a pause is a billing state, not a permission
+    // — the 402 tells the client to offer resume/plan, not sign-in.
+    const spendErr = await new ApiContext().requireSpend(ctx, teamId)
+    if (spendErr) return spendErr
 
     let body: Record<string, unknown> = {}
     try {

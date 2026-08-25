@@ -21,6 +21,7 @@ export { NotificationPresenter } from "./domain/Events"
 export type { NotificationChannel, DeliveryResult } from "./ports/NotificationChannel"
 export type { Recipient, RecipientResolver } from "./ports/RecipientResolver"
 export type { OutboxStore, OutboxRecord } from "./ports/OutboxStore"
+export type { EnrichmentSource, EnrichmentSubject, Enrichment } from "./ports/EnrichmentSource"
 
 export { NotificationDispatcher } from "./application/NotificationDispatcher"
 export { NotificationService } from "./application/NotificationService"
@@ -29,6 +30,7 @@ export { createInAppFeedChannel } from "./infrastructure/InAppFeedChannel"
 export { createEmailChannel } from "./infrastructure/EmailChannel"
 export { createSupabaseRecipientResolver } from "./infrastructure/SupabaseRecipientResolver"
 export { createSupabaseOutboxStore } from "./infrastructure/SupabaseOutboxStore"
+export { createSupabaseEnrichmentSource } from "./infrastructure/SupabaseEnrichmentSource"
 
 // The user-facing tray feed (RLS-scoped reads/writes on the notifications table).
 export type { NotificationFeedRepository } from "./ports/NotificationFeedRepository"
@@ -40,3 +42,8 @@ export { createNotificationService } from "./Composition"
 // Legacy trigger-path email renderer (still serves /api/internal/notification-email
 // until the outbox cutover retires it).
 export { NotificationEmail } from "./infrastructure/NotificationEmail"
+
+// The per-kind email templates BOTH senders render through. Pure — exported so a
+// mail can be rendered (and eyeballed) without a transport or a database.
+export type { NotificationEmailContext, RenderedEmail } from "./infrastructure/EmailTemplates"
+export { renderNotificationEmail } from "./infrastructure/EmailTemplates"

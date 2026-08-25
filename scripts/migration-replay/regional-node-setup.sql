@@ -54,25 +54,54 @@
 -- cascade debt of this design — compare the earlier `projects`-regional cut,
 -- which put team deletion itself on the hook.
 
+-- ─── Why this is driven by the CATALOGUE, not by a list ──────────────────────
+--
+-- It used to be twelve hand-written DROP statements. That list was correct on
+-- the day it was written and silently wrong afterwards: migration 0080 added
+-- tracker.pull_request_analysis_rounds with a foreign key to `projects`, nobody
+-- added it here, and every round insert on a regional node failed with 23503 —
+-- discarded by the caller, so PR review rounds simply never recorded and
+-- incremental review could not work on any regional project. Nothing said so for
+-- four review rounds.
+--
+-- A list you have to remember to extend is the same shape as the grant bug 0073
+-- had to repair. So the boundary is now enforced by asking the catalogue: drop
+-- EVERY foreign key from this schema into a table that lives centrally. New
+-- regional tables are covered the day they are created, without anyone
+-- remembering this file exists.
+--
+-- The central set is named explicitly rather than inferred. It is short, it
+-- changes rarely, and inferring it would be the second guess in a file whose
+-- whole job is to be certain about one boundary.
+
 begin;
 
--- → tracker.projects (central)
-alter table tracker.issues                 drop constraint if exists issues_project_id_fkey;
-alter table tracker.issue_comments         drop constraint if exists issue_comments_project_id_fkey;
-alter table tracker.issue_embeddings       drop constraint if exists issue_embeddings_project_id_fkey;
-alter table tracker.pr_comments            drop constraint if exists pr_comments_project_id_fkey;
-alter table tracker.pull_requests          drop constraint if exists pull_requests_project_id_fkey;
-alter table tracker.pull_request_analyses  drop constraint if exists pull_request_analyses_project_id_fkey;
-alter table tracker.mind_context           drop constraint if exists mind_context_project_id_fkey;
-
--- → auth.users (central)
-alter table tracker.issues                 drop constraint if exists issues_user_id_fkey;
-alter table tracker.issue_comments         drop constraint if exists issue_comments_author_user_id_fkey;
-alter table tracker.pr_comments            drop constraint if exists pr_comments_author_user_id_fkey;
-alter table tracker.public_issue_reporters drop constraint if exists public_issue_reporters_auth_user_id_fkey;
-
--- → tracker.public_sessions (central — it has a team-scoped listing query)
-alter table tracker.public_issue_reporters drop constraint if exists public_issue_reporters_session_id_fkey;
+do $$
+declare
+    r record;
+    n int := 0;
+begin
+    for r in
+        select con.conname, c.relname as child, tc.relname as parent, tn.nspname as parent_schema
+        from pg_constraint con
+        join pg_class c       on c.oid  = con.conrelid
+        join pg_namespace cn  on cn.oid = c.relnamespace
+        join pg_class tc      on tc.oid = con.confrelid
+        join pg_namespace tn  on tn.oid = tc.relnamespace
+        where con.contype = 'f'
+          and cn.nspname = 'tracker'
+          -- The control plane: identity, and the two tracker tables that have
+          -- team-spanning listing queries. Everything else in `tracker` is
+          -- regional and its keys are intra-regional, so they stay enforced.
+          and (tn.nspname = 'auth' or (tn.nspname = 'tracker' and tc.relname in ('projects', 'public_sessions')))
+    loop
+        execute format('alter table tracker.%I drop constraint %I', r.child, r.conname);
+        raise notice 'regional-node-setup: dropped %.% → %.% (%)',
+            'tracker', r.child, r.parent_schema, r.parent, r.conname;
+        n := n + 1;
+    end loop;
+    raise notice 'regional-node-setup: severed % cross-plane foreign key(s)', n;
+end $$;
 
 -- Mark the node, so a human opening this database knows what it is and the app
 -- can refuse to treat it as if it held identity.
@@ -82,13 +111,20 @@ on conflict (key) do update set value = excluded.value;
 
 commit;
 
--- Verify — must return 0:
---   select count(*) from pg_constraint con
---   join pg_class c  on c.oid  = con.conrelid
---   join pg_class tc on tc.oid = con.confrelid
+-- Verify — must return 0. Same catalogue query as the drop above, with no table
+-- list of its own: a new regional table with a cross-plane key shows up here
+-- whether or not anyone thought to mention it.
+--
+--   select c.relname as child, con.conname, tc.relname as parent
+--   from pg_constraint con
+--   join pg_class c      on c.oid  = con.conrelid
+--   join pg_namespace cn on cn.oid = c.relnamespace
+--   join pg_class tc     on tc.oid = con.confrelid
 --   join pg_namespace tn on tn.oid = tc.relnamespace
 --   where con.contype = 'f'
---     and c.relname in ('issues','issue_embeddings','issue_comments','pr_comments',
---                       'pull_requests','pull_request_analyses','mind_context',
---                       'public_issue_reporters')
---     and (tn.nspname = 'auth' or tc.relname in ('projects','public_sessions'));
+--     and cn.nspname = 'tracker'
+--     and (tn.nspname = 'auth'
+--          or (tn.nspname = 'tracker' and tc.relname in ('projects','public_sessions')));
+--
+-- Worth running on every regional node after ANY migration that adds a table,
+-- not only at provisioning. That is what would have caught 0080.

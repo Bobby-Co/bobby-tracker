@@ -17,8 +17,14 @@ import type { IssueAnalysisData } from "@/lib/shared/types"
 // so the drawer can copy it synchronously on click.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const { ctx, user, error } = await new ApiContext().requireIssueAccess(id)
+    const { ctx, teamId, user, error } = await new ApiContext().requireIssueAccess(id)
     if (error) return error
+
+    // Hard gate: a paused team may read everything and run nothing (0076). Sits
+    // after the access guard because a pause is a billing state, not a permission
+    // — the 402 tells the client to offer resume/plan, not sign-in.
+    const spendErr = await new ApiContext().requireSpend(ctx, teamId)
+    if (spendErr) return spendErr
 
     // Per-issue effort, resolved in priority order:
     //   1. explicit override in this request (the suggestions popover), then

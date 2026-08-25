@@ -26,6 +26,11 @@ export class IssueEmbedder {
     constructor(
         private readonly analyser: Analyser,
         private readonly index: EmbeddingIndex,
+        /** May this project's team spend right now? A plain predicate rather than
+         *  the billing port itself, so this module stays free of billing types —
+         *  the composition root knows how to answer it. Defaults to "yes" so the
+         *  many existing test constructions keep working. */
+        private readonly canSpend: (projectId: string) => Promise<boolean> = async () => true,
     ) {}
 
     /** Embed one issue and upsert its vector. Best-effort — a failure logs and
@@ -33,6 +38,12 @@ export class IssueEmbedder {
      *  (never throws, so it can't break the caller's insert). */
     async embedIssue(issue: EmbeddableIssue): Promise<void> {
         try {
+            // Hard gate (0076): a paused team embeds nothing. Silent, like every
+            // other failure here — this runs detached in `after()` with nobody to
+            // report to, and the row stays in the backlog for whenever the team
+            // resumes.
+            if (!(await this.canSpend(issue.project_id))) return
+
             // Billed to the issue's project. No teamId here — this runs deep in
             // the sync path with no request guard in reach — so the analyser
             // resolves the team from project_analyser, which is sound because an

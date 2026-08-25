@@ -9,12 +9,21 @@ import { PrMergeBar } from "@/components/pulls/pr-merge-bar"
 import { PrReview } from "@/components/pulls/pr-review"
 import { PrComments } from "@/components/pulls/pr-comments"
 import type { PrComment, Project, PullRequest, PullRequestAnalysis } from "@/lib/shared/types"
+import type { RoundSummary } from "@/components/pulls/pr-review"
+import type { RoundDelta } from "@/modules/analysis/domain/ReviewRounds"
+import type { PullRequestRound } from "@/modules/vcs/ports/PullRequestReadRepository"
+import { findingState } from "@/lib/shared/rendering/finding-state"
 
 interface PullView {
     pull: PullRequest | null
     project: Pick<Project, "id" | "name" | "repo_url" | "repo_full_name"> | null
     analysis: PullRequestAnalysis | null
     comments: PrComment[]
+    /** Completed reviews of earlier heads, OLDEST first (0080). */
+    rounds?: PullRequestRound[]
+    /** How the current review compares with the round before it, computed
+     *  server-side so the panel and the merge bar cannot disagree. */
+    delta?: RoundDelta | null
 }
 
 export default function PullDetailPage() {
@@ -24,6 +33,35 @@ export default function PullDetailPage() {
 
     const pull = data?.pull ?? null
     if (!loading && data && !pull) notFound()
+
+    // Each round, as the strip and the round selector read it. The stored
+    // SNAPSHOT is passed through whole — that is what lets selecting round 2
+    // render round 2's answer rather than one rebuilt from a chain of diffs.
+    //
+    // The two counts are derived here rather than stored, with the SAME
+    // normaliser the panel groups findings by, so a round summary can never
+    // disagree with the findings underneath it.
+    const rounds: RoundSummary[] = (data?.rounds ?? []).map((r) => ({
+        headSha: r.headSha,
+        round: r.round,
+        verdict: r.verdict,
+        score: r.score,
+        scoreMax: r.scoreMax,
+        findings: r.findings,
+        degraded: r.degraded,
+        scope: r.scope,
+        scopeReason: r.scopeReason,
+        commits: r.commits ?? [],
+        carriedCount: r.carriedCount ?? 0,
+        resolved: r.resolved ?? [],
+        createdAt: r.createdAt,
+        blockers: r.findings.filter((f) => findingState(f.severity) === "critical").length,
+        // What this round closed, from its own record. A round that predates the
+        // resolved column reports zero, which reads as "we did not track it"
+        // rather than as "nothing was fixed" — the strip simply omits the chip.
+        fixed: (r.resolved ?? []).length,
+    }))
+    const delta = data?.delta ?? null
 
     if (error) {
         return (
@@ -46,10 +84,11 @@ export default function PullDetailPage() {
                         projectId={id}
                         pull={pull}
                         analysis={data?.analysis ?? null}
+                        progress={delta ? { fixed: delta.counts.fixed } : undefined}
                         onMerged={refetch}
                     />
                     <div id="pr-review" className="scroll-mt-20">
-                        <PrReview analysis={data?.analysis ?? null} />
+                        <PrReview analysis={data?.analysis ?? null} rounds={rounds} delta={delta} />
                     </div>
                     <PrComments
                         comments={data?.comments ?? []}

@@ -24,6 +24,9 @@ import {
     type VcsMergeability,
     type VcsPullRequest,
     type VcsPullRequestFile,
+    type VcsCompare,
+    type VcsCommitSummary,
+    type VcsCompareStatus,
     type VcsReview,
 } from "../ports/VcsTypes"
 
@@ -299,6 +302,77 @@ export class GitlabVcsAppInstance implements VcsAppInstance {
             additions: 0,
             deletions: 0,
         }))
+    }
+
+    async compareCommits(base: string, head: string): Promise<VcsCompare> {
+        const { c, pid } = await this.client()
+
+        // straight=true is base..head — the literal range. Without it GitLab
+        // compares against the merge base, which silently answers a DIFFERENT
+        // question than the one an incremental review asks ("what did this push
+        // change") the moment the branch has been updated from its target.
+        const q = `from=${encodeURIComponent(base)}&to=${encodeURIComponent(head)}&straight=true`
+        const res = await c.fetch(`/projects/${pid}/repository/compare?${q}`)
+        if (!res.ok) await fail(res, "compare commits")
+        const b = (await res.json()) as {
+            commits?: { id: string; message?: string; title?: string; author_name?: string; committed_date?: string }[]
+            diffs?: { old_path: string; new_path: string; diff?: string; new_file?: boolean; deleted_file?: boolean; renamed_file?: boolean }[]
+            compare_timeout?: boolean
+        }
+
+        const commits: VcsCommitSummary[] = (b.commits ?? []).map((x) => ({
+            sha: x.id,
+            message: x.message ?? x.title ?? "",
+            author: x.author_name ?? null,
+            committedAt: x.committed_date ?? null,
+        }))
+        const files = (b.diffs ?? []).map((f) => ({
+            filename: f.new_path,
+            previousFilename: f.renamed_file ? f.old_path : undefined,
+            status: f.new_file ? "added" : f.deleted_file ? "removed" : f.renamed_file ? "renamed" : "modified",
+            patch: f.diff,
+            // GitLab's compare payload carries no per-file line counts. Zeroes
+            // rather than a guess: the numbers are cosmetic here, and an invented
+            // one would be indistinguishable from a real one downstream.
+            additions: 0,
+            deletions: 0,
+        }))
+
+        return {
+            status: await this.ancestry(base, head),
+            aheadBy: commits.length,
+            behindBy: 0,
+            files,
+            commits,
+            // GitLab gives up on a big diff rather than truncating to a cap, and
+            // says so. A timed-out compare is not a complete picture of the push.
+            truncated: b.compare_timeout === true,
+        }
+    }
+
+    /** Where `base` sits relative to `head`, via the merge base.
+     *
+     *  GitLab's compare payload has no `status` field, so this is a second call.
+     *  Worth it: the answer is what decides whether a force-push may carry
+     *  findings forward, and the alternative — assuming the convenient reading —
+     *  is the exact fail-open the caller reads this to avoid. Any failure
+     *  answers "unknown", which the caller treats as "prove nothing, carry
+     *  nothing". */
+    private async ancestry(base: string, head: string): Promise<VcsCompareStatus> {
+        if (base === head) return "identical"
+        try {
+            const { c, pid } = await this.client()
+            const q = `refs[]=${encodeURIComponent(base)}&refs[]=${encodeURIComponent(head)}`
+            const res = await c.fetch(`/projects/${pid}/repository/merge_base?${q}`)
+            if (!res.ok) return "unknown"
+            const mb = (await res.json()) as { id?: string }
+            if (!mb.id) return "unknown"
+            if (mb.id === base) return "ahead"
+            if (mb.id === head) return "behind"
+            return "diverged"
+        } catch {
+            return "unknown"
+        }
     }
 
     async listPullRequestReviews(_number: number): Promise<VcsReview[]> {
