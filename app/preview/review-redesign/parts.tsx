@@ -424,13 +424,15 @@ export function GroupHead({
     style: HeadStyle
 }) {
     const s = SEV[sev]
+    // No glyph. At this size the WORD is the marker — an icon beside it competes
+    // with the per-finding glyphs directly below, and two of the same symbol a
+    // few pixels apart reads as noise rather than as a hierarchy.
     const label = (
         <>
-            <Icon name={s.icon} size={13} className={style === "quiet" ? s.text : undefined} />
             <span>{title}</span>
             <span
                 className={cn(
-                    "rounded-full px-1.5 text-[10px] font-bold normal-case tracking-normal tabular-nums",
+                    "rounded-full px-1.5 py-[1px] text-[11px] font-bold normal-case tracking-normal tabular-nums",
                     style === "quiet" || style === "rule"
                         ? "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]"
                         : "bg-[color:var(--c-surface)]/70",
@@ -441,21 +443,21 @@ export function GroupHead({
         </>
     )
 
-    const base = "flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.07em]"
+    const base = "flex items-center gap-2 text-[13.5px] font-bold uppercase tracking-[0.05em]"
 
     if (style === "quiet") {
-        return <h3 className={cn(base, "mb-2 text-[color:var(--c-text-dim)]")}>{label}</h3>
+        return <h3 className={cn(base, "mb-2.5 text-[color:var(--c-text-muted)]")}>{label}</h3>
     }
     // Toned: the label takes its severity's colour instead of grey. One line of
     // change, and the heading stops being furniture.
     if (style === "toned") {
-        return <h3 className={cn(base, "mb-2", s.text)}>{label}</h3>
+        return <h3 className={cn(base, "mb-2.5", s.text)}>{label}</h3>
     }
     // Rule: the same, with a hairline running to the edge — the heading reads as
     // a section BREAK rather than as the first line of the group.
     if (style === "rule") {
         return (
-            <h3 className={cn(base, "mb-2.5 text-[color:var(--c-text-muted)]")}>
+            <h3 className={cn(base, "mb-3", s.text)}>
                 {label}
                 <span className="ml-1 h-px flex-1 bg-[color:var(--c-border)]" />
             </h3>
@@ -464,7 +466,7 @@ export function GroupHead({
     // Band: a tinted row. Loudest, and the one that risks bringing the boxes back.
     if (style === "band") {
         return (
-            <h3 className={cn(base, "mb-2.5 rounded-[7px] px-2.5 py-1.5", s.chip)}>{label}</h3>
+            <h3 className={cn(base, "mb-3 rounded-[8px] px-3 py-2", s.chip)}>{label}</h3>
         )
     }
     // Rail handles its own heading inside GroupRail below.
