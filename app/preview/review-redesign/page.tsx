@@ -6,6 +6,7 @@ import { cn } from "@/components/ui/cn"
 import type { PullRequestAnalysis } from "@/lib/shared/types"
 import { REVIEW, REVIEW_MANY } from "./fixture"
 import { FindingRow, Footer, MetaRail, MoreDetail, Rounds, SEV, sevOf, VerdictBand } from "./parts"
+import { Icon } from "./glyphs"
 
 // Three ways to render one review, so a direction can be chosen by looking
 // rather than by describing.
@@ -65,10 +66,12 @@ function Brief({ r }: { r: typeof REVIEW }) {
                         if (!items.length) return null
                         return (
                             <div key={g.key} className="mb-5 last:mb-0">
-                                <h3 className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
-                                    <span className={cn("h-1.5 w-1.5 rounded-full", SEV[g.key].dot)} />
+                                <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
+                                    <Icon name={SEV[g.key].icon} size={13} className={SEV[g.key].text} />
                                     {g.title}
-                                    <span className="opacity-60">{items.length}</span>
+                                    <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 text-[10px] font-semibold normal-case tracking-normal">
+                                        {items.length}
+                                    </span>
                                 </h3>
                                 <div className="divide-y divide-[color:var(--c-border)]">
                                     {items.map((f, i) => (
