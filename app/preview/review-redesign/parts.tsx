@@ -51,37 +51,59 @@ export function VerdictBand({ r }: { r: PrAnalysis }) {
  *  box inside a drawer. */
 export function FindingRow({ f, rail }: { f: PrFinding; rail?: boolean }) {
     const s = SEV[sevOf(f)]
+    // The path a reader recognises is the tail; the directories are how it is
+    // FOUND, not what it is. Full path on hover, so nothing is lost.
+    const short = (file?: string, line?: number) => `${file?.split("/").pop() ?? ""}${line ? `:${line}` : ""}`
     return (
-        <div className={cn("relative py-3", rail && "pl-5")}>
-            {rail && <span className={cn("absolute left-0 top-[18px] h-2 w-2 rounded-full ring-4 ring-[color:var(--c-surface)]", s.dot)} />}
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                {!rail && <Icon name={s.icon} size={13} className={cn("translate-y-[0.5px]", s.text)} />}
-                <span className="text-[13.5px] font-semibold leading-5 text-[color:var(--c-text)]">{f.title}</span>
+        <div className={cn("relative py-3.5", rail && "pl-5")}>
+            {rail && <span className={cn("absolute left-0 top-[20px] h-2 w-2 rounded-full ring-4 ring-[color:var(--c-surface)]", s.dot)} />}
+
+            {/* Level 1 — the only thing at the left edge, and the only thing at
+                full contrast. This is what a reader scans down. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {!rail && <Icon name={s.icon} size={14} className={cn("translate-y-[0.5px]", s.text)} />}
+                <span className="text-[14px] font-semibold leading-[1.35] text-[color:var(--c-text)]">{f.title}</span>
                 {f.provenance?.carried && (
-                    <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-medium uppercase tracking-wide text-[color:var(--c-text-muted)]">
+                    <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[9.5px] font-semibold uppercase tracking-[0.05em] text-[color:var(--c-text-dim)]">
                         carried
                     </span>
                 )}
-                <code className="ml-auto shrink-0 font-mono text-[10.5px] text-[color:var(--c-text-dim)]">
-                    {f.file?.split("/").pop()}
-                    {f.line ? `:${f.line}` : ""}
-                </code>
             </div>
-            {f.detail && <p className="mt-1.5 max-w-[70ch] text-[12.5px] leading-[1.65] text-[color:var(--c-text-muted)]">{f.detail}</p>}
-            {f.evidence?.length ? (
-                <ul className="mt-2 flex flex-col gap-1">
-                    {f.evidence.map((e, i) => (
-                        <li key={i} className="flex items-baseline gap-1.5 font-mono text-[10.5px] text-[color:var(--c-text-dim)]">
-                            <Icon name="code" size={10} className="translate-y-[1px] opacity-50" />
-                            <span className="truncate">
-                                {e.file}
-                                {e.line ? `:${e.line}` : ""}
-                            </span>
-                            {e.note && <span className="truncate font-sans opacity-70">— {e.note}</span>}
-                        </li>
-                    ))}
-                </ul>
-            ) : null}
+
+            {/* Everything below is INDENTED under the title, so the finding reads
+                as one block with a head rather than four stacked lines. */}
+            <div className={cn("mt-1", !rail && "pl-[22px]")}>
+                {/* Level 2 — where. Dim, small, and on its own line rather than
+                    fighting the title for the right edge. */}
+                <code
+                    className="font-mono text-[10.5px] text-[color:var(--c-text-dim)]"
+                    title={f.file ?? undefined}
+                >
+                    {short(f.file, f.line)}
+                </code>
+
+                {/* Level 3 — why. The only prose, at reading measure. */}
+                {f.detail && (
+                    <p className="mt-1 max-w-[68ch] text-[12.5px] leading-[1.65] text-[color:var(--c-text-muted)]">{f.detail}</p>
+                )}
+
+                {/* Level 4 — what was checked. A citation list, so the NOTE is the
+                    readable part and the location is the reference beside it. The
+                    other way round put a 60-character path in front of the four
+                    words that say why it matters. */}
+                {f.evidence?.length ? (
+                    <ul className="mt-2 flex flex-col gap-[3px] border-l border-[color:var(--c-border)] pl-2.5">
+                        {f.evidence.map((e, i) => (
+                            <li key={i} className="flex flex-wrap items-baseline gap-x-1.5 text-[11px] leading-[1.5]">
+                                <span className="text-[color:var(--c-text-muted)]">{e.note ?? e.kind}</span>
+                                <code className="font-mono text-[10px] text-[color:var(--c-text-dim)]" title={e.file}>
+                                    {short(e.file, e.line)}
+                                </code>
+                            </li>
+                        ))}
+                    </ul>
+                ) : null}
+            </div>
         </div>
     )
 }
