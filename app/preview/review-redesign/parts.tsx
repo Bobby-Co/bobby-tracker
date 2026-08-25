@@ -1,4 +1,5 @@
 "use client"
+import { useState } from "react"
 
 import type { PrAnalysis, PrFinding } from "@/lib/shared/types"
 import { cn } from "@/components/ui/cn"
@@ -180,43 +181,111 @@ export function MoreDetail({ r }: { r: PrAnalysis }) {
     )
 }
 
-/** The round strip, as a row of cards rather than a segmented bar — so a round
- *  reads as a thing that happened, and the current one is visibly current. */
+/** The round strip. Every round is always on screen — no horizontal scroll.
+ *
+ *  A scroller hides rounds behind a gesture, and the one thing this strip has to
+ *  answer is "how did this pull request get here", which cannot be answered by a
+ *  slice of it. So the row divides the width it has: the selected round takes
+ *  the space it needs to be readable, and the rest squeeze.
+ *
+ *  Squeezing is not shrinking the same card. A 40px card cannot hold a sha, a
+ *  verdict and a commit subject at any font size, so a collapsed round drops to
+ *  what still means something at that width — its number and a dot for how it
+ *  went. The detail fades rather than disappearing, so the growing card does not
+ *  pop.
+ */
 export function Rounds() {
     const rounds = [
-        { sha: "a3f1c02", n: 1, verdict: "Changes requested", blockers: 2, fixed: 0, carried: 0, msg: "feat(console): saved views" },
-        { sha: "7bd9e14", n: 2, verdict: "Changes requested", blockers: 1, fixed: 1, carried: 1, msg: "fix(console): validate the saved-view name" },
+        { sha: "a3f1c02", n: 1, verdict: "Changes requested", blockers: 2, fixed: 0, carried: 0, msg: "feat(console): saved views", tone: "critical" as Sev },
+        { sha: "1d90b4e", n: 2, verdict: "Changes requested", blockers: 1, fixed: 1, carried: 2, msg: "fix(console): guard the empty name", tone: "critical" as Sev },
+        { sha: "c72aa10", n: 3, verdict: "Comment", blockers: 0, fixed: 1, carried: 1, msg: "test(console): cover the rename path", tone: "review" as Sev },
+        { sha: "8e4b1f9", n: 4, verdict: "Comment", blockers: 0, fixed: 0, carried: 1, msg: "docs(console): say what a saved view is", tone: "review" as Sev },
+        { sha: "7bd9e14", n: 5, verdict: "Changes requested", blockers: 1, fixed: 1, carried: 1, msg: "fix(console): validate the saved-view name", tone: "critical" as Sev },
     ]
+    const [sel, setSel] = useState(rounds.length - 1)
+
     return (
-        <div className="flex gap-2 overflow-x-auto pb-0.5">
+        <div className="flex w-full gap-1.5">
             {rounds.map((r, i) => {
+                const open = i === sel
                 const current = i === rounds.length - 1
                 return (
                     <button
                         key={r.sha}
                         type="button"
+                        onClick={() => setSel(i)}
+                        aria-expanded={open}
+                        // basis-0 so grow alone decides the split, and min-w-0 so a
+                        // squeezed card is allowed to be genuinely narrow rather
+                        // than pushing the row wider than its container.
+                        style={{ flexGrow: open ? rounds.length : 1 }}
                         className={cn(
-                            "min-w-[220px] flex-1 rounded-[10px] border px-3 py-2.5 text-left transition-colors",
-                            // The CURRENT round is the one the merge gate reads,
-                            // so it must be the one that draws the eye. An earlier
-                            // round is history: reachable, quieter.
-                            current
+                            "flex shrink basis-0 flex-col overflow-hidden rounded-[10px] border px-2.5 py-2 text-left",
+                            // A collapsed card is one line in a box sized by its
+                            // expanded neighbour, so centre it rather than leaving
+                            // it stranded at the top of empty space.
+                            open ? "justify-start" : "justify-center",
+                            // A floor, because grow alone does not have one. This
+                            // pull request ran to thirteen rounds; twelve collapsed
+                            // cards sharing what is left of the row computes to
+                            // about 28px each, which clips the number they exist to
+                            // show. Below this the row would rather be wider than
+                            // illegible.
+                            open ? "min-w-0" : "min-w-[38px]",
+                            "transition-[flex-grow,background-color,border-color] duration-300 ease-out",
+                            open
                                 ? "border-[color:var(--c-border-strong)] bg-[color:var(--c-surface-2)]"
-                                : "border-[color:var(--c-border)] opacity-65 hover:opacity-100",
+                                : "border-[color:var(--c-border)] opacity-70 hover:opacity-100",
                         )}
                     >
-                        <div className="flex items-baseline gap-2">
-                            <code className="font-mono text-[11px] text-[color:var(--c-text-muted)]">{r.sha}</code>
-                            <span className="text-[11px] text-[color:var(--c-text-dim)]">round {r.n}</span>
-                            {current && <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-[color:var(--c-text-muted)]">current</span>}
+                        <div className="flex items-center gap-1.5">
+                            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", SEV[r.tone].dot)} />
+                            <span className="shrink-0 text-[11px] font-semibold text-[color:var(--c-text-muted)]">{r.n}</span>
+                            <code
+                                className={cn(
+                                    "truncate font-mono text-[11px] text-[color:var(--c-text-dim)] transition-opacity duration-200",
+                                    open ? "opacity-100" : "opacity-0",
+                                )}
+                            >
+                                {r.sha}
+                            </code>
+                            {current && open && (
+                                <span className="ml-auto shrink-0 text-[9.5px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
+                                    current
+                                </span>
+                            )}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                            <span className="text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
-                            {r.fixed > 0 && <span className="rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-success)]">{r.fixed} fixed</span>}
-                            {r.blockers > 0 && <span className="rounded-full bg-[color:var(--c-error-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-error)]">{r.blockers} blocker{r.blockers === 1 ? "" : "s"}</span>}
-                            {r.carried > 0 && <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">{r.carried} carried</span>}
+
+                        {/* The detail collapses to zero height AND fades, so a
+                            squeezed card is one line rather than a clipped three. */}
+                        <div
+                            className={cn(
+                                "grid transition-all duration-300 ease-out",
+                                open ? "mt-1 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                            )}
+                        >
+                            <div className="min-h-0 overflow-hidden">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="whitespace-nowrap text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
+                                    {r.fixed > 0 && (
+                                        <span className="whitespace-nowrap rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-success)]">
+                                            {r.fixed} fixed
+                                        </span>
+                                    )}
+                                    {r.blockers > 0 && (
+                                        <span className="whitespace-nowrap rounded-full bg-[color:var(--c-error-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-error)]">
+                                            {r.blockers} blocker{r.blockers === 1 ? "" : "s"}
+                                        </span>
+                                    )}
+                                    {r.carried > 0 && (
+                                        <span className="whitespace-nowrap rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">
+                                            {r.carried} carried
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="mt-1 truncate text-[11px] text-[color:var(--c-text-dim)]">{r.msg}</p>
+                            </div>
                         </div>
-                        <p className="mt-1 truncate text-[11px] text-[color:var(--c-text-dim)]">{r.msg}</p>
                     </button>
                 )
             })}
