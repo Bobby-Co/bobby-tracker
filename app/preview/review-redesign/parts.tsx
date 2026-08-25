@@ -9,9 +9,9 @@ import { Icon, type IconName } from "./glyphs"
 // chosen.
 
 export const SEV = {
-    critical: { dot: "bg-rose-500", text: "text-rose-600", chip: "bg-rose-50 text-rose-700 ring-rose-200", label: "Blocker", icon: "alert" as IconName },
-    review: { dot: "bg-amber-500", text: "text-amber-600", chip: "bg-amber-50 text-amber-700 ring-amber-200", label: "Worth a look", icon: "search" as IconName },
-    good: { dot: "bg-emerald-500", text: "text-emerald-600", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200", label: "Good", icon: "check" as IconName },
+    critical: { dot: "bg-[color:var(--c-error)]", text: "text-[color:var(--c-error)]", chip: "bg-[color:var(--c-error-bg)] text-[color:var(--c-error)] ring-[color:var(--c-error)]/30", label: "Blocker", icon: "alert" as IconName },
+    review: { dot: "bg-[color:var(--c-warn)]", text: "text-[color:var(--c-warn)]", chip: "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)] ring-[color:var(--c-warn)]/30", label: "Worth a look", icon: "search" as IconName },
+    good: { dot: "bg-[color:var(--c-success)]", text: "text-[color:var(--c-success)]", chip: "bg-[color:var(--c-success-bg)] text-[color:var(--c-success)] ring-[color:var(--c-success)]/30", label: "Good", icon: "check" as IconName },
 } as const
 
 export type Sev = keyof typeof SEV
@@ -22,9 +22,9 @@ export const sevOf = (f: PrFinding): Sev =>
 export function VerdictBand({ r }: { r: PrAnalysis }) {
     const blocking = r.verdict === "request_changes"
     const tone = blocking
-        ? "border-rose-200 bg-rose-50/70 text-rose-900"
+        ? "border-[color:var(--c-error)]/30 bg-[color:var(--c-error-bg)] text-[color:var(--c-error)]"
         : r.verdict === "approve"
-          ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
+          ? "border-[color:var(--c-success)]/30 bg-[color:var(--c-success-bg)] text-[color:var(--c-success)]"
           : "border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] text-[color:var(--c-text)]"
     const blockers = (r.findings ?? []).filter((f) => sevOf(f) === "critical").length
     const icon: IconName = blocking ? "x" : r.verdict === "approve" ? "check" : "chat"
@@ -37,7 +37,7 @@ export function VerdictBand({ r }: { r: PrAnalysis }) {
                 </span>
                 <span className="text-[13px] opacity-80">{r.verdict_reason}</span>
                 {blockers > 0 && (
-                    <span className="ml-auto rounded-full bg-white/70 px-2 py-[3px] text-[11.5px] font-semibold ring-1 ring-rose-200">
+                    <span className="ml-auto rounded-full bg-[color:var(--c-surface)]/70 px-2 py-[3px] text-[11.5px] font-semibold ring-1 ring-[color:var(--c-error)]/30">
                         {blockers} blocker{blockers === 1 ? "" : "s"}
                     </span>
                 )}
@@ -143,7 +143,7 @@ export function MoreDetail({ r }: { r: PrAnalysis }) {
                     {(r.fix_claims ?? []).map((c, i) => (
                         <p key={i} className="leading-[1.65] text-[color:var(--c-text-muted)]">
                             <span className="text-[color:var(--c-text)]">{c.claim}</span> — {c.reason}{" "}
-                            <span className="rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10.5px] font-semibold text-emerald-700">{c.verdict}</span>
+                            <span className="rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10.5px] font-semibold text-[color:var(--c-success)]">{c.verdict}</span>
                         </p>
                     ))}
                 </div>
@@ -190,9 +190,9 @@ export function Rounds() {
                         </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1.5">
                             <span className="text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
-                            {r.fixed > 0 && <span className="rounded-full bg-emerald-50 px-1.5 py-[1px] text-[10px] font-semibold text-emerald-700">{r.fixed} fixed</span>}
-                            {r.blockers > 0 && <span className="rounded-full bg-rose-50 px-1.5 py-[1px] text-[10px] font-semibold text-rose-700">{r.blockers} blocker{r.blockers === 1 ? "" : "s"}</span>}
-                            {r.carried > 0 && <span className="rounded-full bg-[color:var(--c-surface-3,#f1f1f1)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">{r.carried} carried</span>}
+                            {r.fixed > 0 && <span className="rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-success)]">{r.fixed} fixed</span>}
+                            {r.blockers > 0 && <span className="rounded-full bg-[color:var(--c-error-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-error)]">{r.blockers} blocker{r.blockers === 1 ? "" : "s"}</span>}
+                            {r.carried > 0 && <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">{r.carried} carried</span>}
                         </div>
                         <p className="mt-1 truncate text-[11px] text-[color:var(--c-text-dim)]">{r.msg}</p>
                     </button>
@@ -236,10 +236,10 @@ export function ScoreBar({ value, max }: { value: number; max: number }) {
     const r = max > 0 ? value / max : 0
     const band =
         r >= 0.8
-            ? { text: "text-emerald-700", fill: "bg-emerald-500", empty: "bg-emerald-200/60" }
+            ? { text: "text-[color:var(--c-success)]", fill: "bg-[color:var(--c-success)]", empty: "bg-[color:var(--c-success)]/20" }
             : r >= 0.5
-              ? { text: "text-amber-700", fill: "bg-amber-500", empty: "bg-amber-200/60" }
-              : { text: "text-rose-700", fill: "bg-rose-500", empty: "bg-rose-200/60" }
+              ? { text: "text-[color:var(--c-warn)]", fill: "bg-[color:var(--c-warn)]", empty: "bg-[color:var(--c-warn)]/20" }
+              : { text: "text-[color:var(--c-error)]", fill: "bg-[color:var(--c-error)]", empty: "bg-[color:var(--c-error)]/20" }
     return (
         <div className="mt-3 flex items-center gap-2.5">
             <span className={cn("flex items-baseline gap-1", band.text)}>
@@ -271,16 +271,16 @@ export function Meters({ r }: { r: PrAnalysis }) {
                 const idx = d.level === "high" ? 3 : d.level === "medium" ? 2 : 1
                 const tone =
                     d.level === "high"
-                        ? { fill: "bg-emerald-500", text: "text-emerald-600" }
+                        ? { fill: "bg-[color:var(--c-success)]", text: "text-[color:var(--c-success)]" }
                         : d.level === "medium"
-                          ? { fill: "bg-amber-500", text: "text-amber-600" }
-                          : { fill: "bg-rose-500", text: "text-rose-600" }
+                          ? { fill: "bg-[color:var(--c-warn)]", text: "text-[color:var(--c-warn)]" }
+                          : { fill: "bg-[color:var(--c-error)]", text: "text-[color:var(--c-error)]" }
                 return (
                     <div key={label} className="flex items-center gap-2" title={d.basis}>
                         <span className="w-[72px] shrink-0 text-[11px] text-[color:var(--c-text-muted)]">{label}</span>
                         <div className="flex items-center gap-[3px]">
                             {[0, 1, 2].map((i) => (
-                                <span key={i} className={cn("h-2 w-3 rounded-[2px]", i < idx ? tone.fill : "bg-[color:var(--c-surface-3,#e7e5e0)]")} />
+                                <span key={i} className={cn("h-2 w-3 rounded-[2px]", i < idx ? tone.fill : "bg-[color:var(--c-surface-2)]")} />
                             ))}
                         </div>
                         <span className={cn("text-[11px] font-semibold", tone.text)}>{d.level}</span>
@@ -306,9 +306,9 @@ export function RailHeading({ icon, children }: { icon: IconName; children: Reac
  *  it is what the merge gate is still reading. */
 export function InFlight({ queued }: { queued?: boolean }) {
     return (
-        <div className="flex flex-col gap-1 rounded-[12px] border border-amber-200 bg-amber-50/60 px-4 py-3 text-amber-800">
+        <div className="flex flex-col gap-1 rounded-[12px] border border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] px-4 py-3 text-[color:var(--c-warn)]">
             <span className="flex items-center gap-2 text-[13px] font-semibold">
-                <span className={cn("h-2 w-2 rounded-full bg-amber-500", !queued && "animate-pulse")} />
+                <span className={cn("h-2 w-2 rounded-full bg-[color:var(--c-warn)]", !queued && "animate-pulse")} />
                 {queued ? "Queued — waiting for a review slot" : "Reviewing 1 new commit"}
             </span>
             <span className="text-[12px] opacity-85">
@@ -337,7 +337,7 @@ export function ArchiveBanner({ round }: { round: number }) {
  *  silent: an unfinished review that looks finished is how a blocker gets missed. */
 export function DegradedNote() {
     return (
-        <div className="flex items-start gap-2 rounded-[12px] border border-amber-200 bg-amber-50/60 px-4 py-3 text-[12px] leading-[1.6] text-amber-800">
+        <div className="flex items-start gap-2 rounded-[12px] border border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)] px-4 py-3 text-[12px] leading-[1.6] text-[color:var(--c-warn)]">
             <Icon name="alert" size={14} className="mt-[2px]" />
             <span>
                 <b>Partial review.</b> The grounded pass did not complete, so this is the diff-level draft — read it as
@@ -350,7 +350,7 @@ export function DegradedNote() {
 /** A terminal state that produced nothing. */
 export function EmptyState({ kind }: { kind: "failed" | "cancelled" | "none" }) {
     const copy = {
-        failed: { icon: "x" as IconName, text: "Ucelot couldn't complete the review this time.", tone: "text-rose-700 border-rose-200 bg-rose-50/60" },
+        failed: { icon: "x" as IconName, text: "Ucelot couldn't complete the review this time.", tone: "text-[color:var(--c-error)] border-[color:var(--c-error)]/30 bg-[color:var(--c-error-bg)]" },
         cancelled: { icon: "x" as IconName, text: "The review was cancelled — the pull request closed before it finished.", tone: "text-[color:var(--c-text-muted)] border-[color:var(--c-border)]" },
         none: { icon: "chat" as IconName, text: "No review yet for this pull request.", tone: "text-[color:var(--c-text-muted)] border-[color:var(--c-border)]" },
     }[kind]
@@ -367,13 +367,13 @@ export function ProgressLine({ fixed, added }: { fixed: number; added: number })
     return (
         <p className="flex flex-wrap items-center gap-2 text-[12px] text-[color:var(--c-text-muted)]">
             {fixed > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-[2px] font-semibold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--c-success-bg)] px-2 py-[2px] font-semibold text-[color:var(--c-success)]">
                     <Icon name="check" size={11} /> {fixed} fixed
                 </span>
             )}
             since the last push
             {added > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-[2px] font-semibold text-amber-700">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--c-warn-bg)] px-2 py-[2px] font-semibold text-[color:var(--c-warn)]">
                     {added} new
                 </span>
             )}

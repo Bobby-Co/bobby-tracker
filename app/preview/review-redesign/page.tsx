@@ -138,7 +138,7 @@ export default function ReviewStatesPreview() {
 
             <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5 shadow-[var(--shadow-card)] sm:p-6">
                 <div className="mb-4 flex items-center gap-2">
-                    <Icon name="search" size={15} className="text-amber-600" />
+                    <Icon name="search" size={15} className="text-[color:var(--c-warn)]" />
                     <h2 className="text-[14px] font-bold tracking-[-0.005em]">Ucelot · PR review</h2>
                     <span className="ml-auto rounded-full border border-[color:var(--c-border)] px-2 py-[2px] text-[11px] text-[color:var(--c-text-muted)]">
                         Payments — strict
@@ -287,7 +287,7 @@ function Check({ on, onClick, children }: { on: boolean; onClick: () => void; ch
                     : "border-[color:var(--c-border)] text-[color:var(--c-text-dim)]",
             )}
         >
-            <span className={cn("grid h-3 w-3 place-items-center rounded-[3px] border", on ? "border-transparent bg-emerald-500 text-white" : "border-[color:var(--c-border-strong)]")}>
+            <span className={cn("grid h-3 w-3 place-items-center rounded-[3px] border", on ? "border-transparent bg-[color:var(--c-success)] text-white" : "border-[color:var(--c-border-strong)]")}>
                 {on && <Icon name="check" size={9} />}
             </span>
             {children}

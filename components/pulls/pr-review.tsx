@@ -1147,7 +1147,7 @@ function Meter({ label, dim }: { label: string; dim: PrConfidenceDimension }) {
             <span className="w-[76px] shrink-0 text-[11.5px] text-[color:var(--c-text-muted)]">{label}</span>
             <div className="flex items-center gap-[3px]">
                 {[0, 1, 2].map((i) => (
-                    <span key={i} className={cn("h-2 w-3.5 rounded-[2px]", i < idx ? t.fill : "bg-[color:var(--c-surface-3,#e7e5e0)]")} />
+                    <span key={i} className={cn("h-2 w-3.5 rounded-[2px]", i < idx ? t.fill : "bg-[color:var(--c-surface-2)]")} />
                 ))}
             </div>
             <span className={cn("text-[11.5px] font-semibold", t.text)}>{dim.level}</span>
@@ -1267,7 +1267,7 @@ function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | n
                     {severityLabel(f.severity)}
                 </span>
                 {catLabel && (
-                    <span className="shrink-0 rounded-full bg-[color:var(--c-surface-3,#f1f1f1)] px-1.5 py-[1px] text-[9.5px] font-medium uppercase tracking-wide text-[color:var(--c-text-muted)]">
+                    <span className="shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[9.5px] font-medium uppercase tracking-wide text-[color:var(--c-text-muted)]">
                         {catLabel}
                     </span>
                 )}

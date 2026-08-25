@@ -11,10 +11,10 @@ import { Icon, type IconName } from "./glyphs"
 
 const TONE: Record<BlockTone, { box: string; head: string; icon: IconName }> = {
     neutral: { box: "border-[color:var(--c-border)]", head: "text-[color:var(--c-text)]", icon: "list" },
-    info: { box: "border-blue-200 bg-blue-50/50", head: "text-blue-800", icon: "chat" },
-    good: { box: "border-emerald-200 bg-emerald-50/50", head: "text-emerald-800", icon: "check" },
-    warn: { box: "border-amber-200 bg-amber-50/50", head: "text-amber-800", icon: "alert" },
-    critical: { box: "border-rose-200 bg-rose-50/60", head: "text-rose-800", icon: "alert" },
+    info: { box: "border-[color:var(--c-info-fg)]/30 bg-[color:var(--c-info-bg)]", head: "text-[color:var(--c-info-fg)]", icon: "chat" },
+    good: { box: "border-[color:var(--c-success)]/30 bg-[color:var(--c-success-bg)]", head: "text-[color:var(--c-success)]", icon: "check" },
+    warn: { box: "border-[color:var(--c-warn)]/30 bg-[color:var(--c-warn-bg)]", head: "text-[color:var(--c-warn)]", icon: "alert" },
+    critical: { box: "border-[color:var(--c-error)]/30 bg-[color:var(--c-error-bg)]", head: "text-[color:var(--c-error)]", icon: "alert" },
 }
 
 export function SectionHead({ icon, children, count }: { icon: IconName; children: React.ReactNode; count?: number }) {
@@ -45,7 +45,7 @@ export function Callout({ title, body, tone = "warn" }: { title: string; body: s
 
 /** risk_matrix — likelihood × impact, as a table rather than prose. */
 export function RiskMatrix({ items }: { items: BlockItem[] }) {
-    const rank = (v?: string) => (v === "high" ? "text-rose-600" : v === "medium" ? "text-amber-600" : "text-[color:var(--c-text-muted)]")
+    const rank = (v?: string) => (v === "high" ? "text-[color:var(--c-error)]" : v === "medium" ? "text-[color:var(--c-warn)]" : "text-[color:var(--c-text-muted)]")
     return (
         <div>
             <SectionHead icon="alert" count={items.length}>Risks</SectionHead>
@@ -158,7 +158,7 @@ export function Checklist({ items }: { items: string[] }) {
 /** claims_table — what the PR said it did, and whether it did. */
 export function Claims({ items }: { items: { claim: string; verdict?: string; reason?: string }[] }) {
     const tone = (v?: string) =>
-        v === "likely" ? "bg-emerald-50 text-emerald-700" : v === "unlikely" ? "bg-rose-50 text-rose-700" : v === "partial" ? "bg-amber-50 text-amber-700" : "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]"
+        v === "likely" ? "bg-[color:var(--c-success-bg)] text-[color:var(--c-success)]" : v === "unlikely" ? "bg-[color:var(--c-error-bg)] text-[color:var(--c-error)]" : v === "partial" ? "bg-[color:var(--c-warn-bg)] text-[color:var(--c-warn)]" : "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]"
     return (
         <div>
             <SectionHead icon="target" count={items.length}>Fix claims</SectionHead>
