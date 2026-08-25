@@ -1,0 +1,91 @@
+# Deploy the tracker to Cloudflare Workers from self-hosted GitLab.
+#
+# Cloudflare's own Git integration (Workers Builds) speaks to GitHub and
+# gitlab.com only, so a self-hosted instance has to run the deploy itself. That
+# is all this does: the same `bun run deploy` you run by hand, on a runner.
+#
+# ─── Before this works ──────────────────────────────────────────────────────
+#
+# Settings → CI/CD → Variables. Every one MASKED; the NEXT_PUBLIC_* ones are not
+# secret but the rest are:
+#
+#   CLOUDFLARE_API_TOKEN      "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID
+#
+#   NEXT_PUBLIC_APP_URL              ) baked into the CLIENT bundle at build
+#   NEXT_PUBLIC_SUPABASE_URL         ) time. Miss one and the build still
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY    ) succeeds — it just ships a browser
+#   NEXT_PUBLIC_AUTH_COOKIE_DOMAIN   ) bundle pointing at nothing, which is the
+#   NEXT_PUBLIC_GITHUB_APP_SLUG      ) failure mode most likely to reach
+#   NEXT_PUBLIC_GITHUB_CLIENT_ID     ) production unnoticed.
+#   NEXT_PUBLIC_BETA_ALLOWED_EMAILS  )
+#
+# Server-side secrets (SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY, the
+# BOBBY_ANALYSER_* pairs, ...) are NOT here and must not be: they belong to the
+# Worker, set once with `wrangler secret put`, and adding them to CI would put
+# them in a build log's environment for no benefit.
+
+stages: [verify, deploy]
+
+default:
+  # The self-hosted runner registered for this. On a DOCKER executor the image
+  # below is used; on a SHELL executor it is ignored and bun must already be on
+  # the runner's PATH.
+  tags: [cloudflare]
+  image: oven/bun:1
+  cache:
+    key:
+      files: [bun.lock]
+    paths: [node_modules/]
+  before_script:
+    - bun install --frozen-lockfile
+
+# Deploying a build that does not typecheck is worse than not deploying, so this
+# gates the job below rather than running beside it.
+verify:
+  stage: verify
+  script:
+    - bunx tsc --noEmit -p tsconfig.json
+    - bun test modules/ lib/
+  rules:
+    - if: $CI_COMMIT_BRANCH == "development" || $CI_COMMIT_BRANCH == "main"
+    - if: $CI_MERGE_REQUEST_IID
+
+deploy:
+  stage: deploy
+  needs: [verify]
+  script:
+    # Refuse to build without the client-side variables.
+    #
+    # These are inlined into the browser bundle at build time, so a missing one
+    # does NOT fail the build — it ships a client pointing at nothing, from a
+    # green pipeline. That is the one failure here that reaches production
+    # unnoticed, and it is the difference between CI and running `bun run deploy`
+    # on a machine that happens to have .env.local. Five lines to make it
+    # impossible.
+    - |
+      missing=""
+      for v in NEXT_PUBLIC_APP_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY \
+               NEXT_PUBLIC_AUTH_COOKIE_DOMAIN NEXT_PUBLIC_GITHUB_APP_SLUG \
+               NEXT_PUBLIC_GITHUB_CLIENT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+        [ -n "$(eval echo \$$v)" ] || missing="$missing $v"
+      done
+      if [ -n "$missing" ]; then
+        echo "refusing to deploy — these CI/CD variables are unset:$missing" >&2
+        echo "the NEXT_PUBLIC_* ones are baked into the browser bundle, so building" >&2
+        echo "without them would succeed and ship a client pointing at nothing." >&2
+        exit 1
+      fi
+    - bun run deploy
+  environment:
+    name: production
+    url: $NEXT_PUBLIC_APP_URL
+  rules:
+    # One branch deploys, and it is the one you already treat as the release
+    # branch. Change this line rather than adding a second deploy job.
+    - if: $CI_COMMIT_BRANCH == "development"
+  # A half-finished deploy is worth retrying once; a broken build is not, and
+  # `bun run deploy` builds before it uploads.
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure]
