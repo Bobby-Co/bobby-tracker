@@ -119,8 +119,8 @@ function VerdictIcon({ v }: { v: string }) {
 
 function Shell({ children, profile }: { children: React.ReactNode; profile?: ReviewRunProfile | null }) {
     return (
-        <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)] sm:p-5">
-            <div className="mb-3 flex items-center gap-2">
+        <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5 shadow-[var(--shadow-card)] sm:p-6">
+            <div className="mb-4 flex items-center gap-2">
                 <span className="grid h-6 w-6 place-items-center rounded-[7px] bg-amber-50 text-amber-600">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <circle cx="11" cy="11" r="7" />
@@ -135,7 +135,13 @@ function Shell({ children, profile }: { children: React.ReactNode; profile?: Rev
                     exactly when somebody who just changed the setting is looking. */}
                 <ProfileTag profile={profile ?? null} />
             </div>
-            {children}
+            {/* One rhythm for everything the panel stacks. These used to be bare
+                siblings — RoundStrip, the in-flight and progress banners, then
+                the review body — so their spacing was whatever margin each
+                happened to carry, which for most of them was none. Five full
+                width bars touching each other reads as one dense block rather
+                than as five things. */}
+            <div className="flex flex-col gap-3.5">{children}</div>
         </section>
     )
 }
@@ -413,7 +419,7 @@ function ArchiveBanner({ round, onBack }: { round: RoundSummary; onBack: () => v
 function RoundSnapshot({ round }: { round: RoundSummary }) {
     const groups: BlockState[] = ["critical", "review", "good"]
     return (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
             {round.verdict && (
                 <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] border px-3 py-2", verdictBannerClasses(round.verdict))}>
                     <span className="inline-flex items-center gap-1.5 text-[13px] font-bold">
@@ -430,7 +436,7 @@ function RoundSnapshot({ round }: { round: RoundSummary }) {
                 const style = GROUP_STYLE[state]
                 return (
                     <Section key={state} title={style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2.5">
                             {items.map((f, i) => (
                                 <Finding key={i} f={f} />
                             ))}
@@ -440,7 +446,7 @@ function RoundSnapshot({ round }: { round: RoundSummary }) {
             })}
             {round.resolved.length > 0 && (
                 <Section title="Resolved by this push" count={round.resolved.length} countTone="bg-[color:var(--c-output-bg)] text-[color:var(--c-output-fg)]" defaultOpen={false}>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2.5">
                         {round.resolved.map((f, i) => (
                             <Finding key={i} f={f} />
                         ))}
@@ -500,7 +506,7 @@ function CarriedNote({ findings }: { findings: PrFinding[] }) {
     if (carried.length === 0) return null
     return (
         <Section title="Carried forward" count={carried.length} countTone="bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]" defaultOpen={false}>
-            <p className="mb-2 text-[11.5px] leading-5 text-[color:var(--c-text-muted)]">
+            <p className="text-[11.5px] leading-5 text-[color:var(--c-text-muted)]">
                 This round reviewed only what the push changed. These findings were reported earlier, their files were not touched, and no symbol
                 they name was changed elsewhere — so they are still there, and nothing needed to be asked.
             </p>
@@ -821,7 +827,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         const style = GROUP_STYLE[state] ?? GROUP_STYLE.review
         return (
             <Section title={b.title || style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5">
                     {items.map((f, i) => (
                         <Finding key={i} f={f} delta={deltaOf(delta, f)} />
                     ))}
@@ -1066,7 +1072,7 @@ function Section({
 }) {
     return (
         <details open={defaultOpen} className="group rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)]">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
                 <svg
                     width="12"
                     height="12"
@@ -1086,7 +1092,7 @@ function Section({
                     <span className={cn("ml-auto rounded-full px-1.5 py-[1px] text-[10.5px] font-semibold", countTone ?? "bg-[color:var(--c-surface-2)] text-[color:var(--c-text-muted)]")}>{count}</span>
                 )}
             </summary>
-            <div className="border-t border-[color:var(--c-border)] px-3 py-2.5">{children}</div>
+            <div className="border-t border-[color:var(--c-border)] px-4 py-3.5">{children}</div>
         </details>
     )
 }
@@ -1167,7 +1173,7 @@ function ConfidenceMeters({ c, dims }: { c: PrConfidences; dims?: string[] }) {
     // than silently dropping the confidence the review did calibrate.
     const shown = wanted.length > 0 ? wanted : [...METER_DIMS]
     return (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
             {shown.map((d) => (
                 <Meter key={d} label={METER_LABEL[d]} dim={c[d]} />
             ))}
@@ -1206,7 +1212,7 @@ function ChecksFooter({ checks, findings, profile, build }: { checks: PrChecks |
 
     if (parts.length === 0 && !checks?.dropped && lenses.length === 0 && !build) return null
     return (
-        <div className="flex flex-col gap-1 border-t border-[color:var(--c-border)] pt-2 text-[11px] text-[color:var(--c-text-dim)]">
+        <div className="flex flex-col gap-1.5 border-t border-[color:var(--c-border)] pt-3.5 text-[11px] leading-[1.6] text-[color:var(--c-text-dim)]">
             {(parts.length > 0 || checks?.dropped) && (
                 <p>
                     {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
@@ -1255,7 +1261,7 @@ function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | n
     const evidence = (f.evidence ?? []).filter((a) => a.file).slice(0, 3)
     const snippet = f.snippet?.trim() ? "```" + (f.lang || "diff") + "\n" + f.snippet.trim() + "\n```" : ""
     return (
-        <div className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-2.5 py-2">
+        <div className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3.5 py-3">
             <div className="flex items-baseline gap-2">
                 <span className={cn("shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide", severityClasses(f.severity))}>
                     {severityLabel(f.severity)}
@@ -1280,7 +1286,7 @@ function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | n
                 </code>
             </div>
 
-            {hasDetail && <p className="mt-1 text-[12px] leading-5 text-[color:var(--c-text-muted)]">{f.detail}</p>}
+            {hasDetail && <p className="mt-1.5 text-[12px] leading-[1.6] text-[color:var(--c-text-muted)]">{f.detail}</p>}
 
             {snippet && (
                 <details className="group/snip mt-2">
@@ -1360,7 +1366,7 @@ function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId
                 type="button"
                 onClick={open}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-1 text-[12px] font-medium text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3.5 py-1.5 text-[12px] font-medium text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] hover:bg-[color:var(--c-surface-2)] disabled:opacity-50"
             >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                     <path d="M12 3a9 9 0 1 0 9 9" />
