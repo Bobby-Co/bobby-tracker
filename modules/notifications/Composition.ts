@@ -22,6 +22,7 @@ import { NotificationService } from "./application/NotificationService"
 type ServiceDb = SupabaseClient<any, any, any>
 import { createInAppFeedChannel } from "./infrastructure/InAppFeedChannel"
 import { createEmailChannel } from "./infrastructure/EmailChannel"
+import { createSupabaseEnrichmentSource } from "./infrastructure/SupabaseEnrichmentSource"
 import { createSupabaseRecipientResolver } from "./infrastructure/SupabaseRecipientResolver"
 import { createSupabaseOutboxStore } from "./infrastructure/SupabaseOutboxStore"
 
@@ -31,6 +32,6 @@ import { createSupabaseOutboxStore } from "./infrastructure/SupabaseOutboxStore"
 export function createNotificationService(svc: ServiceDb): NotificationService {
     const dispatcher = new NotificationDispatcher(createSupabaseRecipientResolver(svc))
         .register(createInAppFeedChannel(svc))
-        .register(createEmailChannel())
+        .register(createEmailChannel(createSupabaseEnrichmentSource(svc)))
     return new NotificationService(dispatcher, createSupabaseOutboxStore(svc))
 }

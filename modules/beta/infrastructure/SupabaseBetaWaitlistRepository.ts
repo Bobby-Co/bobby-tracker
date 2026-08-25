@@ -19,20 +19,29 @@ export class SupabaseBetaWaitlistRepository implements BetaWaitlistRepository {
     async record(
         email: BetaEmail,
         who: { userId?: string | null; displayName?: string | null; source?: string },
-    ): Promise<void> {
+    ): Promise<boolean> {
         // ignoreDuplicates keeps the FIRST request: the row's whole purpose is to
         // say how long someone has been waiting, and an upsert would reset that
         // every time they reload the page and press the button again.
-        const { error } = await this.db.from(TABLE).upsert(
-            {
-                email: email.value,
-                user_id: who.userId ?? null,
-                display_name: who.displayName ?? null,
-                source: who.source ?? "waitlist",
-            },
-            { onConflict: "email", ignoreDuplicates: true },
-        )
+        //
+        // The trailing select is what turns that into an ANSWER. `ON CONFLICT DO
+        // NOTHING` returns the row it inserted and nothing at all when it
+        // skipped, so an empty result means "already waiting" — which is how the
+        // caller knows not to send a second confirmation email.
+        const { data, error } = await this.db
+            .from(TABLE)
+            .upsert(
+                {
+                    email: email.value,
+                    user_id: who.userId ?? null,
+                    display_name: who.displayName ?? null,
+                    source: who.source ?? "waitlist",
+                },
+                { onConflict: "email", ignoreDuplicates: true },
+            )
+            .select("email")
         if (error) throw new RepositoryError(error.message, { cause: error })
+        return (data?.length ?? 0) > 0
     }
 
     async remove(email: BetaEmail): Promise<void> {

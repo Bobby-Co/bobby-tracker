@@ -16,6 +16,8 @@ import { BetaEnrollmentService } from "./application/BetaEnrollmentService"
 import { createSupabaseBetaAllowlistRepository } from "./infrastructure/SupabaseBetaAllowlistRepository"
 import { createSupabaseBetaWaitlistRepository } from "./infrastructure/SupabaseBetaWaitlistRepository"
 import { createSupabaseAuthBetaAccessStamp } from "./infrastructure/SupabaseAuthBetaAccessStamp"
+import { JmapBetaMailer } from "./infrastructure/JmapBetaMailer"
+import type { BetaMailer } from "./ports/BetaMailer"
 import type { BetaWaitlistRepository } from "./ports/BetaWaitlistRepository"
 
 /** The enrolment use cases, bound to the control database. */
@@ -30,4 +32,10 @@ export function getBetaEnrollmentService(): BetaEnrollmentService {
 /** The waitlist queue — who has asked to be let in. */
 export function getBetaWaitlist(): BetaWaitlistRepository {
     return createSupabaseBetaWaitlistRepository(Supabase.service())
+}
+
+/** The beta mailer (the JMAP email adapter today). Needs no database — the two
+ *  mails it sends are told everything they need by their caller. */
+export function createBetaMailer(): BetaMailer {
+    return new JmapBetaMailer()
 }

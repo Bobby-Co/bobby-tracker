@@ -41,5 +41,11 @@ export { createSupabaseAuthBetaAccessStamp } from "./infrastructure/SupabaseAuth
 // ─── who may edit the list ───────────────────────────────────────────────────
 export { EnvBetaStaff } from "./infrastructure/EnvBetaStaff"
 
+// ─── the two mails the gate produces ─────────────────────────────────────────
+export type { BetaMailer, WaitlistJoinedMessage, BetaAccessMessage } from "./ports/BetaMailer"
+// The templates themselves, pure and transport-free, so they can be rendered
+// and reviewed without sending one.
+export { renderWaitlistJoinedEmail, renderBetaAccessEmail } from "./infrastructure/JmapBetaMailer"
+
 // ─── composition seams ───────────────────────────────────────────────────────
-export { getBetaEnrollmentService, getBetaWaitlist } from "./Composition"
+export { getBetaEnrollmentService, getBetaWaitlist, createBetaMailer } from "./Composition"

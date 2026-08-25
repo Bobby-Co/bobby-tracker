@@ -271,6 +271,49 @@ describe("start — a push during an in-flight review", () => {
         expect(store.setPendingHead.mock.calls[0].slice(0, 3)).toEqual(["proj-1", 7, "head1"])
     })
 
+    // An analyser restarted mid-review takes its callback with it. The row stays
+    // "analysing", and the guard above — correct for a RUNNING review — then
+    // coalesces every future push into a pending head that nothing will ever
+    // drain. There is no scheduler here to notice, so the pull request is wedged
+    // until somebody edits the database by hand.
+    test("a review past the deadline is taken over rather than waited on", async () => {
+        const longAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+        store.findTracking.mockResolvedValue({
+            id: "t", status: "analysing", githubCommentId: 1, headSha: "head0",
+            pendingHeadSha: null, analysingSince: longAgo,
+        })
+        await svcWithPulls().start(project, { ...pr, headSha: "head1" }, "https://app")
+
+        expect(store.setPendingHead).not.toHaveBeenCalled()
+        expect(analyser.startPRAnalysis).toHaveBeenCalledTimes(1)
+    })
+
+    // A run that is genuinely still going must never be stolen.
+    test("a review inside the deadline still coalesces", async () => {
+        store.findTracking.mockResolvedValue({
+            id: "t", status: "analysing", githubCommentId: 1, headSha: "head0",
+            pendingHeadSha: null, analysingSince: new Date(Date.now() - 30_000).toISOString(),
+        })
+        await svcWithPulls().start(project, { ...pr, headSha: "head1" }, "https://app")
+
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+        expect(store.setPendingHead).toHaveBeenCalledTimes(1)
+    })
+
+    // Rows written before 0090 — and every row if the migration has not been
+    // applied — carry no start time. Unknown must read as ALIVE, so this rule can
+    // only ever unwedge a pull request and never abandon a running review.
+    test("a row with no start time is treated as running", async () => {
+        store.findTracking.mockResolvedValue({
+            id: "t", status: "analysing", githubCommentId: 1, headSha: "head0",
+            pendingHeadSha: null, analysingSince: null,
+        })
+        await svcWithPulls().start(project, { ...pr, headSha: "head1" }, "https://app")
+
+        expect(analyser.startPRAnalysis).not.toHaveBeenCalled()
+        expect(store.setPendingHead).toHaveBeenCalledTimes(1)
+    })
+
     // The same head arriving again (reopened, labeled, edited) is not a move.
     test("the same head is not recorded as pending", async () => {
         store.findTracking.mockResolvedValue({ id: "t", status: "analysing", githubCommentId: 1, headSha: "head1", pendingHeadSha: null })

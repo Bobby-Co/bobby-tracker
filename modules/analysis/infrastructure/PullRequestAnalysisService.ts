@@ -88,6 +88,27 @@ const ROUND_WINDOW = 8
  *  one — a vendored dependency bump, a lockfile, a generated client. */
 const MANIFEST_PATCH_BUDGET_BYTES = 2_000_000
 
+/** How long a dispatched review may stay in flight before it is presumed dead.
+ *
+ *  The analyser's own ceiling is --pr-timeout, 12 minutes, plus the callback
+ *  round trip. Twenty is comfortably past any honest run and short enough that a
+ *  wedged pull request heals on the next push rather than the next person. */
+const REVIEW_DEADLINE_MS = 20 * 60 * 1000
+
+/** Whether a run stamped at `since` has outlived any review that could still be
+ *  running.
+ *
+ *  Null means UNKNOWN — a row written before 0090, or one whose migration has
+ *  not been applied yet. Unknown is treated as alive, which is exactly today's
+ *  behaviour: this rule can only ever unwedge a pull request, never abandon a
+ *  review that is genuinely still going. */
+function reviewIsDead(since: string | null): boolean {
+    if (!since) return false
+    const started = Date.parse(since)
+    if (Number.isNaN(started)) return false
+    return Date.now() - started > REVIEW_DEADLINE_MS
+}
+
 const DEPENDENT_PROBES = 5
 
 /** The provider's file shape onto the analyser's. */
@@ -220,7 +241,7 @@ export class PullRequestAnalysisService {
         }
 
         const existing = await this.store.findTracking(project.id, pr.number)
-        if (existing?.status === "analysing") {
+        if (existing?.status === "analysing" && !reviewIsDead(existing.analysingSince)) {
             // A push landed while a review was running. This used to `return`
             // outright, keeping no record — so the review finished describing an
             // older head, the comment described code no longer in the pull
@@ -237,6 +258,18 @@ export class PullRequestAnalysisService {
                 await tryOrNull(() => this.store.setPendingHead(project.id, pr.number, pr.headSha as string))
             }
             return
+        }
+        if (existing?.status === "analysing") {
+            // Past the deadline, so the run that set this is gone — the analyser
+            // was restarted or crashed mid-review and the callback that would
+            // have cleared the row is never coming. Fall through and dispatch a
+            // new one, which is the only way this heals: there is no scheduler
+            // here to notice, and the guard above would otherwise coalesce every
+            // future push into a pending head nothing will ever drain.
+            console.warn(
+                `[pr-review] project=${project.id} pr=${pr.number} was left "analysing" since ` +
+                    `${existing.analysingSince} — past the deadline, so the run is dead. Taking it over.`,
+            )
         }
 
         // Already waiting for a slot. Take the newer head rather than enqueueing a

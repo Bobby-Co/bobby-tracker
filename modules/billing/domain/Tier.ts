@@ -10,10 +10,11 @@
 // mirrors TierId; a per-team `monthly_points` override (for negotiated Apex deals)
 // is layered on top at read time — see Balance.
 
-/** The four tiers, low → high. Mirrors the tracker.prowl_tier Postgres enum. */
-export type TierId = "kit" | "prowler" | "pride" | "apex"
+/** The tiers, low → high. Mirrors the tracker.prowl_tier Postgres enum, which is
+ *  why adding one is a migration (0087) and not only an edit here. */
+export type TierId = "kit" | "scout" | "prowler" | "pride" | "apex"
 
-export const TIER_IDS: readonly TierId[] = ["kit", "prowler", "pride", "apex"] as const
+export const TIER_IDS: readonly TierId[] = ["kit", "scout", "prowler", "pride", "apex"] as const
 
 export interface TierSpec {
     id: TierId
@@ -23,6 +24,22 @@ export interface TierSpec {
     tagline: string
     /** Monthly credit allowance. `null` = uncapped / negotiated (Apex). */
     monthlyPoints: number | null
+    /** How many billable runs the tier may have IN FLIGHT at once. `null` =
+     *  uncapped (Apex).
+     *
+     *  This is a safety bound, not a product feature, and it is the reason the
+     *  monthly allowance cannot be blown past in one burst: the balance the gate
+     *  reads only moves when the analyser flushes its meter (every $0.25 or two
+     *  minutes), so without a ceiling on concurrency an arbitrary number of runs
+     *  can pass the gate on the same stale reading. Capping in-flight work bounds
+     *  that overshoot to `concurrentRuns × cost-per-run` regardless of how far
+     *  the ledger lags.
+     *
+     *  Kept deliberately close to what the analyser can actually serve — its
+     *  scheduler admits 2 queries at a time per cell — so the cap mostly stops
+     *  work being QUEUED, which is also what keeps one team from monopolising a
+     *  shared cell. */
+    concurrentRuns: number | null
     /** Headline monthly price in USD. `null` = "Custom" (contact sales). */
     priceUsd: number | null
     /** How many teammates the tier is meant for (soft, display-only for now). */
@@ -40,6 +57,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         name: "Kit",
         tagline: "For solo explorers finding their footing.",
         monthlyPoints: 2_000,
+        concurrentRuns: 2,
         priceUsd: 0,
         seats: 1,
         features: [
@@ -49,11 +67,32 @@ const CATALOGUE: Record<TierId, TierSpec> = {
             "Community support",
         ],
     },
+    scout: {
+        id: "scout",
+        name: "Scout",
+        tagline: "For solo builders past their first repo.",
+        // 10,000 credits for $5 holds the ladder's ratio — Prowler is 2.1x
+        // credits per dollar, Pride 1.9x, this 2.0x. Priced to be the smallest
+        // real commitment rather than to change the economics: like every paid
+        // tier here it breaks even around 50% utilisation, because credits are
+        // sold at the cost of the underlying model spend (see ProwlPoints).
+        monthlyPoints: 10_000,
+        concurrentRuns: 3,
+        priceUsd: 5,
+        seats: 2,
+        features: [
+            "10,000 credits / month",
+            "Everything in Kit",
+            "PR review on your own repos",
+            "Up to 2 teammates",
+        ],
+    },
     prowler: {
         id: "prowler",
         name: "Prowler",
         tagline: "For individuals shipping in earnest.",
         monthlyPoints: 40_000,
+        concurrentRuns: 4,
         priceUsd: 19,
         seats: 3,
         features: [
@@ -68,6 +107,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         name: "Pride",
         tagline: "For teams hunting together.",
         monthlyPoints: 150_000,
+        concurrentRuns: 8,
         priceUsd: 79,
         seats: 10,
         features: [
@@ -83,6 +123,7 @@ const CATALOGUE: Record<TierId, TierSpec> = {
         name: "Apex",
         tagline: "For organisations at the top of the food chain.",
         monthlyPoints: null,
+        concurrentRuns: null,
         priceUsd: null,
         seats: null,
         features: [
@@ -120,6 +161,11 @@ export class Tier {
      *  per-team override — Balance applies it over this default. */
     get monthlyPoints(): number | null {
         return this.spec.monthlyPoints
+    }
+    /** How many billable runs may be in flight for this tier at once (`null` =
+     *  uncapped). See TierSpec.concurrentRuns for why this exists. */
+    get concurrentRuns(): number | null {
+        return this.spec.concurrentRuns
     }
     get isFree(): boolean {
         return this.spec.priceUsd === 0

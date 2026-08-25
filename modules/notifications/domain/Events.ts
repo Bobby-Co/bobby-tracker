@@ -5,7 +5,7 @@
 //
 // Pure domain: no I/O, no framework, no SDK.
 
-export type NotificationKind = "kb_ready" | "kb_updated" | "pr_opened" | "pr_analysis_ready"
+export type NotificationKind = "kb_ready" | "kb_updated" | "kb_failed" | "pr_opened" | "pr_analysis_ready"
 
 /** Push channels. Extend the union to add one (e.g. "web_push" | "slack") — the
  *  dispatcher and existing channels don't change (OCP). */
@@ -19,6 +19,13 @@ interface BaseEvent {
 }
 export interface KnowledgeBaseReadyEvent extends BaseEvent { readonly kind: "kb_ready"; readonly projectName: string }
 export interface KnowledgeBaseUpdatedEvent extends BaseEvent { readonly kind: "kb_updated"; readonly projectName: string }
+/** Indexing ended in `failed`. `reason` is the analyser's last_error, SNAPSHOTTED
+ *  at the moment it happened — the column is overwritten on the next attempt. */
+export interface KnowledgeBaseFailedEvent extends BaseEvent {
+    readonly kind: "kb_failed"
+    readonly projectName: string
+    readonly reason: string | null
+}
 export interface PrOpenedEvent extends BaseEvent {
     readonly kind: "pr_opened"
     readonly projectName: string
@@ -35,7 +42,12 @@ export interface PrAnalysisReadyEvent extends BaseEvent {
 
 /** Discriminated union — payloads carry the FACTS; presentation is derived by the
  *  NotificationPresenter, so copy for a kind lives in exactly one place. */
-export type NotificationEvent = KnowledgeBaseReadyEvent | KnowledgeBaseUpdatedEvent | PrOpenedEvent | PrAnalysisReadyEvent
+export type NotificationEvent =
+    | KnowledgeBaseReadyEvent
+    | KnowledgeBaseUpdatedEvent
+    | KnowledgeBaseFailedEvent
+    | PrOpenedEvent
+    | PrAnalysisReadyEvent
 
 /** The feed row is a point-in-time snapshot (matching migration 0049's model). */
 export interface RenderedNotification {
@@ -54,6 +66,11 @@ export class NotificationPresenter {
                 return { title: "Knowledge base is ready!", meta: event.projectName, href: `/projects/${event.projectId}` }
             case "kb_updated":
                 return { title: "Knowledge base update finished", meta: event.projectName, href: `/projects/${event.projectId}` }
+            case "kb_failed":
+                // The title says FAILED and nothing else; the reason is long,
+                // often a stack-shaped string, and belongs in the mail and the
+                // project page rather than in a tray row.
+                return { title: "Indexing failed", meta: event.projectName, href: `/projects/${event.projectId}` }
             case "pr_opened":
                 return {
                     title: `${event.authorLogin ?? "Someone"} opened a pull request`,
@@ -76,6 +93,7 @@ export class NotificationPresenter {
         switch (kind) {
             case "kb_ready":
             case "kb_updated":
+            case "kb_failed":
             case "pr_opened":
             case "pr_analysis_ready":
                 return ["in_app", "email"]

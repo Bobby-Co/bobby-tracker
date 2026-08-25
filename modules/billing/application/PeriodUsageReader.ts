@@ -10,6 +10,7 @@
 // page (GET /api/billing) — and a balance that differs between them is a bug
 // users notice immediately and nobody can explain.
 
+import type { SubjectFacts } from "../domain/SlotPolicy"
 import type { UsageRepository, PeriodUsage } from "../ports/UsageRepository"
 import type { UsageSubjectStore } from "../ports/UsageSubjectStore"
 
@@ -20,7 +21,22 @@ export class PeriodUsageReader {
     ) {}
 
     async forTeam(teamId: string, periodStart: string): Promise<PeriodUsage> {
-        const subject = await this.subjects.findForTeam(teamId)
+        return this.forSubject(await this.subjects.findForTeam(teamId), teamId, periodStart)
+    }
+
+    /** The same read for a subject the caller has ALREADY resolved.
+     *
+     *  SpendGate looks the subject up anyway (it needs the suspension status), so
+     *  routing it back through `forTeam` would read the same row twice on the hot
+     *  path of every billable request. Splitting the lookup from the summation
+     *  keeps one implementation of what a balance MEANS — which is the whole
+     *  reason this class exists — while letting a caller that already has the
+     *  facts skip the round trip. */
+    async forSubject(
+        subject: SubjectFacts | null,
+        teamId: string,
+        periodStart: string,
+    ): Promise<PeriodUsage> {
         // No subject: a team created before 0076 that the lazy backfill on the
         // team-create path hasn't reached yet. Reading its own rollup row is
         // exactly what it did before, so the fallback is the old behaviour rather

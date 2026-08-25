@@ -155,6 +155,17 @@ export interface ProjectsRepository {
      *  duplicate check. THROWS on a query failure. */
     listRepoRefsForTeam(teamId: string): Promise<Pick<Project, "repo_url" | "repo_full_name">[]>
 
+    /** Just the ids of every project in a team, unordered and unscoped by access
+     *  groups.
+     *
+     *  Deliberately NOT `listForTeam(teamId, "all").map(p => p.id)`: the callers
+     *  are billing-side (counting a team's in-flight runs, sweeping them when the
+     *  allowance runs out), they run on the hot path of every dispatch, and they
+     *  care about what the TEAM is spending — which is every project it owns,
+     *  including ones the requesting member cannot see. Selecting one column keeps
+     *  that read cheap enough to sit in front of a dispatch. THROWS. */
+    listIdsForTeam(teamId: string): Promise<string[]>
+
     /** Insert a project. Returns a typed refusal on 23505 — see
      *  {@link ProjectCreateResult} for why the two cases are distinguished.
      *  THROWS RepositoryError on any other failure. */

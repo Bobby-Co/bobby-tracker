@@ -17,6 +17,16 @@ describe("NotificationPresenter.render — feed snapshot per kind", () => {
         )
     })
 
+    // The failure kind links to the same place as the successes — the project
+    // page is where the retry lives.
+    test("kb_failed says so plainly and links to the project", () => {
+        expect(p.render({ ...proj, kind: "kb_failed", reason: "clone failed: 403" } as NotificationEvent)).toEqual({
+            title: "Indexing failed",
+            meta: "Acme",
+            href: "/projects/p1",
+        })
+    })
+
     test("pr_opened names the author and links to the PR", () => {
         const r = p.render({ ...proj, kind: "pr_opened", prNumber: 7, authorLogin: "octocat" } as NotificationEvent)
         expect(r.title).toBe("octocat opened a pull request")
@@ -38,7 +48,7 @@ describe("NotificationPresenter.render — feed snapshot per kind", () => {
 })
 
 test("NotificationPresenter.defaultChannels — every kind fans out to in_app + email", () => {
-    for (const kind of ["kb_ready", "kb_updated", "pr_opened", "pr_analysis_ready"] as const) {
+    for (const kind of ["kb_ready", "kb_updated", "kb_failed", "pr_opened", "pr_analysis_ready"] as const) {
         expect(p.defaultChannels(kind)).toEqual(["in_app", "email"])
     }
 })

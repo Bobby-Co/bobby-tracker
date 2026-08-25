@@ -25,7 +25,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
     async findTracking(projectId: string, prNumber: number): Promise<PullRequestAnalysisTracking | null> {
         const { data, error } = await this.db
             .from("pull_request_analyses")
-            .select("id,status,github_comment_id,head_sha,pending_head_sha")
+            .select("id,status,github_comment_id,head_sha,pending_head_sha,analysing_since")
             .eq("project_id", projectId)
             .eq("pr_number", prNumber)
             .maybeSingle<{
@@ -34,6 +34,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                 github_comment_id: number | null
                 head_sha: string | null
                 pending_head_sha: string | null
+                analysing_since: string | null
             }>()
         if (error) {
             // null here means "this pull request has never been reviewed", and
@@ -54,6 +55,7 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
             githubCommentId: data.github_comment_id,
             headSha: data.head_sha,
             pendingHeadSha: data.pending_head_sha ?? null,
+            analysingSince: data.analysing_since ?? null,
         }
     }
 
@@ -101,6 +103,10 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
                     // reason (0081) — and the callback READS it back, so a
                     // re-run must overwrite rather than accumulate.
                     review_scope: input.reviewScope,
+                    // Stamped when a run goes in flight and cleared the moment
+                    // it is not, so "is a review actually running" has an
+                    // answer that survives the analyser dying mid-review (0090).
+                    analysing_since: input.status === "analysing" ? new Date().toISOString() : null,
                 },
                 { onConflict: "project_id,pr_number" },
             )
@@ -162,7 +168,9 @@ export class SupabasePullRequestAnalysisStore implements PullRequestAnalysisStor
         // in migration 0049) → review email via notifications.
         const { error } = await this.db
             .from("pull_request_analyses")
-            .update({ status, result: result ?? null })
+            // analysing_since goes back to null the moment the run is no longer
+            // in flight, so a takeover can never fire against a finished review.
+            .update({ status, result: result ?? null, analysing_since: null })
             .eq("id", taskId)
         if (error) {
             // The review is gone. The comment on the pull request may already

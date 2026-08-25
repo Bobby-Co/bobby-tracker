@@ -18,6 +18,12 @@ export interface PullRequestAnalysisTracking {
      *  starts the next round for it; until then it is the only record that the
      *  pull request has moved on. */
     pendingHeadSha: string | null
+    /** When the in-flight run was dispatched (0090), or null when none is.
+     *
+     *  NOT updated_at: that column has a touch trigger, so recording a pending
+     *  head refreshes it, and a dead review would look alive for as long as
+     *  anyone kept pushing. This is written once, at dispatch. */
+    analysingSince: string | null
 }
 
 /** The callback view of a tracking row, looked up by task id. */

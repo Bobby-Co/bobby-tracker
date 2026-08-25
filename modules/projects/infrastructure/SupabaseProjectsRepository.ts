@@ -115,6 +115,16 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
         return data ?? []
     }
 
+    async listIdsForTeam(teamId: string): Promise<string[]> {
+        const { data, error } = await this.db
+            .from("projects")
+            .select("id")
+            .eq("team_id", teamId)
+            .returns<{ id: string }[]>()
+        if (error) throw new RepositoryError(error.message, { cause: error })
+        return (data ?? []).map((r) => r.id)
+    }
+
     async listForTeamWithInsight(teamId: string, scope: ProjectScope): Promise<ProjectWithInsight[]> {
         let q = this.db
             .from("projects")

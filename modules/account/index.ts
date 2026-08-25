@@ -23,3 +23,11 @@ export type { TeamFacts, DeletionPlan, Disposition } from "./domain/AccountDelet
 export type { AccountIdentityStore } from "./ports/AccountIdentityStore"
 export { createSupabaseAuthIdentityStore } from "./infrastructure/SupabaseAuthIdentityStore"
 export { getAccountIdentityStore } from "./Composition"
+
+// ─── lifecycle mail: the welcome and the farewell ────────────────────────────
+export type { AccountMailer, WelcomeMessage, FarewellMessage } from "./ports/AccountMailer"
+export type { WelcomeLedger } from "./ports/WelcomeLedger"
+export { createAccountMailer, getWelcomeLedger } from "./Composition"
+// The templates themselves, pure and transport-free, so they can be rendered
+// and reviewed without sending one.
+export { renderWelcomeEmail, renderFarewellEmail } from "./infrastructure/JmapAccountMailer"

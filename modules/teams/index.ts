@@ -7,9 +7,12 @@
 export { Invite } from "./domain/Invite"
 export { Email } from "./domain/Email"
 
-// ─── invite delivery (port + composition seam) ──────────────────────────────
-export type { InviteNotifier, InviteMessage } from "./ports/InviteNotifier"
-export { createInviteNotifier } from "./Composition"
+// ─── mail to a person about their standing in a team ────────────────────────
+export type { TeamMailer, InviteMessage, RoleChangedMessage, RemovedFromTeamMessage } from "./ports/TeamMailer"
+export { createTeamMailer } from "./Composition"
+// The TEMPLATES, pure and transport-free — rendered on their own so the mail can
+// be reviewed without sending any.
+export { renderInviteEmail, renderRoleChangedEmail, renderRemovedFromTeamEmail } from "./infrastructure/JmapTeamMailer"
 
 // ─── team membership / access reads ─────────────────────────────────────────
 export type { TeamMember, TeamMembershipRepository } from "./ports/TeamMembershipRepository"
