@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -270,47 +270,113 @@ export interface RoundSummary {
  *  later fixed. That is the point: a reader can see what the review said BEFORE
  *  their fix, which is the only way to check that the fix addressed what was
  *  actually reported rather than what they remembered being reported. */
+/** How wide a round has to be to be worth reading, and how wide one is when it
+ *  is not being read. A closed round is a SLIVER: a dot and a number, which is
+ *  the honest amount of information for something you are not looking at. */
+const SLIVER_W = 22
+const READABLE_W = 232
+const STRIP_GAP = 6
+
 function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; selected: number | null; onSelect: (round: number | null) => void }) {
+    const rowRef = useRef<HTMLDivElement | null>(null)
+    const [width, setWidth] = useState(0)
+
+    // Measured, not a breakpoint: the strip's width depends on the panel it is
+    // in, not on the viewport, so a media query would answer about the wrong
+    // element.
+    useEffect(() => {
+        const el = rowRef.current
+        if (!el || typeof ResizeObserver === "undefined") return
+        const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
+        ro.observe(el)
+        setWidth(el.getBoundingClientRect().width)
+        return () => ro.disconnect()
+    }, [])
+
     if (rounds.length < 2) return null // one round is not a story
-    const latest = rounds[rounds.length - 1].round
+
+    const lastIdx = rounds.length - 1
+    const latest = rounds[lastIdx].round
+    const selIdx = Math.max(0, rounds.findIndex((r) => r.round === (selected ?? latest)))
+
+    // Two open when the row can afford two READABLE cards, because the useful
+    // comparison is almost always a round against the current one. One when it
+    // cannot — better than two nobody can read.
+    const fitsTwo = width > 0 && 2 * READABLE_W + (rounds.length - 2) * SLIVER_W + (rounds.length - 1) * STRIP_GAP <= width
+    const open = new Set<number>([selIdx])
+    if (fitsTwo) open.add(selIdx === lastIdx ? lastIdx - 1 : lastIdx)
+
     return (
-        <div className="flex gap-0 overflow-x-auto rounded-[10px] border border-[color:var(--c-border)]">
-            {rounds.map((r) => {
+        <div ref={rowRef} className="flex min-h-[78px] w-full" style={{ gap: STRIP_GAP }}>
+            {rounds.map((r, i) => {
+                const isOpen = open.has(i)
                 const isLatest = r.round === latest
-                const isSelected = (selected ?? latest) === r.round
+                const isSelected = i === selIdx
                 const commit = r.commits[r.commits.length - 1]
+                const tone = r.degraded ? "bg-[color:var(--c-warn)]" : r.blockers > 0 ? "bg-[color:var(--c-error)]" : "bg-[color:var(--c-success)]"
                 return (
                     <button
                         key={r.headSha + r.round}
                         type="button"
                         onClick={() => onSelect(isLatest ? null : r.round)}
+                        aria-expanded={isOpen}
                         aria-pressed={isSelected}
+                        aria-label={`Round ${r.round}${isLatest ? " (current)" : ""}`}
                         title={r.scopeReason ?? undefined}
+                        style={isOpen ? { flexGrow: 1, flexBasis: 0 } : { flex: `0 0 ${SLIVER_W}px` }}
                         className={cn(
-                            "flex min-w-[10.5rem] flex-1 cursor-pointer flex-col gap-1 border-r border-[color:var(--c-border)] px-3 py-2 text-left transition-colors last:border-r-0",
-                            "hover:bg-[color:var(--c-surface-2)]",
-                            isSelected && "bg-[color:var(--c-primary-tint)] hover:bg-[color:var(--c-primary-tint)]",
+                            "flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[10px] border text-left",
+                            "transition-[flex-grow,flex-basis,background-color,border-color,opacity] duration-300 ease-out",
+                            isOpen
+                                ? "items-stretch justify-start bg-[color:var(--c-surface-2)] px-2.5 py-2"
+                                : "items-center justify-center gap-1 px-0 py-2 opacity-70 hover:opacity-100",
+                            isSelected
+                                ? "border-[color:var(--c-primary)] ring-1 ring-inset ring-[color:var(--c-primary)]/40"
+                                : isOpen
+                                  ? "border-[color:var(--c-border-strong)]"
+                                  : "border-[color:var(--c-border)]",
                         )}
                     >
-                        <span className={cn("font-mono text-[10.5px]", isSelected ? "font-semibold text-[color:var(--c-primary)]" : "text-[color:var(--c-text-muted)]")}>
-                            {r.headSha.slice(0, 7)} · round {r.round}
-                            {isLatest && " · current"}
-                        </span>
-                        <span className="text-[12px] font-semibold leading-4">{r.verdict ? verdictLabel(r.verdict) : "—"}</span>
-                        <span className="flex flex-wrap gap-1">
-                            {r.degraded && <DeltaChip kind="partial" />}
-                            {r.fixed > 0 && <DeltaChip kind="fixed" n={r.fixed} />}
-                            {r.blockers > 0 && <DeltaChip kind="blockers" n={r.blockers} />}
-                            {!r.degraded && r.blockers === 0 && <DeltaChip kind="clear" />}
-                            {r.carriedCount > 0 && <DeltaChip kind="carried" n={r.carriedCount} />}
-                        </span>
-                        {/* The commit under the round, so the strip doubles as the
-                            series of pushes: a bare sha says which head, this says
-                            which CHANGE the review was answering. */}
-                        {commit && (
-                            <span className="truncate text-[10.5px] leading-4 text-[color:var(--c-text-dim)]" title={commit.subject}>
-                                {commit.subject}
-                            </span>
+                        {isOpen ? (
+                            <>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone)} />
+                                    <span className="shrink-0 text-[11px] font-semibold text-[color:var(--c-text-muted)]">{r.round}</span>
+                                    <code className="truncate font-mono text-[11px] text-[color:var(--c-text-dim)]">{r.headSha.slice(0, 7)}</code>
+                                    {isLatest && (
+                                        <span className="ml-auto shrink-0 text-[9.5px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
+                                            current
+                                        </span>
+                                    )}
+                                </div>
+                                {/* One line, never wrapped. A card animating from a
+                                    sliver passes through every width in between, and
+                                    chips that restack make it taller at the narrow
+                                    end — which is the row jumping mid-transition. */}
+                                <div className="mt-1 flex min-w-0 items-center gap-1">
+                                    <span className="truncate text-[12px] font-semibold leading-4">{r.verdict ? verdictLabel(r.verdict) : "—"}</span>
+                                    <span className="flex shrink-0 gap-1">
+                                        {r.degraded && <DeltaChip kind="partial" />}
+                                        {r.fixed > 0 && <DeltaChip kind="fixed" n={r.fixed} />}
+                                        {r.blockers > 0 && <DeltaChip kind="blockers" n={r.blockers} />}
+                                        {!r.degraded && r.blockers === 0 && <DeltaChip kind="clear" />}
+                                        {r.carriedCount > 0 && <DeltaChip kind="carried" n={r.carriedCount} />}
+                                    </span>
+                                </div>
+                                {/* The commit under the round, so the strip doubles as
+                                    the series of pushes: a bare sha says which head,
+                                    this says which CHANGE the review was answering. */}
+                                {commit && (
+                                    <span className="mt-1 truncate text-[10.5px] leading-4 text-[color:var(--c-text-dim)]" title={commit.subject}>
+                                        {commit.subject}
+                                    </span>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <span className={cn("h-1.5 w-1.5 rounded-full", tone)} />
+                                <span className="text-[10.5px] font-semibold tabular-nums text-[color:var(--c-text-muted)]">{r.round}</span>
+                            </>
                         )}
                     </button>
                 )
@@ -318,6 +384,7 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
         </div>
     )
 }
+
 
 /** What is being reviewed RIGHT NOW, while it is being reviewed.
  *
@@ -435,13 +502,13 @@ function RoundSnapshot({ round }: { round: RoundSummary }) {
                 if (items.length === 0) return null
                 const style = GROUP_STYLE[state]
                 return (
-                    <Section key={state} title={style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
-                        <div className="flex flex-col gap-2.5">
+                    <Group key={state} title={style.title} count={items.length} state={state}>
+                        <div className="divide-y divide-[color:var(--c-border)]">
                             {items.map((f, i) => (
                                 <Finding key={i} f={f} />
                             ))}
                         </div>
-                    </Section>
+                    </Group>
                 )
             })}
             {round.resolved.length > 0 && (
@@ -789,7 +856,9 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
     // review shows security first — and falls back to the canonical order.
     meters: ({ b, r }) =>
         r.confidences ? (
-            <ConfidenceMeters c={r.confidences} dims={b.dims} />
+            <Group title={b.title || "Confidence"}>
+                <ConfidenceMeters c={r.confidences} dims={b.dims} />
+            </Group>
         ) : r.confidence ? (
             <span className={cn("inline-flex w-fit items-center rounded-full px-2 py-[2px] text-[11px] font-semibold", confidenceClasses(r.confidence))}>
                 confidence: {r.confidence}
@@ -806,17 +875,17 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         }
         if (b.role === "impact") {
             return !r.impact?.trim() ? null : (
-                <Section title={b.title || "Impact"}>
+                <Group title={b.title || "Impact"}>
                     <Md className="text-[13px] leading-6">{r.impact}</Md>
-                </Section>
+                </Group>
             )
         }
         // "note" — the one prose role that carries its own text, for a lens that
         // wants to say something no canonical field holds.
         return !b.body?.trim() ? null : (
-            <Section title={b.title || "Note"}>
+            <Group title={b.title || "Note"}>
                 <Md className="text-[13px] leading-6">{b.body}</Md>
-            </Section>
+            </Group>
         )
     },
 
@@ -826,13 +895,13 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         if (items.length === 0) return null
         const style = GROUP_STYLE[state] ?? GROUP_STYLE.review
         return (
-            <Section title={b.title || style.title} count={items.length} countTone={style.tone} defaultOpen={style.open}>
-                <div className="flex flex-col gap-2.5">
+            <Group title={b.title || style.title} count={items.length} state={state}>
+                <div className="divide-y divide-[color:var(--c-border)]">
                     {items.map((f, i) => (
                         <Finding key={i} f={f} delta={deltaOf(delta, f)} />
                     ))}
                 </div>
-            </Section>
+            </Group>
         )
     },
 
@@ -840,16 +909,16 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         const files = r.impact_files ?? []
         if (files.length === 0) return null
         return (
-            <Section title={b.title || "Affected files"} count={files.length}>
-                <ul className="flex flex-col gap-1.5">
+            <Group title={b.title || "Affected files"} count={files.length}>
+                <ul className="flex flex-col gap-2">
                     {files.map((f, i) => (
-                        <li key={i} className="text-[12.5px] leading-5">
-                            <code className="rounded bg-[color:var(--c-surface-2)] px-1 py-[1px] font-mono text-[11.5px]">{f.file}</code>
-                            <span className="text-[color:var(--c-text-muted)]"> — {f.reason}</span>
+                        <li key={i} className="min-w-0 text-[12px] leading-[1.5]">
+                            <code className="block truncate font-mono text-[11px] text-[color:var(--c-text)]" title={f.file}>{f.file}</code>
+                            <span className="text-[11px] text-[color:var(--c-text-dim)]">{f.reason}</span>
                         </li>
                     ))}
                 </ul>
-            </Section>
+            </Group>
         )
     },
 
@@ -892,8 +961,10 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         )
     },
 
-    checks_footer: ({ r, profile }) => (
-        <ChecksFooter checks={r.checks ?? null} findings={r.findings ?? []} profile={profile} build={r.analyser_build} />
+    checks_footer: ({ b, r, profile }) => (
+        <Group title={b.title || "Checked"}>
+            <ChecksFooter checks={r.checks ?? null} findings={r.findings ?? []} profile={profile} build={r.analyser_build} />
+        </Group>
     ),
 
     deep_dive_cta: ({ r, projectId }) =>
@@ -924,7 +995,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
         return (
             <Section title={b.title || "Details"} count={rows.length}>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[12px]">
+                    <table className="w-full min-w-max text-left text-[12px]">
                         {cols.length > 0 && (
                             <thead>
                                 <tr>
@@ -940,7 +1011,7 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
                             {rows.map((row, i) => (
                                 <tr key={i}>
                                     {row.map((cell, j) => (
-                                        <td key={j} className="border-b border-[color:var(--c-border)] py-1.5 pr-3 align-top leading-5 text-[color:var(--c-text-muted)]">
+                                        <td key={j} className="whitespace-nowrap border-b border-[color:var(--c-border)] py-1.5 pr-3 align-top leading-5 text-[color:var(--c-text-muted)]">
                                             {cell}
                                         </td>
                                     ))}
@@ -1024,17 +1095,51 @@ const BLOCKS: Record<BlockKind, (p: BlockProps) => React.ReactNode> = {
 // one, for the years of stored reviews written before layouts existed. Blocks
 // whose data is empty return null and simply take up no space, so a small PR
 // doesn't render as a column of empty boxes.
+/** Which blocks are REFERENCE rather than review.
+ *
+ *  Confidence, the files touched and the checks ledger are things a reader
+ *  consults; findings and the verdict are things a reader acts on. In one column
+ *  the reference material pushed the last findings below the fold for content
+ *  nobody was triaging, so it moves to a rail beside them.
+ *
+ *  Order is preserved WITHIN each column, so a profile that puts security first
+ *  still gets security first. What a profile cannot express — and does not try
+ *  to — is which column a block belongs in: that is a property of the kind, not
+ *  of the review. */
+const RAIL_KINDS = new Set(["meters", "file_impact_list", "checks_footer"])
+
+/** And which are the HEADLINE — the answer to "can I merge", which is the one
+ *  question every reader arrives with. These span the full width above the
+ *  columns rather than being squeezed into one of them: a verdict wrapped into a
+ *  narrow column reads as a caption, not as a verdict. */
+const HEADER_KINDS = new Set(["verdict_banner", "score", "tally", "callout"])
+
 function Review({ r, projectId, profile, delta }: { r: PrAnalysis; projectId: string | null; profile: ReviewRunProfile | null; delta?: RoundDelta | null }) {
+    const layout = layoutFor(r.report)
+    const draw = (b: (typeof layout)[number], i: number) => {
+        const render = BLOCKS[b.kind]
+        // Belt to the registry filter's braces: layoutFor already drops kinds we
+        // don't know, but this render path is the one place a newer analyser's
+        // vocabulary reaches the browser.
+        if (!render) return null
+        return <Fragment key={i}>{render({ b, r, projectId, profile, delta: delta ?? null })}</Fragment>
+    }
+
+    const header = layout.filter((b) => HEADER_KINDS.has(b.kind))
+    const main = layout.filter((b) => !RAIL_KINDS.has(b.kind) && !HEADER_KINDS.has(b.kind))
+    const rail = layout.filter((b) => RAIL_KINDS.has(b.kind))
+
     return (
-        <div className="flex flex-col gap-3">
-            {layoutFor(r.report).map((b, i) => {
-                const render = BLOCKS[b.kind]
-                // Belt to the registry filter's braces: layoutFor already drops
-                // kinds we don't know, but this render path is the one place a
-                // newer analyser's vocabulary reaches the browser.
-                if (!render) return null
-                return <Fragment key={i}>{render({ b, r, projectId, profile, delta: delta ?? null })}</Fragment>
-            })}
+        <div className="flex flex-col gap-4">
+            {header.length > 0 && <div className="flex flex-col gap-3">{header.map(draw)}</div>}
+            <div className={cn("grid gap-6", rail.length > 0 && "lg:grid-cols-[minmax(0,1fr)_252px]")}>
+                <div className="flex min-w-0 flex-col gap-5">{main.map(draw)}</div>
+                {rail.length > 0 && (
+                    <aside className="flex flex-col divide-y divide-[color:var(--c-border)] [&>*]:py-4 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+                        {rail.map(draw)}
+                    </aside>
+                )}
+            </div>
 
             {/* AI disclaimer — subtle, like the platforms' "can make mistakes" note.
                 Outside the layout on purpose: it is not the analyser's to omit. */}
@@ -1057,6 +1162,63 @@ function Tally({ n, label, tone }: { n: number; label: string; tone: string }) {
 
 // Section is a native collapsible <details> block with a header + optional count,
 // so a long review collapses into a scannable outline.
+/** A heading over its content, with a coloured rail when the content is
+ *  findings.
+ *
+ *  The panel used to put twelve near-identical <details> boxes in a column, so a
+ *  critical blocker carried exactly the weight of "nice to check" and telling
+ *  them apart meant opening drawers. A group that is always open does not need
+ *  a disclosure around it; it needs a heading you can find. The rail also
+ *  answers "how far do the blockers go" from the edge of the column, without
+ *  reading a word.
+ *
+ *  Section survives for the blocks that ARE collapsed by default — the commit
+ *  list, carried-forward, resolved — where hiding the content is the point. */
+const GROUP_RAIL: Record<string, string> = {
+    critical: "border-[color:var(--c-error)]/45",
+    review: "border-[color:var(--c-warn)]/45",
+    good: "border-[color:var(--c-success)]/45",
+}
+const GROUP_TEXT: Record<string, string> = {
+    critical: "text-[color:var(--c-error)]",
+    review: "text-[color:var(--c-warn)]",
+    good: "text-[color:var(--c-success)]",
+}
+
+function Group({
+    title,
+    count,
+    state,
+    children,
+}: {
+    title: string
+    count?: number
+    /** Findings groups take their severity's rail and label colour. Absent for
+     *  everything else, which gets a plain heading. */
+    state?: string
+    children: React.ReactNode
+}) {
+    const rail = state ? GROUP_RAIL[state] : undefined
+    return (
+        <div className={cn(rail && "border-l-2 pl-3.5", rail)}>
+            <h3
+                className={cn(
+                    "mb-2.5 flex items-center gap-2 text-[13.5px] font-bold uppercase tracking-[0.05em]",
+                    state ? GROUP_TEXT[state] : "text-[color:var(--c-text-muted)]",
+                )}
+            >
+                {title}
+                {count != null && (
+                    <span className="rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[11px] font-bold normal-case tracking-normal tabular-nums text-[color:var(--c-text-muted)]">
+                        {count}
+                    </span>
+                )}
+            </h3>
+            {children}
+        </div>
+    )
+}
+
 function Section({
     title,
     count,
@@ -1212,7 +1374,7 @@ function ChecksFooter({ checks, findings, profile, build }: { checks: PrChecks |
 
     if (parts.length === 0 && !checks?.dropped && lenses.length === 0 && !build) return null
     return (
-        <div className="flex flex-col gap-1.5 border-t border-[color:var(--c-border)] pt-3.5 text-[11px] leading-[1.6] text-[color:var(--c-text-dim)]">
+        <div className="flex flex-col gap-1.5 text-[11px] leading-[1.6] text-[color:var(--c-text-dim)]">
             {(parts.length > 0 || checks?.dropped) && (
                 <p>
                     {parts.length > 0 && <>Checked {parts.join(" · ")}</>}
@@ -1255,19 +1417,30 @@ function ChecksFooter({ checks, findings, profile, build }: { checks: PrChecks |
 // evidence, and what the reviewer verified.
 function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | null }) {
     const loc = f.line && f.line > 0 ? `${f.file}:${f.line}` : f.file
+    // The tail is what a reader recognises; the directories are how a file is
+    // FOUND, not what it is. Full path stays on the title attribute.
+    const shortLoc = `${f.file?.split("/").pop() ?? ""}${f.line && f.line > 0 ? `:${f.line}` : ""}`
     const title = (f.title && f.title.trim()) || f.detail
     const hasDetail = !!(f.title && f.title.trim() && f.detail && f.detail.trim() !== f.title.trim())
     const catLabel = f.category ? categoryLabel(f.category) : ""
     const evidence = (f.evidence ?? []).filter((a) => a.file).slice(0, 3)
     const snippet = f.snippet?.trim() ? "```" + (f.lang || "diff") + "\n" + f.snippet.trim() + "\n```" : ""
+    const state = findingState(f.severity)
+    const dot = state === "critical" ? "bg-[color:var(--c-error)]" : state === "good" ? "bg-[color:var(--c-success)]" : "bg-[color:var(--c-warn)]"
+
+    // No box. A finding carries four kinds of information and they used to be
+    // rendered at nearly one weight inside a card, which reads as a wall. Ranked
+    // and indented, the eye can travel down TITLES alone and stop where it
+    // matters.
     return (
-        <div className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3.5 py-3">
-            <div className="flex items-baseline gap-2">
-                <span className={cn("shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-semibold uppercase tracking-wide", severityClasses(f.severity))}>
-                    {severityLabel(f.severity)}
-                </span>
+        <div className="py-3.5">
+            {/* 1 — the title, alone at the left edge and the only thing at full
+                contrast. Chips ride with it because they qualify it. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className={cn("h-2 w-2 shrink-0 rounded-full", dot)} aria-hidden />
+                <span className="text-[14px] font-semibold leading-[1.35] text-[color:var(--c-text)]">{title}</span>
                 {catLabel && (
-                    <span className="shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[9.5px] font-medium uppercase tracking-wide text-[color:var(--c-text-muted)]">
+                    <span className="shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[9.5px] font-semibold uppercase tracking-[0.05em] text-[color:var(--c-text-dim)]">
                         {catLabel}
                     </span>
                 )}
@@ -1280,56 +1453,62 @@ function Finding({ f, delta }: { f: PrFinding; delta?: DeltaFinding["delta"] | n
                     between "somebody read this code again this round" and "this
                     rode along because nothing it depends on moved". */}
                 {f.provenance?.carried === true && <DeltaChip kind="carried" />}
-                <span className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-[color:var(--c-text)]">{title}</span>
-                <code className="max-w-[42%] shrink-0 truncate font-mono text-[10.5px] text-[color:var(--c-text-muted)]" title={loc}>
-                    {loc}
-                </code>
             </div>
 
-            {hasDetail && <p className="mt-1.5 text-[12px] leading-[1.6] text-[color:var(--c-text-muted)]">{f.detail}</p>}
+            <div className="mt-1 pl-4">
+                {/* 2 — where. Its own line rather than fighting the title for the
+                    right edge, and shortened so a column of these is scannable. */}
+                <code className="font-mono text-[10.5px] text-[color:var(--c-text-dim)]" title={loc}>
+                    {shortLoc}
+                </code>
 
-            {snippet && (
-                <details className="group/snip mt-2">
-                    <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-[color:var(--c-text-dim)] [&::-webkit-details-marker]:hidden">
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open/snip:rotate-90" aria-hidden>
-                            <path d="M9 18l6-6-6-6" />
-                        </svg>
-                        View change
-                    </summary>
-                    <div className="mt-1 overflow-x-auto rounded-[8px] border border-[color:var(--c-border)]">
-                        <Md className="text-[11px] [&_pre]:my-0 [&_pre]:rounded-none [&_pre]:border-0">{snippet}</Md>
-                    </div>
-                </details>
-            )}
+                {/* 3 — why. The only prose, at reading measure. */}
+                {hasDetail && <p className="mt-1 max-w-[68ch] text-[12.5px] leading-[1.65] text-[color:var(--c-text-muted)]">{f.detail}</p>}
 
-            {evidence.length > 0 && (
-                <ul className="mt-1.5 flex flex-col gap-0.5">
-                    {evidence.map((a, i) => (
-                        <li key={i} className="flex items-baseline gap-1 text-[11px] leading-5 text-[color:var(--c-text-dim)]">
-                            <span aria-hidden>↳</span>
-                            <code className="font-mono text-[10.5px] text-[color:var(--c-text-muted)]">
-                                {a.line && a.line > 0 ? `${a.file}:${a.line}` : a.file}
-                            </code>
-                            {a.note && <span className="min-w-0 truncate">— {a.note}</span>}
-                        </li>
-                    ))}
-                </ul>
-            )}
+                {snippet && (
+                    <details className="group/snip mt-2">
+                        <summary className="flex cursor-pointer list-none items-center gap-1 text-[11px] font-medium text-[color:var(--c-text-dim)] [&::-webkit-details-marker]:hidden">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open/snip:rotate-90" aria-hidden>
+                                <path d="M9 18l6-6-6-6" />
+                            </svg>
+                            View change
+                        </summary>
+                        <div className="mt-1 overflow-x-auto rounded-[8px] border border-[color:var(--c-border)]">
+                            <Md className="text-[11px] [&_pre]:my-0 [&_pre]:rounded-none [&_pre]:border-0">{snippet}</Md>
+                        </div>
+                    </details>
+                )}
 
-            {f.checked && f.checked.length > 0 && (
-                <p className="mt-1.5 flex items-baseline gap-1 text-[10.5px] leading-5 text-[color:var(--c-text-dim)]">
-                    <span className="text-emerald-600" aria-hidden>✓</span>
-                    <span className="min-w-0">Verified: {f.checked.slice(0, 3).join("; ")}</span>
-                </p>
-            )}
+                {/* 4 — what was checked, as a citation list. The NOTE leads and the
+                    location follows: the other way round put a sixty-character
+                    path in front of the four words that say why it matters. */}
+                {evidence.length > 0 && (
+                    <ul className="mt-2 flex flex-col gap-[3px] border-l border-[color:var(--c-border)] pl-2.5">
+                        {evidence.map((a, i) => (
+                            <li key={i} className="flex flex-wrap items-baseline gap-x-1.5 text-[11px] leading-[1.5]">
+                                {a.note && <span className="text-[color:var(--c-text-muted)]">{a.note}</span>}
+                                <code
+                                    className="font-mono text-[10px] text-[color:var(--c-text-dim)]"
+                                    title={a.line && a.line > 0 ? `${a.file}:${a.line}` : a.file}
+                                >
+                                    {`${a.file?.split("/").pop() ?? ""}${a.line && a.line > 0 ? `:${a.line}` : ""}`}
+                                </code>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                {f.checked && f.checked.length > 0 && (
+                    <p className="mt-1.5 flex items-baseline gap-1 text-[10.5px] leading-5 text-[color:var(--c-text-dim)]">
+                        <span className="text-[color:var(--c-success)]" aria-hidden>✓</span>
+                        <span className="min-w-0">Verified: {f.checked.slice(0, 3).join("; ")}</span>
+                    </p>
+                )}
+            </div>
         </div>
     )
 }
 
-// DeepDiveButton opens the Mind chat seeded with this PR's session insight
-// (analyser ADR-0055): it mints a conversation via the tracker route, then
-// navigates to the Mind page with that conversation_id so the first turn is
-// already grounded in the PR.
 function DeepDiveButton({ insightId, projectId }: { insightId: string; projectId: string }) {
     const router = useRouter()
     const [busy, setBusy] = useState(false)
