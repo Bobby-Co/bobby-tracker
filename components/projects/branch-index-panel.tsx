@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { MultiDropdown } from "@/components/ui/multi-dropdown"
+import { FieldRow, FieldTable, MiniCard } from "@/components/ui/field-card"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { ProjectBranch } from "@/lib/shared/types"
@@ -189,37 +190,61 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
             </div>
 
             {branches.length > 0 && (
-                <ul className="mt-4 flex flex-col divide-y divide-[color:var(--c-border)] border-y border-[color:var(--c-border)]">
+                // One CARD per indexed branch, not one row.
+                //
+                // Each branch is its own knowledge graph with its own freshness,
+                // its own head, and its own id — the same facts the default
+                // branch's panel shows about itself. A row could hold the name
+                // and a status and nothing else, which quietly said a branch was
+                // a lesser thing than the default. It is not; it is the same
+                // thing, pointed at a different tree.
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {branches.map((b) => (
-                        <li key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
-                            <code className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-[color:var(--c-text)]">
-                                {b.branch}
-                            </code>
-                            <StatusChip status={b.status} />
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={() => index(b.branch)}
-                                    disabled={busy !== null || b.status === "indexing"}
-                                    className="cursor-pointer rounded-[8px] px-2 py-1 text-[12px] font-semibold text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    {b.status === "ready" ? "Re-index" : "Index"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => untrack(b.branch)}
-                                    disabled={busy !== null}
-                                    className="cursor-pointer rounded-[8px] px-2 py-1 text-[12px] font-semibold text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-error-bg)] hover:text-[color:var(--c-error)] disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                    Remove
-                                </button>
-                            </div>
+                        <MiniCard
+                            key={b.id}
+                            tone={b.status === "failed" ? "rose" : b.status === "ready" ? "emerald" : "amber"}
+                            interactive={false}
+                            icon={<BranchIcon />}
+                            title={<span className="font-mono text-[13px]">{b.branch}</span>}
+                            badge={<StatusChip status={b.status} />}
+                            footer={
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => index(b.branch)}
+                                        disabled={busy !== null || b.status === "indexing"}
+                                        className="cursor-pointer rounded-[8px] px-2 py-1 text-[12px] font-semibold text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        {b.status === "ready" ? "Re-index" : "Index"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => untrack(b.branch)}
+                                        disabled={busy !== null}
+                                        className="cursor-pointer rounded-[8px] px-2 py-1 text-[12px] font-semibold text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-error-bg)] hover:text-[color:var(--c-error)] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        Remove
+                                    </button>
+                                </div>
+                            }
+                        >
+                            <FieldTable>
+                                <FieldRow label="Last indexed">
+                                    {b.last_indexed_at ? new Date(b.last_indexed_at).toLocaleString() : "—"}
+                                </FieldRow>
+                                <FieldRow label="HEAD SHA">
+                                    <code className="font-mono">{b.last_indexed_sha ? b.last_indexed_sha.slice(0, 7) : "—"}</code>
+                                </FieldRow>
+                                <FieldRow label="Graph ID">
+                                    <code className="truncate font-mono">{b.graph_id || "—"}</code>
+                                </FieldRow>
+                            </FieldTable>
                             {b.status === "failed" && b.last_error && (
-                                <p className="w-full text-[12px] text-[color:var(--c-error)]">{b.last_error}</p>
+                                <p className="mt-2 text-[12px] leading-5 text-[color:var(--c-error)]">{b.last_error}</p>
                             )}
-                        </li>
+                        </MiniCard>
                     ))}
-                </ul>
+                </div>
             )}
 
             {available.length > 0 ? (
