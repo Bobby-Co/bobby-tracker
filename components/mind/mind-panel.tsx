@@ -11,6 +11,7 @@ import { cn } from "@/components/ui/cn"
 import PixelScatter from "@/components/ui/pixel-scatter"
 import { ThinkingCard, type Progress } from "@/components/mind/mind-thinking"
 import { IssueDrawer } from "@/components/issues/issue-drawer"
+import { BranchPicker, DEFAULT_BRANCH_VALUE } from "@/components/projects/branch-picker"
 import type { Issue, ProjectLabelIcon, ProjectStatusColor } from "@/lib/shared/types"
 
 // ── Types mirroring the analyser /chat SSE events + final answer ──────────────
@@ -74,6 +75,9 @@ export function MindPanel({
     initialConversationId?: string
 }) {
     const [question, setQuestion] = useState("")
+    // Which indexed tree answers. Empty is the default branch — the only option
+    // until a project tracks one, and what every existing conversation used.
+    const [branch, setBranch] = useState(DEFAULT_BRANCH_VALUE)
     const [busy, setBusy] = useState(false)
     const [messages, setMessages] = useState<Message[]>([])
     const endRef = useRef<HTMLDivElement>(null)
@@ -211,7 +215,7 @@ export function MindPanel({
                 const res = await fetch(`/api/projects/${projectId}/mind`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ question: q, history, conversation_id: conversationId }),
+                    body: JSON.stringify({ question: q, history, conversation_id: conversationId, branch: branch || undefined }),
                 })
                 if (!res.ok || !res.body) {
                     const e = await res.json().catch(() => ({}))
@@ -246,7 +250,7 @@ export function MindPanel({
                 setBusy(false)
             }
         },
-        [busy, messages, projectId, conversationId, patchAssistant, openIssue],
+        [busy, messages, projectId, conversationId, branch, patchAssistant, openIssue],
     )
 
     // Deep-dive (ADR-0055): arriving from a PR review with a pre-seeded
@@ -358,6 +362,15 @@ export function MindPanel({
                 <div className="shrink-0">
                     <div className="mx-auto w-full max-w-3xl px-4 py-3 sm:px-6">
                         <Composer value={question} onChange={setQuestion} onSubmit={() => void submit(question)} busy={busy} />
+                        {/* Renders nothing until the project tracks a ready
+                            branch, so the composer is unchanged for everyone
+                            who has not asked for one. */}
+                        <BranchPicker
+                            projectId={projectId}
+                            value={branch}
+                            onChange={setBranch}
+                            className="mt-2 justify-end"
+                        />
                     </div>
                 </div>
             </div>

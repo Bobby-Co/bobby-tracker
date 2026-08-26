@@ -54,6 +54,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             ? body.conversation_id
             : undefined
 
+    // Which indexed tree to answer from. Validated against the project's TRACKED
+    // branches rather than passed through: the analyser refuses a branch it has
+    // not indexed, so an unknown name here would fail the whole turn with an
+    // error about the analyser instead of one about the branch.
+    const requestedBranch = typeof body?.branch === "string" ? body.branch.trim() : ""
+
     const pid = await tryOrNull(() => ctx.projects.findId(id))
     if (!pid) return jsonError("not_found", "project not found", 404)
 
@@ -67,13 +73,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         )
     }
 
+    let branch: string | undefined
+    if (requestedBranch) {
+        const tracked = await tryOrNull(() => ctx.projectBranches.find(id, requestedBranch))
+        if (!tracked) return jsonError("not_found", `${requestedBranch} is not a tracked branch`, 404)
+        if (tracked.status !== "ready") {
+            return jsonError("branch_not_ready", `${requestedBranch} is still indexing — try again shortly.`, 409)
+        }
+        branch = tracked.branch
+    }
+
     const cell = await ctx.projects.findCell(id)
     if (!cell) return jsonError("placement_unavailable", "This project's data location is unavailable.", 503)
 
     try {
         // Pass the project uuid (scopes the "issues" action, ADR-0048) and the
         // conversation id (keys the managed-context store, ADR-0049).
-        const upstream = await getAnalyser(cell).streamChat(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId)
+        const upstream = await getAnalyser(cell).streamChat(analyser.graph_id, question, history, maxBudgetUsd, id, conversationId, branch)
         // Pipe the analyser's SSE stream straight to the browser. (Usage is metered
         // analyser-side — bobby-analyser records this turn's cost directly.)
         return new Response(upstream.body, {

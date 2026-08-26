@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { BranchIndexPanel } from "@/components/projects/branch-index-panel"
+import { BranchPicker, DEFAULT_BRANCH_VALUE } from "@/components/projects/branch-picker"
 import type { ProjectBranch } from "@/lib/shared/types"
 
 // The branch panel, every state, no network.
@@ -47,6 +48,7 @@ const SETS: Record<string, ProjectBranch[]> = {
 
 export default function BranchIndexPreview() {
     const [set, setSet] = useState<keyof typeof SETS>("Every state")
+    const [picked, setPicked] = useState(DEFAULT_BRANCH_VALUE)
     const [ready, setReady] = useState(false)
 
     useEffect(() => {
@@ -102,6 +104,15 @@ export default function BranchIndexPreview() {
             </div>
 
             {ready && <BranchIndexPanel key={set} projectId="p1" />}
+
+            <div className="flex flex-col gap-2 rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-5">
+                <div className="text-[14px] font-bold">Picker</div>
+                <p className="text-[13px] text-[color:var(--c-text-muted)]">
+                    Renders nothing unless a branch is <code>ready</code>. Currently answering from:{" "}
+                    <code>{picked || "default"}</code>
+                </p>
+                {ready && <BranchPicker key={set} projectId="p1" value={picked} onChange={setPicked} />}
+            </div>
         </div>
     )
 }
