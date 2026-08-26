@@ -38,11 +38,19 @@ export interface SetupWizardProps {
     onSaveGithub: (dir: WizardDir) => void
     /** Persist the auto-update toggle (fired when leaving scene 2). */
     onSaveAutoUpdate: (on: boolean) => void
+    /** The repository's branches, so the wizard can show what will be indexed
+     *  alongside the default one. Empty when the provider cannot list them —
+     *  the step then explains that only the default branch is indexed, which is
+     *  the truth and needs no control. */
+    branchOptions?: { name: string; protected: boolean }[]
+    /** Persist the branch selection (fired when leaving scene 3). Tracks them;
+     *  they index after the first build finishes. */
+    onSaveBranches?: (branches: string[]) => void
     /** Start the first index at the chosen depth. May reject to surface an error. */
     onBuild: (effort: WizardEffort) => Promise<void> | void
 }
 
-const STEPS = ["GitHub", "Updates", "Index"]
+const STEPS = ["GitHub", "Updates", "Branches", "Index"]
 const EASE = [0.16, 1, 0.3, 1] as const
 
 export function SetupWizard({
@@ -56,6 +64,8 @@ export function SetupWizard({
     onConnect,
     onSaveGithub,
     onSaveAutoUpdate,
+    onSaveBranches,
+    branchOptions = [],
     onBuild,
 }: SetupWizardProps) {
     const reduce = useReducedMotion()
@@ -65,6 +75,11 @@ export function SetupWizard({
     const router = useRouter()
     const [autoUpdate, setAutoUpdate] = useState(initialAutoUpdate)
     const [effort, setEffort] = useState<WizardEffort>(initialEffort)
+    // Protected branches are the suggested set: the ones the team already said
+    // matter. Overridable, and nothing is indexed until the wizard finishes.
+    const [branches, setBranches] = useState<string[] | null>(null)
+    const suggestedBranches = branchOptions.filter((b) => b.protected).map((b) => b.name)
+    const pickedBranches = branches ?? suggestedBranches
     const [busy, setBusy] = useState(false)
     const [err, setErr] = useState<string | null>(null)
 
@@ -78,6 +93,7 @@ export function SetupWizard({
         if (githubBlocked) return
         if (step === 0) onSaveGithub(dir)
         if (step === 1) onSaveAutoUpdate(autoUpdate)
+        if (step === 2) onSaveBranches?.(pickedBranches)
         setStep((s) => Math.min(STEPS.length - 1, s + 1))
     }
 
@@ -120,7 +136,14 @@ export function SetupWizard({
                     >
                         {step === 0 && <GithubScene dir={dir} onPick={setDir} installed={installed} onConnect={onConnect} reduce={!!reduce} provider={provider} label={label} />}
                         {step === 1 && <AutoUpdateScene defaultOn={autoUpdate} onToggle={() => setAutoUpdate((v) => !v)} reduce={!!reduce} />}
-                        {step === 2 && <EffortScene value={effort} onPick={setEffort} reduce={!!reduce} />}
+                        {step === 2 && (
+                            <BranchesScene
+                                options={branchOptions}
+                                picked={pickedBranches}
+                                onChange={setBranches}
+                            />
+                        )}
+                        {step === 3 && <EffortScene value={effort} onPick={setEffort} reduce={!!reduce} />}
                     </motion.div>
                 </AnimatePresence>
             </div>
@@ -519,6 +542,87 @@ const EFFORTS: { val: WizardEffort; label: string; blurb: string; bars: number }
     { val: "high", label: "Thorough", blurb: "The deepest first pass. Best for big or unfamiliar codebases. Slower, pricier.", bars: 3 },
 ]
 
+function BranchesScene({
+    options,
+    picked,
+    onChange,
+}: {
+    options: { name: string; protected: boolean }[]
+    picked: string[]
+    onChange: (v: string[]) => void
+}) {
+    // Nothing to choose from — no integration, or a provider that would not
+    // list. Say what happens rather than showing an empty control.
+    if (options.length === 0) {
+        return (
+            <div className="flex flex-col items-center gap-5 text-center">
+                <SceneTitle>Which branches should stay indexed?</SceneTitle>
+                <p className="max-w-sm text-[13px] leading-6 text-[color:var(--c-text-muted)]">
+                    We&rsquo;ll index the default branch. You can add others later from
+                    Knowledge, once we can read the branch list.
+                </p>
+            </div>
+        )
+    }
+
+    const toggle = (name: string) =>
+        onChange(picked.includes(name) ? picked.filter((b) => b !== name) : [...picked, name])
+
+    return (
+        <div className="flex w-full flex-col items-center gap-4 text-center">
+            <SceneTitle>Which branches should stay indexed?</SceneTitle>
+            <p className="max-w-sm text-[13px] leading-6 text-[color:var(--c-text-muted)]">
+                The default branch is always indexed. Protected branches are picked for you —
+                each extra one is kept up to date on every push.
+            </p>
+
+            <div className="max-h-[180px] w-full overflow-y-auto rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] text-left">
+                {options.map((b) => {
+                    const on = picked.includes(b.name)
+                    return (
+                        <button
+                            key={b.name}
+                            type="button"
+                            onClick={() => toggle(b.name)}
+                            className="flex w-full cursor-pointer items-center gap-2.5 border-b border-[color:var(--c-border)] px-3 py-2 text-left last:border-b-0 hover:bg-[color:var(--c-surface-2)]"
+                        >
+                            <span
+                                className={cn(
+                                    "grid h-[16px] w-[16px] shrink-0 place-items-center rounded-[4px] border",
+                                    on
+                                        ? "border-[color:var(--c-primary)] bg-[color:var(--c-primary)] text-white"
+                                        : "border-[color:var(--c-border-strong)]",
+                                )}
+                            >
+                                {on && (
+                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                                        <path d="M1.5 5.2 4 7.5 8.5 2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                )}
+                            </span>
+                            <code className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{b.name}</code>
+                            {b.protected && (
+                                <span className="shrink-0 rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[9.5px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-muted)]">
+                                    Protected
+                                </span>
+                            )}
+                        </button>
+                    )
+                })}
+            </div>
+
+            {/* The honest version of the cost. A branch reuses the project's
+                existing analysis — it is a read of the code, not a re-think of
+                it — so saying "a few credits" is both true and not alarming. */}
+            <p className="max-w-sm text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
+                {picked.length === 0
+                    ? "Only the default branch will be indexed."
+                    : `${picked.length} extra branch${picked.length === 1 ? "" : "es"} — each reuses this project's index, so it costs a few credits to read the code, not a full analysis.`}
+            </p>
+        </div>
+    )
+}
+
 function EffortScene({ value, onPick, reduce }: { value: WizardEffort; onPick: (e: WizardEffort) => void; reduce: boolean }) {
     const active = EFFORTS.find((e) => e.val === value) ?? EFFORTS[1]
     return (
@@ -862,7 +966,7 @@ function AmbientGlow({ reduce, step }: { reduce: boolean; step: number }) {
         <motion.div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
             <motion.div
                 className="absolute h-64 w-64 rounded-full bg-[color:var(--c-primary)] opacity-[0.07] blur-3xl"
-                animate={reduce ? { top: "10%", left: step === 2 ? "55%" : "10%" } : { top: ["8%", "16%", "8%"], left: step === 2 ? "52%" : "8%" }}
+                animate={reduce ? { top: "10%", left: step === 3 ? "55%" : "10%" } : { top: ["8%", "16%", "8%"], left: step === 3 ? "52%" : "8%" }}
                 transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
             />
             <motion.div

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useApi } from "@/lib/client/hooks/use-api"
 import { cn } from "@/components/ui/cn"
 import { createClient } from "@/lib/client/supabase"
 import type { ProjectAnalyser } from "@/lib/shared/types"
@@ -30,6 +31,15 @@ export function AnalyserPanel({
     const [advanced, setAdvanced] = useState(false)
     const [token, setToken] = useState("")
     const [busy, setBusy] = useState(false) // toggling enable/disable/index buttons
+
+    // How many OTHER branches this project indexes, so the figures below can say
+    // which one they describe. Read here rather than passed down: the panel is
+    // mounted from two places and threading a count through both to answer a
+    // question this component asks is worse than one small extra read.
+    const { data: branchData } = useApi<{ branches: { status: string }[] }>(
+        `/api/projects/${projectId}/branches`,
+    )
+    const trackedCount = (branchData?.branches ?? []).length
 
     const enabled = !!analyser?.enabled
     const status = analyser?.status ?? "disabled"
@@ -176,6 +186,22 @@ export function AnalyserPanel({
             <p className="mt-1.5 text-[12.5px] text-[color:var(--c-text-muted)]">
                 Indexes the repo into a knowledge graph so issue suggestions can cite specific files and lines.
             </p>
+
+            {/* Every figure below describes the DEFAULT branch. That was the
+                whole story until a project could index others, and reading
+                "Last indexed" as the state of a repository with three indexed
+                branches is now wrong — so the panel says which branch it means,
+                and points at where the rest live. Only when there are others:
+                a project with one indexed tree needs no disambiguation. */}
+            {enabled && trackedCount > 0 && (
+                <p className="mt-2 text-[12px] text-[color:var(--c-text-muted)]">
+                    Showing the default branch.{" "}
+                    <span className="text-[color:var(--c-text)]">
+                        {trackedCount} other {trackedCount === 1 ? "branch is" : "branches are"} indexed
+                    </span>{" "}
+                    — see Indexed branches below.
+                </p>
+            )}
 
             {enabled && (
                 <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">

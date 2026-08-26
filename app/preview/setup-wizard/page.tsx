@@ -61,6 +61,13 @@ export default function SetupWizardPreview() {
                     }}
                     onSaveGithub={(dir) => console.log("[wizard] saveGithub", dir)}
                     onSaveAutoUpdate={(on) => console.log("[wizard] saveAutoUpdate", on)}
+                    branchOptions={[
+                        { name: "develop", protected: true },
+                        { name: "release/2.0", protected: true },
+                        { name: "feat/multi-branch", protected: false },
+                        { name: "feat/new-thing", protected: false },
+                    ]}
+                    onSaveBranches={(b) => console.log("[wizard] saveBranches", b)}
                     onBuild={async (effort) => {
                         console.log("[wizard] build", effort)
                         await new Promise((r) => setTimeout(r, 900))

@@ -32,6 +32,13 @@ export default function SetupWizardPage() {
     const { id } = useParams<{ id: string }>()
     const router = useRouter()
     const { data, loading } = useApi<{ project: SetupProject | null }>(`/api/projects/${id}`)
+    // The repository's branches, for the Branches step. Empty when the provider
+    // cannot list them, which the step handles by explaining rather than by
+    // showing an empty control.
+    const { data: branchData } = useApi<{ branches: { name: string; protected: boolean }[] }>(
+        `/api/projects/${id}/branches/available`,
+    )
+    const branchOptions = branchData?.branches ?? []
     const [connectErr, setConnectErr] = useState<string | null>(null)
 
     const project = data?.project ?? null
@@ -105,6 +112,21 @@ export default function SetupWizardPage() {
             : "https://github.com/apps"
     }
 
+    // Track the chosen branches now; they index after the first build lands —
+    // a branch graph is a COPY of the project's, so there is nothing to copy
+    // until the bootstrap has produced one. They sit `pending` until then, and
+    // the Knowledge panel the wizard lands on is where they finish.
+    async function saveBranches(branches: string[]) {
+        for (const branch of branches) {
+            try {
+                await apiMutate(`/api/projects/${id}/branches`, { method: "POST", body: { branch } })
+            } catch {
+                // Best-effort: a branch that will not track must not strand
+                // someone mid-wizard. Knowledge shows what stuck.
+            }
+        }
+    }
+
     async function build(effort: WizardEffort) {
         const res = await fetch(`/api/projects/${id}/analyser/index`, {
             method: "POST",
@@ -139,6 +161,8 @@ export default function SetupWizardPage() {
                 onConnect={connect}
                 onSaveGithub={saveGithub}
                 onSaveAutoUpdate={saveAutoUpdate}
+                branchOptions={branchOptions}
+                onSaveBranches={saveBranches}
                 onBuild={build}
             />
         </>
