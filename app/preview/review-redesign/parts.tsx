@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import type { PrAnalysis, PrFinding } from "@/lib/shared/types"
 import { cn } from "@/components/ui/cn"
@@ -183,17 +183,24 @@ export function MoreDetail({ r }: { r: PrAnalysis }) {
 
 /** The round strip. Every round is always on screen — no horizontal scroll.
  *
- *  A scroller hides rounds behind a gesture, and the one thing this strip has to
- *  answer is "how did this pull request get here", which cannot be answered by a
- *  slice of it. So the row divides the width it has: the selected round takes
- *  the space it needs to be readable, and the rest squeeze.
+ *  A scroller hides rounds behind a gesture, and the question this strip exists
+ *  to answer — how did this pull request get here — cannot be answered by a slice
+ *  of it. So the row divides the width it has.
  *
- *  Squeezing is not shrinking the same card. A 40px card cannot hold a sha, a
- *  verdict and a commit subject at any font size, so a collapsed round drops to
- *  what still means something at that width — its number and a dot for how it
- *  went. The detail fades rather than disappearing, so the growing card does not
- *  pop.
+ *  A closed round is a SLIVER, not a small card. Twenty-two pixels holds a dot
+ *  and a number and nothing else, and that is the honest amount of information
+ *  for something you are not currently reading: which round, and how it went.
+ *  Anything more at that width is a clipped word pretending to be a word.
+ *
+ *  Two rounds open when the row can afford it, because the useful comparison is
+ *  almost always "this one against the current one" — click round 2 and the
+ *  current round stays open beside it. When the row cannot afford two readable
+ *  cards it opens one, which is better than two unreadable ones.
  */
+const SLIVER_W = 22
+const READABLE_W = 232
+const STRIP_GAP = 6
+
 export function Rounds() {
     const rounds = [
         { sha: "a3f1c02", n: 1, verdict: "Changes requested", blockers: 2, fixed: 0, carried: 0, msg: "feat(console): saved views", tone: "critical" as Sev },
@@ -202,77 +209,69 @@ export function Rounds() {
         { sha: "8e4b1f9", n: 4, verdict: "Comment", blockers: 0, fixed: 0, carried: 1, msg: "docs(console): say what a saved view is", tone: "review" as Sev },
         { sha: "7bd9e14", n: 5, verdict: "Changes requested", blockers: 1, fixed: 1, carried: 1, msg: "fix(console): validate the saved-view name", tone: "critical" as Sev },
     ]
-    const [sel, setSel] = useState(rounds.length - 1)
+    const last = rounds.length - 1
+    const [sel, setSel] = useState(last)
+    const [width, setWidth] = useState(0)
+    const rowRef = useRef<HTMLDivElement | null>(null)
+
+    // Measured, not guessed at from a breakpoint: the strip sits in a column
+    // whose width depends on whether the metadata rail is showing, so a media
+    // query would be answering about the wrong element.
+    useEffect(() => {
+        const el = rowRef.current
+        if (!el || typeof ResizeObserver === "undefined") return
+        const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
+        ro.observe(el)
+        setWidth(el.getBoundingClientRect().width)
+        return () => ro.disconnect()
+    }, [])
+
+    const fits = (openCount: number) =>
+        openCount * READABLE_W + (rounds.length - openCount) * SLIVER_W + (rounds.length - 1) * STRIP_GAP <= width
+
+    const open = new Set<number>([sel])
+    if (rounds.length > 1 && width > 0 && fits(2)) {
+        // The second card is the CURRENT round — the thing the merge gate reads
+        // and the thing a previous round is worth comparing against. Looking at
+        // the current one already? Then the previous, for the same reason.
+        open.add(sel === last ? last - 1 : last)
+    }
 
     return (
-        // min-h, not h. The row's natural height is set by whichever card is open, and
-        // mid-animation NEITHER is fully open — the collapsing detail and the
-        // expanding one are both half-height at the midpoint, so the row dips below
-        // its resting height and springs back. That is the glitch. A floor holds it
-        // still through the transition; it is a MINIMUM rather than a fixed height so
-        // a longer commit subject or a larger font can still push it taller instead
-        // of being clipped.
-        <div className="flex w-full gap-1.5 min-h-[78px]">
+        <div ref={rowRef} className="flex min-h-[78px] w-full" style={{ gap: STRIP_GAP }}>
             {rounds.map((r, i) => {
-                const open = i === sel
-                const current = i === rounds.length - 1
+                const isOpen = open.has(i)
+                const current = i === last
                 return (
                     <button
                         key={r.sha}
                         type="button"
                         onClick={() => setSel(i)}
-                        aria-expanded={open}
-                        // basis-0 so grow alone decides the split, and min-w-0 so a
-                        // squeezed card is allowed to be genuinely narrow rather
-                        // than pushing the row wider than its container.
-                        style={{ flexGrow: open ? rounds.length : 1 }}
+                        aria-expanded={isOpen}
+                        aria-label={`Round ${r.n} — ${r.verdict}`}
+                        style={isOpen ? { flexGrow: 1, flexBasis: 0 } : { flex: `0 0 ${SLIVER_W}px` }}
                         className={cn(
-                            "flex shrink basis-0 flex-col overflow-hidden rounded-[10px] border px-2.5 py-2 text-left",
-                            // A collapsed card is one line in a box sized by its
-                            // expanded neighbour, so centre it rather than leaving
-                            // it stranded at the top of empty space.
-                            open ? "justify-start" : "justify-center",
-                            // A floor, because grow alone does not have one. This
-                            // pull request ran to thirteen rounds; twelve collapsed
-                            // cards sharing what is left of the row computes to
-                            // about 28px each, which clips the number they exist to
-                            // show. Below this the row would rather be wider than
-                            // illegible.
-                            open ? "min-w-0" : "min-w-[38px]",
-                            "transition-[flex-grow,background-color,border-color] duration-300 ease-out",
-                            open
-                                ? "border-[color:var(--c-border-strong)] bg-[color:var(--c-surface-2)]"
-                                : "border-[color:var(--c-border)] opacity-70 hover:opacity-100",
+                            "flex min-w-0 flex-col overflow-hidden rounded-[10px] border text-left",
+                            "transition-[flex-grow,flex-basis,background-color,border-color,opacity] duration-300 ease-out",
+                            isOpen
+                                ? "items-stretch justify-start px-2.5 py-2 border-[color:var(--c-border-strong)] bg-[color:var(--c-surface-2)]"
+                                : "items-center justify-center gap-1 px-0 py-2 border-[color:var(--c-border)] opacity-70 hover:opacity-100",
+                            current && isOpen && "ring-1 ring-inset ring-[color:var(--c-border-strong)]",
                         )}
                     >
-                        <div className="flex items-center gap-1.5">
-                            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", SEV[r.tone].dot)} />
-                            <span className="shrink-0 text-[11px] font-semibold text-[color:var(--c-text-muted)]">{r.n}</span>
-                            <code
-                                className={cn(
-                                    "truncate font-mono text-[11px] text-[color:var(--c-text-dim)] transition-opacity duration-200",
-                                    open ? "opacity-100" : "opacity-0",
-                                )}
-                            >
-                                {r.sha}
-                            </code>
-                            {current && open && (
-                                <span className="ml-auto shrink-0 text-[9.5px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
-                                    current
-                                </span>
-                            )}
-                        </div>
-
-                        {/* The detail collapses to zero height AND fades, so a
-                            squeezed card is one line rather than a clipped three. */}
-                        <div
-                            className={cn(
-                                "grid transition-all duration-300 ease-out",
-                                open ? "mt-1 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
-                            )}
-                        >
-                            <div className="min-h-0 overflow-hidden">
-                                <div className="flex flex-wrap items-center gap-1.5">
+                        {isOpen ? (
+                            <>
+                                <div className="flex items-center gap-1.5">
+                                    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", SEV[r.tone].dot)} />
+                                    <span className="shrink-0 text-[11px] font-semibold text-[color:var(--c-text-muted)]">{r.n}</span>
+                                    <code className="truncate font-mono text-[11px] text-[color:var(--c-text-dim)]">{r.sha}</code>
+                                    {current && (
+                                        <span className="ml-auto shrink-0 text-[9.5px] font-bold uppercase tracking-[0.06em] text-[color:var(--c-text-dim)]">
+                                            current
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                     <span className="whitespace-nowrap text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
                                     {r.fixed > 0 && (
                                         <span className="whitespace-nowrap rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-success)]">
@@ -291,8 +290,15 @@ export function Rounds() {
                                     )}
                                 </div>
                                 <p className="mt-1 truncate text-[11px] text-[color:var(--c-text-dim)]">{r.msg}</p>
-                            </div>
-                        </div>
+                            </>
+                        ) : (
+                            // A sliver says which round and how it went. Nothing else
+                            // fits, and a clipped word is worse than no word.
+                            <>
+                                <span className={cn("h-1.5 w-1.5 rounded-full", SEV[r.tone].dot)} />
+                                <span className="text-[10.5px] font-semibold tabular-nums text-[color:var(--c-text-muted)]">{r.n}</span>
+                            </>
+                        )}
                     </button>
                 )
             })}
