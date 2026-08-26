@@ -2,6 +2,7 @@
 
 import { useApi } from "@/lib/client/hooks/use-api"
 import { cn } from "@/components/ui/cn"
+import { Dropdown } from "@/components/ui/dropdown"
 import type { ProjectBranch } from "@/lib/shared/types"
 
 // BranchPicker — which indexed tree a question is answered from.
@@ -37,18 +38,21 @@ export function BranchPicker({
     return (
         <label className={cn("flex items-center gap-1.5 text-[12px]", className)}>
             <span className="text-[color:var(--c-text-muted)]">Branch</span>
-            <select
+            <Dropdown
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="cursor-pointer rounded-[8px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-2 py-1 font-mono text-[12px] outline-none focus:border-[color:var(--c-primary)]"
-            >
-                <option value={DEFAULT_BRANCH_VALUE}>default</option>
-                {ready.map((b) => (
-                    <option key={b.id} value={b.branch}>
-                        {b.branch}
-                    </option>
-                ))}
-            </select>
+                onChange={onChange}
+                options={[
+                    { value: DEFAULT_BRANCH_VALUE, label: "default" },
+                    ...ready.map((b) => ({ value: b.branch, label: b.branch })),
+                ]}
+                searchable={ready.length > 8}
+                aria-label="Branch to answer from"
+                // Dropdown is w-full by default, which is right for a form field
+                // and wrong for an inline control sitting beside a label above
+                // the composer. Bounded so it sizes to its content instead of
+                // stretching the row.
+                className="w-auto min-w-[9rem] max-w-[16rem]"
+            />
         </label>
     )
 }

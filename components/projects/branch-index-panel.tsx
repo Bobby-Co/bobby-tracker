@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
+import { Dropdown } from "@/components/ui/dropdown"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { ProjectBranch } from "@/lib/shared/types"
@@ -167,18 +168,18 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
                     that cannot list — losing the convenience should not lose
                     the capability. */}
                 {available.length > 0 ? (
-                    <select
+                    // Searchable: a busy repository has more branches than
+                    // anyone wants to scroll, and the name is usually known —
+                    // it is the exact spelling that was the problem.
+                    <Dropdown
                         value={adding}
-                        onChange={(e) => setAdding(e.target.value)}
-                        className="min-w-0 flex-1 cursor-pointer rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 font-mono text-[12.5px] outline-none focus:border-[color:var(--c-primary)]"
-                    >
-                        <option value="">Choose a branch…</option>
-                        {available.map((b) => (
-                            <option key={b} value={b}>
-                                {b}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={setAdding}
+                        options={available.map((b) => ({ value: b, label: b }))}
+                        placeholder="Choose a branch…"
+                        searchable={available.length > 8}
+                        aria-label="Branch to track"
+                        className="min-w-0 flex-1"
+                    />
                 ) : (
                     <input
                         value={adding}
