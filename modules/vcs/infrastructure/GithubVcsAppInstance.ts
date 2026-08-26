@@ -25,6 +25,7 @@ import {
     type VcsCommitSummary,
     type VcsCompareStatus,
     type VcsReview,
+    type VcsBranch,
 } from "../ports/VcsTypes"
 
 const GITHUB_API = "https://api.github.com"
@@ -340,6 +341,39 @@ export class GithubVcsAppInstance implements VcsAppInstance {
     }
 
     // ── port: pull requests ──────────────────────────────────────────────────
+    // GitHub's /branches has no sort parameter, so this is repository order.
+    // Five pages of 100 is 500 branches — past that a dropdown is the wrong
+    // control anyway, and the free-text fallback still accepts anything.
+    async listBranches(): Promise<VcsBranch[]> {
+        const rows = await this.paginate<{ name: string; commit?: { sha?: string } }>(
+            "/branches",
+            5,
+            "list branches",
+        )
+        const def = await this.defaultBranch()
+        return rows.map((b) => ({
+            name: b.name,
+            sha: b.commit?.sha ?? null,
+            isDefault: def != null && b.name === def,
+        }))
+    }
+
+    /** The repository's default branch, so the picker can leave it out — it is
+     *  already indexed as the project's own graph.
+     *
+     *  Best-effort: failing to learn it costs the caller a redundant entry in a
+     *  dropdown, which is not worth failing the whole listing over. */
+    private async defaultBranch(): Promise<string | null> {
+        try {
+            const res = await this.client.fetch(this.installationId, this.path(""))
+            if (!res.ok) return null
+            const repo = (await res.json()) as { default_branch?: string }
+            return repo?.default_branch ?? null
+        } catch {
+            return null
+        }
+    }
+
     async listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]> {
         const state = opts?.state ?? "all"
         const rows = await this.paginate<GithubPullRequest>(

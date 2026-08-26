@@ -21,6 +21,7 @@ import type {
     VcsMergeability,
     VcsPullRequestFile,
     VcsCompare,
+    VcsBranch,
 } from "../ports/VcsTypes"
 
 /** The issue fields the sync use cases read. Structural (not the full Issue row)
@@ -61,6 +62,13 @@ export class VcsAppService {
      *  node id + sync bookkeeping back BEFORE returning (writing last_synced_hash
      *  before the echoed `opened` webhook lands is the outbound loop-guard).
      *  No-op unless the project allows outbound. */
+    /** The repository's branches, so a caller can offer them instead of asking
+     *  someone to type one. A pass-through: there is no tracker-side state to
+     *  reconcile, and the provider is the only thing that knows. */
+    async listBranches(): Promise<VcsBranch[]> {
+        return this.vcs.listBranches()
+    }
+
     async syncIssueCreated(issue: SyncIssueInput, project: ProjectSyncState): Promise<void> {
         const p = Project.of(project)
         if (!p.isSyncReady() || !p.allowsOutbound()) return

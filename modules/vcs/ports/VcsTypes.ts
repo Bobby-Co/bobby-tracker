@@ -182,3 +182,17 @@ export class VcsReauthError extends Error {
         this.name = "VcsReauthError"
     }
 }
+
+/** One branch in the remote repository.
+ *
+ *  Listed so tracking a branch for indexing is a CHOICE rather than a typed
+ *  string: the name becomes a graph key and an exact-match lookup, so a typo is
+ *  a branch that indexes nothing or refuses to index at all. */
+export interface VcsBranch {
+    name: string
+    /** Head commit sha where the provider supplies one. */
+    sha: string | null
+    /** The repository's default branch, which is already indexed as the
+     *  project's own graph and so must not be offered as an extra one. */
+    isDefault: boolean
+}

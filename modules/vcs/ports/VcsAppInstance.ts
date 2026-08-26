@@ -12,6 +12,7 @@
 // one place that maps a project row → the right bound adapter.
 
 import type {
+    VcsBranch,
     VcsComment,
     VcsIssue,
     VcsIssueRef,
@@ -63,6 +64,14 @@ export interface VcsAppInstance {
     updatePullRequestComment(prNumber: number, commentId: number, body: string): Promise<void>
     /** The conversation-thread comments on a PR/MR, oldest first. */
     listPullRequestComments(prNumber: number): Promise<VcsComment[]>
+
+    // ─── branches ───────────────────────────────────────────────────────────
+    /** Every branch in the repository, so a caller can OFFER them rather than
+     *  ask someone to type one. Newest-activity first where the provider
+     *  supports it; capped by the adapter's own pagination bound, because a
+     *  repository with thousands of branches should not become a thousand-row
+     *  dropdown. */
+    listBranches(): Promise<VcsBranch[]>
 
     // ─── pull requests ──────────────────────────────────────────────────────
     listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]>

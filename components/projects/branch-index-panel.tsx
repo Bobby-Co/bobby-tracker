@@ -42,6 +42,15 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setRefreshMs(working ? POLL_MS : undefined), [working])
 
+    // The repository's branches, minus the default one and anything already
+    // tracked. Live from the provider: branches come and go constantly and
+    // nothing mirrors them, so a cached list would offer dead branches and miss
+    // the one someone just pushed — which is exactly when they want it indexed.
+    const { data: avail, loading: listing, refetch: refetchAvailable } = useApi<{ branches: string[] }>(
+        `/api/projects/${projectId}/branches/available`,
+    )
+    const available = avail?.branches ?? []
+
     const [adding, setAdding] = useState("")
     const [busy, setBusy] = useState<string | null>(null)
     const [err, setErr] = useState<string | null>(null)
@@ -58,7 +67,7 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
                 body: { branch },
             })
             setAdding("")
-            await refetch()
+            await Promise.all([refetch(), refetchAvailable()])
             // Tracking records intent; indexing is its own call so the button
             // that can fail slowly is the one that shows the failure.
             await index(branch)
@@ -93,7 +102,7 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
             await apiMutate(`/api/projects/${projectId}/branches/${encodeURIComponent(branch)}`, {
                 method: "DELETE",
             })
-            await refetch()
+            await Promise.all([refetch(), refetchAvailable()])
         } catch (e) {
             setErr(e instanceof ApiError ? e.message || `Failed (${e.status})` : "Network error")
         } finally {
@@ -152,13 +161,33 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
             )}
 
             <form onSubmit={track} className="mt-4 flex flex-wrap items-center gap-2">
-                <input
-                    value={adding}
-                    onChange={(e) => setAdding(e.target.value)}
-                    placeholder="feat/my-branch"
-                    spellCheck={false}
-                    className="min-w-0 flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 font-mono text-[12.5px] outline-none focus:border-[color:var(--c-primary)]"
-                />
+                {/* Choose, don't type. The name becomes a graph key and an
+                    exact-match lookup, so a typo is a branch that indexes
+                    nothing. The text box stays as the fallback for a provider
+                    that cannot list — losing the convenience should not lose
+                    the capability. */}
+                {available.length > 0 ? (
+                    <select
+                        value={adding}
+                        onChange={(e) => setAdding(e.target.value)}
+                        className="min-w-0 flex-1 cursor-pointer rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 font-mono text-[12.5px] outline-none focus:border-[color:var(--c-primary)]"
+                    >
+                        <option value="">Choose a branch…</option>
+                        {available.map((b) => (
+                            <option key={b} value={b}>
+                                {b}
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    <input
+                        value={adding}
+                        onChange={(e) => setAdding(e.target.value)}
+                        placeholder={listing ? "loading branches…" : "feat/my-branch"}
+                        spellCheck={false}
+                        className="min-w-0 flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 font-mono text-[12.5px] outline-none focus:border-[color:var(--c-primary)]"
+                    />
+                )}
                 <button
                     type="submit"
                     disabled={!adding.trim() || busy !== null}

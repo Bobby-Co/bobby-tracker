@@ -28,6 +28,7 @@ import {
     type VcsCommitSummary,
     type VcsCompareStatus,
     type VcsReview,
+    type VcsBranch,
 } from "../ports/VcsTypes"
 
 const USER_AGENT = "ucelot-tracker"
@@ -277,6 +278,21 @@ export class GitlabVcsAppInstance implements VcsAppInstance {
     }
 
     // ── merge requests ───────────────────────────────────────────────────────
+    // GitLab sorts branches by name; `default` comes back on each row, so
+    // unlike GitHub this needs no second call to learn it.
+    async listBranches(): Promise<VcsBranch[]> {
+        const { c, pid } = await this.client()
+        const rows = await c.paginate<{ name: string; default?: boolean; commit?: { id?: string } }>(
+            `/projects/${pid}/repository/branches`,
+            5,
+        )
+        return rows.map((b) => ({
+            name: b.name,
+            sha: b.commit?.id ?? null,
+            isDefault: b.default === true,
+        }))
+    }
+
     async listPullRequests(opts?: { state?: "open" | "closed" | "all" }): Promise<VcsPullRequest[]> {
         const { c, pid } = await this.client()
         const state = opts?.state === "open" ? "opened" : opts?.state === "closed" ? "closed" : "all"

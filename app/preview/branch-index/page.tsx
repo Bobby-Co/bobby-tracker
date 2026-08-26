@@ -40,6 +40,7 @@ const SETS: Record<string, ProjectBranch[]> = {
             last_error: "repository has no graph yet — bootstrap it before indexing branches",
         }),
     ],
+    "Provider cannot list": [row("main", "ready")],
     "A long branch name": [
         row("feature/very-long-branch-name-that-should-truncate-rather-than-wrap-the-row", "ready"),
         row("main", "ready"),
@@ -55,6 +56,14 @@ export default function BranchIndexPreview() {
         const real = window.fetch
         window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = typeof input === "string" ? input : input.toString()
+            if (url.includes("/branches/available")) {
+                // "no provider" is the degraded case the free-text fallback exists for.
+                const list = set === "Provider cannot list" ? [] : ["develop", "feat/new-thing", "release/3.0"]
+                return new Response(JSON.stringify({ branches: list }), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                })
+            }
             if (url.includes("/branches")) {
                 // Mutations just echo success; the list is whatever the picker says.
                 if (init?.method && init.method !== "GET") {
