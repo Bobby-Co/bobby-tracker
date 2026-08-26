@@ -63,6 +63,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             ...(divergence.baseRef ? { base_ref: divergence.baseRef } : {}),
             ...(divergence.diverged ? { branch_diverged: true } : {}),
             repo_id: readiness.graph_id,
+            // Billing resolves through this, NOT through supabase_progress below —
+            // that one names the branch's own row.
+            project_id: id,
             user_id: user.id,
             ...(gitAuth ? { git_auth: gitAuth } : {}),
             // The BRANCH row's id, not the project's. A branch job reports into

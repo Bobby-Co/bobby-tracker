@@ -518,6 +518,13 @@ export interface KickoffJobInput {
     repo_url: string
     repo_ref?: string
     repo_id?: string
+    /** The tracker project this job belongs to, for BILLING.
+     *
+     *  Usage used to be attributed from `supabase_progress.key_value`, which was
+     *  the same value until a branch job began reporting progress into its own
+     *  project_branches row. Sent explicitly so the two can differ without the
+     *  ledger losing the tenant. */
+    project_id?: string
     /** For job_type=branch: the branch this one is measured against — the
      *  repository's default branch, whose graph is being copied. Fetched
      *  alongside the branch so a diff has a left-hand side. */

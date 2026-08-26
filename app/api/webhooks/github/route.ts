@@ -576,6 +576,7 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
                     // base costs no extra API call here.
                     ...(defaultBranch ? { base_ref: defaultBranch } : {}),
                     repo_id: graphId,
+                    project_id: project.id,
                     user_id: project.user_id,
                     // The BRANCH row, not the project's — a branch job must not
                     // report into the default branch's analyser row.

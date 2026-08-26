@@ -376,6 +376,7 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
                     // base costs no extra API call here.
                     ...(defaultBranch ? { base_ref: defaultBranch } : {}),
                     repo_id: graphId,
+                    project_id: project.id,
                     user_id: project.user_id,
                     ...(gitAuth ? { git_auth: gitAuth } : {}),
                     // The BRANCH row, not the project's.
