@@ -254,9 +254,16 @@ export function Rounds() {
                             "flex min-w-0 flex-col overflow-hidden rounded-[10px] border text-left",
                             "transition-[flex-grow,flex-basis,background-color,border-color,opacity] duration-300 ease-out",
                             isOpen
-                                ? "items-stretch justify-start px-2.5 py-2 border-[color:var(--c-border-strong)] bg-[color:var(--c-surface-2)]"
+                                ? "items-stretch justify-start px-2.5 py-2 bg-[color:var(--c-surface-2)]"
                                 : "items-center justify-center gap-1 px-0 py-2 border-[color:var(--c-border)] opacity-70 hover:opacity-100",
-                            current && isOpen && "ring-1 ring-inset ring-[color:var(--c-border-strong)]",
+                            // The one you clicked, in the app's own selection
+                            // colour. A closed sliver keeps a hairline of it so
+                            // a selection that squeezed is still findable.
+                            i === sel
+                                ? "border-[color:var(--c-primary)] ring-1 ring-inset ring-[color:var(--c-primary)]/40"
+                                : isOpen
+                                  ? "border-[color:var(--c-border-strong)]"
+                                  : "",
                         )}
                     >
                         {isOpen ? (
@@ -271,20 +278,20 @@ export function Rounds() {
                                         </span>
                                     )}
                                 </div>
-                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                                    <span className="whitespace-nowrap text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
+                                <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                                    <span className="truncate text-[12px] font-semibold text-[color:var(--c-text)]">{r.verdict}</span>
                                     {r.fixed > 0 && (
-                                        <span className="whitespace-nowrap rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-success)]">
+                                        <span className="shrink-0 whitespace-nowrap rounded-full bg-[color:var(--c-success-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-success)]">
                                             {r.fixed} fixed
                                         </span>
                                     )}
                                     {r.blockers > 0 && (
-                                        <span className="whitespace-nowrap rounded-full bg-[color:var(--c-error-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-error)]">
+                                        <span className="shrink-0 whitespace-nowrap rounded-full bg-[color:var(--c-error-bg)] px-1.5 py-[1px] text-[10px] font-semibold text-[color:var(--c-error)]">
                                             {r.blockers} blocker{r.blockers === 1 ? "" : "s"}
                                         </span>
                                     )}
                                     {r.carried > 0 && (
-                                        <span className="whitespace-nowrap rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">
+                                        <span className="shrink-0 whitespace-nowrap rounded-full bg-[color:var(--c-surface-2)] px-1.5 py-[1px] text-[10px] font-medium text-[color:var(--c-text-muted)]">
                                             {r.carried} carried
                                         </span>
                                     )}
