@@ -91,6 +91,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 body: pull.body,
                 baseSha: pull.base_sha,
                 headSha: pull.head_sha,
+                baseRef: pull.base_ref,
             },
             origin,
             // Explicit user request: bypass the "already reviewed this head" skip

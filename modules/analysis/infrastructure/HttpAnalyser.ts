@@ -124,6 +124,7 @@ export class HttpAnalyser implements Analyser {
             // Note the analyser rejects UNKNOWN keys outright — don't send one.
             body: JSON.stringify({
                 repo_id: input.repoId,
+                branch: input.branch,
                 query: input.query,
                 hints: input.hints,
                 max_budget_usd: input.maxBudgetUsd,
@@ -151,6 +152,7 @@ export class HttpAnalyser implements Analyser {
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             body: JSON.stringify({
                 repo_id: input.repoId,
+                branch: input.branch,
                 node_id: input.nodeId,
                 symbol: input.symbol,
                 file: input.file,
@@ -177,6 +179,11 @@ export class HttpAnalyser implements Analyser {
         maxBudgetUsd?: number,
         projectId?: string,
         conversationId?: string,
+        /** Which indexed tree to answer from. Omitted → the default branch, i.e.
+         *  exactly what every caller got before branches existed. Trailing and
+         *  optional because this signature is positional; a seventh argument is
+         *  uglier than an object but it does not disturb five call sites. */
+        branch?: string,
     ): Promise<Response> {
         const res = await fetch(`${this.base()}/chat`, {
             method: "POST",
@@ -185,6 +192,7 @@ export class HttpAnalyser implements Analyser {
             // the durable managed-context store; history is the short buffer.
             body: JSON.stringify({
                 repo_id: repoId,
+                branch,
                 project_id: projectId,
                 conversation_id: conversationId,
                 question,
@@ -205,6 +213,7 @@ export class HttpAnalyser implements Analyser {
             // undefined), so the analyser applies its own fallback chain.
             body: JSON.stringify({
                 repo_id: input.repoId,
+                branch: input.branch,
                 title: input.title,
                 body: input.body,
                 labels: input.labels,
@@ -246,6 +255,7 @@ export class HttpAnalyser implements Analyser {
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             body: JSON.stringify({
                 repo_id: input.repoId,
+                branch: input.branch,
                 title: input.title,
                 body: input.body,
                 labels: input.labels,
@@ -276,6 +286,7 @@ export class HttpAnalyser implements Analyser {
             headers: { "Content-Type": "application/json", ...this.authHeader(), ...this.userHeader(input.userId) },
             body: JSON.stringify({
                 repo_id: input.repoId,
+                branch: input.branch,
                 project_id: input.projectId,
                 number: input.number,
                 title: input.title,

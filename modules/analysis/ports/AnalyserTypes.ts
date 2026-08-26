@@ -73,6 +73,12 @@ export interface RetrieveHints {
 
 export interface RetrieveInput {
     repoId: string
+    /** Which indexed tree to answer from. Omitted (or the default branch) uses
+     *  the project's own graph — what every caller got before branches existed.
+     *  A named branch must already be indexed and `ready`; the analyser answers
+     *  "branch is not indexed" rather than quietly falling back to the default,
+     *  because being told about the wrong tree is worse than being told to wait. */
+    branch?: string
     query: string
     hints?: RetrieveHints
     maxBudgetUsd?: number
@@ -136,6 +142,12 @@ export interface RetrieveResult {
 
 export interface NeighboursInput {
     repoId: string
+    /** Which indexed tree to answer from. Omitted (or the default branch) uses
+     *  the project's own graph — what every caller got before branches existed.
+     *  A named branch must already be indexed and `ready`; the analyser answers
+     *  "branch is not indexed" rather than quietly falling back to the default,
+     *  because being told about the wrong tree is worse than being told to wait. */
+    branch?: string
     /** Exactly one anchor; most specific wins (nodeId > symbol > file). */
     nodeId?: string
     symbol?: string
@@ -242,6 +254,12 @@ export interface IssueAnalysis {
 
 export interface IssueAnalyseInput {
     repoId:        string
+    /** Which indexed tree to answer from. Omitted (or the default branch) uses
+     *  the project's own graph — what every caller got before branches existed.
+     *  A named branch must already be indexed and `ready`; the analyser answers
+     *  "branch is not indexed" rather than quietly falling back to the default,
+     *  because being told about the wrong tree is worse than being told to wait. */
+    branch?: string
     title:         string
     body?:         string
     labels?:       string[]
@@ -343,6 +361,12 @@ export interface PrAnalyseFile {
 
 export interface PrAnalyseInput {
     repoId:  string
+    /** Which indexed tree to answer from. Omitted (or the default branch) uses
+     *  the project's own graph — what every caller got before branches existed.
+     *  A named branch must already be indexed and `ready`; the analyser answers
+     *  "branch is not indexed" rather than quietly falling back to the default,
+     *  because being told about the wrong tree is worse than being told to wait. */
+    branch?: string
     number:  number
     title:   string
     body?:   string

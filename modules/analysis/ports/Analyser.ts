@@ -55,6 +55,8 @@ export interface Analyser {
         maxBudgetUsd?: number,
         projectId?: string,
         conversationId?: string,
+        /** Which indexed tree to answer from; omitted → the default branch. */
+        branch?: string,
     ): Promise<Response>
 
     // ─── /issues/analyse — synchronous structured issue analysis ─────────────

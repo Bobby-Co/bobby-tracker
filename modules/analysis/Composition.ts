@@ -14,6 +14,7 @@ import { createSupabaseSubscriptionsRepository, getRunAllowance, getSpendGate } 
 import type { Analyser } from "./ports/Analyser"
 import { HttpAnalyser } from "./infrastructure/HttpAnalyser"
 import { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
+import { createSupabaseProjectBranchRepository } from "./infrastructure/SupabaseProjectBranchRepository"
 import { createServicePullRequestAnalysisStore } from "./infrastructure/SupabasePullRequestAnalysisStore"
 import { IssueAnalysisComment } from "./infrastructure/IssueAnalysisComment"
 import { PullRequestAnalysisComment } from "./infrastructure/PullRequestAnalysisComment"
@@ -104,6 +105,10 @@ export function createPullRequestAnalysisService(dataDb?: SupabaseRlsClient): Pu
         // was running (0080). REGIONAL, with the pull requests it mirrors and
         // the analyses beside them.
         createSupabasePullRequestReadRepository(data),
+        // Tracked branches, so a pull request into one is reviewed against that
+        // branch's graph. CONTROL plane, with the projects they configure — the
+        // branch list is per-project config, not regional content.
+        createSupabaseProjectBranchRepository(controlDb),
     )
 }
 

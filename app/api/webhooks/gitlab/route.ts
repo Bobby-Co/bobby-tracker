@@ -1,6 +1,6 @@
 import { getSpendGate } from "@/modules/billing"
 import { after } from "next/server"
-import { getAnalyser, createIssueAnalysisService, createPullRequestAnalysisService, createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { getAnalyser, createIssueAnalysisService, createPullRequestAnalysisService, createSupabaseProjectAnalyserRepository, createSupabaseProjectBranchRepository } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { SyncHash, timingSafeEqual, createServicePullRequestStore, getGitlabCloneAuth } from "@/modules/vcs"
 import { createIssueEmbedder, Issue as IssueAggregate, createServiceIssueSyncStore } from "@/modules/issues"
@@ -301,6 +301,8 @@ async function handleMr(svc: Svc, project: GlProjectRow, payload: Record<string,
                 body: a?.description ?? null,
                 baseSha: a?.diff_refs?.base_sha ?? null,
                 headSha: a?.diff_refs?.head_sha ?? a?.last_commit?.id ?? null,
+                // GitLab spells the target branch target_branch.
+                baseRef: a?.target_branch ?? null,
             },
             origin,
         ),
@@ -313,13 +315,27 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
     if (!project.auto_index_on_push) return ack()
     const ref = String((payload as { ref?: unknown }).ref ?? "")
     const headSha = String((payload as { after?: unknown }).after ?? "")
+    // Three ways: the default branch drives the project's graph, a TRACKED
+    // branch refreshes its own, anything else is dropped. Before this a tracked
+    // branch went stale the moment anyone pushed to it.
     const defaultBranch = (payload.project as { default_branch?: string } | undefined)?.default_branch
-    if (!defaultBranch || ref !== `refs/heads/${defaultBranch}`) return ack()
+    const pushedBranch = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null
+    if (!pushedBranch) return ack()
+    const isDefaultBranch = Boolean(defaultBranch) && pushedBranch === defaultBranch
     if (/^0+$/.test(headSha)) return ack()
 
     const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(svc).findByProjectId(project.id))
     if (!analyser?.enabled || !analyser.graph_id) return ack()
-    if (analyser.last_indexed_sha && analyser.last_indexed_sha === headSha) return ack()
+
+    // Resolved before the no-op check, which otherwise compares a branch push
+    // against the DEFAULT branch's sha.
+    const tracked = isDefaultBranch
+        ? null
+        : await tryOrNull(() => createSupabaseProjectBranchRepository(svc).find(project.id, pushedBranch))
+    if (!isDefaultBranch && !tracked) return ack()
+
+    const indexedSha = tracked ? tracked.last_indexed_sha : analyser.last_indexed_sha
+    if (indexedSha && indexedSha === headSha) return ack()
 
     // Which cell holds this graph. An unreadable cell acks rather than
     // retrying — redelivery won't fix a routing gap, it just replays the push.
@@ -344,6 +360,33 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
         return ack()
     }
     const graphId = analyser.graph_id
+
+    // A tracked branch refreshes its own graph and stops here.
+    if (tracked) {
+        const branchRepo = createSupabaseProjectBranchRepository(svc)
+        await tryOrNull(() => branchRepo.markIndexing(project.id, pushedBranch))
+        after(async () => {
+            try {
+                const gitAuth = await getGitlabCloneAuth(project.id)
+                await getAnalyser(cell).startIndex({
+                    job_type: "branch",
+                    repo_url: project.repo_url,
+                    repo_ref: pushedBranch,
+                    repo_id: graphId,
+                    user_id: project.user_id,
+                    ...(gitAuth ? { git_auth: gitAuth } : {}),
+                    // The BRANCH row, not the project's.
+                    supabase_progress: { key_value: tracked.id },
+                })
+            } catch (e) {
+                const message = e instanceof Error ? e.message : String(e)
+                console.error("[gitlab webhook] push → branch index failed", project.id, pushedBranch, message)
+                await branchRepo.markFailed(project.id, pushedBranch, message).catch(() => {})
+            }
+        })
+        return ack()
+    }
+
     after(async () => {
         try {
             // Explicit git_auth (bot token + oauth2 user) so the analyser can clone

@@ -1,6 +1,6 @@
 import { getSpendGate } from "@/modules/billing"
 import { after } from "next/server"
-import { createSupabaseProjectAnalyserRepository, getAnalyser, createIssueAnalysisService } from "@/modules/analysis"
+import { createSupabaseProjectAnalyserRepository, createSupabaseProjectBranchRepository, getAnalyser, createIssueAnalysisService } from "@/modules/analysis"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { getWebhookVerifier, SyncHash } from "@/modules/vcs"
 import { createPullRequestAnalysisService } from "@/modules/analysis"
@@ -449,6 +449,9 @@ async function applyPullRequestToProject(
                 body: pr?.body ?? null,
                 baseSha: pr?.base?.sha ?? null,
                 headSha: pr?.head?.sha ?? null,
+                // The branch this PR targets. When the project tracks it, the
+                // review reads that branch's graph instead of the default one.
+                baseRef: pr?.base?.ref ?? null,
             },
             origin,
         ),
@@ -487,10 +490,18 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
     const repoId = repository?.id
     if (!repoId || !ref) return ack()
 
-    // Only the default branch drives the graph. Feature-branch and tag pushes
-    // are ignored so the graph tracks the canonical branch (no thrashing).
+    // Three ways from here, not two. The default branch drives the project's
+    // graph as it always has; a branch the project explicitly TRACKS gets its
+    // own graph refreshed; everything else — untracked branches, tags — is
+    // dropped, so nothing is indexed that nobody asked for.
+    //
+    // Before this, the second case did not exist and a tracked branch went
+    // stale the moment anyone pushed to it: its index reflected whenever
+    // someone last pressed the button.
     const defaultBranch = repository?.default_branch
-    if (!defaultBranch || ref !== `refs/heads/${defaultBranch}`) return ack()
+    const pushedBranch = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null
+    if (!pushedBranch) return ack() // a tag, or something else that is not a branch
+    const isDefaultBranch = Boolean(defaultBranch) && pushedBranch === defaultBranch
 
     // Branch deletion (or an all-zero head) has nothing to index.
     if (deleted || /^0+$/.test(headSha)) return ack()
@@ -508,9 +519,19 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
     )
     if (!analyser?.enabled || !analyser.graph_id) return ack()
 
+    // A tracked branch, or nothing. Resolved BEFORE the no-op check below,
+    // because that check compares against the wrong row for a branch push: the
+    // project's last_indexed_sha belongs to the default branch, and a branch
+    // whose head happened to match it would be skipped forever.
+    const tracked = isDefaultBranch
+        ? null
+        : await tryOrNull(() => createSupabaseProjectBranchRepository(svc).find(project.id, pushedBranch))
+    if (!isDefaultBranch && !tracked) return ack() // not a branch anyone asked to index
+
     // Already indexed at this exact commit → nothing to do (the analyser would
     // no-op too, but skipping saves a clone + a queue round-trip).
-    if (analyser.last_indexed_sha && analyser.last_indexed_sha === headSha) return ack()
+    const indexedSha = tracked ? tracked.last_indexed_sha : analyser.last_indexed_sha
+    if (indexedSha && indexedSha === headSha) return ack()
 
     // Which cell holds this graph. An unreadable cell acks rather than
     // retrying — redelivery won't fix a routing gap, it just replays the push.
@@ -535,6 +556,37 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
         return ack()
     }
     const graphId = analyser.graph_id
+
+    // A tracked branch refreshes its OWN graph and stops here. Same spend gate,
+    // same cell, same coalescing queue — only the job type and the reported-to
+    // row differ.
+    if (tracked) {
+        const branchRepo = createSupabaseProjectBranchRepository(svc)
+        await tryOrNull(() => branchRepo.markIndexing(project.id, pushedBranch))
+        after(async () => {
+            try {
+                await getAnalyser(cell).startIndex({
+                    job_type: "branch",
+                    repo_url: project.repo_url,
+                    // The branch to clone AND to index. Safe to send now: the
+                    // clone names the branch rather than checking it out after
+                    // a single-branch shallow clone, which is what used to fail.
+                    repo_ref: pushedBranch,
+                    repo_id: graphId,
+                    user_id: project.user_id,
+                    // The BRANCH row, not the project's — a branch job must not
+                    // report into the default branch's analyser row.
+                    supabase_progress: { key_value: tracked.id },
+                })
+            } catch (e) {
+                const message = e instanceof Error ? e.message : String(e)
+                console.error("[github webhook] push → branch index failed", project.id, pushedBranch, message)
+                await branchRepo.markFailed(project.id, pushedBranch, message).catch(() => {})
+            }
+        })
+        return ack()
+    }
+
     after(async () => {
         try {
             await getAnalyser(cell).startIndex({

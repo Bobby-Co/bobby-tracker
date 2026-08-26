@@ -13,6 +13,7 @@ import { ProjectAnalyser } from "../domain/ProjectAnalyser"
 import type { AnalyserResolver } from "../ports/Analyser"
 import type { PrAnalyseFile } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
+import type { ProjectBranchRepository } from "../ports/ProjectBranchRepository"
 import type { PullRequestAnalysisResultRow, PullRequestAnalysisStore } from "../ports/PullRequestAnalysisStore"
 import type { ReviewProfileRepository } from "../ports/ReviewProfileRepository"
 import { compilePolicy, maxDepthForTier, type ReviewProfile } from "../domain/ReviewProfile"
@@ -38,6 +39,11 @@ export interface PrMirror {
         merged: boolean
         head_sha: string | null
         base_sha: string | null
+        /** The branch the pull request targets. Read so a review of a PR into a
+         *  TRACKED branch runs against that branch's graph rather than the
+         *  default one. Nullable: rows mirrored before this was selected have
+         *  none, and those simply review against the default branch. */
+        base_ref?: string | null
     } | null>
 }
 
@@ -62,6 +68,11 @@ export type PrInput = {
     body: string | null
     baseSha: string | null
     headSha: string | null
+    /** The branch this pull request targets ("main", "develop", …). When the
+     *  project TRACKS that branch, the review runs against the branch's own
+     *  graph instead of the default one — a pull request into `develop` should
+     *  be read against `develop`. Absent → the default branch, as before. */
+    baseRef?: string | null
 }
 
 type VcsAppServiceResolver = (project: VcsProviderBinding) => VcsAppService | null
@@ -195,7 +206,24 @@ export class PullRequestAnalysisService {
          *  it a coalesced push is simply not chased, which is the behaviour
          *  before rounds existed. */
         private readonly pulls?: PrMirror,
+        /** The project's tracked branches, so a pull request targeting one is
+         *  reviewed against that branch's graph. Optional like the rest: absent
+         *  means every review reads the default branch, which is what happened
+         *  before branches existed. */
+        private readonly branches?: ProjectBranchRepository,
     ) {}
+
+    /** The branch a review should read, or undefined for the default one.
+     *
+     *  Undefined in every uncertain case — no repository wired, no base ref, the
+     *  branch is not tracked, or it is tracked but not yet ready. The analyser
+     *  REFUSES a branch it has not indexed rather than falling back, so guessing
+     *  here would turn a working review into no review at all. */
+    private async resolveReviewBranch(projectId: string, baseRef?: string | null): Promise<string | undefined> {
+        if (!this.branches || !baseRef) return undefined
+        const tracked = await tryOrNull(() => this.branches!.find(projectId, baseRef))
+        return tracked?.status === "ready" ? tracked.branch : undefined
+    }
 
     /** Gate on link + indexed graph, post/re-use the loading comment, upsert the
      *  tracking row (its id is the analyser task_id), kick the run. Idempotent —
@@ -533,11 +561,26 @@ export class PullRequestAnalysisService {
         })
         if (!row) return
 
+        // Resolved once, before dispatch, so both the initial run and any
+        // re-run in this call agree about which tree they are reading.
+        const reviewBranch = await this.resolveReviewBranch(project.id, pr.baseRef)
+
         const callback = { url: `${callbackOrigin(origin)}/api/internal/pr-analysis-result`, token: process.env.BOBBY_ANALYSER_TOKEN }
         const dispatch = (input: PrAnalyseFile[], carrying: ReviewRunScope) =>
             this.analyserFor(cell).startPRAnalysis(
             {
                 repoId: analyser!.graph_id!, // isReady() guarantees a non-null graph_id
+                // A pull request into a tracked branch is reviewed against THAT
+                // branch's graph. The base ref is already known — no picker, no
+                // guess — and reading a PR into `develop` against `main` is the
+                // same class of wrongness the PR overlay existed to fix, one
+                // level up.
+                //
+                // Only when the branch is READY: an unindexed one would make the
+                // analyser refuse the whole review rather than answer from the
+                // default branch, which is a worse trade here than a slightly
+                // stale base.
+                branch: reviewBranch,
                 number: pr.number,
                 title: pr.title,
                 body: pr.body || "",
@@ -870,7 +913,7 @@ export class PullRequestAnalysisService {
         )
         await this.start(
             project as PrProject,
-            { number: row.prNumber, title: pr.title, body: pr.body, baseSha: pr.base_sha, headSha: pr.head_sha },
+            { number: row.prNumber, title: pr.title, body: pr.body, baseSha: pr.base_sha, headSha: pr.head_sha, baseRef: pr.base_ref },
             origin,
             // The head has not moved, so the run-once-per-head gate would skip
             // this. It is a retry of a review that did not happen, not a repeat
@@ -1164,6 +1207,7 @@ export class PullRequestAnalysisService {
                 body: pr.body,
                 baseSha: pr.base_sha,
                 headSha: pr.head_sha,
+                baseRef: pr.base_ref,
             },
             origin,
         )
@@ -1208,6 +1252,7 @@ export class PullRequestAnalysisService {
                 body: pr.body,
                 baseSha: pr.base_sha,
                 headSha: pr.head_sha,
+                baseRef: pr.base_ref,
             },
             origin,
         )
