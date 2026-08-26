@@ -36,11 +36,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const branch = typeof body.branch === "string" ? body.branch.trim() : ""
     if (!branch) return jsonError("bad_request", "branch is required", 400)
-    // The name becomes a FalkorDB key verbatim, and the DB carries the same
-    // check — rejecting here just gives a better message than a constraint
-    // violation would.
-    if (/\s/.test(branch)) return jsonError("bad_request", "a branch name cannot contain whitespace", 400)
-    if (branch.length > 255) return jsonError("bad_request", "that branch name is too long", 400)
+    const bad = invalidBranchReason(branch)
+    if (bad) return jsonError("bad_request", bad, 400)
 
     // A branch is a copy of the repository's graph plus a replay. Without a
     // bootstrapped repository there is nothing to copy, and the analyser would
@@ -54,4 +51,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { data, error: writeErr } = await repoRead(() => ctx.projectBranches.track(id, branch))
     if (writeErr) return writeErr
     return Response.json({ branch: data }, { status: 201 })
+}
+
+// git's own rules for a ref name, kept to the parts that matter here.
+//
+// This is not politeness about invalid input. The name is concatenated into the
+// analyser's graph id — "<repoId>@branch/<name>" — and that id is joined onto a
+// filesystem path when a graph is torn down. A name containing ".." would climb
+// out of the graph root and delete something else. git would never produce such
+// a branch; an HTTP client will happily send one.
+//
+// The analyser refuses to delete outside its graph root as well. Two checks,
+// because the one that matters is whichever is still there after a refactor.
+function invalidBranchReason(branch: string): string | null {
+    if (branch.length > 255) return "that branch name is too long"
+    if (/\s/.test(branch)) return "a branch name cannot contain whitespace"
+    // eslint-disable-next-line no-control-regex
+    if (/[\x00-\x1f\x7f~^:?*[\\]/.test(branch)) return "that branch name contains characters git does not allow"
+    if (branch.split("/").some((seg) => seg === "" || seg === "." || seg === "..")) {
+        return "that is not a valid branch name"
+    }
+    if (branch.startsWith("/") || branch.endsWith("/") || branch.endsWith(".lock")) {
+        return "that is not a valid branch name"
+    }
+    return null
 }
