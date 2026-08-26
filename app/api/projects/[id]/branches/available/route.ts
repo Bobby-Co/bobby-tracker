@@ -1,5 +1,5 @@
 import { getVcsAppService } from "@/modules/vcs"
-import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
+import { ApiContext, jsonError } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 
 // GET /api/projects/[id]/branches/available — the repo's branches, for the picker.
@@ -9,8 +9,15 @@ import { tryOrNull } from "@/lib/shared/kernel"
 // would offer branches that no longer exist and miss the one someone just
 // pushed — which is exactly when they want to index it.
 //
-// Excludes the default branch (already indexed as the project's own graph) and
-// anything already tracked, so the picker only ever offers additions.
+// Excludes only the default branch — already indexed as the project's own graph,
+// so it can be neither added nor removed. Branches already TRACKED are included:
+// the picker is a multi-select showing which ones are indexed, so it has to be
+// able to render them checked (and let them be unchecked).
+//
+// `protected` rides along as the suggested set. A protected branch is one a team
+// has already said matters, which is a better default than "none" and a far
+// better one than "all" — every tracked branch is resident in the analyser's
+// memory.
 //
 // A provider that cannot answer is NOT an error here. The panel keeps a
 // free-text fallback, and refusing to render the form because a listing failed
@@ -27,16 +34,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const vcs = getVcsAppService(project)
     if (!vcs) return Response.json({ branches: [], reason: "no_provider" })
 
-    const { data: tracked, error: readErr } = await repoRead(() => ctx.projectBranches.listByProject(id))
-    if (readErr) return readErr
-    const already = new Set((tracked ?? []).map((b) => b.branch))
-
     try {
         const all = await vcs.listBranches()
         const offerable = all
-            .filter((b) => !b.isDefault && !already.has(b.name))
-            .map((b) => b.name)
-            .sort((a, b) => a.localeCompare(b))
+            .filter((b) => !b.isDefault)
+            .map((b) => ({ name: b.name, protected: b.isProtected }))
+            // Protected first — the ones most likely to be wanted — then
+            // alphabetical within each half.
+            .sort((a, b) =>
+                a.protected === b.protected ? a.name.localeCompare(b.name) : a.protected ? -1 : 1,
+            )
         return Response.json({ branches: offerable })
     } catch (e) {
         // Degrade to the free-text path rather than failing the panel.

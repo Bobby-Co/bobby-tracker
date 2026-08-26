@@ -345,7 +345,7 @@ export class GithubVcsAppInstance implements VcsAppInstance {
     // Five pages of 100 is 500 branches — past that a dropdown is the wrong
     // control anyway, and the free-text fallback still accepts anything.
     async listBranches(): Promise<VcsBranch[]> {
-        const rows = await this.paginate<{ name: string; commit?: { sha?: string } }>(
+        const rows = await this.paginate<{ name: string; commit?: { sha?: string }; protected?: boolean }>(
             "/branches",
             5,
             "list branches",
@@ -355,6 +355,7 @@ export class GithubVcsAppInstance implements VcsAppInstance {
             name: b.name,
             sha: b.commit?.sha ?? null,
             isDefault: def != null && b.name === def,
+            isProtected: b.protected === true,
         }))
     }
 

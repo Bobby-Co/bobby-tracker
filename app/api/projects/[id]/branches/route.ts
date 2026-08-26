@@ -66,7 +66,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 function invalidBranchReason(branch: string): string | null {
     if (branch.length > 255) return "that branch name is too long"
     if (/\s/.test(branch)) return "a branch name cannot contain whitespace"
-    // eslint-disable-next-line no-control-regex
     if (/[\x00-\x1f\x7f~^:?*[\\]/.test(branch)) return "that branch name contains characters git does not allow"
     if (branch.split("/").some((seg) => seg === "" || seg === "." || seg === "..")) {
         return "that is not a valid branch name"

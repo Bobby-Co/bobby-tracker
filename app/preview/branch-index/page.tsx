@@ -58,7 +58,16 @@ export default function BranchIndexPreview() {
             const url = typeof input === "string" ? input : input.toString()
             if (url.includes("/branches/available")) {
                 // "no provider" is the degraded case the free-text fallback exists for.
-                const list = set === "Provider cannot list" ? [] : ["develop", "feat/new-thing", "release/3.0"]
+                const list =
+                    set === "Provider cannot list"
+                        ? []
+                        : [
+                              { name: "develop", protected: true },
+                              { name: "release/2.0", protected: true },
+                              { name: "feat/multi-branch", protected: false },
+                              { name: "feat/new-thing", protected: false },
+                              { name: "feat/broken", protected: false },
+                          ]
                 return new Response(JSON.stringify({ branches: list }), {
                     status: 200,
                     headers: { "Content-Type": "application/json" },

@@ -195,4 +195,8 @@ export interface VcsBranch {
     /** The repository's default branch, which is already indexed as the
      *  project's own graph and so must not be offered as an extra one. */
     isDefault: boolean
+    /** Protected by the provider's branch rules. Used as the SUGGESTED set to
+     *  index: a protected branch is one a team has said matters, which is a
+     *  better default than "none" and a far better one than "all". */
+    isProtected: boolean
 }

@@ -282,14 +282,17 @@ export class GitlabVcsAppInstance implements VcsAppInstance {
     // unlike GitHub this needs no second call to learn it.
     async listBranches(): Promise<VcsBranch[]> {
         const { c, pid } = await this.client()
-        const rows = await c.paginate<{ name: string; default?: boolean; commit?: { id?: string } }>(
-            `/projects/${pid}/repository/branches`,
-            5,
-        )
+        const rows = await c.paginate<{
+            name: string
+            default?: boolean
+            protected?: boolean
+            commit?: { id?: string }
+        }>(`/projects/${pid}/repository/branches`, 5)
         return rows.map((b) => ({
             name: b.name,
             sha: b.commit?.id ?? null,
             isDefault: b.default === true,
+            isProtected: b.protected === true,
         }))
     }
 

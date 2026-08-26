@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { Dropdown } from "@/components/ui/dropdown"
+import { MultiDropdown } from "@/components/ui/multi-dropdown"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import type { ProjectBranch } from "@/lib/shared/types"
@@ -43,18 +43,81 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => setRefreshMs(working ? POLL_MS : undefined), [working])
 
-    // The repository's branches, minus the default one and anything already
-    // tracked. Live from the provider: branches come and go constantly and
-    // nothing mirrors them, so a cached list would offer dead branches and miss
-    // the one someone just pushed — which is exactly when they want it indexed.
-    const { data: avail, loading: listing, refetch: refetchAvailable } = useApi<{ branches: string[] }>(
-        `/api/projects/${projectId}/branches/available`,
-    )
+    // Every branch in the repository except the default one, with whether the
+    // provider protects it. Live: branches come and go constantly and nothing
+    // mirrors them, so a cache would offer dead branches and miss the one just
+    // pushed — exactly when someone wants it indexed.
+    const { data: avail, loading: listing, refetch: refetchAvailable } = useApi<{
+        branches: { name: string; protected: boolean }[]
+    }>(`/api/projects/${projectId}/branches/available`)
     const available = avail?.branches ?? []
+
+    // What is tracked right now, and what the user has changed it to.
+    //
+    // Derived with an override rather than seeded in an effect: the default is a
+    // pure function of data that arrives asynchronously, so an effect would mean
+    // a render with the wrong value, then a correction — and the lint rule
+    // against setState-in-effect is right about that one.
+    const trackedNames = branches.map((b) => b.branch)
+    const suggested = available.filter((b) => b.protected).map((b) => b.name)
+    // Nothing tracked yet → suggest the protected branches. A protected branch
+    // is one the team has already said matters, which beats "none" and beats
+    // "all" — every tracked branch is resident in the analyser's memory.
+    const defaultSelection = trackedNames.length > 0 ? trackedNames : suggested
+    const [override, setOverride] = useState<string[] | null>(null)
+    const selection = override ?? defaultSelection
+
+    const toAdd = selection.filter((b) => !trackedNames.includes(b))
+    const toRemove = trackedNames.filter((b) => !selection.includes(b))
+    const dirty = toAdd.length > 0 || toRemove.length > 0
 
     const [adding, setAdding] = useState("")
     const [busy, setBusy] = useState<string | null>(null)
     const [err, setErr] = useState<string | null>(null)
+
+    /** Make the tracked set match the selection.
+     *
+     *  Applied as a DIFF rather than a replace: an untrack drops the branch's
+     *  graph, so re-tracking one that never changed would throw away a working
+     *  index and pay to rebuild it.
+     *
+     *  Additions are tracked then indexed — two calls, because tracking records
+     *  intent and cannot fail slowly, whereas indexing can (an unreachable cell,
+     *  a repository with no graph yet) and needs somewhere to report it.
+     *
+     *  Sequential, not parallel: each addition is a clone plus a full graph copy
+     *  on a shared, in-memory server, and firing eight at once is how you find
+     *  that out the hard way. */
+    async function applySelection() {
+        if (!dirty || busy) return
+        setErr(null)
+        setBusy("apply")
+        try {
+            for (const branch of toRemove) {
+                await apiMutate(`/api/projects/${projectId}/branches/${encodeURIComponent(branch)}`, {
+                    method: "DELETE",
+                })
+            }
+            for (const branch of toAdd) {
+                await apiMutate(`/api/projects/${projectId}/branches`, {
+                    method: "POST",
+                    body: { branch },
+                })
+                await apiMutate(`/api/projects/${projectId}/branches/${encodeURIComponent(branch)}/index`, {
+                    method: "POST",
+                })
+            }
+            // Back to "the selection IS what is tracked", so the Apply button
+            // settles rather than staying lit against a stale override.
+            setOverride(null)
+            await Promise.all([refetch(), refetchAvailable()])
+        } catch (e) {
+            setErr(e instanceof ApiError ? e.message || `Failed (${e.status})` : "Network error")
+            await Promise.all([refetch(), refetchAvailable()])
+        } finally {
+            setBusy(null)
+        }
+    }
 
     async function track(e: React.FormEvent) {
         e.preventDefault()
@@ -69,8 +132,6 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
             })
             setAdding("")
             await Promise.all([refetch(), refetchAvailable()])
-            // Tracking records intent; indexing is its own call so the button
-            // that can fail slowly is the one that shows the failure.
             await index(branch)
         } catch (e) {
             setErr(e instanceof ApiError ? e.message || `Failed (${e.status})` : "Network error")
@@ -161,26 +222,41 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
                 </ul>
             )}
 
-            <form onSubmit={track} className="mt-4 flex flex-wrap items-center gap-2">
-                {/* Choose, don't type. The name becomes a graph key and an
-                    exact-match lookup, so a typo is a branch that indexes
-                    nothing. The text box stays as the fallback for a provider
-                    that cannot list — losing the convenience should not lose
-                    the capability. */}
-                {available.length > 0 ? (
-                    // Searchable: a busy repository has more branches than
-                    // anyone wants to scroll, and the name is usually known —
-                    // it is the exact spelling that was the problem.
-                    <Dropdown
-                        value={adding}
-                        onChange={setAdding}
-                        options={available.map((b) => ({ value: b, label: b }))}
-                        placeholder="Choose a branch…"
+            {available.length > 0 ? (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {/* Pick the SET, not one at a time. Which branches are
+                        indexed is a standing choice, so the control that
+                        expresses it should be a selection you adjust — not a
+                        queue you add to and a separate button you remove with. */}
+                    <MultiDropdown
+                        values={selection}
+                        onChange={setOverride}
+                        options={available.map((b) => ({
+                            value: b.name,
+                            label: b.name,
+                            // Protected branches lead, and say why they lead.
+                            group: b.protected ? "Protected" : "Other branches",
+                        }))}
+                        placeholder="No branches indexed"
                         searchable={available.length > 8}
-                        aria-label="Branch to track"
+                        aria-label="Branches to keep indexed"
                         className="min-w-0 flex-1"
+                        disabled={busy !== null}
                     />
-                ) : (
+                    <button
+                        type="button"
+                        onClick={() => void applySelection()}
+                        disabled={!dirty || busy !== null}
+                        className="cursor-pointer rounded-[10px] bg-[color:var(--c-primary)] px-3.5 py-2 text-[12.5px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        {busy === "apply" ? "Applying…" : "Apply"}
+                    </button>
+                </div>
+            ) : (
+                // No listing — no integration, or the provider refused. Typing
+                // still works, because losing the convenience should not lose
+                // the capability.
+                <form onSubmit={track} className="mt-4 flex flex-wrap items-center gap-2">
                     <input
                         value={adding}
                         onChange={(e) => setAdding(e.target.value)}
@@ -188,15 +264,22 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
                         spellCheck={false}
                         className="min-w-0 flex-1 rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 font-mono text-[12.5px] outline-none focus:border-[color:var(--c-primary)]"
                     />
-                )}
-                <button
-                    type="submit"
-                    disabled={!adding.trim() || busy !== null}
-                    className="cursor-pointer rounded-[10px] bg-[color:var(--c-primary)] px-3.5 py-2 text-[12.5px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    {busy === "add" ? "Adding…" : "Track branch"}
-                </button>
-            </form>
+                    <button
+                        type="submit"
+                        disabled={!adding.trim() || busy !== null}
+                        className="cursor-pointer rounded-[10px] bg-[color:var(--c-primary)] px-3.5 py-2 text-[12.5px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        {busy === "add" ? "Adding…" : "Track branch"}
+                    </button>
+                </form>
+            )}
+
+            {dirty && (
+                <p className="mt-2 text-[12.5px] text-[color:var(--c-text-muted)]">
+                    {toAdd.length > 0 && <>Will index {toAdd.join(", ")}. </>}
+                    {toRemove.length > 0 && <>Will stop indexing {toRemove.join(", ")}.</>}
+                </p>
+            )}
 
             {err && <p className="mt-2 text-[12.5px] text-[color:var(--c-error)]">{err}</p>}
         </div>
