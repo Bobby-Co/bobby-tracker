@@ -49,6 +49,20 @@ export interface ImportContext {
     userId: string
 }
 
+/** How many changed files make a branch worth re-analysing from scratch rather
+ *  than inheriting the default branch's analysis.
+ *
+ *  A count, not a ratio, because the cost that matters is absolute: what a
+ *  re-analysis charges for is the modules it has to summarise, and a branch
+ *  touching 300 files costs the same to re-analyse whether the repository has
+ *  a thousand files or ten thousand.
+ *
+ *  Set well below GitHub's 300-file compare cap so the threshold is reached on
+ *  its own terms rather than by the provider truncating first. Deliberately
+ *  generous: inheriting a slightly stale summary is a small harm, and a
+ *  needless full analysis is a real bill. */
+const REWRITE_FILE_COUNT = 150
+
 export class VcsAppService {
     private readonly syncHash = new SyncHash()
 
@@ -78,13 +92,25 @@ export class VcsAppService {
      *  code the branch no longer has, which is worse than having none because it
      *  is stated with the same confidence as everything else.
      *
-     *  `diverged` is the provider's own verdict, not a heuristic of ours. It is
-     *  true when the histories have actually forked — neither is an ancestor of
-     *  the other — or when the comparison came back TRUNCATED, which means the
-     *  provider stopped describing the change (GitHub caps at 300 files / 250
-     *  commits) and a partial answer must not be read as a small one. The
-     *  incremental PR review already treats truncation this way, for the same
-     *  reason.
+     *  Measured by the SIZE of the change, not the shape of the history.
+     *
+     *  compareCommits reports `status: "diverged"` whenever both refs hold
+     *  commits the other does not, which is true of essentially every feature
+     *  branch that has not just been rebased — make a branch, let the default
+     *  branch move on, and you are "diverged". It describes ancestry, not
+     *  distance, and reading it as "too far apart to inherit" condemns the
+     *  ordinary case to a full re-analysis: precisely the branches the copy
+     *  design exists to make free.
+     *
+     *  So the question asked here is how much of the repository this branch
+     *  actually rewrites. Below the threshold the default branch's analysis is
+     *  still broadly true of it and worth inheriting; above it, the inherited
+     *  summaries describe a codebase this branch has left behind.
+     *
+     *  Truncation still counts. GitHub caps compare at 300 files / 250 commits,
+     *  and a partial answer must not be read as a small one — the incremental
+     *  PR review refuses to carry findings across a truncated range for the
+     *  same reason.
      *
      *  Best-effort: a provider that will not answer yields "not diverged", so
      *  the cheap path runs. Guessing "diverged" on a failed lookup would spend
@@ -95,7 +121,8 @@ export class VcsAppService {
             const base = all.find((b) => b.isDefault)
             if (!base || base.name === branch) return { diverged: false }
             const cmp = await this.vcs.compareCommits(base.name, branch)
-            return { baseRef: base.name, diverged: cmp.status === "diverged" || cmp.truncated }
+            if (cmp.truncated) return { baseRef: base.name, diverged: true }
+            return { baseRef: base.name, diverged: cmp.files.length >= REWRITE_FILE_COUNT }
         } catch {
             return { diverged: false }
         }
