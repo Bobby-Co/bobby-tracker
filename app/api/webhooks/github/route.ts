@@ -572,6 +572,9 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
                     // clone names the branch rather than checking it out after
                     // a single-branch shallow clone, which is what used to fail.
                     repo_ref: pushedBranch,
+                    // The push payload already names the default branch, so the
+                    // base costs no extra API call here.
+                    ...(defaultBranch ? { base_ref: defaultBranch } : {}),
                     repo_id: graphId,
                     user_id: project.user_id,
                     // The BRANCH row, not the project's — a branch job must not

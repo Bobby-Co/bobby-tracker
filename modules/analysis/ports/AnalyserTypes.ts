@@ -518,6 +518,14 @@ export interface KickoffJobInput {
     repo_url: string
     repo_ref?: string
     repo_id?: string
+    /** For job_type=branch: the branch this one is measured against — the
+     *  repository's default branch, whose graph is being copied. Fetched
+     *  alongside the branch so a diff has a left-hand side. */
+    base_ref?: string
+    /** For job_type=branch: copying is the wrong strategy for this branch —
+     *  it has diverged past the point where the default branch's analysis is
+     *  still true of it, so it is analysed from scratch instead. */
+    branch_diverged?: boolean
     effort?: "low" | "medium" | "high"
     only_lang?: string[]
     max_budget_usd?: number

@@ -372,6 +372,9 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
                     job_type: "branch",
                     repo_url: project.repo_url,
                     repo_ref: pushedBranch,
+                    // The push payload already names the default branch, so the
+                    // base costs no extra API call here.
+                    ...(defaultBranch ? { base_ref: defaultBranch } : {}),
                     repo_id: graphId,
                     user_id: project.user_id,
                     ...(gitAuth ? { git_auth: gitAuth } : {}),

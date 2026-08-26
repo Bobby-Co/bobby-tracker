@@ -1,5 +1,5 @@
 import { AnalyserError, getAnalyser } from "@/modules/analysis"
-import { getGitlabCloneAuth } from "@/modules/vcs"
+import { getGitlabCloneAuth, getVcsAppService } from "@/modules/vcs"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 
@@ -44,6 +44,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     const gitAuth = await getGitlabCloneAuth(id)
 
+    // How far this branch has drifted, and whether inheriting the default
+    // branch's analysis is still honest. Best-effort: an unreachable provider
+    // yields "not diverged", which runs the cheap path — guessing the expensive
+    // one on a flaky API call would spend a full analysis for nothing.
+    const vcs = getVcsAppService(project)
+    const divergence = vcs ? await vcs.branchDivergence(branch) : { diverged: false }
+
     try {
         const result = await getAnalyser(cell).startIndex({
             job_type: "branch",
@@ -53,6 +60,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
             // it could not do before: `--depth` implies `--single-branch`, so a
             // checkout of anything but the remote's HEAD used to fail outright.
             repo_ref: branch,
+            ...(divergence.baseRef ? { base_ref: divergence.baseRef } : {}),
+            ...(divergence.diverged ? { branch_diverged: true } : {}),
             repo_id: readiness.graph_id,
             user_id: user.id,
             ...(gitAuth ? { git_auth: gitAuth } : {}),

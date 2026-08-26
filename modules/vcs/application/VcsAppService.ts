@@ -69,6 +69,38 @@ export class VcsAppService {
         return this.vcs.listBranches()
     }
 
+    /** How far a branch has drifted from the repository's default branch, and
+     *  whether inheriting the default's analysis is still honest.
+     *
+     *  A branch index is a COPY of the default branch's knowledge plus whatever
+     *  the branch changed. That trade only holds while the copied part is still
+     *  true: past some amount of divergence the inherited summaries describe
+     *  code the branch no longer has, which is worse than having none because it
+     *  is stated with the same confidence as everything else.
+     *
+     *  `diverged` is the provider's own verdict, not a heuristic of ours. It is
+     *  true when the histories have actually forked — neither is an ancestor of
+     *  the other — or when the comparison came back TRUNCATED, which means the
+     *  provider stopped describing the change (GitHub caps at 300 files / 250
+     *  commits) and a partial answer must not be read as a small one. The
+     *  incremental PR review already treats truncation this way, for the same
+     *  reason.
+     *
+     *  Best-effort: a provider that will not answer yields "not diverged", so
+     *  the cheap path runs. Guessing "diverged" on a failed lookup would spend
+     *  a full analysis every time an API call flaked. */
+    async branchDivergence(branch: string): Promise<{ baseRef?: string; diverged: boolean }> {
+        try {
+            const all = await this.vcs.listBranches()
+            const base = all.find((b) => b.isDefault)
+            if (!base || base.name === branch) return { diverged: false }
+            const cmp = await this.vcs.compareCommits(base.name, branch)
+            return { baseRef: base.name, diverged: cmp.status === "diverged" || cmp.truncated }
+        } catch {
+            return { diverged: false }
+        }
+    }
+
     async syncIssueCreated(issue: SyncIssueInput, project: ProjectSyncState): Promise<void> {
         const p = Project.of(project)
         if (!p.isSyncReady() || !p.allowsOutbound()) return
