@@ -28,8 +28,6 @@ export function AnalyserPanel({
     // server-rendered prop and overwritten by realtime payloads.
     const [analyser, setAnalyser] = useState<ProjectAnalyser | null>(state)
     const [error, setError] = useState<string | null>(null)
-    const [advanced, setAdvanced] = useState(false)
-    const [token, setToken] = useState("")
     const [busy, setBusy] = useState(false) // toggling enable/disable/index buttons
 
     // How many OTHER branches this project indexes, so the figures below can say
@@ -156,7 +154,6 @@ export function AnalyserPanel({
                 : prev,
         )
         const payload: Record<string, unknown> = {}
-        if (advanced && token) payload.git_token = token
         if (jobType === "incremental") payload.job_type = "incremental"
         void call("index", Object.keys(payload).length ? payload : undefined)
     }
@@ -234,26 +231,6 @@ export function AnalyserPanel({
                             Update
                         </button>
                     )}
-                    {!isIndexing && (
-                        <button type="button" onClick={() => setAdvanced((v) => !v)} className="btn-ghost">
-                            {advanced ? "Hide private-repo token" : "Private repo?"}
-                        </button>
-                    )}
-                </div>
-            )}
-
-            {advanced && enabled && !isIndexing && (
-                <div className="mt-3 rounded-[12px] border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-900">
-                    <p>
-                        Paste a <strong>short-lived</strong> GitHub PAT or App installation token. It&apos;s sent server-side only — never stored — and used solely for the next clone.
-                    </p>
-                    <input
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
-                        type="password"
-                        placeholder="ghs_…"
-                        className="input mt-2 text-[12px]"
-                    />
                 </div>
             )}
 
