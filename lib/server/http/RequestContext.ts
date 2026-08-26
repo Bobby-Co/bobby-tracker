@@ -61,6 +61,7 @@ import {
     createSupabaseIssueSuggestionsRepository,
 } from "@/modules/issues"
 import { createSupabaseProjectAnalyserRepository } from "@/modules/analysis"
+import { createSupabaseProjectBranchRepository } from "@/modules/analysis"
 import {
     createGithubTokenRepository,
     createProviderTokenRepository,
@@ -230,6 +231,13 @@ export class RequestContext {
      *  Realtime — the indexing panel watches it live. */
     get analyser() {
         return createSupabaseProjectAnalyserRepository(this.controlDb)
+    }
+    /** The branches a project keeps indexed beyond its default. Control plane
+     *  alongside the analyser row it extends: a project's placement decides
+     *  where its graphs live, and its branch LIST is placement metadata, not
+     *  regional content. */
+    get projectBranches() {
+        return createSupabaseProjectBranchRepository(this.controlDb)
     }
     /** Cached analyser output per issue. Realtime — the suggestion box shows a
      *  result the moment the detached run's callback writes it. */

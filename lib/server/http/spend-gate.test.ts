@@ -35,6 +35,7 @@ const EXEMPT = new Map<string, string>([
     ["app/api/projects/route.ts", "icon suggester embed only; unbilled, same rule as icons/search"],
     // Teardown and configuration, not model calls.
     ["app/api/projects/[id]/route.ts", "deleteGraph on project deletion — teardown, not a billable call"],
+    ["app/api/projects/[id]/branches/[branch]/route.ts", "deleteGraph when a branch is untracked — teardown, not a billable call"],
     ["app/api/projects/[id]/issue-preferences/route.ts", "reads/writes analyser config; no model call"],
     // Type/wiring surfaces that NAME the analyser without ever calling it.
     ["modules/analysis/index.ts", "public contract barrel — re-exports, dispatches nothing"],

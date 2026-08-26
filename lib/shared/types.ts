@@ -635,6 +635,32 @@ export interface AnalyserProgress {
     message?: string       // any one-liner the server wants to surface
 }
 
+/** One branch a project keeps indexed beyond its default (tracker.project_branches).
+ *
+ *  The DEFAULT branch is not in this table — it is {@link ProjectAnalyser}. A
+ *  project with no rows here behaves exactly as it did before branches existed,
+ *  which is why this is additive rather than a widening of the analyser row.
+ *
+ *  A branch is only queryable at `status === "ready"`. Sending a non-ready
+ *  branch to the analyser gets an explicit "branch is not indexed" error rather
+ *  than a silent fall back to the default branch — being told about the wrong
+ *  tree is worse than being told to wait. */
+export interface ProjectBranch {
+    id: string
+    project_id: string
+    /** As git spells it: "feat/multi-branch", slashes and all. */
+    branch: string
+    status: AnalyserStatus
+    /** The analyser's logical graph name (`repoID@branch/<name>`). Null until
+     *  the first index lands. */
+    graph_id: string | null
+    last_indexed_at: string | null
+    last_indexed_sha: string | null
+    last_error: string | null
+    created_at: string
+    updated_at: string
+}
+
 export interface ProjectAnalyser {
     project_id: string
     enabled: boolean

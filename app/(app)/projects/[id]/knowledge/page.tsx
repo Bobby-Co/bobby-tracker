@@ -4,6 +4,7 @@ import { useParams } from "next/navigation"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { AnalyserPanel } from "@/components/projects/analyser-panel"
 import { AutoUpdatePanel } from "@/components/projects/auto-update-panel"
+import { BranchIndexPanel } from "@/components/projects/branch-index-panel"
 import { DuplicateSensitivityPanel } from "@/components/projects/duplicate-sensitivity-panel"
 import { AnalyserDefaultEffort } from "@/components/projects/analyser-default-effort"
 import { ReviewProfilePanel } from "@/components/projects/review-profile-panel"
@@ -67,6 +68,7 @@ export default function KnowledgePage() {
             {/* Auto-update on push keeps the graph current on every commit. An
                 indexing setting, so it lives here with the analyser controls. */}
             <AutoUpdatePanel projectId={id} />
+            <BranchIndexPanel projectId={id} />
             {/* Default effort lives with the analyser settings. Only meaningful
                 once the project has an indexed graph the preference keys to. */}
             {state?.graph_id && <AnalyserDefaultEffort projectId={id} />}

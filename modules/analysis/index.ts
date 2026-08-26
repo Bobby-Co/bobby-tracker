@@ -12,6 +12,8 @@ export { ProjectAnalyser } from "./domain/ProjectAnalyser"
 // ─── project_analyser repository ─────────────────────────────────────────────
 export type { AnalyserReadinessRow, ProjectAnalyserRepository } from "./ports/ProjectAnalyserRepository"
 export { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
+export { createSupabaseProjectBranchRepository } from "./infrastructure/SupabaseProjectBranchRepository"
+export type { ProjectBranchRepository } from "./ports/ProjectBranchRepository"
 
 // ─── analysis-orchestration services (durable, cancellable bot-comment lifecycle)
 // The analyser-run lifecycle is an analysis concern; the GitHub side is just a

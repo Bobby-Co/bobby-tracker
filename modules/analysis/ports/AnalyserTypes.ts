@@ -486,7 +486,11 @@ export interface SupabaseProgressTarget {
 }
 
 export interface KickoffJobInput {
-    job_type?: "bootstrap" | "incremental"
+    /** "branch" indexes ONE non-default branch by copying the repository's
+     *  graph and replaying that branch's parse over the copy. Requires
+     *  `repo_ref` (the branch) and a prior bootstrap of the repository. No model
+     *  calls — the summaries and embeddings ride along in the copy. */
+    job_type?: "bootstrap" | "incremental" | "branch"
     repo_url: string
     repo_ref?: string
     repo_id?: string
