@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 
 import type { PrAnalysis, PrFinding } from "@/lib/shared/types"
 import { cn } from "@/components/ui/cn"
@@ -198,6 +198,10 @@ export function MoreDetail({ r }: { r: PrAnalysis }) {
  *  cards it opens one, which is better than two unreadable ones.
  */
 const SLIVER_W = 22
+/** Below this a sliver shows its dot alone rather than half a digit. */
+const SLIVER_NUM_W = 18
+/** The floor — a dot plus its ring. */
+const SLIVER_MIN = 8
 const READABLE_W = 232
 const STRIP_GAP = 6
 
@@ -217,29 +221,35 @@ export function Rounds() {
     // Measured, not guessed at from a breakpoint: the strip sits in a column
     // whose width depends on whether the metadata rail is showing, so a media
     // query would be answering about the wrong element.
-    useEffect(() => {
+    // Before paint, because every width below is derived from this number.
+    useLayoutEffect(() => {
         const el = rowRef.current
-        if (!el || typeof ResizeObserver === "undefined") return
+        if (!el) return
+        setWidth(el.getBoundingClientRect().width)
+        if (typeof ResizeObserver === "undefined") return
         const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
         ro.observe(el)
-        setWidth(el.getBoundingClientRect().width)
         return () => ro.disconnect()
     }, [])
 
-    const fits = (openCount: number) =>
-        openCount * READABLE_W + (rounds.length - openCount) * SLIVER_W + (rounds.length - 1) * STRIP_GAP <= width
-
+    // ONE card open — the selected one. Every round stays on screen, so the
+    // strip cannot also afford a second readable card.
     const open = new Set<number>([sel])
-    if (rounds.length > 1 && width > 0 && fits(2)) {
-        // The second card is the CURRENT round — the thing the merge gate reads
-        // and the thing a previous round is worth comparing against. Looking at
-        // the current one already? Then the previous, for the same reason.
-        open.add(sel === last ? last - 1 : last)
-    }
+
+    // Grow weights over a zero basis, summing to the free space: flex hands out
+    // free space by weight, so the row lands on exactly these widths and cannot
+    // overflow, however many rounds there are.
+    const gaps = (rounds.length - 1) * STRIP_GAP
+    const slivers = Math.max(1, rounds.length - 1)
+    const free = Math.max(0, width - gaps)
+    const sliverW = free > 0 ? Math.max(SLIVER_MIN, Math.min(SLIVER_W, (free - READABLE_W) / slivers)) : SLIVER_W
+    const openW = free > 0 ? Math.max(0, free - slivers * sliverW) : READABLE_W
+    const showNumber = sliverW >= SLIVER_NUM_W
 
     return (
         <div ref={rowRef} className="flex min-h-[78px] w-full" style={{ gap: STRIP_GAP }}>
-            {rounds.map((r, i) => {
+            {/* Nothing until measured — the widths come from that measurement. */}
+            {width > 0 && rounds.map((r, i) => {
                 const isOpen = open.has(i)
                 const current = i === last
                 return (
@@ -249,10 +259,10 @@ export function Rounds() {
                         onClick={() => setSel(i)}
                         aria-expanded={isOpen}
                         aria-label={`Round ${r.n} — ${r.verdict}`}
-                        style={isOpen ? { flexGrow: 1, flexBasis: 0 } : { flex: `0 0 ${SLIVER_W}px` }}
+                        style={{ flexGrow: isOpen ? openW : sliverW, flexBasis: 0, minWidth: 0 }}
                         className={cn(
                             "flex min-w-0 flex-col overflow-hidden rounded-[10px] border text-left",
-                            "transition-[flex-grow,flex-basis,background-color,border-color,opacity] duration-300 ease-out",
+                            "transition-[flex-grow,background-color,border-color,opacity] duration-300 ease-out",
                             isOpen
                                 ? "items-stretch justify-start px-2.5 py-2 bg-[color:var(--c-surface-2)]"
                                 : "items-center justify-center gap-1 px-0 py-2 border-[color:var(--c-border)] opacity-70 hover:opacity-100",
@@ -302,8 +312,10 @@ export function Rounds() {
                             // A sliver says which round and how it went. Nothing else
                             // fits, and a clipped word is worse than no word.
                             <>
-                                <span className={cn("h-1.5 w-1.5 rounded-full", SEV[r.tone].dot)} />
-                                <span className="text-[10.5px] font-semibold tabular-nums text-[color:var(--c-text-muted)]">{r.n}</span>
+                                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", SEV[r.tone].dot)} />
+                                {showNumber && (
+                                    <span className="text-[10.5px] font-semibold tabular-nums text-[color:var(--c-text-muted)]">{r.n}</span>
+                                )}
                             </>
                         )}
                     </button>

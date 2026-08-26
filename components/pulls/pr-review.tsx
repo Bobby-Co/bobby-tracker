@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useEffect, useRef, useState } from "react"
+import { Fragment, useLayoutEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -274,6 +274,11 @@ export interface RoundSummary {
  *  is not being read. A closed round is a SLIVER: a dot and a number, which is
  *  the honest amount of information for something you are not looking at. */
 const SLIVER_W = 22
+/** Narrow enough that a round number no longer fits; below this a sliver shows
+ *  its dot alone rather than half a digit. */
+const SLIVER_NUM_W = 18
+/** The floor. A dot plus its ring needs this much to read as a dot. */
+const SLIVER_MIN = 8
 const READABLE_W = 232
 const STRIP_GAP = 6
 
@@ -284,12 +289,16 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
     // Measured, not a breakpoint: the strip's width depends on the panel it is
     // in, not on the viewport, so a media query would answer about the wrong
     // element.
-    useEffect(() => {
+    // Layout effect, not effect: every width below is derived from this number,
+    // so measuring after paint means the first frame is laid out in ignorance
+    // and then animated away from.
+    useLayoutEffect(() => {
         const el = rowRef.current
-        if (!el || typeof ResizeObserver === "undefined") return
+        if (!el) return
+        setWidth(el.getBoundingClientRect().width)
+        if (typeof ResizeObserver === "undefined") return
         const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
         ro.observe(el)
-        setWidth(el.getBoundingClientRect().width)
         return () => ro.disconnect()
     }, [])
 
@@ -298,17 +307,34 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
     const lastIdx = rounds.length - 1
     const latest = rounds[lastIdx].round
     const selIdx = Math.max(0, rounds.findIndex((r) => r.round === (selected ?? latest)))
+    const gaps = (rounds.length - 1) * STRIP_GAP
+    const slivers = Math.max(1, rounds.length - 1)
 
-    // Two open when the row can afford two READABLE cards, because the useful
-    // comparison is almost always a round against the current one. One when it
-    // cannot — better than two nobody can read.
-    const fitsTwo = width > 0 && 2 * READABLE_W + (rounds.length - 2) * SLIVER_W + (rounds.length - 1) * STRIP_GAP <= width
+    // ONE card open — the selected one. Opening the current one alongside it
+    // read well at five rounds and stopped fitting past that, and a strip whose
+    // job is "every round is on screen" cannot afford a second readable card.
     const open = new Set<number>([selIdx])
-    if (fitsTwo) open.add(selIdx === lastIdx ? lastIdx - 1 : lastIdx)
+
+    // Widths are grow weights over a zero basis, never a basis to be shrunk:
+    // flex hands out free space by weight, so weights that sum to the free space
+    // land on exactly these widths and CANNOT overflow. There is no oversized
+    // basis for the browser to claw back, which is what used to squeeze the open
+    // card once the round count climbed.
+    const free = Math.max(0, width - gaps)
+    const sliverW = free > 0 ? Math.max(SLIVER_MIN, Math.min(SLIVER_W, (free - READABLE_W) / slivers)) : SLIVER_W
+    // The open card takes whatever the slivers left: a full READABLE_W while
+    // that fits, and past that, what remains once every round has its dot. It
+    // gives way before the strip does.
+    const openW = free > 0 ? Math.max(0, free - slivers * sliverW) : READABLE_W
+    // A number that cannot fit is dropped, not clipped.
+    const showNumber = sliverW >= SLIVER_NUM_W
 
     return (
         <div ref={rowRef} className="flex min-h-[78px] w-full" style={{ gap: STRIP_GAP }}>
-            {rounds.map((r, i) => {
+            {/* Nothing until the row has been measured — the tiles' widths come
+                from that measurement, and the reserved height means waiting a
+                frame for it costs no layout jump. */}
+            {width > 0 && rounds.map((r, i) => {
                 const isOpen = open.has(i)
                 const isLatest = r.round === latest
                 const isSelected = i === selIdx
@@ -323,10 +349,10 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
                         aria-pressed={isSelected}
                         aria-label={`Round ${r.round}${isLatest ? " (current)" : ""}`}
                         title={r.scopeReason ?? undefined}
-                        style={isOpen ? { flexGrow: 1, flexBasis: 0 } : { flex: `0 0 ${SLIVER_W}px` }}
+                        style={{ flexGrow: isOpen ? openW : sliverW, flexBasis: 0, minWidth: 0 }}
                         className={cn(
                             "flex min-w-0 cursor-pointer flex-col overflow-hidden rounded-[10px] border text-left",
-                            "transition-[flex-grow,flex-basis,background-color,border-color,opacity] duration-300 ease-out",
+                            "transition-[flex-grow,background-color,border-color,opacity] duration-300 ease-out",
                             isOpen
                                 ? "items-stretch justify-start bg-[color:var(--c-surface-2)] px-2.5 py-2"
                                 : "items-center justify-center gap-1 px-0 py-2 opacity-70 hover:opacity-100",
@@ -374,8 +400,10 @@ function RoundStrip({ rounds, selected, onSelect }: { rounds: RoundSummary[]; se
                             </>
                         ) : (
                             <>
-                                <span className={cn("h-1.5 w-1.5 rounded-full", tone)} />
-                                <span className="text-[10.5px] font-semibold tabular-nums text-[color:var(--c-text-muted)]">{r.round}</span>
+                                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone)} />
+                                {showNumber && (
+                                    <span className="text-[10.5px] font-semibold tabular-nums text-[color:var(--c-text-muted)]">{r.round}</span>
+                                )}
                             </>
                         )}
                     </button>
