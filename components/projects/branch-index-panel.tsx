@@ -183,8 +183,8 @@ export function BranchIndexPanel({ projectId }: { projectId: string }) {
                     <div className="text-[14px] font-bold">Indexed branches</div>
                     <p className="mt-1 text-[13px] leading-relaxed text-[color:var(--c-text-muted)]">
                         Ask questions against a branch as well as the default one. A branch reuses this
-                        project&rsquo;s existing index, so it costs no analysis — only the time to read the
-                        branch&rsquo;s code.
+                        project&rsquo;s existing analysis, so indexing one spends no credits — it only
+                        re-reads the branch&rsquo;s code, and stays current on every push.
                     </p>
                 </div>
             </div>

@@ -611,13 +611,17 @@ function BranchesScene({
                 })}
             </div>
 
-            {/* The honest version of the cost. A branch reuses the project's
-                existing analysis — it is a read of the code, not a re-think of
-                it — so saying "a few credits" is both true and not alarming. */}
+            {/* The honest version of the cost, which is none.
+                Indexing a branch copies the project's existing graph and replays
+                the branch's parse over it — a copy and a parse, no model calls
+                anywhere. Saying "a few credits" would be softer and would be a
+                lie, and the first person to compare it against their bill would
+                stop believing the rest of these numbers. What it DOES cost is
+                memory, which is why this is a list rather than "all branches". */}
             <p className="max-w-sm text-[12.5px] leading-5 text-[color:var(--c-text-muted)]">
                 {picked.length === 0
                     ? "Only the default branch will be indexed."
-                    : `${picked.length} extra branch${picked.length === 1 ? "" : "es"} — each reuses this project's index, so it costs a few credits to read the code, not a full analysis.`}
+                    : `${picked.length} extra branch${picked.length === 1 ? "" : "es"} — each reuses this project's analysis, so no extra credits. They're re-read on every push to stay current.`}
             </p>
         </div>
     )
