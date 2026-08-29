@@ -104,7 +104,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 const MINT_FAILURE: Record<string, { status: number; message: string }> = {
     offline: {
         status: 503,
-        message: "The Zoo daemon for this repo isn't running. Start it and try again.",
+        message: "Zoo couldn't reach this repo's project. Try again in a moment.",
+    },
+    "no-synced-render": {
+        status: 503,
+        // The advice that actually works. Telling someone to start a daemon is
+        // wrong here: an embed can be pinned from a synced render without one,
+        // and what is missing is that nothing has ever been published.
+        message: "No render has been published for that component yet — run `npx zoo` in the repo once, then try again.",
     },
     empty: {
         status: 422,

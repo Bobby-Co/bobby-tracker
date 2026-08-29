@@ -32,6 +32,9 @@ const KNOWN_REASONS = new Set<MintFailure>([
     // No doc page, so no props to render with — the author fixes this in Zoo,
     // not here, so it must not read as a Zoo failure.
     "not-documented",
+    // Nothing has ever been published for this component. Distinct from
+    // "offline", because starting a daemon is not the fix — syncing is.
+    "no-synced-render",
     "error",
 ])
 

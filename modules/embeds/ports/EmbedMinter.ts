@@ -18,6 +18,7 @@ export type MintFailure =
     | "not-granted"
     | "scope-not-granted"
     | "not-documented"
+    | "no-synced-render"
     | "error"
 
 export type MintResult =
