@@ -9,6 +9,7 @@ import { IssueDetail } from "@/components/issues/issue-detail"
 import { IssueSuggestions } from "@/components/issues/issue-suggestions"
 import { IssueComments } from "@/components/issues/issue-comments"
 import { SimilarIssuesCard } from "@/components/issues/similar-issues-card"
+import type { SignedEmbedMap } from "@/modules/embeds/domain/SignedEmbed"
 import type {
     Issue,
     IssueComment,
@@ -28,6 +29,7 @@ interface IssueView {
     labelIcons: ProjectLabelIcon[]
     statusColors: ProjectStatusColor[]
     comments: IssueComment[]
+    embeds: SignedEmbedMap
 }
 
 export default function IssueDetailPage() {
@@ -76,6 +78,8 @@ export default function IssueDetailPage() {
                     peekOthers={peekOthers}
                     labelIcons={labelIcons}
                     statusColors={statusColors}
+                    embeds={data?.embeds}
+                    onBodySaved={refetch}
                 />
             ) : (
                 <div className="skeleton h-64 w-full rounded-[16px]" />

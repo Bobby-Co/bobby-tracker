@@ -3,9 +3,8 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 import { cn } from "@/components/ui/cn"
+import { MarkdownBody } from "@/components/markdown/markdown-body"
 import { IconlyIcon } from "@/components/icons/iconly-icon"
 import { Analysing } from "@/components/issues/analysing-graph"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
@@ -240,9 +239,10 @@ function DrawerBody({
             <div className="min-h-0 flex-1 overflow-y-auto px-7 pt-5 pb-32">
                 {issue.body && (
                     <div className="prose-tracker text-[13.5px] leading-6 text-[color:var(--c-text)]">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {issue.body}
-                        </ReactMarkdown>
+                        {/* No signed embeds here: the drawer renders issues out of a
+                            list, so there is no per-issue access check to vouch for.
+                            A zoo: reference shows a placeholder — open the issue. */}
+                        <MarkdownBody>{issue.body}</MarkdownBody>
                     </div>
                 )}
 

@@ -147,6 +147,7 @@ functions is the anti-pattern; each of these replaced one:
 | `notifications` | `NotificationChannel`, `RecipientResolver`, `OutboxStore` | `EmailChannel`, `InAppFeedChannel`, `Supabase*` | `NotificationService.drain()`, `NotificationDispatcher` |
 | `relay` | `AnalyserWorkerDirectory` | `HttpAnalyserWorkerDirectory` | `domain/PairingCodes` value helpers |
 | `projects` | `ProjectsRepository` | `SupabaseProjectsRepository` | the `Project` aggregate + `pickStatus` policy |
+| `embeds` | `EmbedUrlSigner`, `EmbedMetadataSource` | `ZooEmbedUrlSigner` (Ed25519 over Web Crypto), `ZooEmbedMetadataSource` | `EmbedSigningService` — vouches for an access check already made |
 
 Pure value/domain helpers (`RepoRef`, `SyncHash`, `PairingCodes`, `Invite`,
 `pickStatus`) stay as functions in a well-named concept file — a class there would

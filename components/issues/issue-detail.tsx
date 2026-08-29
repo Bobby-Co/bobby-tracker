@@ -1,9 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type {
     Issue,
@@ -17,6 +15,10 @@ import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { Dropdown } from "@/components/ui/dropdown"
 import { LabelsEditor } from "@/components/issues/labels-editor"
 import { TimelinePeek } from "@/components/timeline/timeline-peek"
+import { MarkdownBody } from "@/components/markdown/markdown-body"
+import { EmbedPicker } from "@/components/embeds/embed-picker"
+import { insertEmbedReference } from "@/modules/embeds/domain/EmbedInsertion"
+import type { SignedEmbed, SignedEmbedMap } from "@/modules/embeds/domain/SignedEmbed"
 
 const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
@@ -48,6 +50,8 @@ export function IssueDetail({
     peekOthers = [],
     labelIcons = [],
     statusColors = [],
+    embeds,
+    onBodySaved,
 }: {
     issue: Issue
     /** Optional — when present, the aside renders a peek timeline
@@ -57,17 +61,53 @@ export function IssueDetail({
     peekOthers?: Issue[]
     labelIcons?: ProjectLabelIcon[]
     statusColors?: ProjectStatusColor[]
+    /** Zoo embeds referenced by this body, signed server-side for THIS render
+     *  (see modules/embeds). Re-fetched with the issue, never cached here. */
+    embeds?: SignedEmbedMap
+    /** Called after the body is saved. Editing the body can introduce a new
+     *  `zoo:` reference, and only the server can sign one — so the page has to
+     *  re-fetch, or the new embed sits as a placeholder until a reload. */
+    onBodySaved?: () => void
 }) {
     const router = useRouter()
     const [editingBody, setEditingBody] = useState(false)
     const [body, setBody] = useState(issue.body || "")
     const [pending, startTransition] = useTransition()
+    const bodyRef = useRef<HTMLTextAreaElement>(null)
 
-    function patch(values: Partial<Issue>) {
+    // Embeds inserted during THIS edit. The server signs what it found in the
+    // saved body, so a reference the author just typed has no signed URL yet —
+    // the picker already resolved one, so we keep it here and the body renders
+    // correctly the moment it is saved, instead of showing a placeholder until
+    // the re-fetch lands. Overlaid, never merged back: the server's map wins.
+    const [inserted, setInserted] = useState<SignedEmbedMap>({})
+    const shownEmbeds = useMemo(() => ({ ...inserted, ...embeds }), [inserted, embeds])
+
+    /** Write a reference at the caret. The markdown block rules live in
+     *  insertEmbedReference, where they are tested — see why there. */
+    function insertEmbed(embed: SignedEmbed) {
+        const el = bodyRef.current
+        const { text, caret } = insertEmbedReference(
+            body,
+            el?.selectionStart ?? body.length,
+            el?.selectionEnd ?? body.length,
+            embed.embedId,
+            embed.componentId ?? "Component preview",
+        )
+        setBody(text)
+        setInserted((m) => ({ ...m, [embed.embedId]: embed }))
+        requestAnimationFrame(() => {
+            el?.focus()
+            el?.setSelectionRange(caret, caret)
+        })
+    }
+
+    function patch(values: Partial<Issue>, onSaved?: () => void) {
         startTransition(async () => {
             try {
                 await apiMutate(`/api/issues/${issue.id}`, { method: "PATCH", body: values })
                 router.refresh()
+                onSaved?.()
             } catch (e) {
                 if (!(e instanceof ApiError)) throw e
                 // Server error: silently ignore, as before (no refresh).
@@ -104,7 +144,13 @@ export function IssueDetail({
                     </div>
                     {editingBody ? (
                         <div className="flex flex-col gap-2">
+                            {projectId ? (
+                                <div className="flex items-center">
+                                    <EmbedPicker projectId={projectId} onInsert={insertEmbed} />
+                                </div>
+                            ) : null}
                             <textarea
+                                ref={bodyRef}
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
                                 rows={8}
@@ -123,7 +169,7 @@ export function IssueDetail({
                                 </button>
                                 <button
                                     onClick={() => {
-                                        patch({ body })
+                                        patch({ body }, onBodySaved)
                                         setEditingBody(false)
                                     }}
                                     disabled={pending}
@@ -135,9 +181,7 @@ export function IssueDetail({
                         </div>
                     ) : body ? (
                         <div className="prose-tracker text-[13px] leading-6 text-[color:var(--c-text)]">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {body}
-                            </ReactMarkdown>
+                            <MarkdownBody embeds={shownEmbeds}>{body}</MarkdownBody>
                         </div>
                     ) : (
                         <p className="text-[13px] italic leading-6 text-[color:var(--c-text-dim)]">

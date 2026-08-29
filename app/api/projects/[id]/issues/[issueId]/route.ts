@@ -2,6 +2,8 @@ import { after } from "next/server"
 import { ApiContext, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { getPullRequestServiceForProject } from "@/modules/vcs"
+import { getEmbedSigningService } from "@/modules/embeds"
+import type { SignedEmbedMap } from "@/modules/embeds"
 import type { IssueComment } from "@/lib/shared/types"
 
 // GET /api/projects/[id]/issues/[issueId]
@@ -57,6 +59,23 @@ export async function GET(
         }
     }
 
+    // Zoo embeds. Signed HERE and only here, because this is where the access
+    // check for this issue lives — the signature is our vouch that the viewer
+    // above was allowed to see it (see modules/embeds), so it must not be
+    // reachable from a path that skipped requireProjectAccess.
+    //
+    // Signed per request, never stored: a signed URL is a bearer token for
+    // 15–30 minutes, so it belongs in a response body and nowhere else.
+    //
+    // A signing failure is a deployment problem (missing or broken key), not a
+    // reason to fail the issue: log it and render the page without embeds.
+    let embeds: SignedEmbedMap = {}
+    try {
+        embeds = (await getEmbedSigningService()?.forMarkdown(issueR.data?.body)) ?? {}
+    } catch (e) {
+        console.error("[embeds] failed to sign embeds for issue", issueId, e)
+    }
+
     return Response.json({
         issue: issueR.data,
         project: projectR.data,
@@ -66,5 +85,6 @@ export async function GET(
         labelIcons: iconsR.data,
         statusColors: colorsR.data,
         comments,
+        embeds,
     })
 }

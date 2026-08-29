@@ -9,6 +9,27 @@ const supabaseHost = (() => {
 })();
 const supabaseConnect = supabaseHost ? ` https://${supabaseHost} wss://${supabaseHost}` : "";
 
+// Zoo embed images are loaded by <img>, so the Zoo origin has to be allowed in
+// img-src. In production it already is: Zoo is https, and img-src permits any
+// https host. A LOCAL Zoo is not — `http://127.0.0.1:8787` matches neither
+// 'self' (different port is a different origin) nor https:, so every embed is
+// blocked by CSP with the signature, the key and the route all working
+// perfectly. This adds the configured origin only when it is not https, which
+// in practice means loopback during development.
+//
+// Read at BUILD time, like the Supabase host above — which is fine precisely
+// because the only case it covers is the dev server, where .env is loaded
+// before next dev starts. Deployed builds take the https: branch and need
+// nothing from the Worker's runtime secret.
+const zooEmbedImg = (() => {
+  const raw = (process.env.ZOO_EMBED_HOST || "").trim();
+  if (!raw) return "";
+  try {
+    const { protocol, origin } = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    return protocol === "https:" ? "" : ` ${origin}`;   // https is already covered
+  } catch { return ""; }
+})();
+
 // Content-Security-Policy. 'unsafe-inline' is retained for script/style because
 // Next.js injects inline bootstrap/hydration scripts and framer-motion/Tailwind
 // emit inline styles, and this app does not run a nonce middleware. CSP here is
@@ -27,7 +48,7 @@ const csp = [
   // and debug callstacks. Production React never uses eval, so it stays out.
   `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
+  `img-src 'self' data: blob: https:${zooEmbedImg}`,
   `connect-src 'self'${supabaseConnect}`,
   "font-src 'self' data:",
   "frame-ancestors 'none'",
