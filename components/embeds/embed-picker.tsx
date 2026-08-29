@@ -211,12 +211,15 @@ export function EmbedPicker({
                               />
                           </div>
 
-                          {/* Browsable but unmintable is a real state, and the
-                              author needs to know BEFORE clicking. */}
+                          {/* Offline is no longer a blocker: Zoo pins the last
+                              synced render when the developer's daemon is asleep.
+                              Worth saying, because the image is then a render of
+                              the last sync rather than of right now — but it is a
+                              note, not a warning, and it must not stop anyone. */}
                           {catalogue && catalogue.configured && !catalogue.online && components.length > 0 ? (
                               <p className="border-b border-[color:var(--c-border)] bg-[color:var(--c-surface-2)] px-3 py-2 text-[11px] leading-snug text-[color:var(--c-text-muted)]">
-                                  The Zoo daemon for this repo is offline. Embedding needs it
-                                  running — start it to pin a component.
+                                  This repo&apos;s Zoo daemon is offline, so pinning uses the last
+                                  synced render.
                               </p>
                           ) : null}
 
@@ -273,7 +276,7 @@ export function EmbedPicker({
                                               <button
                                                   type="button"
                                                   onClick={() => void pick(component)}
-                                                  disabled={!!minting || !catalogue.online}
+                                                  disabled={!!minting}
                                                   className="flex w-full items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left hover:bg-[color:var(--c-overlay)] disabled:cursor-not-allowed disabled:opacity-50"
                                               >
                                                   <Thumbnail projectId={projectId} componentId={component.id} />
