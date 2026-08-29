@@ -21,6 +21,8 @@ interface CatalogueResponse {
     online: boolean
     project?: string
     components: ZooComponent[]
+    /** Components that exist but have no doc page — they cannot be pinned. */
+    undocumented?: number
     reason?: string
     /** Present when the repo's owner has not approved this project — the link
      *  that lets them. */
@@ -255,7 +257,14 @@ export function EmbedPicker({
                                   <Notice>Zoo has no project for this repository yet.</Notice>
                               ) : filtered.length === 0 ? (
                                   <Notice>
-                                      {query.trim() ? "No components match." : "This project has no components in Zoo."}
+                                      {query.trim()
+                                          ? "No components match."
+                                          : catalogue.undocumented
+                                            ? // The distinction that matters: the project HAS components,
+                                              // they just have no doc page, so there are no props to
+                                              // render them with. Sends the author to Zoo, not to support.
+                                              `${catalogue.undocumented} component${catalogue.undocumented === 1 ? "" : "s"} in this project ${catalogue.undocumented === 1 ? "has" : "have"} no doc page yet. Document them in Zoo to embed them.`
+                                            : "This project has no components in Zoo."}
                                   </Notice>
                               ) : (
                                   <ul className="flex flex-col gap-0.5">

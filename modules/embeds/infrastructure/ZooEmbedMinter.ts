@@ -29,6 +29,9 @@ const KNOWN_REASONS = new Set<MintFailure>([
     // Connected, but only for reading the catalogue — a different fix for the
     // author than "not connected at all", so it keeps its own name.
     "scope-not-granted",
+    // No doc page, so no props to render with — the author fixes this in Zoo,
+    // not here, so it must not read as a Zoo failure.
+    "not-documented",
     "error",
 ])
 

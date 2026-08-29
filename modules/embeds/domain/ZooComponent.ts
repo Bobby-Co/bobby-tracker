@@ -21,5 +21,10 @@ export interface ZooCatalogue {
     repo: string
     project: string
     online: boolean
+    /** Only DOCUMENTED components: Zoo offers those with a doc page, because a
+     *  doc page is what carries the props they render with. */
     components: ZooComponent[]
+    /** How many components exist but have no doc page. Lets an empty list say
+     *  "document them in Zoo" instead of "this project has no components". */
+    undocumented: number
 }

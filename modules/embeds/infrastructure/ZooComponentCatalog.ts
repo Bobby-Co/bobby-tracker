@@ -60,6 +60,7 @@ export class ZooComponentCatalog implements ComponentCatalog, ComponentThumbnail
                     project: typeof body.project === "string" ? body.project : "",
                     online: body.online === true,
                     components: toComponents(body.components),
+                    undocumented: typeof body.undocumented === "number" ? body.undocumented : 0,
                 },
             }
         } catch {

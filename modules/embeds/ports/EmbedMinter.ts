@@ -17,6 +17,7 @@ export type MintFailure =
     | "not-found"
     | "not-granted"
     | "scope-not-granted"
+    | "not-documented"
     | "error"
 
 export type MintResult =

@@ -60,7 +60,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     // volatile part and the picker acts on it.
     const { catalogue } = outcome
     return Response.json(
-        { configured: true, online: catalogue.online, project: catalogue.project, components: catalogue.components },
+        {
+            configured: true,
+            online: catalogue.online,
+            project: catalogue.project,
+            components: catalogue.components,
+            undocumented: catalogue.undocumented,
+        },
         { headers: { "Cache-Control": "private, max-age=20" } },
     )
 }
@@ -108,6 +114,10 @@ const MINT_FAILURE: Record<string, { status: number; message: string }> = {
     "unknown-component": { status: 404, message: "Zoo doesn't know that component any more." },
     unclaimed: { status: 409, message: "That Zoo project hasn't been claimed by a user yet." },
     "not-found": { status: 404, message: "Zoo has no project for this repository." },
+    "not-documented": {
+        status: 422,
+        message: "That component has no doc page in Zoo yet, so there's nothing to pin.",
+    },
     "not-granted": {
         status: 403,
         message: "This project isn't connected to Zoo yet — the repo's owner has to approve it.",

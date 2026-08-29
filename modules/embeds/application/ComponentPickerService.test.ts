@@ -56,7 +56,7 @@ const service = (catalogue: CatalogueOutcome, mint: MintResult) => {
 
 const OK: CatalogueOutcome = {
     status: "ok",
-    catalogue: { repo: "github.com/acme/app", project: "app", online: true, components: [] },
+    catalogue: { repo: "github.com/acme/app", project: "app", online: true, components: [], undocumented: 0 },
 }
 
 describe("ComponentPickerService — consent reaches Zoo", () => {
