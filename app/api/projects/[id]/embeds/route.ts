@@ -42,8 +42,15 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const outcome = await picker.list(repoUrl, id)
     if (outcome.status === "not-connected") {
         // Signed fine, but the repo's owner has not approved THIS project. The one
-        // state the user can act on, so it must not read as "no such project".
-        return Response.json({ configured: true, online: false, components: [], reason: "not-connected" })
+        // state the user can act on, so it must not read as "no such project" —
+        // and it comes with the link that fixes it.
+        return Response.json({
+            configured: true,
+            online: false,
+            components: [],
+            reason: "not-connected",
+            connectUrl: picker.connectUrl(repoUrl, id),
+        })
     }
     if (outcome.status === "unavailable") {
         return Response.json({ configured: true, online: false, components: [], reason: "no-zoo-project" })

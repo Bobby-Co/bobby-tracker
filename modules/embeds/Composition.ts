@@ -84,7 +84,11 @@ export function getComponentPickerService(): ComponentPickerService | null {
     // One adapter implements both roles — the catalogue and its thumbnails are
     // the same endpoint family behind the same token scope.
     const catalog = new ZooComponentCatalog(origin, tokens)
-    return new ComponentPickerService(catalog, new ZooEmbedMinter(origin, tokens), signing, catalog)
+    return new ComponentPickerService(catalog, new ZooEmbedMinter(origin, tokens), signing, catalog, {
+        origin,
+        kid: env.kid,
+        appName: "Bobby Tracker",
+    })
 }
 
 /** `zoo.example` and `https://zoo.example/` both normalise to `https://zoo.example`. */

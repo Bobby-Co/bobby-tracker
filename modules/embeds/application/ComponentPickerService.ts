@@ -31,7 +31,31 @@ export class ComponentPickerService {
         private readonly minter: EmbedMinter,
         private readonly signing: EmbedSigningService,
         private readonly thumbnails: ComponentThumbnails | null = null,
+        /** What a "connect this project" link needs. Null when embeds aren't
+         *  configured, in which case there is nothing to connect to. */
+        private readonly link: { origin: string; kid: string; appName: string } | null = null,
     ) {}
+
+    /**
+     * Where to send a user to approve this project, or null when we can't build
+     * one. The decision happens entirely on Zoo — we only carry the request, and
+     * the caller appends its own `redirect` so the user comes back where they
+     * were.
+     *
+     * `subject` travels in the link because Zoo records consent against it: the
+     * same value we then sign into every request for this project.
+     */
+    connectUrl(repoUrl: string, subject: string): string | null {
+        if (!this.link) return null
+        const q = new URLSearchParams({
+            kid: this.link.kid,
+            repo: repoUrl,
+            subject,
+            scopes: "catalogue,mint",
+            app: this.link.appName,
+        })
+        return `${this.link.origin}/connect?${q}`
+    }
 
     /** A component's preview, for the picker's list. Cheap and unpinned —
      *  browsing must never mint. */

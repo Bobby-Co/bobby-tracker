@@ -22,6 +22,9 @@ interface CatalogueResponse {
     project?: string
     components: ZooComponent[]
     reason?: string
+    /** Present when the repo's owner has not approved this project — the link
+     *  that lets them. */
+    connectUrl?: string | null
 }
 
 export function EmbedPicker({
@@ -227,11 +230,27 @@ export function EmbedPicker({
                               ) : catalogue.reason === "no-repo" ? (
                                   <Notice>Link this project to a repository to embed its components.</Notice>
                               ) : catalogue.reason === "not-connected" ? (
-                                  <Notice>
-                                      This project isn&apos;t connected to Zoo yet. The owner of this
-                                      repository has to approve it before its components can be shown
-                                      here.
-                                  </Notice>
+                                  <div className="flex flex-col items-center gap-2 px-2 py-5 text-center">
+                                      <p className="text-[12px] leading-relaxed text-[color:var(--c-text-muted)]">
+                                          This project isn&apos;t connected to Zoo yet. The owner of this
+                                          repository has to approve it.
+                                      </p>
+                                      {catalogue.connectUrl ? (
+                                          <a
+                                              // A new tab, and the current URL as the return address:
+                                              // approving happens on Zoo, and the author should come
+                                              // back to the issue they were writing.
+                                              href={`${catalogue.connectUrl}&redirect=${encodeURIComponent(
+                                                  typeof window === "undefined" ? "" : window.location.href,
+                                              )}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="btn-primary text-[11.5px]"
+                                          >
+                                              Connect in Zoo
+                                          </a>
+                                      ) : null}
+                                  </div>
                               ) : catalogue.reason === "no-zoo-project" ? (
                                   <Notice>Zoo has no project for this repository yet.</Notice>
                               ) : filtered.length === 0 ? (
