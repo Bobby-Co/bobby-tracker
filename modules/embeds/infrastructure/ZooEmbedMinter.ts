@@ -23,6 +23,12 @@ const KNOWN_REASONS = new Set<MintFailure>([
     "unknown-component",
     "unclaimed",
     "not-found",
+    // Zoo's word for "the repo owner has not connected this project" — the one
+    // failure the author can actually fix, so it must not flatten to "error".
+    "not-granted",
+    // Connected, but only for reading the catalogue — a different fix for the
+    // author than "not connected at all", so it keeps its own name.
+    "scope-not-granted",
     "error",
 ])
 
@@ -33,12 +39,12 @@ export class ZooEmbedMinter implements EmbedMinter {
         private readonly userAgent = "bobby-tracker",
     ) {}
 
-    async mint(input: { repoUrl: string; componentId: string; presetKey?: string }): Promise<MintResult> {
+    async mint(input: { repoUrl: string; componentId: string; presetKey?: string; subject: string }): Promise<MintResult> {
         const repoKey = normalizeRepoUrl(input.repoUrl)
         if (!repoKey) return { ok: false, reason: "not-found" }
 
         try {
-            const token = await this.tokens.bearer("mint", repoKey)
+            const token = await this.tokens.bearer("mint", repoKey, input.subject)
             const response = await fetch(`${this.origin}/api/embeds`, {
                 method: "POST",
                 headers: {
@@ -50,6 +56,7 @@ export class ZooEmbedMinter implements EmbedMinter {
                     repo: input.repoUrl,
                     componentId: input.componentId,
                     presetKey: input.presetKey ?? "",
+                    subject: input.subject,
                 }),
                 signal: AbortSignal.timeout(TIMEOUT_MS),
             })

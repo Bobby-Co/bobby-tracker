@@ -6,11 +6,25 @@
 
 import type { ZooCatalogue } from "../domain/ZooComponent"
 
+/** Why there is no catalogue to show.
+ *
+ *  `not-connected` is deliberately distinct from `unavailable`: it is the one
+ *  the user can act on, and telling them "Zoo has no project for this repo"
+ *  when the truth is "nobody approved you yet" sends them to fix the wrong
+ *  thing. */
+export type CatalogueOutcome =
+    | { status: "ok"; catalogue: ZooCatalogue }
+    | { status: "not-connected" }
+    | { status: "unavailable" }
+
 export interface ComponentCatalog {
-    /** The catalogue for a repo, or null when Zoo has no project for it (or
-     *  can't be reached). Never throws — an unreachable Zoo is an empty picker,
-     *  not a broken editor. */
-    forRepo(repoUrl: string): Promise<ZooCatalogue | null>
+    /** The catalogue for a repo. Never throws — an unreachable Zoo is an empty
+     *  picker, not a broken editor.
+     *
+     *  `subject` names the tenant we are acting for. Zoo records consent per
+     *  (app, tenant, repo), so it is not optional context — it is half of what
+     *  decides whether this call is allowed at all. */
+    forRepo(repoUrl: string, subject: string): Promise<CatalogueOutcome>
 }
 
 /** A component's palette preview, as the picker needs it.
@@ -24,5 +38,5 @@ export type ThumbnailResult =
 
 export interface ComponentThumbnails {
     /** The preview for one component. Never throws. */
-    thumbnail(repoUrl: string, componentId: string): Promise<ThumbnailResult>
+    thumbnail(repoUrl: string, componentId: string, subject: string): Promise<ThumbnailResult>
 }

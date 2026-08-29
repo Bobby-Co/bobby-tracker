@@ -72,6 +72,10 @@ const SETS = {
     "No components in Zoo": [] as Fixture[],
 } as const
 
+/** Zoo's consent states, which the picker has to explain rather than just show
+ *  as empty. */
+const REASONS = [null, "not-connected", "no-repo"] as const
+
 function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })
 }
@@ -80,6 +84,7 @@ export default function EmbedPickerPreview() {
     const [set, setSet] = useState<keyof typeof SETS>("Components in this project")
     const [configured, setConfigured] = useState(true)
     const [online, setOnline] = useState(true)
+    const [reason, setReason] = useState<(typeof REASONS)[number]>(null)
     const [body, setBody] = useState("The regression shows up on the hover state:\n")
     const [inserted, setInserted] = useState<SignedEmbedMap>({})
 
@@ -112,7 +117,8 @@ export default function EmbedPickerPreview() {
                     configured,
                     online,
                     project: "external-app",
-                    components: configured ? SETS[set].map((f) => f.component) : [],
+                    reason: reason ?? undefined,
+                    components: configured && !reason ? SETS[set].map((f) => f.component) : [],
                 })
             }
             return real(input, init)
@@ -120,7 +126,7 @@ export default function EmbedPickerPreview() {
         return () => {
             window.fetch = real
         }
-    }, [set, configured, online])
+    }, [set, configured, online, reason])
 
     function onInsert(embed: SignedEmbed) {
         // The SAME insertion the editor uses — a harness that reimplements the
@@ -153,6 +159,12 @@ export default function EmbedPickerPreview() {
                 <Toggle on={online} onClick={() => setOnline((o) => !o)}>
                     {online ? "daemon online" : "daemon OFFLINE"}
                 </Toggle>
+                <Toggle
+                    on={reason === null}
+                    onClick={() => setReason((r) => REASONS[(REASONS.indexOf(r) + 1) % REASONS.length])}
+                >
+                    {reason === null ? "connected" : reason}
+                </Toggle>
             </div>
 
             <section className="rounded-[16px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-4 shadow-[var(--shadow-card)]">
@@ -163,7 +175,7 @@ export default function EmbedPickerPreview() {
                             // Keyed so a toggle remounts: the picker loads its
                             // catalogue once per mount, which is right in the app
                             // and inert in a harness.
-                            key={`${set}:${configured}:${online}`}
+                            key={`${set}:${configured}:${online}:${reason}`}
                             projectId="preview"
                             onInsert={onInsert}
                         />

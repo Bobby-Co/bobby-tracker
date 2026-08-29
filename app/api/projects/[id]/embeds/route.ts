@@ -15,6 +15,12 @@ import { getComponentPickerService } from "@/modules/embeds"
 //
 // The project's git remote is the join key: Zoo indexes projects by normalized
 // remote, which we already store, so neither side learns the other's ids.
+//
+// The PROJECT ID is the consent subject. Zoo records access per (app, subject,
+// repo), so consent is scoped to this one project rather than to our whole
+// deployment — pointing a second project at the same repo does not inherit the
+// first one's grant, which is the point: a tracker user must not be able to
+// reach a repo by naming it.
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -33,13 +39,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
         return Response.json({ configured: true, online: false, components: [], reason: "no-repo" })
     }
 
-    const catalogue = await picker.list(repoUrl)
-    if (!catalogue) {
+    const outcome = await picker.list(repoUrl, id)
+    if (outcome.status === "not-connected") {
+        // Signed fine, but the repo's owner has not approved THIS project. The one
+        // state the user can act on, so it must not read as "no such project".
+        return Response.json({ configured: true, online: false, components: [], reason: "not-connected" })
+    }
+    if (outcome.status === "unavailable") {
         return Response.json({ configured: true, online: false, components: [], reason: "no-zoo-project" })
     }
 
     // Private: scoped to one caller's authorization, and short — `online` is the
     // volatile part and the picker acts on it.
+    const { catalogue } = outcome
     return Response.json(
         { configured: true, online: catalogue.online, project: catalogue.project, components: catalogue.components },
         { headers: { "Cache-Control": "private, max-age=20" } },
@@ -64,7 +76,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const repoUrl = projectR.data?.repo_url ?? ""
     if (!repoUrl) return jsonError("no_repo", "This project has no linked repository.", 400)
 
-    const picked = await picker.pick({ repoUrl, componentId, presetKey })
+    const picked = await picker.pick({ repoUrl, componentId, presetKey, subject: id })
     if (!picked.ok) {
         const { status, message } = MINT_FAILURE[picked.reason] ?? MINT_FAILURE.error
         return jsonError(`mint_${picked.reason.replace(/-/g, "_")}`, message, status)
@@ -89,5 +101,13 @@ const MINT_FAILURE: Record<string, { status: number; message: string }> = {
     "unknown-component": { status: 404, message: "Zoo doesn't know that component any more." },
     unclaimed: { status: 409, message: "That Zoo project hasn't been claimed by a user yet." },
     "not-found": { status: 404, message: "Zoo has no project for this repository." },
+    "not-granted": {
+        status: 403,
+        message: "This project isn't connected to Zoo yet — the repo's owner has to approve it.",
+    },
+    "scope-not-granted": {
+        status: 403,
+        message: "This project can read Zoo components but isn't approved to pin them. The repo's owner can allow it.",
+    },
     error: { status: 502, message: "Zoo couldn't render that component." },
 }

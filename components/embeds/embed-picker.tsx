@@ -226,6 +226,12 @@ export function EmbedPicker({
                                   <Notice>Zoo embeds aren&apos;t configured for this deployment yet.</Notice>
                               ) : catalogue.reason === "no-repo" ? (
                                   <Notice>Link this project to a repository to embed its components.</Notice>
+                              ) : catalogue.reason === "not-connected" ? (
+                                  <Notice>
+                                      This project isn&apos;t connected to Zoo yet. The owner of this
+                                      repository has to approve it before its components can be shown
+                                      here.
+                                  </Notice>
                               ) : catalogue.reason === "no-zoo-project" ? (
                                   <Notice>Zoo has no project for this repository yet.</Notice>
                               ) : filtered.length === 0 ? (

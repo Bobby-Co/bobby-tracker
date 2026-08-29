@@ -7,8 +7,13 @@
 // why `online` travels with the components rather than gating them.
 
 import { normalizeRepoUrl } from "../domain/RepoKey"
-import type { ZooCatalogue, ZooComponent } from "../domain/ZooComponent"
-import type { ComponentCatalog, ComponentThumbnails, ThumbnailResult } from "../ports/ComponentCatalog"
+import type { ZooComponent } from "../domain/ZooComponent"
+import type {
+    CatalogueOutcome,
+    ComponentCatalog,
+    ComponentThumbnails,
+    ThumbnailResult,
+} from "../ports/ComponentCatalog"
 import type { ZooRepoTokens } from "./ZooRepoTokens"
 
 const TIMEOUT_MS = 4000
@@ -23,48 +28,58 @@ export class ZooComponentCatalog implements ComponentCatalog, ComponentThumbnail
         private readonly userAgent = "bobby-tracker",
     ) {}
 
-    async forRepo(repoUrl: string): Promise<ZooCatalogue | null> {
+    async forRepo(repoUrl: string, subject: string): Promise<CatalogueOutcome> {
         const repoKey = normalizeRepoUrl(repoUrl)
-        if (!repoKey) return null
+        if (!repoKey) return { status: "unavailable" }
 
         try {
             // The token is bound to the NORMALIZED key; the query carries the raw
             // remote and Zoo normalizes it the same way. Sending the normalized
             // form in both would work too — this way a mismatch surfaces as a
             // signature failure rather than silently reading another repo.
-            const token = await this.tokens.bearer("catalogue", repoKey)
-            const url = `${this.origin}/api/catalogue?repo=${encodeURIComponent(repoUrl)}`
+            const token = await this.tokens.bearer("catalogue", repoKey, subject)
+            const url =
+                `${this.origin}/api/catalogue?repo=${encodeURIComponent(repoUrl)}` +
+                `&subject=${encodeURIComponent(subject)}`
             const response = await fetch(url, {
                 headers: { authorization: `Bearer ${token}`, accept: "application/json", "user-agent": this.userAgent },
                 signal: AbortSignal.timeout(TIMEOUT_MS),
             })
-            if (!response.ok) return null
+            if (response.status === 403) {
+                // Signed correctly, but this project has no consent from the
+                // repo's owner. Distinct from "Zoo doesn't know this repo".
+                return { status: "not-connected" }
+            }
+            if (!response.ok) return { status: "unavailable" }
 
             const body = (await response.json()) as Record<string, unknown>
             return {
-                repo: typeof body.repo === "string" ? body.repo : repoKey,
-                project: typeof body.project === "string" ? body.project : "",
-                online: body.online === true,
-                components: toComponents(body.components),
+                status: "ok",
+                catalogue: {
+                    repo: typeof body.repo === "string" ? body.repo : repoKey,
+                    project: typeof body.project === "string" ? body.project : "",
+                    online: body.online === true,
+                    components: toComponents(body.components),
+                },
             }
         } catch {
             // Unreachable Zoo, timeout, bad JSON — all the same to a picker.
-            return null
+            return { status: "unavailable" }
         }
     }
 
     /** One component's palette thumbnail. Cheap and unpinned — this is the
      *  preview the studio already renders, NOT a mint: nothing is frozen and
      *  nothing is persisted, so browsing the picker costs no embeds. */
-    async thumbnail(repoUrl: string, componentId: string): Promise<ThumbnailResult> {
+    async thumbnail(repoUrl: string, componentId: string, subject: string): Promise<ThumbnailResult> {
         const repoKey = normalizeRepoUrl(repoUrl)
         if (!repoKey) return { status: "unavailable" }
 
         try {
-            const token = await this.tokens.bearer("catalogue", repoKey)
+            const token = await this.tokens.bearer("catalogue", repoKey, subject)
             const url =
                 `${this.origin}/api/catalogue/thumb/${encodeURIComponent(componentId)}` +
-                `?repo=${encodeURIComponent(repoUrl)}`
+                `?repo=${encodeURIComponent(repoUrl)}&subject=${encodeURIComponent(subject)}`
             const response = await fetch(url, {
                 headers: { authorization: `Bearer ${token}`, accept: "image/webp,*/*", "user-agent": this.userAgent },
                 signal: AbortSignal.timeout(THUMBNAIL_TIMEOUT_MS),

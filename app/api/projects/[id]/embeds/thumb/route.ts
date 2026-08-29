@@ -33,7 +33,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const repoUrl = projectR.data?.repo_url ?? ""
     if (!repoUrl) return new Response(null, { status: 404 })
 
-    const thumb = await picker.thumbnail(repoUrl, componentId)
+    const thumb = await picker.thumbnail(repoUrl, componentId, id)
     if (thumb.status === "pending") {
         return Response.json({ status: "pending" }, { status: 202 })
     }

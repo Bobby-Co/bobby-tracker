@@ -15,6 +15,8 @@ export type MintFailure =
     | "unknown-component"
     | "unclaimed"
     | "not-found"
+    | "not-granted"
+    | "scope-not-granted"
     | "error"
 
 export type MintResult =
@@ -22,5 +24,11 @@ export type MintResult =
     | { ok: false; reason: MintFailure }
 
 export interface EmbedMinter {
-    mint(input: { repoUrl: string; componentId: string; presetKey?: string }): Promise<MintResult>
+    mint(input: {
+        repoUrl: string
+        componentId: string
+        presetKey?: string
+        /** The tenant we are acting for — see ComponentCatalog.forRepo. */
+        subject: string
+    }): Promise<MintResult>
 }

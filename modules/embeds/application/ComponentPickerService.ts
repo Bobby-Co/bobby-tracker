@@ -12,8 +12,12 @@
 // other — it is a preview, not something to persist.
 
 import type { SignedEmbed } from "../domain/SignedEmbed"
-import type { ZooCatalogue } from "../domain/ZooComponent"
-import type { ComponentCatalog, ComponentThumbnails, ThumbnailResult } from "../ports/ComponentCatalog"
+import type {
+    CatalogueOutcome,
+    ComponentCatalog,
+    ComponentThumbnails,
+    ThumbnailResult,
+} from "../ports/ComponentCatalog"
 import type { EmbedMinter, MintFailure } from "../ports/EmbedMinter"
 import type { EmbedSigningService } from "./EmbedSigningService"
 
@@ -31,18 +35,24 @@ export class ComponentPickerService {
 
     /** A component's preview, for the picker's list. Cheap and unpinned —
      *  browsing must never mint. */
-    async thumbnail(repoUrl: string, componentId: string): Promise<ThumbnailResult> {
+    async thumbnail(repoUrl: string, componentId: string, subject: string): Promise<ThumbnailResult> {
         if (!this.thumbnails) return { status: "unavailable" }
-        return this.thumbnails.thumbnail(repoUrl, componentId)
+        return this.thumbnails.thumbnail(repoUrl, componentId, subject)
     }
 
-    /** What this project can embed. Null when Zoo has no project for the repo. */
-    async list(repoUrl: string): Promise<ZooCatalogue | null> {
-        return this.catalog.forRepo(repoUrl)
+    /** What this project can embed. Null when Zoo has no project for the repo,
+     *  or its owner has not granted this project access. */
+    async list(repoUrl: string, subject: string): Promise<CatalogueOutcome> {
+        return this.catalog.forRepo(repoUrl, subject)
     }
 
     /** Freeze one component and hand back something renderable. */
-    async pick(input: { repoUrl: string; componentId: string; presetKey?: string }): Promise<PickResult> {
+    async pick(input: {
+        repoUrl: string
+        componentId: string
+        presetKey?: string
+        subject: string
+    }): Promise<PickResult> {
         const minted = await this.minter.mint(input)
         if (!minted.ok) return { ok: false, reason: minted.reason }
 

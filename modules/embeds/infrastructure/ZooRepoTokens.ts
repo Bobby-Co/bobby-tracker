@@ -36,11 +36,18 @@ export class ZooRepoTokens {
         if (!isValidKid(config.kid)) throw new Error(`ZOO_EMBED_KID is not a valid kid: ${config.kid}`)
     }
 
-    /** A bearer token for `scope`, bound to `repoKey`. */
-    async bearer(scope: ZooTokenScope, repoKey: string): Promise<string> {
+    /** A bearer token for `scope`, bound to `repoKey` AND to the tenant we are
+     *  acting for.
+     *
+     *  The tenant binding is what makes Zoo's consent meaningful: every one of
+     *  our projects signs with the SAME key, so without it a grant made by one
+     *  Zoo user would open their repo to every project in this deployment. Zoo
+     *  records consent per (kid, subject, repo) and checks all three. */
+    async bearer(scope: ZooTokenScope, repoKey: string, subject: string): Promise<string> {
         const exp = Math.floor(this.clock.now().getTime() / 1000) + TOKEN_TTL_SECONDS
         const scopeHash = await sha256Hex(repoKey)
-        const payload = `v1.${scope}.${scopeHash}.${exp}.${this.config.kid}`
+        const subjectHash = await sha256Hex(subject)
+        const payload = `v1.${scope}.${scopeHash}.${subjectHash}.${exp}.${this.config.kid}`
         const sig = new Uint8Array(
             await crypto.subtle.sign("Ed25519", await this.key(), new TextEncoder().encode(payload)),
         )
