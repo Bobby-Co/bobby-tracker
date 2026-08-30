@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type {
@@ -16,8 +16,7 @@ import { Dropdown } from "@/components/ui/dropdown"
 import { LabelsEditor } from "@/components/issues/labels-editor"
 import { TimelinePeek } from "@/components/timeline/timeline-peek"
 import { MarkdownBody } from "@/components/markdown/markdown-body"
-import { EmbedPicker } from "@/components/embeds/embed-picker"
-import { insertEmbedReference } from "@/modules/embeds/domain/EmbedInsertion"
+import { MarkdownEditor } from "@/components/markdown/markdown-editor"
 import type { SignedEmbed, SignedEmbedMap } from "@/modules/embeds/domain/SignedEmbed"
 
 const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
@@ -73,7 +72,6 @@ export function IssueDetail({
     const [editingBody, setEditingBody] = useState(false)
     const [body, setBody] = useState(issue.body || "")
     const [pending, startTransition] = useTransition()
-    const bodyRef = useRef<HTMLTextAreaElement>(null)
 
     // Embeds inserted during THIS edit. The server signs what it found in the
     // saved body, so a reference the author just typed has no signed URL yet —
@@ -83,23 +81,10 @@ export function IssueDetail({
     const [inserted, setInserted] = useState<SignedEmbedMap>({})
     const shownEmbeds = useMemo(() => ({ ...inserted, ...embeds }), [inserted, embeds])
 
-    /** Write a reference at the caret. The markdown block rules live in
-     *  insertEmbedReference, where they are tested — see why there. */
-    function insertEmbed(embed: SignedEmbed) {
-        const el = bodyRef.current
-        const { text, caret } = insertEmbedReference(
-            body,
-            el?.selectionStart ?? body.length,
-            el?.selectionEnd ?? body.length,
-            embed.embedId,
-            embed.componentId ?? "Component preview",
-        )
-        setBody(text)
+    /** Remember a freshly minted embed so the saved body renders it immediately.
+     *  The editor writes the reference into the text itself. */
+    function rememberEmbed(embed: SignedEmbed) {
         setInserted((m) => ({ ...m, [embed.embedId]: embed }))
-        requestAnimationFrame(() => {
-            el?.focus()
-            el?.setSelectionRange(caret, caret)
-        })
     }
 
     function patch(values: Partial<Issue>, onSaved?: () => void) {
@@ -144,18 +129,13 @@ export function IssueDetail({
                     </div>
                     {editingBody ? (
                         <div className="flex flex-col gap-2">
-                            {projectId ? (
-                                <div className="flex items-center">
-                                    <EmbedPicker projectId={projectId} onInsert={insertEmbed} />
-                                </div>
-                            ) : null}
-                            <textarea
-                                ref={bodyRef}
+                            <MarkdownEditor
                                 value={body}
-                                onChange={(e) => setBody(e.target.value)}
-                                rows={8}
-                                className="input text-[13px]"
-                                autoFocus
+                                onChange={setBody}
+                                projectId={projectId}
+                                embeds={shownEmbeds}
+                                onEmbedInserted={rememberEmbed}
+                                ariaLabel="Issue description"
                             />
                             <div className="flex justify-end gap-2">
                                 <button

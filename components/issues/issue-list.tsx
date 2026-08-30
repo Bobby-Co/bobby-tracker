@@ -5,6 +5,7 @@ import { useState } from "react"
 import type { Issue } from "@/lib/shared/types"
 import { PriorityChip, StatusChip } from "@/components/ui/status-chip"
 import { STATUS_META } from "@/components/issues/issue-meta"
+import { setIssueDragData } from "@/components/issues/issue-drag"
 import { cn } from "@/components/ui/cn"
 
 // Hierarchical list view of issues.
@@ -130,6 +131,10 @@ function ParentRowCard({
             <Link
                 href={`/projects/${projectId}/issues/${parent.id}`}
                 prefetch={false}
+                draggable
+                onDragStart={(e) =>
+                    setIssueDragData(e, { projectId, issueId: parent.id, number: parent.issue_number, title: parent.title })
+                }
                 className="group flex min-w-0 flex-1 items-center gap-2 py-2.5 sm:gap-3"
             >
                 <span
@@ -191,6 +196,10 @@ function ChildRowCard({
         <Link
             href={`/projects/${projectId}/issues/${child.id}`}
             prefetch={false}
+            draggable
+            onDragStart={(e) =>
+                setIssueDragData(e, { projectId, issueId: child.id, number: child.issue_number, title: child.title })
+            }
             className={
                 "group flex items-center gap-2 overflow-hidden rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] px-3 py-2 text-[12.5px] shadow-sm transition-colors hover:bg-[color:var(--c-surface-2)] sm:gap-3 sm:px-3.5" +
                 (muted ? " opacity-80" : "")

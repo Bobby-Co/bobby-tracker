@@ -2,12 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/components/ui/cn"
-import { Sidebar, SidebarBloom, SidebarBrand, SidebarPrimaryNav } from "@/components/layout/sidebar"
+import { Sidebar, SidebarBloom, SidebarBrand, SidebarPrimaryNav, SidebarToggleProvider } from "@/components/layout/sidebar"
 import { BalancePillSkeleton } from "@/components/layout/balance-pill"
 import { MobileSidebar } from "@/components/layout/mobile-sidebar"
 import { NotificationPopover } from "@/components/layout/notification-popover"
 import { isImmersiveMind } from "@/components/layout/immersive"
+import { IssueComposerProvider, IssueComposerPanel, useIssueComposer } from "@/components/issues/issue-composer"
 import { MotionProvider } from "@/components/ui/lazy-motion"
 import type { Project } from "@/lib/shared/types"
 
@@ -26,16 +28,64 @@ export function AppShell({
     projects: Project[]
     children: React.ReactNode
 }) {
-    const pathname = usePathname()
-    const immersive = isImmersiveMind(pathname)
-
     return (
         // MotionProvider supplies the animation features the shell's `m` components
         // need, from a chunk that loads after first paint. It wraps children too, so
         // page-level `motion` components keep working unchanged.
+        //
+        // IssueComposerProvider wraps the whole shell so a "New issue" trigger on
+        // any page opens the same docked panel, and the chrome can read its state
+        // to fold the sidebar to a rail while composing.
         <MotionProvider>
+            <IssueComposerProvider>
+                <AppShellChrome projects={projects}>{children}</AppShellChrome>
+            </IssueComposerProvider>
+        </MotionProvider>
+    )
+}
+
+const COLLAPSE_KEY = "sidebar:collapsed"
+
+function AppShellChrome({ projects, children }: { projects: Project[]; children: React.ReactNode }) {
+    const pathname = usePathname()
+    const immersive = isImmersiveMind(pathname)
+    const { expanded: composerOpen } = useIssueComposer()
+
+    // The user's own collapse preference, remembered across loads. Read after
+    // mount so SSR and first client render agree.
+    const [userCollapsed, setUserCollapsed] = useState(false)
+    useEffect(() => {
+        try {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setUserCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1")
+        } catch {
+            /* storage disabled — default to expanded */
+        }
+    }, [])
+    const toggleCollapsed = useCallback(() => {
+        setUserCollapsed((v) => {
+            const next = !v
+            try {
+                window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0")
+            } catch {
+                /* not persisted, still applies this session */
+            }
+            return next
+        })
+    }, [])
+
+    // Immersive wins (it hides everything); otherwise the rail folds to icons
+    // either because the composer needs the room or because the user asked; else
+    // the full rail.
+    const sidebarMode = immersive ? "hidden" : composerOpen || userCollapsed ? "rail" : "full"
+
+    return (
         <div className="flex h-screen w-full bg-[color:var(--c-shell)] text-[color:var(--c-text)]">
-            <Sidebar projects={projects} collapsed={immersive} />
+            {/* No manual toggle while the composer owns the rail — it would fight
+                the composer's forced collapse. The control returns when it closes. */}
+            <SidebarToggleProvider toggle={composerOpen || immersive ? null : toggleCollapsed}>
+                <Sidebar projects={projects} mode={sidebarMode} />
+            </SidebarToggleProvider>
             <div className={cn("flex min-w-0 flex-1 flex-col transition-[padding] duration-500", immersive ? "pt-0" : "pt-2")}>
                 <header
                     className={cn(
@@ -58,12 +108,19 @@ export function AppShell({
                         <NotificationPopover />
                     </div>
                 </header>
-                <main className="min-h-0 flex-1">
-                    <div className={cn("app-panel", immersive && "is-immersive")}>{children}</div>
-                </main>
+                {/* Main + composer share this row so the panel's height matches
+                    the content card and the topbar above stays put — the composer
+                    pushes the page, it doesn't reach up over the search and bell. */}
+                <div className="flex min-h-0 flex-1">
+                    <main className="min-w-0 flex-1">
+                        <div className={cn("app-panel", immersive && "is-immersive", composerOpen && !immersive && "app-panel--tray")}>
+                            {children}
+                        </div>
+                    </main>
+                    <IssueComposerPanel />
+                </div>
             </div>
         </div>
-        </MotionProvider>
     )
 }
 

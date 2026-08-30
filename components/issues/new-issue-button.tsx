@@ -1,8 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { Modal } from "@/components/ui/modal"
-import { IssueForm } from "@/components/issues/issue-form"
+import { useIssueComposer } from "@/components/issues/issue-composer"
 
 export function NewIssueButton({
     projectId,
@@ -18,34 +16,25 @@ export function NewIssueButton({
     /** Tooltip + a11y description for the disabled state. */
     disabledReason?: string
 }) {
-    const [open, setOpen] = useState(false)
+    // Opens the docked composer panel (app-shell renders it once). No modal —
+    // creating an issue is the main act, so it gets a first-class surface that
+    // pushes the page rather than dimming it. See issue-composer.tsx.
+    const { startDraft, expanded, openProjectId } = useIssueComposer()
+    const isOpen = expanded && openProjectId === projectId
+
     return (
-        <>
-            <button
-                onClick={() => setOpen(true)}
-                disabled={disabled}
-                title={disabled ? disabledReason : undefined}
-                aria-disabled={disabled}
-                className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-                    <path d="M12 5v14M5 12h14" />
-                </svg>
-                New issue
-            </button>
-            <Modal
-                open={open}
-                onClose={() => setOpen(false)}
-                title="New issue"
-                description="Title is required. Status, priority, and labels can be edited later."
-                size="lg"
-            >
-                <IssueForm
-                    projectId={projectId}
-                    onSuccess={() => setOpen(false)}
-                    onCancel={() => setOpen(false)}
-                />
-            </Modal>
-        </>
+        <button
+            onClick={() => startDraft(projectId)}
+            disabled={disabled}
+            title={disabled ? disabledReason : undefined}
+            aria-disabled={disabled}
+            aria-expanded={isOpen}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+        >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
+                <path d="M12 5v14M5 12h14" />
+            </svg>
+            New issue
+        </button>
     )
 }

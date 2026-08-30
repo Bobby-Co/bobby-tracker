@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
 import { cn } from "@/components/ui/cn"
 import { useAuth } from "@/lib/client/auth/auth-context"
 import { useTeam } from "@/lib/client/auth/team-context"
@@ -22,6 +22,21 @@ interface SidebarProps {
     onNavigate?: () => void
 }
 
+// The user's manual collapse control. Provided by the app shell (which owns the
+// persisted state and folds the shell to match); consumed by the brand header's
+// toggle. Null where no manual toggle exists — the mobile drawer and the
+// loading skeleton, which are always full — so the button simply isn't drawn
+// there rather than doing nothing.
+const SidebarToggleContext = createContext<(() => void) | null>(null)
+
+export function SidebarToggleProvider({ toggle, children }: { toggle: (() => void) | null; children: React.ReactNode }) {
+    return <SidebarToggleContext.Provider value={toggle}>{children}</SidebarToggleContext.Provider>
+}
+
+function useSidebarToggle(): (() => void) | null {
+    return useContext(SidebarToggleContext)
+}
+
 // Shared row states. On the tinted shell, an active row reads as a
 // raised white pill (hairline ring + soft shadow); idle rows are quiet
 // and lift on hover with a translucent overlay.
@@ -36,7 +51,7 @@ const ROW_IDLE = "text-[color:var(--c-text-muted)] hover:bg-[color:var(--c-overl
 // tree, stubbed to match the reference) — and a user card pinned to the
 // bottom. onNavigate fires after any link tap so the mobile drawer can
 // close itself.
-export function SidebarContent({ projects, activeProjectId, onNavigate }: SidebarProps) {
+export function SidebarContent({ projects, activeProjectId, onNavigate, collapsed = false }: SidebarProps & { collapsed?: boolean }) {
     const pathname = usePathname()
     const router = useRouter()
     const { user, signOut } = useAuth()
@@ -89,39 +104,43 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
             </div>
             {/* Content sits above the decorative ember layers (logo + blooms). */}
             <div className="relative flex min-h-0 flex-1 flex-col">
-            <SidebarBrand />
+            <SidebarBrand collapsed={collapsed} />
 
             {/* Team switcher — the active workspace. Sits above the scroll body so
                 its dropdown isn't clipped by the nav's overflow. */}
             <div className="relative z-30 px-2.5 pt-1.5 pb-1">
-                <div className="mb-1 px-0.5 text-[11.5px] font-semibold tracking-wide text-[color:var(--c-text-muted)]">
-                    Team
-                </div>
-                <TeamSelector />
+                <FoldRow collapsed={collapsed}>
+                    <div className="mb-1 px-0.5 text-[11.5px] font-semibold tracking-wide text-[color:var(--c-text-muted)]">
+                        Team
+                    </div>
+                </FoldRow>
+                <TeamSelector collapsed={collapsed} />
                 {/* Prowl Points balance — team-scoped, so it sits with the team switch. */}
-                <BalancePill />
+                <BalancePill collapsed={collapsed} />
             </div>
 
-            {/* Scrollable nav body */}
-            <div className="flex-1 overflow-y-auto px-2.5 pb-3 pt-3">
-                <SidebarPrimaryNav onNavigate={onNavigate} />
+            {/* Scrollable nav body. overflow-x hidden so a label mid-fold never
+                bleeds a scrollbar into the rail. */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-3">
+                <SidebarPrimaryNav onNavigate={onNavigate} collapsed={collapsed} />
 
                 {/* Featured — the most recently active projects (up to 5). The
                     full list lives on the Projects page. */}
-                <SectionHeader label="Featured" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} />
+                <SectionHeader label="Featured" open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)} collapsed={collapsed} />
                 {/* The row fade-in is CSS (.stagger + .anim-fade), not motion: it runs
                     on MOUNT, and the motion features load asynchronously now, so a
                     JS-driven entrance would be skipped on a cold load — the one
                     animation here that has to be frame-one ready. 20ms/row matches
-                    the old `delay: 0.02*i`. */}
-                {projectsOpen && (
+                    the old `delay: 0.02*i`. Collapsed forces the list open — there
+                    is no header to toggle it with. */}
+                {(projectsOpen || collapsed) && (
                     <m.div
                         layout="position"
-                        className="stagger mt-0.5 flex flex-col gap-[4px] pl-3"
+                        className={cn("stagger mt-0.5 flex flex-col gap-[4px] transition-[padding] duration-500", collapsed ? "pl-0" : "pl-3")}
                         style={{ ["--stagger-step" as string]: "20ms" } as React.CSSProperties}
                     >
                         {featured.length === 0 ? (
-                            <p className="px-2 py-1.5 text-[12px] text-[color:var(--c-text-dim)]">No projects yet.</p>
+                            !collapsed && <p className="px-2 py-1.5 text-[12px] text-[color:var(--c-text-dim)]">No projects yet.</p>
                         ) : (
                             featured.map((p, i) => {
                                 const active = p.id === activeProj
@@ -131,17 +150,19 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                                         href={`/projects/${p.id}/issues`}
                                         prefetch={false}
                                         onClick={onNavigate}
+                                        title={collapsed ? p.name : undefined}
                                         className="anim-fade"
                                         style={{ ["--i" as string]: i } as React.CSSProperties}
                                     >
                                         <div className={cn(
-                                            "group flex items-center w-max gap-2.5 rounded-[9px] px-2.5 py-[3px] text-[13px] transition-colors",
+                                            "group flex w-max items-center rounded-[9px] py-[3px] text-[13px] transition-[padding,background-color] duration-500",
+                                            collapsed ? "pl-2.5 pr-2.5" : "pl-2.5 pr-2.5",
                                             active ? ROW_ACTIVE : ROW_IDLE,
                                         )}>
                                             <MiniIcon tone={toneFromString(p.name)} size={18}>
                                                 <span className="text-[9px] font-bold uppercase">{p.name[0] ?? "?"}</span>
                                             </MiniIcon>
-                                            <span className="truncate">{p.name}</span>
+                                            <FoldingLabel collapsed={collapsed} className="ml-2.5 truncate">{p.name}</FoldingLabel>
                                         </div>
                                     </Link>
                                 )
@@ -152,32 +173,35 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
 
                 {/* Groups — the active team's people-groups (repo access control).
                     Each links to the team's management page. */}
-                <SectionHeader label="Groups" open={groupsOpen} onToggle={() => setGroupsOpen((o) => !o)} />
-                {groupsOpen && (
-                    <m.div layout="position" className="mt-0.5 flex flex-col gap-[2px] pl-3">
+                <SectionHeader label="Groups" open={groupsOpen} onToggle={() => setGroupsOpen((o) => !o)} collapsed={collapsed} />
+                {(groupsOpen || collapsed) && (
+                    <m.div layout="position" className={cn("mt-0.5 flex flex-col gap-[2px] transition-[padding] duration-500", collapsed ? "pl-0" : "pl-3")}>
                         {groups.length === 0 ? (
-                            <Link
-                                href="/team?tab=groups"
-                                onClick={onNavigate}
-                                className="px-2.5 py-1.5 text-[12px] text-[color:var(--c-text-dim)] transition-colors hover:text-[color:var(--c-text)]"
-                            >
-                                No groups yet — manage team →
-                            </Link>
+                            !collapsed && (
+                                <Link
+                                    href="/team?tab=groups"
+                                    onClick={onNavigate}
+                                    className="px-2.5 py-1.5 text-[12px] text-[color:var(--c-text-dim)] transition-colors hover:text-[color:var(--c-text)]"
+                                >
+                                    No groups yet — manage team →
+                                </Link>
+                            )
                         ) : (
                             groups.map((g) => (
                                 <Link
                                     key={g.id}
                                     href="/team?tab=groups"
                                     onClick={onNavigate}
+                                    title={collapsed ? g.name : undefined}
                                     className={cn(
-                                        "flex items-center gap-2.5 w-max rounded-sq-l pl-2.5 pr-3 py-[3px] text-[13px]",
+                                        "flex w-max items-center rounded-sq-l py-[3px] pl-2.5 pr-2.5 text-[13px]",
                                         ROW_IDLE,
                                     )}
                                 >
                                     <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[6px] bg-emerald-50 text-emerald-600">
                                         <GroupLeafIcon />
                                     </span>
-                                    <span className="min-w-0 flex-1 truncate text-left">{g.name}</span>
+                                    <FoldingLabel collapsed={collapsed} className="ml-2.5 truncate text-left">{g.name}</FoldingLabel>
                                 </Link>
                             ))
                         )}
@@ -194,21 +218,27 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                     onNavigate={onNavigate}
                     icon={<SettingsIcon />}
                     label="Settings"
+                    collapsed={collapsed}
                 />
             </div>
 
-            {/* User card */}
+            {/* User card — folds to just the avatar. */}
             <div className="shrink-0 border-t border-[color:var(--c-border)] p-2.5">
-                <div className="flex items-center gap-2.5 px-1.5 py-1">
+                <div className="flex items-center px-1.5 py-1">
                     {avatarUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                        <img src={avatarUrl} alt="" title={collapsed ? name : undefined} className="h-8 w-8 shrink-0 rounded-full object-cover" />
                     ) : (
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-[color:var(--c-text-muted)]">
+                        <span title={collapsed ? name : undefined} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--c-border)] text-[11px] font-bold text-[color:var(--c-text-muted)]">
                             {initials}
                         </span>
                     )}
-                    <div className="min-w-0 flex-1">
+                    <div
+                        className={cn(
+                            "min-w-0 overflow-hidden transition-[max-width,opacity,margin] duration-500",
+                            collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2.5 max-w-[160px] flex-1 opacity-100",
+                        )}
+                    >
                         <div className="truncate text-[12.5px] font-semibold leading-tight">{name}</div>
                         {user?.email && (
                             <div className="truncate text-[11px] leading-tight text-[color:var(--c-text-muted)]">
@@ -222,7 +252,10 @@ export function SidebarContent({ projects, activeProjectId, onNavigate }: Sideba
                         disabled={signingOut}
                         aria-label="Sign out"
                         title="Sign out"
-                        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[color:var(--c-text-dim)] transition-colors hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)] disabled:opacity-50"
+                        className={cn(
+                            "grid h-7 shrink-0 place-items-center overflow-hidden rounded-md text-[color:var(--c-text-dim)] transition-[max-width,opacity] duration-500 hover:bg-[color:var(--c-overlay)] hover:text-[color:var(--c-text)] disabled:opacity-50",
+                            collapsed ? "pointer-events-none max-w-0 opacity-0" : "max-w-[28px] w-7 opacity-100",
+                        )}
                     >
                         <LogoutIcon />
                     </button>
@@ -239,45 +272,72 @@ function NavItem({
     icon,
     label,
     onNavigate,
+    collapsed = false,
 }: {
     href: string
     active: boolean
     icon: React.ReactNode
     label: string
     onNavigate?: () => void
+    collapsed?: boolean
 }) {
     return (
         <Link
             href={href}
             prefetch={false}
             onClick={onNavigate}
+            title={collapsed ? label : undefined}
             className={cn(
-                "flex items-center w-max gap-2 rounded-sq-l pl-2.5 pr-4 py-[3px] text-[13px] font-medium",
+                "flex w-max items-center rounded-sq-l py-[3px] pl-2.5 text-[13px] font-medium transition-[padding] duration-500",
+                collapsed ? "pr-2.5" : "pr-4",
                 active ? ROW_ACTIVE : ROW_IDLE,
             )}
         >
             <span className={cn("grid h-[18px] w-[18px] shrink-0 place-items-center", active ? "text-amber-500" : "text-[color:var(--c-text-dim)]")}>
                 {icon}
             </span>
-            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <FoldingLabel collapsed={collapsed} className="ml-2 truncate">{label}</FoldingLabel>
         </Link>
     )
 }
 
 // Sentence-case section header with a leading-rotation down-caret, like
-// the reference's "Starred" / "Teams".
-function SectionHeader({ label, open, onToggle }: { label: string; open: boolean; onToggle: () => void }) {
+// the reference's "Starred" / "Teams". On collapse the CAPTION fades but its
+// box KEEPS its height, so the icons below hold their vertical position — the
+// rail is a pure width morph, nothing rides up.
+function SectionHeader({ label, open, onToggle, collapsed = false }: { label: string; open: boolean; onToggle: () => void; collapsed?: boolean }) {
     return (
         <m.button
             layout="position"
             type="button"
             onClick={onToggle}
             aria-expanded={open}
-            className="mt-[14px] mb-px flex w-full items-center gap-1.5 px-1 py-1 text-[11.5px] font-semibold tracking-[0.01em] text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
+            aria-hidden={collapsed}
+            tabIndex={collapsed ? -1 : undefined}
+            className={cn(
+                "mt-[14px] mb-px flex max-h-8 w-full items-center gap-1.5 overflow-hidden px-1 py-1 text-[11.5px] font-semibold tracking-[0.01em] text-[color:var(--c-text-muted)] transition-opacity duration-500 hover:text-[color:var(--c-text)]",
+                collapsed ? "pointer-events-none opacity-0" : "opacity-100",
+            )}
         >
             <span>{label}</span>
             <Caret open={open} />
         </m.button>
+    )
+}
+
+/** A vertical fold for a text-only row (e.g. the "Team" caption): on collapse the
+ *  text fades but the row KEEPS its height, so nothing below shifts up. */
+function FoldRow({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+    return (
+        <div
+            aria-hidden={collapsed}
+            className={cn(
+                "max-h-8 overflow-hidden transition-opacity duration-500",
+                collapsed ? "pointer-events-none opacity-0" : "opacity-100",
+            )}
+        >
+            {children}
+        </div>
     )
 }
 
@@ -300,22 +360,70 @@ function Caret({ open }: { open: boolean }) {
     )
 }
 
+export type SidebarMode = "full" | "rail" | "hidden"
+
+const RAIL_W = 68
+
 // Sidebar — desktop wrapper. Hidden on small screens; the topbar's
-// MobileSidebar handles those. `collapsed` slides it away (width → 0) for the
-// immersive Mind view; the inner content keeps its 64-width and is clipped, so
-// the rail glides out rather than reflowing as it shrinks.
-export function Sidebar({ projects, activeProjectId, collapsed }: SidebarProps & { collapsed?: boolean }) {
+// MobileSidebar handles those. Three states, all animated:
+//   · "full"   the w-64 rail (default)
+//   · "rail"   a 60px icon strip — the SAME SidebarContent, its labels folded
+//              away, so it MORPHS rather than swapping to different markup. Used
+//              while the composer takes the width (see issue-composer.tsx).
+//   · "hidden" width → 0 for the immersive Mind view — here the inner content
+//              keeps its full 256 width and is clipped, so the whole rail glides
+//              out intact instead of collapsing to icons on its way off-screen.
+export function Sidebar({
+    projects,
+    activeProjectId,
+    mode = "full",
+}: SidebarProps & { mode?: SidebarMode }) {
+    const rail = mode === "rail"
+    const hidden = mode === "hidden"
     return (
         <aside
             className={cn(
                 "hidden h-full shrink-0 overflow-hidden bg-[color:var(--c-shell)] transition-[width,opacity] duration-500 md:block",
-                collapsed ? "w-0 opacity-0" : "w-64",
+                hidden && "opacity-0",
             )}
+            style={{ width: hidden ? 0 : rail ? RAIL_W : 256 }}
         >
-            <div className="h-full w-64">
-                <SidebarContent projects={projects} activeProjectId={activeProjectId} />
+            {/* Inner width tracks the aside EXCEPT when hidden, where it holds at
+                256 so the full content glides out rather than collapsing first. */}
+            <div className="h-full transition-[width] duration-500" style={{ width: hidden ? 256 : rail ? RAIL_W : 256 }}>
+                <SidebarContent projects={projects} activeProjectId={activeProjectId} collapsed={rail} />
             </div>
         </aside>
+    )
+}
+
+/** A row label that folds to nothing on collapse. Kept mounted and animated on
+ *  BOTH width and its left margin, so the icon to its left never moves — the
+ *  text simply slides shut. `whitespace-nowrap` stops it wrapping to two lines
+ *  as the rail narrows before it has finished closing. */
+function FoldingLabel({
+    collapsed,
+    children,
+    className,
+    max = 180,
+}: {
+    collapsed: boolean
+    children: React.ReactNode
+    className?: string
+    max?: number
+}) {
+    return (
+        <span
+            aria-hidden={collapsed}
+            className={cn(
+                "overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-500",
+                collapsed ? "ml-0 max-w-0 opacity-0" : "opacity-100",
+                className,
+            )}
+            style={{ maxWidth: collapsed ? 0 : max, marginLeft: collapsed ? 0 : undefined }}
+        >
+            {children}
+        </span>
     )
 }
 
@@ -425,51 +533,70 @@ const BRAND_EMBER_8X8 =
  *  was inventing a loading state for something already known, and the swap to
  *  the real mark was a visible flicker on every hard navigation (which is what a
  *  team switch is). */
-export function SidebarBrand() {
+export function SidebarBrand({ collapsed = false }: { collapsed?: boolean }) {
+    // The manual collapse control, when the shell provides one. In the rail the
+    // dedicated toggle folds away, so the logo itself becomes the expand button —
+    // meaning there's always a way back out.
+    const toggle = useSidebarToggle()
+    /* Brand ember — the exact 8×8 image <PixelGradient> paints, baked to a data
+       URI and upscaled with the same `pixelated` rendering. PixelGradient draws a
+       <canvas> in useEffect, blank through SSR/first paint; on a 32px mark that
+       is the logo flashing on every load. An 8×8 PNG (not a CSS gradient) because
+       the canvas draws SQUARE TILES — equal-width diagonal stops would stripe.
+       318 bytes, no request, no JS. */
+    const markClass =
+        "relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]"
+    const markStyle: React.CSSProperties = {
+        backgroundImage: `url("${BRAND_EMBER_8X8}")`,
+        backgroundSize: "100% 100%",
+        imageRendering: "pixelated",
+    }
+    const mark = (
+        <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
+            <BobbyMark />
+        </span>
+    )
+
     return (
-        <div className="flex h-14 shrink-0 items-center gap-2.5 px-3">
-            <span
-                className="relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[9px] text-white shadow-[0_1px_4px_rgba(180,83,9,0.30)] ring-1 ring-[color:var(--c-border)]"
-                /* Brand ember — the exact 8×8 image <PixelGradient> paints, baked
-                   to a data URI and upscaled with the same `pixelated` rendering.
-
-                   PixelGradient draws a <canvas> inside useEffect, so it is blank
-                   through SSR and first paint and fills in after hydration. On the
-                   login panel that is invisible; on a 32px mark it is the logo
-                   flashing on every load.
-
-                   An 8×8 PNG rather than a CSS gradient. In linear mode at 45° the
-                   colour depends only on x+y, which tempts you to express it as 15
-                   diagonal hard stops — but the canvas draws SQUARE TILES, and
-                   equal-width diagonal stops render as stripes, not a staircase of
-                   squares. Side by side the difference is obvious. Only an image
-                   keeps the grid.
-
-                   318 bytes, no request, no JS. To regenerate after changing the
-                   stops or tile size: render <PixelGradient> at this size and call
-                   canvas.toDataURL(). */
-                style={{
-                    backgroundImage: `url("${BRAND_EMBER_8X8}")`,
-                    backgroundSize: "100% 100%",
-                    imageRendering: "pixelated",
-                }}
-            >
-                <span className="relative z-10 drop-shadow-[0_1px_1px_rgba(0,0,0,0.45)]">
-                    <BobbyMark />
+        <div className="flex h-14 shrink-0 items-center px-3">
+            {toggle ? (
+                <button
+                    type="button"
+                    onClick={toggle}
+                    aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    className={cn(markClass, "transition-shadow hover:ring-2 hover:ring-[color:var(--c-ring)]")}
+                    style={markStyle}
+                >
+                    {mark}
+                </button>
+            ) : (
+                <span className={markClass} style={markStyle}>
+                    {mark}
                 </span>
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[14px] font-bold tracking-[-0.01em]">
+            )}
+            <FoldingLabel collapsed={collapsed} className="ml-2.5 min-w-0 truncate text-[14px] font-bold tracking-[-0.01em]" max={120}>
                 Ucelot
-            </span>
-            {/* Panel toggle — matches the reference; visual affordance for now. */}
-            <button
-                type="button"
-                aria-label="Toggle sidebar"
-                title="Toggle sidebar"
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-[7px] border border-[color:var(--c-border)] text-[color:var(--c-text-dim)] transition-colors hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)]"
-            >
-                <PanelIcon />
-            </button>
+            </FoldingLabel>
+            {/* Dedicated collapse button. Folds away in the rail — where the logo
+                takes over as the expand control. Hidden entirely when there's no
+                toggle to drive (mobile drawer, skeleton). */}
+            {toggle ? (
+                <button
+                    type="button"
+                    onClick={toggle}
+                    aria-label="Collapse sidebar"
+                    title="Collapse sidebar"
+                    aria-hidden={collapsed}
+                    tabIndex={collapsed ? -1 : undefined}
+                    className={cn(
+                        "ml-auto grid h-7 shrink-0 place-items-center overflow-hidden rounded-[7px] text-[color:var(--c-text-dim)] transition-[max-width,opacity,border-color] duration-500 hover:bg-[color:var(--c-surface-2)] hover:text-[color:var(--c-text)]",
+                        collapsed ? "pointer-events-none max-w-0 border-0 opacity-0" : "max-w-[28px] w-7 border border-[color:var(--c-border)] opacity-100",
+                    )}
+                >
+                    <PanelIcon />
+                </button>
+            ) : null}
         </div>
     )
 }
@@ -480,14 +607,14 @@ export function SidebarBrand() {
  *
  *  Exported because ShellSkeleton renders it too. It used to draw four grey
  *  rectangles in this spot — a loading state for a list that cannot load. */
-export function SidebarPrimaryNav({ onNavigate }: { onNavigate?: () => void }) {
+export function SidebarPrimaryNav({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
     const pathname = usePathname()
     return (
         <div className="flex flex-col gap-[4px]">
-            <NavItem href="/projects" active={pathname === "/projects"} onNavigate={onNavigate} icon={<RepoIcon />} label="Projects" />
-            <NavItem href="/groups" active={pathname === "/groups" || pathname.startsWith("/groups/")} onNavigate={onNavigate} icon={<GroupsIcon />} label="Collections" />
-            <NavItem href="/sessions" active={pathname === "/sessions" || pathname.startsWith("/sessions/")} onNavigate={onNavigate} icon={<SessionsIcon />} label="Public sessions" />
-            <NavItem href="/workers" active={pathname.startsWith("/workers")} onNavigate={onNavigate} icon={<WorkersIcon />} label="Local models" />
+            <NavItem href="/projects" active={pathname === "/projects"} onNavigate={onNavigate} icon={<RepoIcon />} label="Projects" collapsed={collapsed} />
+            <NavItem href="/groups" active={pathname === "/groups" || pathname.startsWith("/groups/")} onNavigate={onNavigate} icon={<GroupsIcon />} label="Collections" collapsed={collapsed} />
+            <NavItem href="/sessions" active={pathname === "/sessions" || pathname.startsWith("/sessions/")} onNavigate={onNavigate} icon={<SessionsIcon />} label="Public sessions" collapsed={collapsed} />
+            <NavItem href="/workers" active={pathname.startsWith("/workers")} onNavigate={onNavigate} icon={<WorkersIcon />} label="Local models" collapsed={collapsed} />
         </div>
     )
 }

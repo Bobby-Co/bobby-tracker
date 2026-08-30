@@ -407,12 +407,18 @@ main[data-page="landing"] {
     min-height: 0;
     overflow-y: auto;
     background-color: var(--c-surface);
-    transition: border-top-left-radius 450ms ease, box-shadow 450ms ease;
+    transition: border-top-left-radius 450ms ease, border-top-right-radius 450ms ease, box-shadow 450ms ease;
 }
 @media (min-width: 768px) {
     .app-panel {
         border-top-left-radius: 22px;
         box-shadow: var(--shadow-panel);
+    }
+    /* When the composer tray is docked beside it, the content card's right edge
+       is no longer at the window edge but faces the gap — so it earns a rounded
+       top-right corner too, and the two read as a matched pair. */
+    .app-panel.app-panel--tray {
+        border-top-right-radius: 22px;
     }
 }
 /* Immersive Mind view: the panel drops its rounded corner + shadow and becomes

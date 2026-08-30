@@ -11,7 +11,10 @@ import { NewTeamModal } from "@/components/teams/new-team-modal"
 
 // Top-bar workspace switcher. Shows the active team and, on open, the full list
 // (switch), a link to manage the current team, and an inline create-team form.
-export function TeamSelector() {
+//
+// `collapsed` folds the trigger to just the team avatar (the rail state) while
+// the dropdown keeps its full width — same element morphing, not a swap.
+export function TeamSelector({ collapsed = false }: { collapsed?: boolean }) {
     const { teams, activeTeam, setActiveTeam, refetch } = useTeam()
     const [open, setOpen] = useState(false)
     // Creation moved to a modal: picking a region is a decision for the life of
@@ -33,7 +36,7 @@ export function TeamSelector() {
     // collapsed the row and shoved the whole nav up, which is what made a team
     // switch (a hard navigation, so everything remounts) visibly jump.
     if (!activeTeam) {
-        return <div className="skeleton h-7 w-full rounded-[10px]" aria-hidden />
+        return <div className={cn("skeleton h-7 rounded-[10px]", collapsed ? "w-9" : "w-full")} aria-hidden />
     }
 
     return (
@@ -43,11 +46,26 @@ export function TeamSelector() {
                 onClick={() => setOpen((o) => !o)}
                 aria-haspopup="menu"
                 aria-expanded={open}
-                className="flex h-7 w-full items-center gap-2 rounded-sq-l bg-[color:var(--c-surface)] pl-2.5 pr-4 text-[12.5px] font-semibold text-[color:var(--c-text)] ring-1 ring-[color:var(--c-border)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] hover:ring-[color:var(--c-border-strong)]"
+                title={collapsed ? activeTeam.name : undefined}
+                className={cn(
+                    "flex h-7 items-center rounded-sq-l bg-[color:var(--c-surface)] text-[12.5px] font-semibold text-[color:var(--c-text)] ring-1 ring-[color:var(--c-border)] shadow-[0_1px_1px_rgba(17,24,39,0.02)] transition-[width,padding] duration-500 hover:ring-[color:var(--c-border-strong)]",
+                    collapsed ? "w-9 justify-center px-0" : "w-full pl-2.5 pr-4",
+                )}
             >
                 <TeamAvatar name={activeTeam.name} personal={activeTeam.is_personal} size={18} />
-                <span className="min-w-0 flex-1 truncate text-left">{activeTeam.name}</span>
-                <Caret open={open} />
+                <span
+                    className={cn(
+                        "overflow-hidden whitespace-nowrap text-left transition-[max-width,opacity,margin] duration-500",
+                        collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2 max-w-[150px] truncate opacity-100",
+                    )}
+                >
+                    {activeTeam.name}
+                </span>
+                {/* ml-auto pins the caret to the right edge; without it the name's
+                    flex-grow left the caret floating short of the edge. */}
+                <span className={cn("overflow-hidden transition-[max-width,opacity] duration-500", collapsed ? "ml-0 max-w-0 opacity-0" : "ml-auto max-w-[16px] opacity-100")}>
+                    <Caret open={open} />
+                </span>
             </button>
 
             <AnimatePresence>
@@ -59,7 +77,9 @@ export function TeamSelector() {
                     exit={{ opacity: 0, y: -6, scale: 0.97 }}
                     transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                     style={{ transformOrigin: "top" }}
-                    className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-1.5 shadow-[0_12px_32px_rgba(17,24,39,0.14)]"
+                    // min-width keeps the menu readable even when the trigger has
+                    // folded to a 36px avatar in the rail.
+                    className="absolute left-0 top-[calc(100%+6px)] z-40 min-w-[220px] overflow-hidden rounded-[12px] border border-[color:var(--c-border)] bg-[color:var(--c-surface)] p-1.5 shadow-[0_12px_32px_rgba(17,24,39,0.14)]"
                 >
                     <div className="px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-[color:var(--c-text-muted)]">
                         Teams

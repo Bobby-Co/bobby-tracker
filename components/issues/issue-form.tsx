@@ -4,18 +4,27 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
-import { ProjectAnalyser, type AnalyseEffort } from "@/modules/analysis/domain/ProjectAnalyser"
+import { ProjectAnalyser } from "@/modules/analysis/domain/ProjectAnalyser"
 import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
+import { MarkdownEditor } from "@/components/markdown/markdown-editor"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
+import { EMPTY_DRAFT_FIELDS, type DraftEffort, type DraftFields, type DraftPriority, type DraftStatus } from "@/modules/issues/domain/IssueDraft"
+
+// Drift guard: the draft's mirrored field unions (the domain layer can't import
+// lib/shared) must stay identical to the real issue enums. If either side gains
+// a value the other lacks, `Exact` collapses to `never` and this fails to build.
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never
+const _statusInSync: Exact<DraftStatus, IssueStatus> = true
+const _priorityInSync: Exact<DraftPriority, IssuePriority> = true
+void _statusInSync
+void _priorityInSync
 
 const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
 const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
 
-// "" = inherit the project default. The 4 levels mirror AnalyseEffort.
-type EffortChoice = "" | AnalyseEffort
-const EFFORT_OPTIONS: { value: EffortChoice; label: string; description: string }[] = [
+const EFFORT_OPTIONS: { value: DraftEffort; label: string; description: string }[] = [
     { value: "", label: "Use project default", description: "Inherit the project's saved effort." },
     ...ProjectAnalyser.EFFORTS.map((level) => ({
         value: level,
@@ -28,19 +37,32 @@ interface IssueFormProps {
     projectId: string
     onSuccess?: () => void
     onCancel?: () => void
+    /** "panel" gives the composer more vertical room for the description — it is
+     *  a full composition surface, not a quick modal field. */
+    variant?: "modal" | "panel"
+    /** Controlled mode: the owner (the draft-backed composer) holds the field
+     *  values and receives every edit, so a draft can persist and re-open with
+     *  what was typed. Omit both to run uncontrolled with local state (the group
+     *  quick-create modal, which has nothing to persist). */
+    value?: DraftFields
+    onChange?: (patch: Partial<DraftFields>) => void
+    /** Verb on the primary button — the composer labels it per its own flow. */
+    submitLabel?: string
 }
 
-// Controlled form for creating an issue. The owner (modal wrapper, inline
-// page section, etc.) supplies projectId and optional onSuccess /
-// onCancel callbacks. The form does NOT manage its own open/close state.
-export function IssueForm({ projectId, onSuccess, onCancel }: IssueFormProps) {
+// Form for creating an issue. The owner (composer panel, modal wrapper, inline
+// page section, etc.) supplies projectId and optional callbacks. The form does
+// NOT manage its own open/close state, and can be either controlled (value +
+// onChange, so its content lives in a persistable draft) or uncontrolled.
+export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", value, onChange, submitLabel = "Create issue" }: IssueFormProps) {
+    const panel = variant === "panel"
     const router = useRouter()
-    const [title, setTitle] = useState("")
-    const [body, setBody] = useState("")
-    const [status, setStatus] = useState<IssueStatus>("open")
-    const [priority, setPriority] = useState<IssuePriority>("medium")
-    const [labels, setLabels] = useState("")
-    const [effort, setEffort] = useState<EffortChoice>("")
+    // Controlled when the owner passes value+onChange; otherwise keep the fields
+    // in local state so standalone callers work unchanged.
+    const [localFields, setLocalFields] = useState<DraftFields>(EMPTY_DRAFT_FIELDS)
+    const fields = value ?? localFields
+    const patch = onChange ?? ((p: Partial<DraftFields>) => setLocalFields((f) => ({ ...f, ...p })))
+    const { title, body, status, priority, labels, effort } = fields
     const [advanced, setAdvanced] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
@@ -82,33 +104,34 @@ export function IssueForm({ projectId, onSuccess, onCancel }: IssueFormProps) {
                 autoFocus
                 required
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => patch({ title: e.target.value })}
                 placeholder="Issue title…"
                 className="input text-[14px] font-semibold"
             />
-            <textarea
+            <MarkdownEditor
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={5}
-                placeholder="Describe what's happening (markdown supported)…"
-                className="input text-[13px]"
+                onChange={(v) => patch({ body: v })}
+                projectId={projectId}
+                minHeight={panel ? 280 : 160}
+                placeholder="Describe what's happening. Press Enter to render a block; right-click for formatting."
+                ariaLabel="Issue description"
             />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Dropdown<IssueStatus>
+                <Dropdown
                     value={status}
-                    onChange={setStatus}
+                    onChange={(v) => patch({ status: v })}
                     options={STATUS_OPTIONS}
                     aria-label="Status"
                 />
-                <Dropdown<IssuePriority>
+                <Dropdown
                     value={priority}
-                    onChange={setPriority}
+                    onChange={(v) => patch({ priority: v })}
                     options={PRIORITY_OPTIONS}
                     aria-label="Priority"
                 />
                 <input
                     value={labels}
-                    onChange={(e) => setLabels(e.target.value)}
+                    onChange={(e) => patch({ labels: e.target.value })}
                     placeholder="bug, performance"
                     className="input"
                 />
@@ -136,9 +159,9 @@ export function IssueForm({ projectId, onSuccess, onCancel }: IssueFormProps) {
                             Analyser effort
                         </label>
                         <div className="mt-1.5">
-                            <Dropdown<EffortChoice>
+                            <Dropdown
                                 value={effort}
-                                onChange={setEffort}
+                                onChange={(v) => patch({ effort: v })}
                                 options={EFFORT_OPTIONS}
                                 aria-label="Analyser effort"
                             />
@@ -160,7 +183,7 @@ export function IssueForm({ projectId, onSuccess, onCancel }: IssueFormProps) {
                     </button>
                 )}
                 <button type="submit" disabled={pending || !title.trim()} className="btn-primary">
-                    {pending ? "Saving…" : "Create issue"}
+                    {pending ? "Saving…" : submitLabel}
                 </button>
             </div>
         </form>
