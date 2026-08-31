@@ -132,7 +132,7 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
     // The tree this issue will be investigated against. Not part of the
     // proposal: the model drafts the issue's CONTENT, it has no idea which
     // branch the author is working on.
-    const readyBranches = useReadyBranches(projectId)
+    const { ready: readyBranches, defaultBranch } = useReadyBranches(projectId)
     const [branch, setBranch] = useState<string | null>(null)
 
     function createIssue() {
@@ -188,6 +188,7 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
             proposal={proposal}
             setProposal={setProposal}
             readyBranches={readyBranches}
+            defaultBranch={defaultBranch}
             branch={branch}
             setBranch={setBranch}
             onBack={backToCapture}
@@ -311,13 +312,14 @@ function CaptureStep({
 
 function ReviewStep({
     proposal, setProposal,
-    readyBranches, branch, setBranch,
+    readyBranches, defaultBranch, branch, setBranch,
     onBack, onCreate,
     creating, createError,
 }: {
     proposal: IssueProposal
     setProposal: (p: IssueProposal) => void
     readyBranches: ProjectBranch[]
+    defaultBranch: string | null
     branch: string | null
     setBranch: (b: string) => void
     onBack: () => void
@@ -419,7 +421,7 @@ function ReviewStep({
             {/* Same requirement as the hand-written composer: an AI-drafted
                 issue is investigated exactly like any other, so the tree it is
                 investigated against is just as much the author's decision. */}
-            <IssueBranchChoice ready={readyBranches} value={branch} onChange={setBranch} />
+            <IssueBranchChoice ready={readyBranches} defaultBranch={defaultBranch} value={branch} onChange={setBranch} />
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">

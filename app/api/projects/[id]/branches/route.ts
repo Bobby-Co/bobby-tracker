@@ -1,5 +1,10 @@
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
+import { getVcsAppService } from "@/modules/vcs"
+
+/** Just the repositories this route reaches for — the ApiContext's shape,
+ *  narrowed so the helper below states what it actually needs. */
+type ApiContextRepos = Awaited<ReturnType<ApiContext["requireProjectAccess"]>>["ctx"]
 
 // GET  /api/projects/[id]/branches — the branches this project keeps indexed
 // POST /api/projects/[id]/branches — start tracking one
@@ -21,7 +26,41 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
     const { data, error: readErr } = await repoRead(() => ctx.projectBranches.listByProject(id))
     if (readErr) return readErr
-    return Response.json({ branches: data ?? [] })
+    const branches = data ?? []
+
+    // The default branch's NAME rides along, so a picker can offer "Default
+    // branch (main)" rather than asking someone to choose between a named
+    // branch and an unnamed one.
+    //
+    // Resolved lazily and ONLY when this project actually tracks branches:
+    // that is the only case where the name will be displayed, and it confines
+    // the one-off provider round-trip to projects that have a use for it. A
+    // project nobody tracks branches on never pays for it. Once learned it is
+    // stored (0095), so this costs at most one call per project — and the
+    // webhooks usually get there first.
+    const defaultBranch = branches.length > 0 ? await resolveDefaultBranch(ctx, id) : null
+
+    return Response.json({ branches, default_branch: defaultBranch })
+}
+
+/** The project's default branch name, from the column when we have it and from
+ *  the provider (persisted) the first time we don't.
+ *
+ *  Every failure path returns null, which every reader renders as the generic
+ *  "Default branch". A label is never worth failing a request for. */
+async function resolveDefaultBranch(ctx: ApiContextRepos, projectId: string): Promise<string | null> {
+    const project = await tryOrNull(() => ctx.projects.findFull(projectId))
+    if (!project) return null
+    if (project.default_branch) return project.default_branch
+
+    const vcs = getVcsAppService(project)
+    if (!vcs) return null
+    const branches = await tryOrNull(() => vcs.listBranches())
+    const found = branches?.find((b) => b.isDefault)?.name
+    if (!found) return null
+
+    await tryOrNull(() => ctx.projects.recordDefaultBranch(projectId, found))
+    return found
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

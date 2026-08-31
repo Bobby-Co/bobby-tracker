@@ -32,6 +32,9 @@ interface GlProjectRow {
     github_sync_direction: "inbound" | "outbound" | "both"
     github_sync_deletes: boolean
     auto_index_on_push: boolean
+    /** Selected, not merely written, so the mirror in handlePush can compare in
+     *  memory and issue no statement on the common path. */
+    default_branch: string | null
 }
 
 export async function POST(request: Request) {
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
     const { data: candidates } = await svc
         .from("projects")
         .select(
-            "id,user_id,repo_url,repo_full_name,gitlab_project_id,gitlab_host,github_sync_enabled,github_sync_direction,github_sync_deletes,auto_index_on_push",
+            "id,user_id,repo_url,repo_full_name,gitlab_project_id,gitlab_host,github_sync_enabled,github_sync_direction,github_sync_deletes,auto_index_on_push,default_branch",
         )
         .eq("gitlab_project_id", projectId)
         .eq("gitlab_host", host)
@@ -322,6 +325,14 @@ async function handlePush(svc: Svc, project: GlProjectRow, payload: Record<strin
     const pushedBranch = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null
     if (!pushedBranch) return ack()
     const isDefaultBranch = Boolean(defaultBranch) && pushedBranch === defaultBranch
+
+    // Mirror the default branch's NAME (0095). Same reasoning as the GitHub
+    // webhook: the payload carries it, there is no scheduler here to backfill
+    // it, and a rename self-corrects on the next push.
+    if (defaultBranch && defaultBranch !== project.default_branch) {
+        await tryOrNull(() => createSupabaseProjectsRepository(svc).recordDefaultBranch(project.id, defaultBranch))
+    }
+
     if (/^0+$/.test(headSha)) return ack()
 
     const analyser = await tryOrNull(() => createSupabaseProjectAnalyserRepository(svc).findByProjectId(project.id))

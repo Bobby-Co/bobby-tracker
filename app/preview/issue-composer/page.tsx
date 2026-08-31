@@ -89,7 +89,7 @@ function useStubbedApi() {
             if (url.includes("/api/billing/balance")) return json({ balance: null })
             // Before the generic /api/projects catch-all, or it would swallow
             // this and the branch control would never render in the preview.
-            if (url.includes("/branches")) return json({ branches: BRANCHES })
+            if (url.includes("/branches")) return json({ branches: BRANCHES, default_branch: "main" })
             if (url.includes("/api/projects")) return json({ projects: PROJECTS })
             return real(input, init)
         }

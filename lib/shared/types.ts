@@ -30,6 +30,12 @@ export interface Project {
      *  join key for routing inbound `issues` webhooks to this project.
      *  Enforced unique-per-repo by a partial index. Null until linked. */
     github_repo_id: number | null
+    /** The repository's default branch name ("main", "develop", …), mirrored
+     *  from the provider (0095). Null means NOT YET LEARNED, which is not an
+     *  error: it is filled opportunistically from webhook payloads and by a
+     *  lazy resolve the first time a project needs to name its default, and
+     *  every reader falls back to the generic "Default branch". */
+    default_branch: string | null
     /** Master toggle for two-way GitHub issue sync. Orthogonal to
      *  project_analyser.enabled — gates both inbound routing and
      *  outbound pushes. */

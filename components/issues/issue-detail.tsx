@@ -240,14 +240,14 @@ function BranchField({
     value: string
     onChange: (branch: string) => void
 }) {
-    const ready = useReadyBranches(projectId)
+    const { ready, defaultBranch } = useReadyBranches(projectId)
     if (ready.length === 0) return null
     return (
         <Field label="Branch">
             <Dropdown
                 value={value}
                 onChange={onChange}
-                options={branchOptions(ready)}
+                options={branchOptions(ready, defaultBranch)}
                 searchable={ready.length > 8}
                 aria-label="Branch this issue is about"
             />

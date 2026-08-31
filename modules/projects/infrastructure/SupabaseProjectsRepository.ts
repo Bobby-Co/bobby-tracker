@@ -217,6 +217,25 @@ export class SupabaseProjectsRepository implements ProjectsRepository {
         return data
     }
 
+    async recordDefaultBranch(projectId: string, branch: string): Promise<void> {
+        // Conditional on the value actually differing, so the webhook callers —
+        // which hand this the same name on every single push — write once and
+        // then stop. `neq` rather than a read-then-write: one statement, and no
+        // window between the two in which a rename could be lost.
+        //
+        // Swallowed rather than thrown: every caller is doing this alongside its
+        // real work (indexing a push, listing branches), and none of them should
+        // fail because a display label could not be cached.
+        const { error } = await this.db
+            .from("projects")
+            .update({ default_branch: branch })
+            .eq("id", projectId)
+            .or(`default_branch.is.null,default_branch.neq.${branch}`)
+        if (error) {
+            console.warn(`[projects] could not record default branch for ${projectId}:`, error.message)
+        }
+    }
+
     async findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null> {
         const { data } = await this.db
             .from("projects")

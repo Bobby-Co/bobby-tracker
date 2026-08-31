@@ -68,7 +68,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
     const [advanced, setAdvanced] = useState(false)
     // Fetched ONCE here and passed down: the submit gate and the control need
     // the same list, and useApi does no dedup.
-    const readyBranches = useReadyBranches(projectId)
+    const { ready: readyBranches, defaultBranch } = useReadyBranches(projectId)
     const needsBranch = branchChoicePending(readyBranches, branch)
     const [error, setError] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
@@ -131,6 +131,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                 describe the issue, this decides what the analysis reads. */}
             <IssueBranchChoice
                 ready={readyBranches}
+                defaultBranch={defaultBranch}
                 value={branch}
                 onChange={(v) => patch({ branch: v })}
             />

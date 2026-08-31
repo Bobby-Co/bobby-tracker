@@ -467,9 +467,12 @@ async function applyPullRequestToProject(
 // The analyser's coalescing queue collapses a burst of pushes to the same repo
 // into a single re-index at the latest commit, so we forward every qualifying
 // push (even mid-update) rather than debouncing here.
-type PushProject = Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "auto_index_on_push">
+type PushProject = Pick<Project, "id" | "user_id" | "repo_url" | "github_repo_id" | "auto_index_on_push" | "default_branch">
 
-const PUSH_COLS = "id,user_id,repo_url,github_repo_id,auto_index_on_push"
+// default_branch is SELECTED, not just written, so the mirror below can compare
+// in memory and issue no statement at all on the overwhelmingly common path
+// where the name has not changed since the last push.
+const PUSH_COLS = "id,user_id,repo_url,github_repo_id,auto_index_on_push,default_branch"
 
 async function handlePush(svc: Svc, payload: Record<string, unknown>): Promise<Response> {
     const pushRepoId = (payload.repository as { id?: number } | undefined)?.id
@@ -502,6 +505,18 @@ async function applyPushToProject(svc: Svc, payload: Record<string, unknown>, pr
     const pushedBranch = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null
     if (!pushedBranch) return ack() // a tag, or something else that is not a branch
     const isDefaultBranch = Boolean(defaultBranch) && pushedBranch === defaultBranch
+
+    // Mirror the default branch's NAME (0095) while we have it in hand. Every
+    // push payload carries it and we were throwing it away; catching it here is
+    // what fills the column for existing projects, with no backfill job — there
+    // is no scheduler in this stack to run one — and what makes a RENAMED
+    // default self-correct, which a one-shot backfill could not.
+    //
+    // Before the early returns below, deliberately: a tag push and a
+    // deletion carry the name just as truthfully as an indexable one.
+    if (defaultBranch && defaultBranch !== project.default_branch) {
+        await tryOrNull(() => createSupabaseProjectsRepository(svc).recordDefaultBranch(project.id, defaultBranch))
+    }
 
     // Branch deletion (or an all-zero head) has nothing to index.
     if (deleted || /^0+$/.test(headSha)) return ack()

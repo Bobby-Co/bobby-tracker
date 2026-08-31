@@ -2,7 +2,7 @@
 
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
-import { DEFAULT_BRANCH_VALUE } from "@/components/projects/branch-picker"
+import { DEFAULT_BRANCH_VALUE, defaultBranchLabel } from "@/components/projects/branch-picker"
 import type { ProjectBranch } from "@/lib/shared/types"
 
 // Which tree an issue gets investigated against — asked at composition time,
@@ -55,6 +55,7 @@ export function branchChoicePending(ready: ProjectBranch[], value: string | null
 
 export function IssueBranchChoice({
     ready,
+    defaultBranch,
     value,
     onChange,
     className,
@@ -63,6 +64,8 @@ export function IssueBranchChoice({
      *  does no dedup, so a hook in this component would double every request
      *  the submit gate already makes. */
     ready: ProjectBranch[]
+    /** The default branch's name, or null when it hasn't been learned. */
+    defaultBranch: string | null
     value: string | null
     onChange: (branch: string) => void
     className?: string
@@ -99,7 +102,7 @@ export function IssueBranchChoice({
                     onChange={onChange}
                     placeholder="Choose a branch…"
                     options={[
-                        { value: DEFAULT_BRANCH_VALUE, label: "Default branch" },
+                        { value: DEFAULT_BRANCH_VALUE, label: defaultBranchLabel(defaultBranch) },
                         ...ready.map((b) => ({ value: b.branch, label: b.branch })),
                     ]}
                     searchable={ready.length > 8}

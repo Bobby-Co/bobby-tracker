@@ -184,6 +184,19 @@ export interface ProjectsRepository {
      *  projection. THROWS on a query failure. */
     linkGithub(projectId: string, installationId: number, repoId: number): Promise<GithubLink>
 
+    /** Mirror the repository's default branch name (0095).
+     *
+     *  Its OWN method rather than a key on ProjectPatch, because it is a fact
+     *  the provider owns and we merely observe — never something a settings
+     *  form may set. Idempotent, and a no-op when the stored value already
+     *  matches, so the webhook callers that hand it the same name on every push
+     *  do not write on every push.
+     *
+     *  Best-effort by contract: it resolves rather than throwing on a query
+     *  failure, because every caller is doing this ALONGSIDE its real work and
+     *  none of them should fail for want of a label. */
+    recordDefaultBranch(projectId: string, branch: string): Promise<void>
+
     /** Analysis-flow project context (name/description + GitHub-link gate), or
      *  null when absent / not visible. */
     findAnalysisContext(projectId: string): Promise<AnalysisProjectContext | null>
