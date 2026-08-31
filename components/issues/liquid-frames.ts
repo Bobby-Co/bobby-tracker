@@ -27,7 +27,9 @@
 //     "one pinched shape" look alike; a traced frame is genuinely two subpaths.
 
 export interface DockGeometry {
-    /** Full span the animation occupies, button plus gap plus drop. */
+    /** Full span the animation occupies. Must be the OPENED pill plus the gap plus
+     *  the button: sized to the drop's circle instead, the pill runs off the
+     *  left of the raster and its contour is cut into pieces. */
     width: number
     height: number
     /** The fixed right-hand end. */
@@ -51,10 +53,25 @@ export const WIDEN_MS = 240
 /** Everything, start to finish. */
 export const OPEN_MS = WIDEN_FROM_MS + WIDEN_MS
 
-/** Spring with a little overshoot — a drop let go by surface tension. */
+/** The drop's travel.
+ *
+ *  Ease-IN-out, not ease-out, and that is about the neck rather than the drop.
+ *  The join only exists while the two shapes are within the blur's reach — some
+ *  ten pixels of a ninety-pixel journey — so a front-loaded curve spends that
+ *  distance almost instantly and the tear is over before it can be seen. Both
+ *  ease-out-back and a damped sinusoid put the drop 92% of the way home inside
+ *  the first 40% of the duration. Accelerating out of rest holds the shapes
+ *  close for long enough to watch them part, and decelerating into place is
+ *  what settling looks like anyway.
+ *
+ *  The overshoot is small and comes from the tail, so it lands just past the
+ *  mark and returns rather than bouncing. */
 function springOut(t: number): number {
     if (t >= 1) return 1
-    return 1 - Math.pow(2, -9 * t) * Math.cos(t * 9)
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+    // A gentle push past the target over the last third, decaying to nothing.
+    const overshoot = Math.max(0, Math.sin((t - 0.55) * Math.PI * 1.6)) * 0.06 * (1 - t)
+    return Math.min(1.08, eased + overshoot)
 }
 
 function easeOut(t: number): number {
@@ -205,31 +222,44 @@ const KEY = (p: Pt) => `${Math.round(p.x * 64)},${Math.round(p.y * 64)}`
 
 /** Stitch loose segments into closed loops. Two shapes give two loops, one
  *  shape gives one — which is how a baked frame can say "separated" outright,
- *  where the filter could only ever hand back a single picture. */
+ *  where the filter could only ever hand back a single picture.
+ *
+ *  Orientation-agnostic on purpose. Marching squares emits a cell's segment in
+ *  one direction or the other depending on which corners are inside, so a walk
+ *  that only ever matches tail-to-head breaks the moment the contour crosses a
+ *  complementary case — and a single outline comes back as three or four
+ *  fragments. Matching on either endpoint costs one extra lookup and removes
+ *  the whole class of bug. */
 function stitch(segs: [Pt, Pt][]): Pt[][] {
-    const from = new Map<string, number[]>()
-    segs.forEach(([a], i) => {
-        const k = KEY(a)
-        const list = from.get(k)
+    const incident = new Map<string, number[]>()
+    const add = (p: Pt, i: number) => {
+        const k = KEY(p)
+        const list = incident.get(k)
         if (list) list.push(i)
-        else from.set(k, [i])
+        else incident.set(k, [i])
+    }
+    segs.forEach(([a, b], i) => {
+        add(a, i)
+        add(b, i)
     })
 
     const used = new Array(segs.length).fill(false)
     const loops: Pt[][] = []
 
-    for (let i = 0; i < segs.length; i++) {
-        if (used[i]) continue
-        const loop: Pt[] = [segs[i][0]]
-        let cur = i
-        used[cur] = true
+    for (let seed = 0; seed < segs.length; seed++) {
+        if (used[seed]) continue
+        used[seed] = true
+        const loop: Pt[] = [segs[seed][0], segs[seed][1]]
+        let head = segs[seed][1]
+
         for (let guard = 0; guard < segs.length + 2; guard++) {
-            const end = segs[cur][1]
-            loop.push(end)
-            const next = (from.get(KEY(end)) ?? []).find((j) => !used[j])
+            const next = (incident.get(KEY(head)) ?? []).find((j) => !used[j])
             if (next === undefined) break
             used[next] = true
-            cur = next
+            const [a, b] = segs[next]
+            // Whichever end is not the one we arrived on continues the walk.
+            head = KEY(a) === KEY(head) ? b : a
+            loop.push(head)
         }
         if (loop.length > 3) loops.push(loop)
     }
@@ -238,7 +268,7 @@ function stitch(segs: [Pt, Pt][]): Pt[][] {
 
 /** Douglas–Peucker, so a contour that arrives as several hundred one-pixel
  *  steps ships as a few dozen points. */
-function simplify(pts: Pt[], tol: number): Pt[] {
+function simplifyOpen(pts: Pt[], tol: number): Pt[] {
     if (pts.length < 3) return pts
     const keep = new Array(pts.length).fill(false)
     keep[0] = keep[pts.length - 1] = true
@@ -264,6 +294,29 @@ function simplify(pts: Pt[], tol: number): Pt[] {
     return pts.filter((_, i) => keep[i])
 }
 
+/** The same, for a CLOSED loop.
+ *
+ *  Douglas–Peucker anchors on the first and last point and measures every other
+ *  point's distance from the line between them. On a closed contour those two
+ *  anchors are the SAME point, so that line has no length, every distance
+ *  collapses to zero, and the whole loop simplifies to two points and vanishes.
+ *  Splitting at the point farthest from the start gives two genuinely open
+ *  halves, each of which the ordinary algorithm handles. */
+function simplify(pts: Pt[], tol: number): Pt[] {
+    if (pts.length < 5) return pts
+    const a = pts[0]
+    let far = 0
+    let best = -1
+    for (let i = 1; i < pts.length; i++) {
+        const d = Math.hypot(pts[i].x - a.x, pts[i].y - a.y)
+        if (d > best) { best = d; far = i }
+    }
+    if (far < 2 || far > pts.length - 2) return simplifyOpen(pts, tol)
+    const head = simplifyOpen(pts.slice(0, far + 1), tol)
+    const tail = simplifyOpen(pts.slice(far), tol)
+    return head.concat(tail.slice(1))
+}
+
 /** One frame's `d`, in the dock's own coordinates (the pad is subtracted back
  *  out so the path lines up with the controls on top of it). */
 export function traceFrame(geo: DockGeometry, ms: number, sigma: number, pad: number): string {
@@ -271,10 +324,15 @@ export function traceFrame(geo: DockGeometry, ms: number, sigma: number, pad: nu
     const loops = stitch(isoSegments(f, w, h, 0.5))
     const n = (v: number) => Math.round(v * 10) / 10
     return loops
-        .map((loop) => simplify(loop, 0.28))
+        .map((loop) => simplify(loop, 0.15))
         .filter((loop) => loop.length > 3)
         .map((loop) => `M ${loop.map((p) => `${n(p.x - pad)} ${n(p.y - pad)}`).join(" L ")} Z`)
         .join(" ")
+}
+
+/** The span a geometry needs: the opened pill, the gap, and the button. */
+export function spanFor(buttonWidth: number, pillWidth: number, gap: number): number {
+    return pillWidth + gap + buttonWidth
 }
 
 /** Every frame of the gesture, baked. Call once per geometry. */

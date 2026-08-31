@@ -14,7 +14,6 @@ import {
     LABEL_TRAVEL,
     LABEL_TRAVEL_BACK,
     LiquidBackdrop,
-    LiquidGooFilter,
     TEXT_DELAY_MS,
 } from "@/components/issues/liquid-dock"
 import { Spinner } from "@/components/ui/spinner"
@@ -365,7 +364,6 @@ function AiDraftDock({
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false)
             }}
         >
-            <LiquidGooFilter />
             {/* The fill of BOTH controls, so the merge is between the things you
                 can actually see. Everything below renders on top of it with no
                 background of its own. */}
