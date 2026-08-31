@@ -8,6 +8,7 @@ import { useReadyBranches } from "@/components/projects/branch-picker"
 import { branchChoicePending } from "@/components/issues/issue-branch-choice"
 import { IssueEffortChip, IssueMetaBar } from "@/components/issues/issue-meta-bar"
 import { AttachmentChips, MAX_ATTACHMENTS, isFileDrag, useIssueAttachments } from "@/components/issues/issue-attachments"
+import { LiquidSplit } from "@/components/issues/liquid-split"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/components/ui/cn"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
@@ -329,50 +330,59 @@ function AiDraftDock({
     canDraft: boolean
     attachmentsFull: boolean
 }) {
-    const [open, setOpen] = useState(false)
-    const [expanded, setExpanded] = useState(false)
+    const [phase, setPhase] = useState<Phase>("idle")
     const [dims, setDims] = useState({ travel: 0, full: 0, height: 0 })
+    const [plays, setPlays] = useState(0)
     const pillRef = useRef<HTMLLabelElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
+    const beat = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Layout effect, not a plain one: this decides where two elements sit and
     // how wide one of them is. Read after paint, the first frame would show the
     // pill at its natural size sitting on top of the button.
     useLayoutEffect(() => {
-        const travel = btnRef.current?.offsetWidth ?? 0
+        const btn = btnRef.current?.offsetWidth ?? 0
         const full = pillRef.current?.offsetWidth ?? 0
         const height = btnRef.current?.offsetHeight ?? 0
-        if (travel > 0 && full > 0) setDims({ travel: travel + GAP, full, height })
+        if (btn > 0 && full > 0) setDims({ travel: btn + GAP, full, height })
     }, [])
 
-    // Sequence the two beats — and reverse them on the way out — from the
-    // handlers rather than from an effect on `open`. An effect can only react to
-    // the final state, so it collapses the label and retracts the pill in the
-    // same frame; closing has to be label-first, then retract, or the pill flies
-    // home while still shedding width and reads as a glitch.
-    //
-    // A timer rather than transitionend, which fires once per animated property
-    // and again for the label's own fade.
-    const beat = useRef<ReturnType<typeof setTimeout> | null>(null)
     useEffect(() => () => { if (beat.current) clearTimeout(beat.current) }, [])
 
+    // ─── the choreography ───────────────────────────────────────────────────
+    //
+    //   reach   the button stretches LEFT over the ground both halves will
+    //           occupy. Nothing has split yet; there is just more of it.
+    //   split   the button's own skin goes transparent and the SVG blob takes
+    //           its place, thinning at the waist until a ball pinches off the
+    //           left end.
+    //   open    the blob is dropped, the real pill appears where the ball
+    //           ended and grows to admit its label, and the button is back to
+    //           its own width.
+    //
+    // Three states rather than a flag because each has different things
+    // visible, and a boolean cannot say which of them we are in.
     function openDock() {
         if (beat.current) clearTimeout(beat.current)
-        // Already out — a pointer moving between the two halves must not make
-        // the button kick again.
-        if (!open) recoil(btnRef.current)
-        setOpen(true)
-        beat.current = setTimeout(() => setExpanded(true), EJECT_MS)
+        if (phase !== "idle") return
+        setPhase("reach")
+        beat.current = setTimeout(() => {
+            setPhase("split")
+            setPlays((n) => n + 1)
+            beat.current = setTimeout(() => setPhase("open"), SPLIT_MS)
+        }, REACH_MS)
     }
 
     function closeDock() {
         if (beat.current) clearTimeout(beat.current)
-        setExpanded(false)
-        beat.current = setTimeout(() => setOpen(false), COLLAPSE_MS)
+        // Straight back. Reversing the split would mean replaying it backwards
+        // for a gesture nobody watches — a pointer leaving is already gone.
+        setPhase("idle")
     }
 
-    // Until measured, the pill renders at its natural width so it CAN be
-    // measured; it is transparent throughout, so nothing shows.
+    const reaching = phase !== "idle"
+    const splitting = phase === "split"
+    const opened = phase === "open"
     const measured = dims.full > 0
 
     return (
@@ -385,26 +395,38 @@ function AiDraftDock({
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closeDock()
             }}
         >
-            <GooFilter />
-            <GooSplit
-                active={open && !expanded}
-                travel={dims.travel}
-                height={dims.height}
-                buttonWidth={dims.travel - GAP}
-            />
+            {/* The blob stands in for the button's skin for exactly one beat. */}
+            {measured && dims.height > 0 && (
+                <div
+                    aria-hidden
+                    className={cn(
+                        "pointer-events-none absolute bottom-0 right-0 transition-opacity",
+                        splitting ? "opacity-100 duration-0" : "opacity-0 duration-150",
+                    )}
+                >
+                    <LiquidSplit
+                        geo={{
+                            width: dims.travel + CIRCLE,
+                            height: dims.height,
+                            capWidth: dims.travel - GAP,
+                            ballRadius: CIRCLE / 2,
+                        }}
+                        playToken={plays}
+                        durationMs={SPLIT_MS}
+                    />
+                </div>
+            )}
 
             <label
                 ref={pillRef}
                 style={{
-                    transform: open ? `translateX(${-dims.travel}px)` : "translateX(0) scale(0.6)",
-                    width: measured ? (expanded ? dims.full : CIRCLE) : undefined,
+                    transform: opened ? `translateX(${-dims.travel}px)` : "translateX(0) scale(0.6)",
+                    width: measured ? (opened ? dims.full : CIRCLE) : undefined,
                 }}
                 className={cn(
                     "absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
-                    // Transform springs (the throw); width eases (the opening).
-                    // Different motions, so deliberately different curves.
-                    "transition-[transform,width,opacity] duration-[420ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
-                    open ? "opacity-100" : "pointer-events-none opacity-0",
+                    "transition-[transform,width,opacity] duration-[320ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
+                    opened ? "opacity-100" : "pointer-events-none opacity-0",
                     attachmentsFull && "cursor-not-allowed opacity-50",
                 )}
             >
@@ -415,16 +437,7 @@ function AiDraftDock({
                         <path d="M4 16.5 9 12l3.5 3 2.5-2 5 4.5" />
                     </svg>
                 </span>
-                {/* Fades with the widening rather than being revealed by the
-                    clip alone — text sliding out from behind an edge reads as a
-                    marquee. Kept in the DOM at all times so the label is always
-                    the control's accessible name. */}
-                <span
-                    className={cn(
-                        "transition-opacity duration-150",
-                        measured && !expanded && "opacity-0",
-                    )}
-                >
+                <span className={cn("transition-opacity duration-150", !opened && "opacity-0")}>
                     Analyse image
                 </span>
                 <input
@@ -447,7 +460,21 @@ function AiDraftDock({
                 onClick={onDraft}
                 disabled={!canDraft || drafting}
                 title={canDraft ? undefined : "Write a line or attach a screenshot first"}
-                className="relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] transition-[background,opacity] duration-150 hover:bg-[color:var(--c-surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
+                style={{
+                    // Reaches left over the ground the split will use, then lets
+                    // go once the pill is real. Padding-left carries the label to
+                    // the right so the text never moves.
+                    paddingLeft: reaching && !opened && measured ? dims.travel + 10 : undefined,
+                }}
+                className={cn(
+                    "relative inline-flex items-center justify-end gap-1.5 whitespace-nowrap rounded-full py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] disabled:cursor-not-allowed disabled:opacity-45",
+                    "transition-[padding,background,border-color,opacity] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    // Its skin is handed to the blob for the duration of the
+                    // split and taken back afterwards.
+                    splitting
+                        ? "border border-transparent bg-transparent shadow-none"
+                        : "border border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] hover:bg-[color:var(--c-surface-2)]",
+                )}
             >
                 {drafting ? <Spinner /> : <SparkleIcon />}
                 {drafting ? "Drafting…" : "Draft with AI"}
@@ -456,152 +483,17 @@ function AiDraftDock({
     )
 }
 
-/** The gooey bridge the circle stretches out of the button as it leaves.
- *
- *  Two solid blobs behind the real controls, inside an SVG filter that blurs
- *  them and then slams the alpha channel through a steep contrast curve. Blur
- *  makes two nearby shapes overlap in a soft haze; the contrast turns that haze
- *  back into a hard edge — so shapes that are close FUSE, and a bridge forms
- *  between them that thins and snaps as they separate. That is the whole trick,
- *  and it is why this is a filter on plain divs rather than a hand-animated
- *  path: the merge geometry falls out of the maths.
- *
- *  ─── why it is a separate layer ──────────────────────────────────────────
- *
- *  The filter would wreck the real controls: it blurs everything it is applied
- *  to, so text turns to mush and 1px borders dissolve. So the blobs are purely
- *  decorative, aria-hidden, sitting behind — and they are BOTH the button's
- *  fill, not their own, because two metaballs in different colours read as two
- *  objects overlapping rather than one splitting. The ejected circle looking
- *  like the button at the moment of birth is the point.
- *
- *  It only exists during the throw. Once the pill has landed, the layer fades
- *  and the real pill fades in over it, taking its own surface and border and
- *  label. Keeping the filter mounted would blur nothing and cost a full-page
- *  filter region on every frame of the label opening.
- *
- *  The filter needs room to blur into: `inset` gives it a margin, since a
- *  filter clipped at the element's box would cut the bridge off flat. */
-function GooSplit({
-    active,
-    travel,
-    height,
-    buttonWidth,
-}: {
-    active: boolean
-    travel: number
-    height: number
-    buttonWidth: number
-}) {
-    // Nothing to draw before the dock has been measured.
-    if (height === 0) return null
+type Phase = "idle" | "reach" | "split" | "open"
 
-    return (
-        <span
-            aria-hidden
-            className={cn(
-                "pointer-events-none absolute -inset-6 transition-opacity duration-200",
-                active ? "opacity-100" : "opacity-0",
-            )}
-            style={{ filter: "url(#ai-goo)" }}
-        >
-            {/* The button's own silhouette, INSET on every side. The filter
-                grows a shape slightly as it re-hardens the blurred edge, so a
-                blob drawn at the button's exact size would peek out all round
-                it as a halo. Inset, it stays tucked behind the button and is
-                seen only where the bridge leaves it. */}
-            <span
-                className="absolute rounded-full bg-[color:var(--c-primary)]"
-                style={{
-                    right: 24 + BLOB_INSET,
-                    bottom: 24 + BLOB_INSET,
-                    width: buttonWidth - BLOB_INSET * 2,
-                    height: height - BLOB_INSET * 2,
-                }}
-            />
-            {/* The circle being thrown. Same travel and curve as the real pill,
-                so the goo tracks it exactly. */}
-            <span
-                className="absolute rounded-full bg-[color:var(--c-primary)] transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]"
-                style={{
-                    right: 24 + (buttonWidth - CIRCLE) / 2,
-                    bottom: 24 + (height - CIRCLE) / 2,
-                    width: CIRCLE,
-                    height: CIRCLE,
-                    transform: active ? `translateX(${-travel + (buttonWidth - CIRCLE) / 2}px)` : "translateX(0)",
-                }}
-            />
-        </span>
-    )
-}
-
-/** The metaball filter, mounted once per dock.
- *
- *  stdDeviation sets how far apart two shapes can be and still fuse; the
- *  colour matrix's last row is the contrast — a large alpha multiplier with an
- *  offset that pushes everything below the midpoint to fully transparent and
- *  everything above it to fully opaque. */
-function GooFilter() {
-    return (
-        <svg aria-hidden focusable="false" width="0" height="0" className="absolute">
-            <defs>
-                <filter id="ai-goo">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
-                    <feColorMatrix
-                        in="blur"
-                        type="matrix"
-                        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9"
-                    />
-                </filter>
-            </defs>
-        </svg>
-    )
-}
-
-/** The button's reaction to throwing the pill.
- *
- *  Not a displacement: it winds up right, lunges left as the pill leaves, and
- *  settles on the exact pixel it started from. A button that ejects something
- *  and does not move at all reads as two unrelated animations played together;
- *  one that moves and STAYS moved slides out from under the cursor reaching for
- *  it. A transient is the only version that is both physical and clickable.
- *
- *  Driven by the Web Animations API rather than a CSS class, because it has to
- *  REPLAY on every eject. A CSS animation will not restart on an element that
- *  merely re-rendered; the usual fixes are to remount it (which drops focus —
- *  fatal here, since focusing the button is one of the ways to open the dock)
- *  or to toggle a class around a forced reflow. `animate()` just plays it.
- *
- *  Honours prefers-reduced-motion by hand: an imperative animation is invisible
- *  to the stylesheet's media query. */
-function recoil(el: HTMLElement | null) {
-    if (!el || typeof el.animate !== "function") return
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
-    el.animate(
-        [
-            { transform: "translateX(0)" },
-            { transform: "translateX(4px)", offset: 0.22 },
-            { transform: "translateX(-3px)", offset: 0.52 },
-            { transform: "translateX(1px)", offset: 0.78 },
-            { transform: "translateX(0)" },
-        ],
-        { duration: 420, easing: "cubic-bezier(0.33, 0, 0.25, 1)" },
-    )
-}
-
-/** How far the goo blobs sit inside the shapes they stand behind, so the
- *  filter's re-hardened edge lands under the real control rather than around
- *  it. */
-const BLOB_INSET = 3
+/** How long the button takes to stretch over the ground it is about to split. */
+const REACH_MS = 200
+/** How long the blob takes to pinch a ball off its left end. */
+const SPLIT_MS = 380
 
 /** Space between the pill and the button once the pill has landed. */
 const GAP = 6
 /** The pill before it opens: a circle holding just the icon. */
 const CIRCLE = 28
-/** How long the throw takes, and therefore when the label may start to open. */
-const EJECT_MS = 260
-/** How long the label takes to be swallowed before the pill is pulled back. */
-const COLLAPSE_MS = 160
 
 function SparkleIcon() {
     return (
