@@ -35,63 +35,82 @@ export interface SplitGeometry {
     height: number
     /** The right-hand end — the button — which keeps its size throughout. */
     capWidth: number
-    /** Radius of the ball being thrown off the left. */
-    ballRadius: number
 }
 
-/** The outline at progress `t`: 0 is one undivided capsule, 1 is a ball pinched
- *  off the left end.
+/** Where the animation stops growing and starts tearing. */
+const GROW_UNTIL = 0.45
+
+/** The outline at progress `t`.
+ *
+ *  0     the button's own capsule, and nothing else.
+ *  →0.45 the capsule EXTENDS: its left end travels out across the span while
+ *        the shape stays whole. This is the "expand", and it happens inside the
+ *        path — not as a layout change on the button, which is what made the
+ *        earlier version choppy.
+ *  →1    the extended capsule NECKS IN THE MIDDLE and pinches apart, leaving a
+ *        round end that is the same size as the one it left.
+ *
+ *  ─── why both ends are the same radius ──────────────────────────────────
+ *
+ *  The first version threw a small ball out of a big capsule's left cap, and it
+ *  looked like a raindrop being squeezed out because that is geometrically what
+ *  it was: the neck ran from a 28px circle to the full 30px height of the
+ *  capsule's flank, so the taper was spread down the whole length instead of
+ *  being a pinch in one place. Two ends of equal radius — which here is just
+ *  the control's own height — give the reference's shape: a peanut whose waist
+ *  narrows in the middle and lets go.
  *
  *  Pure, and exported, so its shape can be asserted rather than eyeballed. */
 export function splitPath(geo: SplitGeometry, t: number): string {
-    const { width: W, height: H, capWidth, ballRadius: r } = geo
+    const { width: W, height: H, capWidth } = geo
     const R = H / 2
     const cy = R
 
-    // Where the ball's centre travels: from tucked inside the capsule's left
-    // cap out to the far edge of the span.
-    const from = W - capWidth + R
-    const to = r
-    const cx = from + (to - from) * t
-
-    // The waist. Full height at rest — which is what makes the whole thing read
-    // as ONE capsule rather than two shapes that happen to touch — and gone at
-    // the end. The exponent makes it hold its width and then let go, which is
-    // how a liquid neck actually behaves; a linear taper looks like a wipe.
-    const k = R * Math.pow(1 - t, 1.6)
-
-    // The capsule's left cap is replaced by the junction, so the neck attaches
-    // at the cap's tangent points rather than at the bounding box.
+    // The button, which never changes: its two cap centres.
     const capLeft = W - capWidth + R
-    const ballRight = cx + r
-    const gap = capLeft - ballRight
-    const midX = ballRight + gap / 2
-    const c1X = ballRight + gap * 0.3
-    const c2X = capLeft - gap * 0.3
+    const rx = W - R
+
+    // The round end starts AS the button's left cap — same centre, same radius
+    // — and travels out. At t=0 the two coincide and the outline is the button
+    // exactly, which is what lets the SVG take over from it with nothing moving.
+    const lx = capLeft + (R - capLeft) * Math.min(t / GROW_UNTIL, 1)
+
+    // The waist, and the correction that took two attempts to get right: it
+    // applies ONLY across the neck — between the round end and the button's own
+    // left cap — never along the button's flank. Sagging the whole span pinched
+    // the button itself into a thread with a bulb on the end, which is not a
+    // split, it is a deflation.
+    const tear = t <= GROW_UNTIL ? 0 : (t - GROW_UNTIL) / (1 - GROW_UNTIL)
+    // Eased so the neck holds and then lets go, rather than closing at a
+    // constant rate — a linear waist reads as a wipe, not a tear.
+    const sag = R * Math.pow(tear, 1.35)
+
+    // A cubic whose own midpoint dips by exactly `sag` needs its control points
+    // pulled 4/3 of that, because a symmetric cubic reaches only three quarters
+    // of the way to its handles.
+    const pull = (sag * 4) / 3
+    const reach = (capLeft - lx) * 0.3
 
     const n = (v: number) => Math.round(v * 100) / 100
 
     return [
-        `M ${n(cx - r)} ${n(cy)}`,
-        // ball: left side, up over the top
-        `C ${n(cx - r)} ${n(cy - r * K)} ${n(cx - r * K)} ${n(cy - r)} ${n(cx)} ${n(cy - r)}`,
-        // ball top into the waist
-        `C ${n(cx + r * K)} ${n(cy - r)} ${n(c1X)} ${n(cy - k)} ${n(midX)} ${n(cy - k)}`,
-        // waist into the capsule's top tangent
-        `C ${n(c2X)} ${n(cy - k)} ${n(capLeft - R * K)} 0 ${n(capLeft)} 0`,
-        // along the top
-        `L ${n(W - R)} 0`,
-        // right cap
-        `C ${n(W - R + R * K)} 0 ${n(W)} ${n(R - R * K)} ${n(W)} ${n(R)}`,
-        `C ${n(W)} ${n(R + R * K)} ${n(W - R + R * K)} ${n(H)} ${n(W - R)} ${n(H)}`,
-        // back along the bottom
-        `L ${n(capLeft)} ${n(H)}`,
-        // capsule bottom tangent into the waist
-        `C ${n(capLeft - R * K)} ${n(H)} ${n(c2X)} ${n(cy + k)} ${n(midX)} ${n(cy + k)}`,
-        // waist into the ball's underside
-        `C ${n(c1X)} ${n(cy + k)} ${n(cx + r * K)} ${n(cy + r)} ${n(cx)} ${n(cy + r)}`,
-        // ball: round the bottom back to the start
-        `C ${n(cx - r * K)} ${n(cy + r)} ${n(cx - r)} ${n(cy + r * K)} ${n(cx - r)} ${n(cy)}`,
+        // the round end, leftmost point
+        `M ${n(lx - R)} ${n(cy)}`,
+        // round up to its top
+        `C ${n(lx - R)} ${n(cy - R * K)} ${n(lx - R * K)} ${n(cy - R)} ${n(lx)} ${n(cy - R)}`,
+        // the NECK's upper side, sagging toward the centre line
+        `C ${n(lx + reach)} ${n(cy - R + pull)} ${n(capLeft - reach)} ${n(cy - R + pull)} ${n(capLeft)} ${n(cy - R)}`,
+        // the button's own flat top — untouched by the sag
+        `L ${n(rx)} ${n(cy - R)}`,
+        // the button's right cap
+        `C ${n(rx + R * K)} ${n(cy - R)} ${n(rx + R)} ${n(cy - R * K)} ${n(rx + R)} ${n(cy)}`,
+        `C ${n(rx + R)} ${n(cy + R * K)} ${n(rx + R * K)} ${n(cy + R)} ${n(rx)} ${n(cy + R)}`,
+        // back along the button's flat bottom
+        `L ${n(capLeft)} ${n(cy + R)}`,
+        // the NECK's lower side, sagging up to meet the other
+        `C ${n(capLeft - reach)} ${n(cy + R - pull)} ${n(lx + reach)} ${n(cy + R - pull)} ${n(lx)} ${n(cy + R)}`,
+        // round the end back to the start
+        `C ${n(lx - R * K)} ${n(cy + R)} ${n(lx - R)} ${n(cy + R * K)} ${n(lx - R)} ${n(cy)}`,
         "Z",
     ].join(" ")
 }

@@ -1,20 +1,21 @@
 import { test, expect, describe } from "bun:test"
 import { splitPath, splitKeyframes, type SplitGeometry } from "./liquid-split"
 
-const GEO: SplitGeometry = { width: 147, height: 30, capWidth: 113, ballRadius: 14 }
+const GEO: SplitGeometry = { width: 149, height: 30, capWidth: 113 }
 
 /** Every command letter in a path, in order — its "shape" for interpolation. */
 function structure(d: string): string {
     return (d.match(/[A-Za-z]/g) ?? []).join("")
 }
 
-/** The y of the waist's upper point — the endpoint of the third segment, which
- *  is where the neck is at its narrowest. Rises from the shape's top edge to
- *  the centre line as the two halves part. */
-function waistTopY(d: string): number {
+/** How far the upper flank dips toward the centre line at its deepest — the
+ *  waist. Read off the flank cubic's control points, which is where the sag is
+ *  expressed; a symmetric cubic's own midpoint reaches three quarters of it. */
+function waistDip(d: string): number {
     const ns = numbers(d)
-    // M(1 point) C(3) C(3) => the third segment's endpoint is the 7th point.
-    return ns[7 * 2 - 1]
+    // M(1 pt) C(3 pts) then the flank C: its first control point is the 6th.
+    const controlY = ns[5 * 2 + 1]
+    return (controlY - 0) * 0.75
 }
 
 /** Every number in a path, in order. */
@@ -44,25 +45,32 @@ describe("splitPath", () => {
     // the centre line, so the frame the real controls take over from already
     // looks separated.
     test("the waist opens at the full height and closes to a point", () => {
-        expect(waistTopY(splitPath(GEO, 0))).toBeCloseTo(0, 2)
-        expect(waistTopY(splitPath(GEO, 1))).toBeCloseTo(GEO.height / 2, 2)
+        expect(waistDip(splitPath(GEO, 0))).toBeCloseTo(0, 2)
+        expect(waistDip(splitPath(GEO, 1))).toBeCloseTo(GEO.height / 2, 2)
     })
 
     // Monotonic, because a waist that widened again part-way through would
     // read as the blob breathing rather than tearing.
     test("the waist only ever narrows", () => {
-        const ys = splitKeyframes(GEO, 16).map((d) => waistTopY(d))
+        const ys = splitKeyframes(GEO, 16).map((d) => waistDip(d))
         for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThanOrEqual(ys[i - 1])
     })
 
-    // The ball has to end up where the real pill is about to appear, or the
-    // handoff jumps. It travels from inside the capsule out to the left edge.
-    test("the ball travels from inside the cap to the far edge", () => {
-        const startX = numbers(splitPath(GEO, 0))[0]
-        const endX = numbers(splitPath(GEO, 1))[0]
-        expect(endX).toBeLessThan(startX)
-        // First point is the ball's leftmost, so at t=1 it sits on x=0.
-        expect(endX).toBeCloseTo(0, 1)
+    // The capsule has to reach the far edge before it starts tearing, and the
+    // round end has to stop exactly where the real pill will appear — the whole
+    // handoff depends on it.
+    test("the left end grows out to the far edge, then stops", () => {
+        const leftmost = (t: number) => numbers(splitPath(GEO, t))[0]
+        expect(leftmost(0)).toBeCloseTo(GEO.width - GEO.capWidth, 1)
+        expect(leftmost(1)).toBeCloseTo(0, 1)
+        // Growth is finished before the tear begins, so the two never fight.
+        expect(leftmost(0.45)).toBeCloseTo(0, 1)
+    })
+
+    // Nothing may move once the tear starts; the round end is already home.
+    test("the round end is still while the waist closes", () => {
+        const late = [0.5, 0.7, 0.9, 1].map((t) => numbers(splitPath(GEO, t))[0])
+        for (const x of late) expect(x).toBeCloseTo(late[0], 2)
     })
 
     test("never draws outside its own box", () => {

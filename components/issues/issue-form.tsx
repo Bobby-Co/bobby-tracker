@@ -354,8 +354,13 @@ function AiDraftDock({
     //   split   the button's own skin goes transparent and the SVG blob takes
     //           its place, thinning at the waist until a ball pinches off the
     //           left end.
-    //   open    the blob is dropped, the real pill appears where the ball
-    //           ended and grows to admit its label.
+    //   land    the blob is dropped and the real control takes over AS THE BALL
+    //           — a circle, no label, exactly where and what the blob left. It
+    //           has to exist as its own frame: appearing full-width here would
+    //           throw away the ball the split just spent 240ms making, and the
+    //           whole gesture would end on a pop.
+    //   open    and only then does the circle grow into a pill and admit its
+    //           label.
     //
     // There WAS a beat before these two, where the button stretched left over
     // the ground the split would use. It was choppy, and it was redundant: the
@@ -368,7 +373,10 @@ function AiDraftDock({
         if (phase !== "idle") return
         setPhase("split")
         setPlays((n) => n + 1)
-        beat.current = setTimeout(() => setPhase("open"), SPLIT_MS)
+        beat.current = setTimeout(() => {
+            setPhase("land")
+            beat.current = setTimeout(() => setPhase("open"), LAND_MS)
+        }, SPLIT_MS)
     }
 
     function closeDock() {
@@ -379,6 +387,7 @@ function AiDraftDock({
     }
 
     const splitting = phase === "split"
+    const landed = phase === "land" || phase === "open"
     const opened = phase === "open"
     const measured = dims.full > 0
 
@@ -403,10 +412,12 @@ function AiDraftDock({
                 >
                     <LiquidSplit
                         geo={{
-                            width: dims.travel + CIRCLE,
+                            // The ball the split leaves is a circle of the
+                            // control's own height, so the span is the button
+                            // plus the gap plus that.
+                            width: dims.travel + dims.height,
                             height: dims.height,
-                            capWidth: dims.travel - GAP,
-                            ballRadius: CIRCLE / 2,
+                            capWidth: dims.btn,
                         }}
                         playToken={plays}
                         durationMs={SPLIT_MS}
@@ -417,13 +428,23 @@ function AiDraftDock({
             <label
                 ref={pillRef}
                 style={{
-                    transform: opened ? `translateX(${-dims.travel}px)` : "translateX(0) scale(0.6)",
-                    width: measured ? (opened ? dims.full : CIRCLE) : undefined,
+                    // Landing is a HANDOFF, not a move: the ball is already at
+                    // this spot, drawn by the blob. So the control is placed
+                    // there outright and only its width is ever animated.
+                    transform: landed ? `translateX(${-dims.travel}px)` : "translateX(0) scale(0.6)",
+                    // Exactly the ball the blob just drew — same diameter,
+                    // same place — or the handoff is a visible jump.
+                    width: measured ? (opened ? dims.full : dims.height) : undefined,
                 }}
                 className={cn(
                     "absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
-                    "transition-[transform,width,opacity] duration-[240ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
-                    opened ? "opacity-100" : "pointer-events-none opacity-0",
+                    // No transition on the landing frame, or the circle slides
+                    // in from under the button instead of simply BEING where the
+                    // blob left it. From `open` on, width eases.
+                    phase === "land"
+                        ? "transition-none"
+                        : "transition-[transform,width,opacity] duration-[240ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
+                    landed ? "opacity-100" : "pointer-events-none opacity-0",
                     attachmentsFull && "cursor-not-allowed opacity-50",
                 )}
             >
@@ -476,15 +497,17 @@ function AiDraftDock({
     )
 }
 
-type Phase = "idle" | "split" | "open"
+type Phase = "idle" | "split" | "land" | "open"
 
 /** How long the blob takes to pinch a ball off its left end. */
 const SPLIT_MS = 240
+/** How long the ball sits as a plain circle before it grows. Short — it is a
+ *  beat, not a pause — but non-zero, so the eye registers that the thing the
+ *  split produced is the thing that then becomes a button. */
+const LAND_MS = 90
 
 /** Space between the pill and the button once the pill has landed. */
 const GAP = 6
-/** The pill before it opens: a circle holding just the icon. */
-const CIRCLE = 28
 
 function SparkleIcon() {
     return (
