@@ -357,6 +357,9 @@ function AiDraftDock({
 
     function openDock() {
         if (beat.current) clearTimeout(beat.current)
+        // Already out — a pointer moving between the two halves must not make
+        // the button kick again.
+        if (!open) recoil(btnRef.current)
         setOpen(true)
         beat.current = setTimeout(() => setExpanded(true), EJECT_MS)
     }
@@ -441,6 +444,37 @@ function AiDraftDock({
                 {drafting ? "Drafting…" : "Draft with AI"}
             </button>
         </div>
+    )
+}
+
+/** The button's reaction to throwing the pill.
+ *
+ *  Not a displacement: it winds up right, lunges left as the pill leaves, and
+ *  settles on the exact pixel it started from. A button that ejects something
+ *  and does not move at all reads as two unrelated animations played together;
+ *  one that moves and STAYS moved slides out from under the cursor reaching for
+ *  it. A transient is the only version that is both physical and clickable.
+ *
+ *  Driven by the Web Animations API rather than a CSS class, because it has to
+ *  REPLAY on every eject. A CSS animation will not restart on an element that
+ *  merely re-rendered; the usual fixes are to remount it (which drops focus —
+ *  fatal here, since focusing the button is one of the ways to open the dock)
+ *  or to toggle a class around a forced reflow. `animate()` just plays it.
+ *
+ *  Honours prefers-reduced-motion by hand: an imperative animation is invisible
+ *  to the stylesheet's media query. */
+function recoil(el: HTMLElement | null) {
+    if (!el || typeof el.animate !== "function") return
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+    el.animate(
+        [
+            { transform: "translateX(0)" },
+            { transform: "translateX(4px)", offset: 0.22 },
+            { transform: "translateX(-3px)", offset: 0.52 },
+            { transform: "translateX(1px)", offset: 0.78 },
+            { transform: "translateX(0)" },
+        ],
+        { duration: 420, easing: "cubic-bezier(0.33, 0, 0.25, 1)" },
     )
 }
 

@@ -850,6 +850,7 @@ main[data-page="landing"] {
             opacity 200ms ease-out;
     }
 
+
     .skeleton {
         @apply relative overflow-hidden rounded bg-[color:var(--c-surface-2)];
     }
