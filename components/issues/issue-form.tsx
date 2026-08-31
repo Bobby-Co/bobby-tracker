@@ -331,7 +331,7 @@ function AiDraftDock({
 }) {
     const [open, setOpen] = useState(false)
     const [expanded, setExpanded] = useState(false)
-    const [dims, setDims] = useState({ travel: 0, full: 0 })
+    const [dims, setDims] = useState({ travel: 0, full: 0, height: 0 })
     const pillRef = useRef<HTMLLabelElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
 
@@ -341,7 +341,8 @@ function AiDraftDock({
     useLayoutEffect(() => {
         const travel = btnRef.current?.offsetWidth ?? 0
         const full = pillRef.current?.offsetWidth ?? 0
-        if (travel > 0 && full > 0) setDims({ travel: travel + GAP, full })
+        const height = btnRef.current?.offsetHeight ?? 0
+        if (travel > 0 && full > 0) setDims({ travel: travel + GAP, full, height })
     }, [])
 
     // Sequence the two beats — and reverse them on the way out — from the
@@ -384,6 +385,14 @@ function AiDraftDock({
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closeDock()
             }}
         >
+            <GooFilter />
+            <GooSplit
+                active={open && !expanded}
+                travel={dims.travel}
+                height={dims.height}
+                buttonWidth={dims.travel - GAP}
+            />
+
             <label
                 ref={pillRef}
                 style={{
@@ -447,6 +456,108 @@ function AiDraftDock({
     )
 }
 
+/** The gooey bridge the circle stretches out of the button as it leaves.
+ *
+ *  Two solid blobs behind the real controls, inside an SVG filter that blurs
+ *  them and then slams the alpha channel through a steep contrast curve. Blur
+ *  makes two nearby shapes overlap in a soft haze; the contrast turns that haze
+ *  back into a hard edge — so shapes that are close FUSE, and a bridge forms
+ *  between them that thins and snaps as they separate. That is the whole trick,
+ *  and it is why this is a filter on plain divs rather than a hand-animated
+ *  path: the merge geometry falls out of the maths.
+ *
+ *  ─── why it is a separate layer ──────────────────────────────────────────
+ *
+ *  The filter would wreck the real controls: it blurs everything it is applied
+ *  to, so text turns to mush and 1px borders dissolve. So the blobs are purely
+ *  decorative, aria-hidden, sitting behind — and they are BOTH the button's
+ *  fill, not their own, because two metaballs in different colours read as two
+ *  objects overlapping rather than one splitting. The ejected circle looking
+ *  like the button at the moment of birth is the point.
+ *
+ *  It only exists during the throw. Once the pill has landed, the layer fades
+ *  and the real pill fades in over it, taking its own surface and border and
+ *  label. Keeping the filter mounted would blur nothing and cost a full-page
+ *  filter region on every frame of the label opening.
+ *
+ *  The filter needs room to blur into: `inset` gives it a margin, since a
+ *  filter clipped at the element's box would cut the bridge off flat. */
+function GooSplit({
+    active,
+    travel,
+    height,
+    buttonWidth,
+}: {
+    active: boolean
+    travel: number
+    height: number
+    buttonWidth: number
+}) {
+    // Nothing to draw before the dock has been measured.
+    if (height === 0) return null
+
+    return (
+        <span
+            aria-hidden
+            className={cn(
+                "pointer-events-none absolute -inset-6 transition-opacity duration-200",
+                active ? "opacity-100" : "opacity-0",
+            )}
+            style={{ filter: "url(#ai-goo)" }}
+        >
+            {/* The button's own silhouette, INSET on every side. The filter
+                grows a shape slightly as it re-hardens the blurred edge, so a
+                blob drawn at the button's exact size would peek out all round
+                it as a halo. Inset, it stays tucked behind the button and is
+                seen only where the bridge leaves it. */}
+            <span
+                className="absolute rounded-full bg-[color:var(--c-primary)]"
+                style={{
+                    right: 24 + BLOB_INSET,
+                    bottom: 24 + BLOB_INSET,
+                    width: buttonWidth - BLOB_INSET * 2,
+                    height: height - BLOB_INSET * 2,
+                }}
+            />
+            {/* The circle being thrown. Same travel and curve as the real pill,
+                so the goo tracks it exactly. */}
+            <span
+                className="absolute rounded-full bg-[color:var(--c-primary)] transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]"
+                style={{
+                    right: 24 + (buttonWidth - CIRCLE) / 2,
+                    bottom: 24 + (height - CIRCLE) / 2,
+                    width: CIRCLE,
+                    height: CIRCLE,
+                    transform: active ? `translateX(${-travel + (buttonWidth - CIRCLE) / 2}px)` : "translateX(0)",
+                }}
+            />
+        </span>
+    )
+}
+
+/** The metaball filter, mounted once per dock.
+ *
+ *  stdDeviation sets how far apart two shapes can be and still fuse; the
+ *  colour matrix's last row is the contrast — a large alpha multiplier with an
+ *  offset that pushes everything below the midpoint to fully transparent and
+ *  everything above it to fully opaque. */
+function GooFilter() {
+    return (
+        <svg aria-hidden focusable="false" width="0" height="0" className="absolute">
+            <defs>
+                <filter id="ai-goo">
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+                    <feColorMatrix
+                        in="blur"
+                        type="matrix"
+                        values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9"
+                    />
+                </filter>
+            </defs>
+        </svg>
+    )
+}
+
 /** The button's reaction to throwing the pill.
  *
  *  Not a displacement: it winds up right, lunges left as the pill leaves, and
@@ -477,6 +588,11 @@ function recoil(el: HTMLElement | null) {
         { duration: 420, easing: "cubic-bezier(0.33, 0, 0.25, 1)" },
     )
 }
+
+/** How far the goo blobs sit inside the shapes they stand behind, so the
+ *  filter's re-hardened edge lands under the real control rather than around
+ *  it. */
+const BLOB_INSET = 3
 
 /** Space between the pill and the button once the pill has landed. */
 const GAP = 6
