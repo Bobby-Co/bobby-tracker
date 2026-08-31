@@ -25,10 +25,6 @@ import { useEffect, useRef } from "react"
 // the frame after that is the real controls taking over — by which point a
 // pinch and a separation look identical.
 
-/** Circle-quarter control-point ratio: the constant that makes four cubics a
- *  circle to within a fraction of a pixel. */
-const K = 0.5523
-
 export interface SplitGeometry {
     /** Total span the blob occupies: the button plus everything it throws. */
     width: number
@@ -40,31 +36,62 @@ export interface SplitGeometry {
 /** Where the animation stops growing and starts tearing. */
 const GROW_UNTIL = 0.45
 
+/** A point on a circle. Screen coordinates, so y runs downward and the angle
+ *  is the ordinary mathematical one. */
+function pt(cx: number, cy: number, r: number, a: number): [number, number] {
+    return [cx + r * Math.cos(a), cy - r * Math.sin(a)]
+}
+
+/** One cubic approximating the arc from `a0` to `a1`. Exact to within a
+ *  fraction of a pixel for sweeps up to a quarter turn, which is why the
+ *  callers below split anything larger. */
+function arc(cx: number, cy: number, r: number, a0: number, a1: number): string {
+    const h = (4 / 3) * Math.tan((a1 - a0) / 4) * r
+    const [x0, y0] = pt(cx, cy, r, a0)
+    const [x1, y1] = pt(cx, cy, r, a1)
+    const c1: [number, number] = [x0 + h * -Math.sin(a0), y0 + h * -Math.cos(a0)]
+    const c2: [number, number] = [x1 - h * -Math.sin(a1), y1 - h * -Math.cos(a1)]
+    return `C ${f(c1[0])} ${f(c1[1])} ${f(c2[0])} ${f(c2[1])} ${f(x1)} ${f(y1)}`
+}
+
+const f = (v: number) => Math.round(v * 100) / 100
+
 /** The outline at progress `t`.
  *
- *  0     the button's own capsule, and nothing else.
- *  →0.45 the capsule EXTENDS: its left end travels out across the span while
- *        the shape stays whole. This is the "expand", and it happens inside the
- *        path — not as a layout change on the button, which is what made the
- *        earlier version choppy.
- *  →1    the extended capsule NECKS IN THE MIDDLE and pinches apart, leaving a
- *        round end that is the same size as the one it left.
+ *  0     the button's capsule exactly.
+ *  →0.45 the capsule EXTENDS leftward. Still one shape; there is just more of
+ *        it. Doing this inside the path is what stops it being the choppy
+ *        layout jump an earlier version used.
+ *  →1    it detaches, and the shape it leaves behind is a WHOLE circle.
  *
- *  ─── why both ends are the same radius ──────────────────────────────────
+ *  ─── how a gooey detach actually behaves ────────────────────────────────
  *
- *  The first version threw a small ball out of a big capsule's left cap, and it
- *  looked like a raindrop being squeezed out because that is geometrically what
- *  it was: the neck ran from a 28px circle to the full 30px height of the
- *  capsule's flank, so the taper was spread down the whole length instead of
- *  being a pinch in one place. Two ends of equal radius — which here is just
- *  the control's own height — give the reference's shape: a peanut whose waist
- *  narrows in the middle and lets go.
+ *  Everything wrong with the previous two attempts came from where the bridge
+ *  was attached. It ran between the TOPS of the two ends, so it was a long
+ *  shallow sag across the whole gap — which thinned into a stretched thread
+ *  rather than retracting, and left the round end as a permanent semicircle
+ *  that could never finish as a circle.
+ *
+ *  Liquid does the opposite. The bridge attaches at the FACING sides, and as
+ *  the two halves part the attachment point slides down toward the line of
+ *  centres while the bridge shortens and gives up. That single parameter — how
+ *  far around each circle the bridge has climbed — is `wrap` below:
+ *
+ *    wrap = 1  the bridge attaches at both tops and runs straight between
+ *              them, which IS the flat side of a capsule. One shape.
+ *    wrap → 0  the attachment slides to the line of centres, the bridge
+ *              shortens to nothing, and each end is drawn as a FULL circle.
+ *
+ *  So the last frame is not a pinch that we hurry away from; it is two
+ *  separate shapes joined by a zero-area seam, which is what lets the real
+ *  controls take over without anything appearing to change.
  *
  *  Pure, and exported, so its shape can be asserted rather than eyeballed. */
 export function splitPath(geo: SplitGeometry, t: number): string {
     const { width: W, height: H, capWidth } = geo
     const R = H / 2
     const cy = R
+    const HALF = Math.PI / 2
 
     // The button, which never changes: its two cap centres.
     const capLeft = W - capWidth + R
@@ -72,45 +99,64 @@ export function splitPath(geo: SplitGeometry, t: number): string {
 
     // The round end starts AS the button's left cap — same centre, same radius
     // — and travels out. At t=0 the two coincide and the outline is the button
-    // exactly, which is what lets the SVG take over from it with nothing moving.
+    // exactly, which is what lets the SVG take over with nothing moving.
     const lx = capLeft + (R - capLeft) * Math.min(t / GROW_UNTIL, 1)
 
-    // The waist, and the correction that took two attempts to get right: it
-    // applies ONLY across the neck — between the round end and the button's own
-    // left cap — never along the button's flank. Sagging the whole span pinched
-    // the button itself into a thread with a bulb on the end, which is not a
-    // split, it is a deflation.
     const tear = t <= GROW_UNTIL ? 0 : (t - GROW_UNTIL) / (1 - GROW_UNTIL)
-    // Eased so the neck holds and then lets go, rather than closing at a
-    // constant rate — a linear waist reads as a wipe, not a tear.
-    const sag = R * Math.pow(tear, 1.35)
+    // Eased so the bridge holds and then lets go, rather than retracting at a
+    // constant rate — linear reads as a wipe, not a tear.
+    const wrap = 1 - Math.pow(tear, 1.25)
 
-    // A cubic whose own midpoint dips by exactly `sag` needs its control points
-    // pulled 4/3 of that, because a symmetric cubic reaches only three quarters
-    // of the way to its handles.
-    const pull = (sag * 4) / 3
-    const reach = (capLeft - lx) * 0.3
+    // How far the two ends still overlap. Zero once they are clear of each
+    // other, which keeps the bridge from being dragged back down mid-tear.
+    const d = capLeft - lx
+    const u = d < 2 * R ? Math.acos(Math.min(1, d / (2 * R))) : 0
 
-    const n = (v: number) => Math.round(v * 100) / 100
+    // Where the bridge meets each end.
+    const aBall = u + (HALF - u) * wrap
+    const aCap = Math.PI - aBall
+
+    const [b1x, b1y] = pt(lx, cy, R, aBall)      // ball, upper
+    const [b2x, b2y] = pt(lx, cy, R, -aBall)     // ball, lower
+    const [c1x, c1y] = pt(capLeft, cy, R, aCap)  // cap, upper
+    const [c2x, c2y] = pt(capLeft, cy, R, -aCap) // cap, lower
+
+    // Handles along each end's tangent, so the bridge leaves and arrives
+    // flush — that tangency is the whole difference between a liquid fillet
+    // and two shapes with a stick between them.
+    const hb = Math.hypot(c1x - b1x, c1y - b1y) * 0.5
+    const sB = Math.sin(aBall)
+    const cB = Math.cos(aBall)
+    const sC = Math.sin(aCap)
+    const cC = Math.cos(aCap)
+
+    // The ball is drawn the LONG way round, which is what makes it a full
+    // circle once the bridge has retracted. Four cubics: the sweep runs from a
+    // half turn up to a whole one, and a cubic is only faithful to a quarter.
+    const sweep = 2 * aBall - 2 * Math.PI
+    const step = sweep / 4
+    const a0 = -aBall
 
     return [
-        // the round end, leftmost point
-        `M ${n(lx - R)} ${n(cy)}`,
-        // round up to its top
-        `C ${n(lx - R)} ${n(cy - R * K)} ${n(lx - R * K)} ${n(cy - R)} ${n(lx)} ${n(cy - R)}`,
-        // the NECK's upper side, sagging toward the centre line
-        `C ${n(lx + reach)} ${n(cy - R + pull)} ${n(capLeft - reach)} ${n(cy - R + pull)} ${n(capLeft)} ${n(cy - R)}`,
-        // the button's own flat top — untouched by the sag
-        `L ${n(rx)} ${n(cy - R)}`,
-        // the button's right cap
-        `C ${n(rx + R * K)} ${n(cy - R)} ${n(rx + R)} ${n(cy - R * K)} ${n(rx + R)} ${n(cy)}`,
-        `C ${n(rx + R)} ${n(cy + R * K)} ${n(rx + R * K)} ${n(cy + R)} ${n(rx)} ${n(cy + R)}`,
-        // back along the button's flat bottom
-        `L ${n(capLeft)} ${n(cy + R)}`,
-        // the NECK's lower side, sagging up to meet the other
-        `C ${n(capLeft - reach)} ${n(cy + R - pull)} ${n(lx + reach)} ${n(cy + R - pull)} ${n(lx)} ${n(cy + R)}`,
-        // round the end back to the start
-        `C ${n(lx - R * K)} ${n(cy + R)} ${n(lx - R)} ${n(cy + R * K)} ${n(lx - R)} ${n(cy)}`,
+        `M ${f(b1x)} ${f(b1y)}`,
+        // the bridge, upper side
+        `C ${f(b1x + hb * sB)} ${f(b1y + hb * cB)} ${f(c1x - hb * sC)} ${f(c1y - hb * cC)} ${f(c1x)} ${f(c1y)}`,
+        // up over the button's left cap to its top
+        arc(capLeft, cy, R, aCap, HALF),
+        // the button's own flat top, which the tear never touches
+        `L ${f(rx)} ${f(cy - R)}`,
+        arc(rx, cy, R, HALF, 0),
+        arc(rx, cy, R, 0, -HALF),
+        `L ${f(capLeft)} ${f(cy + R)}`,
+        // down the left cap to the bridge's lower attachment
+        arc(capLeft, cy, R, -HALF, -aCap),
+        // the bridge, lower side
+        `C ${f(c2x - hb * sC)} ${f(c2y + hb * cC)} ${f(b2x + hb * sB)} ${f(b2y - hb * cB)} ${f(b2x)} ${f(b2y)}`,
+        // and the long way round the ball, back to where we began
+        arc(lx, cy, R, a0, a0 + step),
+        arc(lx, cy, R, a0 + step, a0 + 2 * step),
+        arc(lx, cy, R, a0 + 2 * step, a0 + 3 * step),
+        arc(lx, cy, R, a0 + 3 * step, a0 + 4 * step),
         "Z",
     ].join(" ")
 }
