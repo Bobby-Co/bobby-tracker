@@ -563,7 +563,16 @@ export function MarkdownEditor({
                                     // default, so a pasted URL would scroll the
                                     // editor sideways exactly as the rendered
                                     // block did before overflow-wrap was set.
-                                    className="my-0.5 block w-full resize-none overflow-hidden break-words bg-transparent font-mono text-[12.5px] leading-6 text-[color:var(--c-text)] outline-none placeholder:text-[color:var(--c-text-dim)]"
+                                    //
+                                    // Face and size match RenderedBlock exactly —
+                                    // 13px in the UI font, not 12.5px mono. This
+                                    // is the SAME LINE in both states, and
+                                    // swapping typeface on focus changed the width
+                                    // of every word and re-wrapped the line under
+                                    // the cursor: the text moved as you clicked
+                                    // into it. Monospace still belongs in Source
+                                    // mode, where you really are reading source.
+                                    className="my-0.5 block w-full resize-none overflow-hidden break-words bg-transparent text-[13px] leading-6 text-[color:var(--c-text)] outline-none placeholder:text-[color:var(--c-text-dim)]"
                                 />
                             ) : (
                                 <RenderedBlock

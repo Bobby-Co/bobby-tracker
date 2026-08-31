@@ -259,9 +259,16 @@ export function IssueComposerPanel() {
     const { expanded, openDraft, peekDrafts, minimize, discardDraft, resumeDraft, updateOpenDraft } = useIssueComposer()
     const [width, setWidth] = useState(DEFAULT_WIDTH)
     const [dragging, setDragging] = useState(false)
-    // Reserve the tab strip at the edge whenever other drafts are peeking, so the
-    // panel opens to its LEFT and the stack stays on the right (not shoved under).
-    const rightInset = peekDrafts.length > 0 ? TAB_W : 0
+    // Reserve the tab strip at the edge whenever other drafts are peeking WHILE
+    // THE PANEL IS OPEN, so the panel opens to its LEFT and the stack stays on
+    // the right rather than being shoved under it.
+    //
+    // Only while open. Collapsed, the panel has no width, and reserving the
+    // strip anyway narrowed the whole content column by 48px for a rail that is
+    // `fixed` and floats over everything regardless — the issue list gave up a
+    // margin to something that was never going to occupy it. Now the content
+    // runs full width and the tabs sit on top of its right edge.
+    const rightInset = expanded && peekDrafts.length > 0 ? TAB_W : 0
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
