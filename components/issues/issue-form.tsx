@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import { MarkdownEditor } from "@/components/markdown/markdown-editor"
@@ -289,15 +289,33 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
  *  button in the row with Cancel and Create reads as another way to submit,
  *  and this rewrites what you are looking at.
  *
- *  "Analyse image" is a second, smaller action that lives UNDER the primary one
- *  until you reach for it. Hovering or focusing the dock throws it out to the
- *  left on a curve that overshoots and settles — the overshoot is what makes it
- *  read as thrown rather than faded in. Leftward and not rightward because the
- *  dock is already against the editor's right edge; there is nothing to the
- *  right but the panel wall.
+ *  ─── the eject ──────────────────────────────────────────────────────────
  *
- *  It stays out whenever the dock holds focus, so a keyboard user can Tab to it
- *  rather than having to produce a hover they cannot produce. */
+ *  "Analyse image" starts hidden underneath "Draft with AI" and ejects to the
+ *  LEFT, in two beats:
+ *
+ *    1. a CIRCLE — the icon alone — is thrown out on a curve that overshoots
+ *       and settles, so it reads as launched rather than faded in;
+ *    2. once it lands, it widens to admit its label. Right edge pinned, so it
+ *       grows away from the button it came from and nothing it has already
+ *       drawn ever moves.
+ *
+ *  Closing reverses the order: the label is swallowed first, then the circle is
+ *  pulled back under the button. Playing both at once looks like a glitch.
+ *
+ *  The primary button does NOT move. An earlier pass gave it a recoil — equal
+ *  and opposite, which looked good in isolation and was bad to use: the thing
+ *  you were reaching for slid out from under the cursor at the exact moment
+ *  hovering it made it move. A control the pointer is approaching stays put.
+ *
+ *  Both distances are MEASURED rather than guessed. The travel is the button's
+ *  width (the pill's right edge lands a gap clear of its left edge) and the
+ *  expanded width is the pill's own natural width — both differ per font and
+ *  per translation, and a hard-coded pair would leave the circle overlapping
+ *  the button or the label clipped.
+ *
+ *  Focus opens it too, so a keyboard user can reach a control they cannot
+ *  hover. */
 function AiDraftDock({
     onDraft,
     onFiles,
@@ -312,32 +330,91 @@ function AiDraftDock({
     attachmentsFull: boolean
 }) {
     const [open, setOpen] = useState(false)
+    const [expanded, setExpanded] = useState(false)
+    const [dims, setDims] = useState({ travel: 0, full: 0 })
+    const pillRef = useRef<HTMLLabelElement>(null)
+    const btnRef = useRef<HTMLButtonElement>(null)
+
+    // Layout effect, not a plain one: this decides where two elements sit and
+    // how wide one of them is. Read after paint, the first frame would show the
+    // pill at its natural size sitting on top of the button.
+    useLayoutEffect(() => {
+        const travel = btnRef.current?.offsetWidth ?? 0
+        const full = pillRef.current?.offsetWidth ?? 0
+        if (travel > 0 && full > 0) setDims({ travel: travel + GAP, full })
+    }, [])
+
+    // Sequence the two beats — and reverse them on the way out — from the
+    // handlers rather than from an effect on `open`. An effect can only react to
+    // the final state, so it collapses the label and retracts the pill in the
+    // same frame; closing has to be label-first, then retract, or the pill flies
+    // home while still shedding width and reads as a glitch.
+    //
+    // A timer rather than transitionend, which fires once per animated property
+    // and again for the label's own fade.
+    const beat = useRef<ReturnType<typeof setTimeout> | null>(null)
+    useEffect(() => () => { if (beat.current) clearTimeout(beat.current) }, [])
+
+    function openDock() {
+        if (beat.current) clearTimeout(beat.current)
+        setOpen(true)
+        beat.current = setTimeout(() => setExpanded(true), EJECT_MS)
+    }
+
+    function closeDock() {
+        if (beat.current) clearTimeout(beat.current)
+        setExpanded(false)
+        beat.current = setTimeout(() => setOpen(false), COLLAPSE_MS)
+    }
+
+    // Until measured, the pill renders at its natural width so it CAN be
+    // measured; it is transparent throughout, so nothing shows.
+    const measured = dims.full > 0
 
     return (
         <div
-            className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5"
-            onPointerEnter={() => setOpen(true)}
-            onPointerLeave={() => setOpen(false)}
-            onFocus={() => setOpen(true)}
+            className="absolute bottom-2.5 right-2.5 flex items-center"
+            onPointerEnter={openDock}
+            onPointerLeave={closeDock}
+            onFocus={openDock}
             onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false)
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closeDock()
             }}
         >
             <label
-                // Translated out from BEHIND the primary button, so the motion
-                // starts where the thing you clicked is.
+                ref={pillRef}
+                style={{
+                    transform: open ? `translateX(${-dims.travel}px)` : "translateX(0) scale(0.6)",
+                    width: measured ? (expanded ? dims.full : CIRCLE) : undefined,
+                }}
                 className={cn(
-                    "spring-out inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] pl-2.5 pr-3 text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
-                    open ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-[46px] opacity-0",
+                    "absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
+                    // Transform springs (the throw); width eases (the opening).
+                    // Different motions, so deliberately different curves.
+                    "transition-[transform,width,opacity] duration-[420ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
+                    open ? "opacity-100" : "pointer-events-none opacity-0",
                     attachmentsFull && "cursor-not-allowed opacity-50",
                 )}
             >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <rect x="3" y="4" width="18" height="16" rx="2.5" />
-                    <circle cx="8.5" cy="9.5" r="1.6" />
-                    <path d="M4 16.5 9 12l3.5 3 2.5-2 5 4.5" />
-                </svg>
-                Analyse image
+                <span className="grid h-3.5 w-3.5 shrink-0 place-items-center">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <rect x="3" y="4" width="18" height="16" rx="2.5" />
+                        <circle cx="8.5" cy="9.5" r="1.6" />
+                        <path d="M4 16.5 9 12l3.5 3 2.5-2 5 4.5" />
+                    </svg>
+                </span>
+                {/* Fades with the widening rather than being revealed by the
+                    clip alone — text sliding out from behind an edge reads as a
+                    marquee. Kept in the DOM at all times so the label is always
+                    the control's accessible name. */}
+                <span
+                    className={cn(
+                        "transition-opacity duration-150",
+                        measured && !expanded && "opacity-0",
+                    )}
+                >
+                    Analyse image
+                </span>
                 <input
                     type="file"
                     accept="image/*"
@@ -353,11 +430,12 @@ function AiDraftDock({
             </label>
 
             <button
+                ref={btnRef}
                 type="button"
                 onClick={onDraft}
                 disabled={!canDraft || drafting}
                 title={canDraft ? undefined : "Write a line or attach a screenshot first"}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] transition-[opacity,background] duration-150 hover:bg-[color:var(--c-surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
+                className="relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] transition-[background,opacity] duration-150 hover:bg-[color:var(--c-surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
             >
                 {drafting ? <Spinner /> : <SparkleIcon />}
                 {drafting ? "Drafting…" : "Draft with AI"}
@@ -365,6 +443,15 @@ function AiDraftDock({
         </div>
     )
 }
+
+/** Space between the pill and the button once the pill has landed. */
+const GAP = 6
+/** The pill before it opens: a circle holding just the icon. */
+const CIRCLE = 28
+/** How long the throw takes, and therefore when the label may start to open. */
+const EJECT_MS = 260
+/** How long the label takes to be swallowed before the pill is pulled back. */
+const COLLAPSE_MS = 160
 
 function SparkleIcon() {
     return (
