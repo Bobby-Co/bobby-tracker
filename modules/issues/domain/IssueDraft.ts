@@ -26,11 +26,16 @@ export interface DraftFields {
     priority: DraftPriority
     labels: string
     effort: DraftEffort
-    /** Which indexed tree the issue is about. "" = the project's default
-     *  branch, mirroring `effort`'s "" = inherit. Kept as a plain string rather
-     *  than a union: the valid values are a project's tracked branches, which
-     *  are data, not a type. */
-    branch: string
+    /** Which indexed tree the issue is about, and therefore what its
+     *  investigation reads. THREE states, and the third is the point:
+     *    null — not chosen yet. The composer will not submit on it when the
+     *           project offers a real choice, because picking the tree an issue
+     *           is about is a decision, not a default.
+     *    ""   — chosen: the project's default branch.
+     *    name — chosen: that tracked branch.
+     *  Kept as a plain string rather than a union: the valid values are a
+     *  project's tracked branches, which are data, not a type. */
+    branch: string | null
 }
 
 // A stored draft: fields + identity + recency (for stable tab ordering).
@@ -47,7 +52,8 @@ export const EMPTY_DRAFT_FIELDS: DraftFields = {
     priority: "medium",
     labels: "",
     effort: "",
-    branch: "",
+    // Unchosen, not "the default" — see DraftFields.branch.
+    branch: null,
 }
 
 /** The localStorage key. One entry holds every project's drafts, grouped by

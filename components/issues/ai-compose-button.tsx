@@ -9,7 +9,9 @@ import { Spinner } from "@/components/ui/spinner"
 import { Dropdown } from "@/components/ui/dropdown"
 import { compressImage, type CompressedImage } from "@/lib/client/image-compress"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
-import { ISSUE_PRIORITIES, type IssuePriority } from "@/lib/shared/types"
+import { useReadyBranches } from "@/components/projects/branch-picker"
+import { IssueBranchChoice, branchChoicePending } from "@/components/issues/issue-branch-choice"
+import { ISSUE_PRIORITIES, type IssuePriority, type ProjectBranch } from "@/lib/shared/types"
 
 interface IssueProposal {
     title: string
@@ -127,6 +129,12 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
         setProposal(null)
     }
 
+    // The tree this issue will be investigated against. Not part of the
+    // proposal: the model drafts the issue's CONTENT, it has no idea which
+    // branch the author is working on.
+    const readyBranches = useReadyBranches(projectId)
+    const [branch, setBranch] = useState<string | null>(null)
+
     function createIssue() {
         if (!proposal) return
         setCreateError(null)
@@ -141,6 +149,7 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
                         priority: proposal.priority,
                         labels: proposal.labels,
                         ai_proposed: true,
+                        branch: branch || undefined,
                     },
                 })
                 onClose()
@@ -178,6 +187,9 @@ function AiComposeBody({ projectId, onClose }: { projectId: string; onClose: () 
         <ReviewStep
             proposal={proposal}
             setProposal={setProposal}
+            readyBranches={readyBranches}
+            branch={branch}
+            setBranch={setBranch}
             onBack={backToCapture}
             onCreate={createIssue}
             creating={creating}
@@ -299,11 +311,15 @@ function CaptureStep({
 
 function ReviewStep({
     proposal, setProposal,
+    readyBranches, branch, setBranch,
     onBack, onCreate,
     creating, createError,
 }: {
     proposal: IssueProposal
     setProposal: (p: IssueProposal) => void
+    readyBranches: ProjectBranch[]
+    branch: string | null
+    setBranch: (b: string) => void
     onBack: () => void
     onCreate: () => void
     creating: boolean
@@ -400,6 +416,11 @@ function ReviewStep({
                 )}
             </div>
 
+            {/* Same requirement as the hand-written composer: an AI-drafted
+                issue is investigated exactly like any other, so the tree it is
+                investigated against is just as much the author's decision. */}
+            <IssueBranchChoice ready={readyBranches} value={branch} onChange={setBranch} />
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="flex flex-col gap-1">
                     <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[color:var(--c-text-muted)]">
@@ -440,7 +461,7 @@ function ReviewStep({
                 <button
                     type="button"
                     onClick={onCreate}
-                    disabled={creating || !proposal.title.trim()}
+                    disabled={creating || !proposal.title.trim() || branchChoicePending(readyBranches, branch)}
                     className="btn-primary"
                 >
                     {creating ? (<><Spinner />Creating…</>) : "Create issue"}

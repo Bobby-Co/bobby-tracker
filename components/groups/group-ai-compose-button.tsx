@@ -490,6 +490,18 @@ function ReviewStep({
 
             <RankingPanel ranking={ranking} picked={picked} onToggle={onTogglePicked} />
 
+            {/* The single-project composers REQUIRE a branch, because the tree
+                an issue is investigated against is the author's decision. This
+                one fans out across projects that each have their own branches,
+                so there is no one answer to ask for — every issue lands on its
+                project's default tree. Said out loud rather than left to be
+                discovered in an analysis that read the wrong branch; each issue
+                can be retargeted from its own page. */}
+            <p className="text-[11.5px] leading-4 text-[color:var(--c-text-muted)]">
+                Each issue is created against its project&apos;s default branch. To analyse one against
+                another branch, open the issue and change it there.
+            </p>
+
             {routingQuery && (
                 <details className="rounded-[10px] border border-[color:var(--c-border)] bg-[color:var(--c-bg-soft)] px-3 py-2 text-[12px]">
                     <summary className="cursor-pointer select-none font-bold uppercase tracking-[0.08em] text-[10.5px] text-[color:var(--c-text-muted)]">

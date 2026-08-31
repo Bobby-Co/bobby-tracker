@@ -9,7 +9,8 @@ import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
 import { MarkdownEditor } from "@/components/markdown/markdown-editor"
-import { BranchPicker } from "@/components/projects/branch-picker"
+import { useReadyBranches } from "@/components/projects/branch-picker"
+import { IssueBranchChoice, branchChoicePending } from "@/components/issues/issue-branch-choice"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { EMPTY_DRAFT_FIELDS, type DraftEffort, type DraftFields, type DraftPriority, type DraftStatus } from "@/modules/issues/domain/IssueDraft"
 
@@ -65,6 +66,10 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
     const patch = onChange ?? ((p: Partial<DraftFields>) => setLocalFields((f) => ({ ...f, ...p })))
     const { title, body, status, priority, labels, effort, branch } = fields
     const [advanced, setAdvanced] = useState(false)
+    // Fetched ONCE here and passed down: the submit gate and the control need
+    // the same list, and useApi does no dedup.
+    const readyBranches = useReadyBranches(projectId)
+    const needsBranch = branchChoicePending(readyBranches, branch)
     const [error, setError] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
 
@@ -84,8 +89,10 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                         labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
                         // Omit when "" so the issue inherits the project default.
                         analyse_effort: effort || undefined,
-                        // Likewise: "" is the default tree, and the server reads
-                        // an absent/blank branch as exactly that.
+                        // Both "chosen: default" ("") and — for a project with
+                        // no branches to choose from — "never asked" (null) go
+                        // to the default tree, which is what an omitted branch
+                        // has always meant.
                         branch: branch || undefined,
                     },
                 })
@@ -119,6 +126,13 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                 minHeight={panel ? 280 : 160}
                 placeholder="Describe what's happening. Press Enter to render a block; right-click for formatting."
                 ariaLabel="Issue description"
+            />
+            {/* Above status/priority/labels, because it outranks them: those
+                describe the issue, this decides what the analysis reads. */}
+            <IssueBranchChoice
+                ready={readyBranches}
+                value={branch}
+                onChange={(v) => patch({ branch: v })}
             />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Dropdown
@@ -176,15 +190,6 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                                 : EFFORT_HINT[effort]}
                         </p>
 
-                        {/* Renders nothing until the project tracks a ready
-                            branch, which is every project until someone does —
-                            so the section stays exactly as it was for them. */}
-                        <BranchPicker
-                            projectId={projectId}
-                            value={branch}
-                            onChange={(v) => patch({ branch: v })}
-                            className="mt-3 flex-wrap"
-                        />
                     </div>
                 )}
             </div>
@@ -196,7 +201,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                         Cancel
                     </button>
                 )}
-                <button type="submit" disabled={pending || !title.trim()} className="btn-primary">
+                <button type="submit" disabled={pending || !title.trim() || needsBranch} className="btn-primary">
                     {pending ? "Saving…" : submitLabel}
                 </button>
             </div>
