@@ -11,6 +11,11 @@ import {
 import { createPortal } from "react-dom"
 import { cn } from "@/components/ui/cn"
 
+/** The panel's ceiling, and the number the flip decision is measured against.
+ *  Was the `max-h-80` utility; it is a real number now because the positioning
+ *  effect has to reason about it. */
+const PANEL_MAX_H = 320
+
 export interface DropdownOption<V extends string = string> {
     value: V
     label: string
@@ -79,7 +84,10 @@ export function Dropdown<V extends string = string>({
     useEffect(() => { setPortalReady(true) }, [])
     // Position of the panel — recomputed on open + on scroll/resize
     // so the floating panel tracks the trigger if the page moves.
-    const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: 0 })
+    // `flip` puts the panel ABOVE the trigger; `avail` is how much room it has
+    // in whichever direction it ended up, so a panel that still cannot fit
+    // scrolls instead of running off the screen.
+    const [panelPos, setPanelPos] = useState({ top: 0, left: 0, width: 0, flip: false, avail: 320 })
 
     const filtered = useMemo(() => {
         if (!query.trim()) return options
@@ -134,7 +142,27 @@ export function Dropdown<V extends string = string>({
         function update() {
             const r = triggerRef.current?.getBoundingClientRect()
             if (!r) return
-            setPanelPos({ top: r.bottom + 6, left: r.left, width: r.width })
+            // Open downward by default; flip up when there is not enough room
+            // below AND there is more room above. Without this a trigger near
+            // the bottom of the viewport — the effort chip sitting next to the
+            // composer's Create button, say — drops its panel off the screen,
+            // where the first option is all you can see and the rest is
+            // unreachable.
+            const gap = 6
+            const margin = 12
+            const below = window.innerHeight - r.bottom - gap - margin
+            const above = r.top - gap - margin
+            const flip = below < Math.min(PANEL_MAX_H, 160) && above > below
+            setPanelPos({
+                // When flipped the panel is anchored by its BOTTOM edge (a
+                // translateY below), so this is the trigger's top either way and
+                // the height never has to be known in advance.
+                top: flip ? r.top - gap : r.bottom + gap,
+                left: r.left,
+                width: r.width,
+                flip,
+                avail: Math.max(120, flip ? above : below),
+            })
         }
         update()
         window.addEventListener("scroll", update, true)
@@ -283,10 +311,14 @@ export function Dropdown<V extends string = string>({
                         width: chip ? "max-content" : panelPos.width,
                         minWidth: chip ? Math.max(panelPos.width, 176) : undefined,
                         maxWidth: chip ? "min(20rem, calc(100vw - 24px))" : undefined,
+                        // Anchoring a flipped panel by its own bottom edge is
+                        // what lets it open upward without anyone measuring it.
+                        transform: panelPos.flip ? "translateY(-100%)" : undefined,
+                        maxHeight: Math.min(PANEL_MAX_H, panelPos.avail),
                         zIndex: 60,
                     }}
                     className={cn(
-                        "max-h-80 overflow-auto rounded-[12px] border bg-[color:var(--c-surface)] p-1.5 shadow-[var(--shadow-pop)]",
+                        "overflow-auto rounded-[12px] border bg-[color:var(--c-surface)] p-1.5 shadow-[var(--shadow-pop)]",
                         "border-[color:var(--c-border)]",
                         "anim-rise",
                     )}

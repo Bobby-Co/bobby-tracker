@@ -114,7 +114,7 @@ export function IssueMetaBar({
     defaultBranch: string | null
     className?: string
 }) {
-    const { status, priority, labels, branch, effort } = fields
+    const { status, priority, labels, branch } = fields
     // The branch chip is the only REQUIRED one, and only when the project
     // actually offers a choice — see issue-branch-choice for the full rule.
     const branchPending = ready.length > 0 && branch === null
@@ -159,20 +159,42 @@ export function IssueMetaBar({
                 />
             )}
 
-            <Dropdown<DraftEffort>
-                variant="chip"
-                value={effort}
-                onChange={(v) => patch({ effort: v })}
-                options={EFFORT_OPTIONS}
-                aria-label="Analyser effort"
-            />
-
             {/* Last, because it is the only OPEN-ENDED one: the fixed chips are
                 each one word and pack predictably, while labels grow with
                 whatever the author adds. Trailing, they wrap onto their own line
                 instead of pushing a select onto the next one. */}
             <LabelChips value={labels} onChange={(v) => patch({ labels: v })} />
         </div>
+    )
+}
+
+/** The analyser-effort chip, deliberately NOT part of the metadata row.
+ *
+ *  Everything on that row describes the ISSUE — what state it is in, how urgent
+ *  it is, which tree it is about, what it is tagged with. Effort describes the
+ *  RUN that happens after you press Create: how hard the analyser should work,
+ *  and therefore how long it takes and what it costs. That is a property of the
+ *  action, not of the thing, so it belongs beside the action — where it reads as
+ *  "when I create this, investigate it like so" rather than as a fifth fact
+ *  about the issue. */
+export function IssueEffortChip({
+    value,
+    onChange,
+    className,
+}: {
+    value: DraftEffort
+    onChange: (effort: DraftEffort) => void
+    className?: string
+}) {
+    return (
+        <Dropdown<DraftEffort>
+            variant="chip"
+            value={value}
+            onChange={onChange}
+            options={EFFORT_OPTIONS}
+            aria-label="Analyser effort"
+            className={className}
+        />
     )
 }
 

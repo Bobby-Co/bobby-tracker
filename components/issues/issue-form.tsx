@@ -6,7 +6,7 @@ import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import { MarkdownEditor } from "@/components/markdown/markdown-editor"
 import { useReadyBranches } from "@/components/projects/branch-picker"
 import { branchChoicePending } from "@/components/issues/issue-branch-choice"
-import { IssueMetaBar } from "@/components/issues/issue-meta-bar"
+import { IssueEffortChip, IssueMetaBar } from "@/components/issues/issue-meta-bar"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { EMPTY_DRAFT_FIELDS, type DraftFields, type DraftPriority, type DraftStatus } from "@/modules/issues/domain/IssueDraft"
 
@@ -122,7 +122,12 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
 
 
             {error && <p className="text-[12px] text-rose-700">{error}</p>}
-            <div className="mt-1 flex justify-end gap-2">
+            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                {/* Beside the action it modifies: this is how hard the analyser
+                    works on the investigation that Create kicks off, not a fact
+                    about the issue. */}
+                <IssueEffortChip value={effort} onChange={(v) => patch({ effort: v })} />
+                <div className="ml-auto flex items-center gap-2">
                 {onCancel && (
                     <button type="button" onClick={onCancel} className="btn-ghost">
                         Cancel
@@ -131,6 +136,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                 <button type="submit" disabled={pending || !title.trim() || needsBranch} className="btn-primary">
                     {pending ? "Saving…" : submitLabel}
                 </button>
+                </div>
             </div>
         </form>
     )
