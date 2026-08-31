@@ -8,7 +8,15 @@ import { useReadyBranches } from "@/components/projects/branch-picker"
 import { branchChoicePending } from "@/components/issues/issue-branch-choice"
 import { IssueEffortChip, IssueMetaBar } from "@/components/issues/issue-meta-bar"
 import { AttachmentChips, MAX_ATTACHMENTS, isFileDrag, useIssueAttachments } from "@/components/issues/issue-attachments"
-import { GOO_GAP, LiquidBackdrop, LiquidGooFilter } from "@/components/issues/liquid-dock"
+import {
+    GOO_GAP,
+    ICON_DELAY_MS,
+    LABEL_TRAVEL,
+    LABEL_TRAVEL_BACK,
+    LiquidBackdrop,
+    LiquidGooFilter,
+    TEXT_DELAY_MS,
+} from "@/components/issues/liquid-dock"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/components/ui/cn"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
@@ -371,27 +379,46 @@ function AiDraftDock({
             <label
                 ref={pillRef}
                 style={{
-                    // Rides the drop exactly: same distance, same curve, same
-                    // delay on the label. The blob is the surface; this is the
+                    // Rides the drop exactly — same distance, same curve, from
+                    // the same constants. The blob is the surface; this is the
                     // writing on it.
                     transform: open && measured ? `translateX(${-travel}px)` : "translateX(0)",
-                    transitionDelay: open ? "0ms" : "120ms",
+                    transition: open ? LABEL_TRAVEL : LABEL_TRAVEL_BACK,
                 }}
                 className={cn(
-                    "ink-on-ember absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full py-[5px] pl-2.5 pr-3 text-[12px] font-semibold",
-                    "transition-[transform,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.34,1.4,0.5,1),ease-out]",
-                    open ? "opacity-100" : "pointer-events-none opacity-0",
+                    "absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full py-[5px] pl-2.5 pr-3 text-[12px] font-medium text-[color:var(--c-text)]",
+                    open ? "" : "pointer-events-none",
                     attachmentsFull && "cursor-not-allowed opacity-50",
                 )}
             >
-                <span className="grid h-3.5 w-3.5 shrink-0 place-items-center">
+                {/* The contents wait for the pill to exist. Both fade where
+                    they already are — nothing here ever slides, because a label
+                    moving independently of its own background is exactly what
+                    made this look wrong. */}
+                <span
+                    className="grid h-3.5 w-3.5 shrink-0 place-items-center transition-opacity"
+                    style={{
+                        opacity: open ? 1 : 0,
+                        transitionDuration: open ? "150ms" : "90ms",
+                        transitionDelay: open ? `${ICON_DELAY_MS}ms` : "0ms",
+                    }}
+                >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <rect x="3" y="4" width="18" height="16" rx="2.5" />
                         <circle cx="8.5" cy="9.5" r="1.6" />
                         <path d="M4 16.5 9 12l3.5 3 2.5-2 5 4.5" />
                     </svg>
                 </span>
-                Analyse image
+                <span
+                    className="transition-opacity"
+                    style={{
+                        opacity: open ? 1 : 0,
+                        transitionDuration: open ? "170ms" : "90ms",
+                        transitionDelay: open ? `${TEXT_DELAY_MS}ms` : "0ms",
+                    }}
+                >
+                    Analyse image
+                </span>
                 <input
                     type="file"
                     accept="image/*"
@@ -413,7 +440,7 @@ function AiDraftDock({
                 disabled={!canDraft || drafting}
                 title={canDraft ? undefined : "Write a line or attach a screenshot first"}
                 // No background and no border: its fill is the blob behind it.
-                className="ink-on-ember relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-transparent py-[5px] pl-2.5 pr-3 text-[12px] font-semibold transition-opacity duration-150 disabled:cursor-not-allowed disabled:opacity-45"
+                className="relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-transparent py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] transition-opacity duration-150 disabled:cursor-not-allowed disabled:opacity-45"
             >
                 {drafting ? <Spinner /> : <SparkleIcon />}
                 {drafting ? "Drafting…" : "Draft with AI"}

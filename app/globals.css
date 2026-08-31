@@ -542,15 +542,6 @@ main[data-page="landing"] {
        outrank it on specificity and repaint its label. */
     :root[data-theme="dark"] .btn-primary:not(.btn-github) { color: #1a1206; }
     .btn-primary:disabled:hover { background-color: var(--c-primary); }
-
-    /* A label sitting on an ember fill that is NOT a .btn-primary — the liquid
-       dock, whose fill is a filtered blob behind the control rather than the
-       control's own background. Same inversion, same reason: white reaches only
-       3.0:1 on this fill, and on dark, where it lifts further, the ink reaches
-       7.7:1. Kept as its own class rather than by reusing .btn-primary, which
-       would also bring a radius, a shadow and a padding this does not want. */
-    .ink-on-ember { color: #fff; }
-    :root[data-theme="dark"] .ink-on-ember { color: #1a1206; }
     /* GitHub provider button — brand-black. Set in CSS (not an inline style)
        so the hyperellipse squircle fallback can read it from the stylesheet
        and bake it into the SVG layer; inline backgrounds render grey. */
