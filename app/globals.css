@@ -704,6 +704,42 @@ main[data-page="landing"] {
     /* GitHub-issue-style markdown for analyser suggestions. */
     .prose-tracker { @apply text-sm leading-6 text-[color:var(--c-text)]; }
     .prose-tracker p { @apply my-2; }
+
+    /* A long unbroken run — a URL, a stack frame, a base64 blob — must wrap
+       rather than push the column wider than its container. Without this the
+       issue body, the editor and every comment scroll sideways the moment
+       someone pastes a link.
+
+       `anywhere` and not `break-word`: it breaks only when the line cannot fit
+       otherwise, and unlike break-word it also shrinks the min-content width,
+       which is what stops a flex/grid parent from being widened by the very
+       string we are trying to contain.
+
+       NOT applied to `pre`: code has its own overflow-x-auto and breaking a
+       source line mid-token makes it unreadable. Scrolling is correct there. */
+    .prose-tracker p,
+    .prose-tracker li,
+    .prose-tracker h1,
+    .prose-tracker h2,
+    .prose-tracker h3,
+    .prose-tracker blockquote,
+    .prose-tracker a,
+    .prose-tracker code:not(pre code) { overflow-wrap: anywhere; }
+
+    /* ─── inside the block EDITOR ────────────────────────────────────────────
+       The rendered body wants paragraph air: it is prose, read in one pass.
+       The editor is a stack of LINES being written, and there the same 8px
+       above and below every block reads as double-spacing — three short lines
+       occupy the height of six. Tightened here only, so the saved document
+       still renders with its usual rhythm everywhere else. */
+    .prose-editor .prose-tracker p,
+    .prose-editor .prose-tracker ul,
+    .prose-editor .prose-tracker ol,
+    .prose-editor .prose-tracker blockquote { @apply my-0.5; }
+    .prose-editor .prose-tracker h1,
+    .prose-editor .prose-tracker h2,
+    .prose-editor .prose-tracker h3 { @apply mb-0.5 mt-2; }
+    .prose-editor .prose-tracker pre { @apply my-1; }
     .prose-tracker h1, .prose-tracker h2, .prose-tracker h3 {
         @apply mt-3 mb-1 font-semibold text-[color:var(--c-text)];
     }

@@ -280,6 +280,57 @@ export function MarkdownEditor({
         }
     }
 
+    /** The blocks a browser text selection actually touches.
+     *
+     *  Dragging across rendered blocks makes ONE Range spanning several sibling
+     *  elements; there is no textarea involved and so, before this, no keystroke
+     *  could act on it — Backspace over five selected paragraphs did nothing at
+     *  all, which reads as a broken editor rather than as an unimplemented one.
+     *
+     *  intersectsNode rather than comparing offsets: a Range that merely clips
+     *  the first and last blocks still means "these blocks are selected", and
+     *  the alternative is reimplementing that arithmetic for every node type
+     *  MarkdownBody can render. */
+    const selectedBlockIds = useCallback((): string[] => {
+        const sel = typeof window !== "undefined" ? window.getSelection() : null
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return []
+        const range = sel.getRangeAt(0)
+        const host = containerRef.current
+        if (!host) return []
+        return blocks
+            .filter((b) => {
+                const el = host.querySelector(`[data-block-id="${b.id}"]`)
+                return !!el && range.intersectsNode(el)
+            })
+            .map((b) => b.id)
+    }, [blocks])
+
+    /** Backspace/Delete over a multi-block selection removes those blocks.
+     *
+     *  Bound on the CONTAINER, not on a block: the whole point is that no block
+     *  owns this selection. It deliberately does nothing when the selection
+     *  touches one block or none — a caret inside the active textarea reports no
+     *  selection here, so ordinary typing and single-block editing keep their
+     *  native behaviour untouched. */
+    function onContainerKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+        if (e.key !== "Backspace" && e.key !== "Delete") return
+        const ids = selectedBlockIds()
+        if (ids.length === 0) return
+        // One block, and it is the one being edited: that is a normal in-textarea
+        // selection, and the textarea deletes it far better than we would.
+        if (ids.length === 1 && ids[0] === activeId) return
+
+        e.preventDefault()
+        const doomed = new Set(ids)
+        const next = blocks.filter((b) => !doomed.has(b.id))
+        window.getSelection()?.removeAllRanges()
+        reflowing.current = true
+        // Deleting everything leaves the empty-state button rather than a
+        // zero-height editor with nothing to click.
+        commit(next)
+        setActiveId(next.some((b) => b.id === activeId) ? activeId : null)
+    }
+
     /** Drop the active block, prune empties, and render everything. */
     const deactivate = useCallback(() => {
         setActiveId(null)
@@ -455,11 +506,16 @@ export function MarkdownEditor({
                 />
             ) : (
                 <div
+                    // Selection-level keys land here because a selection across
+                    // several rendered blocks belongs to none of them. No ref:
+                    // containerRef is the outer shell and already contains these,
+                    // so the block lookup queries down from there.
+                    onKeyDown={onContainerKeyDown}
                     // Normal block flow (not flex) so each block's markdown
                     // margins collapse with its neighbours' exactly as they do
                     // in the rendered body — the editor then reads at the same
                     // vertical rhythm as the saved output, not looser.
-                    className="px-3 py-2.5"
+                    className="prose-editor px-3 py-2.5"
                     style={{ minHeight }}
                     onContextMenu={(e) => {
                         // Right-click in the empty gutter: open a block first.
@@ -497,15 +553,22 @@ export function MarkdownEditor({
                                     rows={1}
                                     spellCheck
                                     aria-label={ariaLabel}
-                                    // my-2 stands in for the prose margin the
+                                    // my-0.5 stands in for the prose margin the
                                     // rendered form of this block would have —
                                     // a textarea can't margin-collapse with its
                                     // siblings, so the rhythm is matched by hand.
-                                    className="my-2 block w-full resize-none overflow-hidden bg-transparent font-mono text-[12.5px] leading-6 text-[color:var(--c-text)] outline-none placeholder:text-[color:var(--c-text-dim)]"
+                                    // It must equal .prose-editor's paragraph
+                                    // margin or a block would jump as you focus it.
+                                    // break-words: a textarea wraps on spaces by
+                                    // default, so a pasted URL would scroll the
+                                    // editor sideways exactly as the rendered
+                                    // block did before overflow-wrap was set.
+                                    className="my-0.5 block w-full resize-none overflow-hidden break-words bg-transparent font-mono text-[12.5px] leading-6 text-[color:var(--c-text)] outline-none placeholder:text-[color:var(--c-text-dim)]"
                                 />
                             ) : (
                                 <RenderedBlock
                                     key={b.id}
+                                    id={b.id}
                                     text={b.text}
                                     embeds={mergedEmbeds}
                                     onActivate={() => activate(b.id, b.text.length)}
@@ -575,11 +638,16 @@ function Divider() {
 }
 
 function RenderedBlock({
+    id,
     text,
     embeds,
     onActivate,
     onContext,
 }: {
+    /** Stamped into the DOM as data-block-id. A browser selection is a Range
+     *  over nodes, and this is what maps the nodes it touches back to the
+     *  blocks the editor is holding. */
+    id: string
     text: string
     embeds: SignedEmbedMap
     onActivate: () => void
@@ -587,6 +655,7 @@ function RenderedBlock({
 }) {
     return (
         <div
+            data-block-id={id}
             role="button"
             tabIndex={0}
             onClick={(e) => {
