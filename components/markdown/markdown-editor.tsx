@@ -56,6 +56,10 @@ interface Block {
 let BLOCK_SEQ = 0
 const nid = () => `b${BLOCK_SEQ++}`
 
+/** performance.now where it exists, wall clock where it does not. Only ever
+ *  used to decide whether a one-shot animation window is still open. */
+const nowMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now())
+
 export function MarkdownEditor({
     value,
     onChange,
@@ -102,6 +106,30 @@ export function MarkdownEditor({
     const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
     // True while an issue is being dragged over the editor — drives the drop ring.
     const [issueDropActive, setIssueDropActive] = useState(false)
+
+    // How long a morph is allowed to be "in progress". Longer than the CSS
+    // animation plus its longest stagger, so the class is gone well before the
+    // author could plausibly type into the result.
+    const MORPH_WINDOW_MS = 1100
+    // The morph is a one-shot on the SIGNAL, not a mode.
+    //
+    // This is the fix for the animation replaying on ordinary edits. `ai-morph`
+    // used to be applied for as long as morphSignal was non-zero, which is
+    // forever after the first draft — so every NEW block, and pressing Enter
+    // makes one, mounted into a container telling it to resolve out of a blur.
+    // The rewrite is an event; typing is not.
+    //
+    // Adjusted during render rather than from an effect: React re-runs the
+    // component immediately and discards the first pass, so the class is on the
+    // render that actually commits. An effect would paint one frame without it
+    // and the first block would miss its own animation. No cleanup is needed
+    // because nothing is scheduled — the window is simply read on later
+    // renders, and a new block mounting after it has passed gets no class.
+    const [morph, setMorph] = useState({ signal: 0, until: 0 })
+    if (morphSignal !== morph.signal) {
+        setMorph({ signal: morphSignal, until: nowMs() + MORPH_WINDOW_MS })
+    }
+    const morphing = morphSignal > 0 && nowMs() < morph.until
 
     // The last document we emitted. Lets us tell OUR change (echoed back through
     // the value prop) from a genuine external reset, so we only rebuild blocks
@@ -532,14 +560,32 @@ export function MarkdownEditor({
                     // margins collapse with its neighbours' exactly as they do
                     // in the rendered body — the editor then reads at the same
                     // vertical rhythm as the saved output, not looser.
+                    style={{
+                        minHeight,
+                        // Keeps the scan band inside the editor. The animation
+                        // runs it from above the top edge to below the bottom
+                        // one, and unclipped it sweeps across the metadata chips
+                        // and the footer on its way past.
+                        //
+                        // clip-path rather than overflow:hidden: both would
+                        // contain it, but overflow establishes a block
+                        // formatting context, which stops the blocks' margins
+                        // collapsing with their container and shifts every line
+                        // by a couple of pixels the instant the class goes on —
+                        // a visible jump exactly when the animation starts.
+                        // clip-path does not touch layout.
+                        //
+                        // Inline rather than in the stylesheet because this
+                        // build drops the declaration from the emitted sheet.
+                        clipPath: thinking ? "inset(0)" : undefined,
+                    }}
                     className={cn(
                         "prose-editor px-3 py-2.5",
                         thinking && "ai-thinking",
                         // Only after a rewrite. On first mount the document is
                         // simply there and had nothing done to it.
-                        morphSignal > 0 && "ai-morph",
+                        morphing && "ai-morph",
                     )}
-                    style={{ minHeight }}
                     onContextMenu={(e) => {
                         // Right-click in the empty gutter: open a block first.
                         if (blocks.length === 0) {

@@ -816,6 +816,9 @@ main[data-page="landing"] {
        pseudo-element rather than a background on the editor itself, so it can
        travel independently of the text and leave it perfectly legible — you can
        keep reading your own words while they are being rewritten. */
+    /* The band is clipped to the editor by an inline clip-path on the element
+       itself — see MarkdownEditor. It is not set here because this build drops
+       the declaration from the emitted sheet. */
     .ai-thinking { position: relative; }
     .ai-thinking::after {
         content: "";
