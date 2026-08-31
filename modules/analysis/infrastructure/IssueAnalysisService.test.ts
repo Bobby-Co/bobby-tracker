@@ -53,9 +53,13 @@ const spend = { check: mock(async () => null as null | { reason: string; message
 // would make them pass for the wrong reason. Its own behaviour is pinned in
 // modules/analysis/application/RunAdmission.test.ts.
 const admission = { check: mock(async () => null) }
+// The project's tracked branches. Defaults to "nothing is tracked", which is
+// every project until someone tracks one — and the state in which this service
+// must behave exactly as it did before branches existed.
+const branches = { find: mock(async () => null as null | { branch: string; status: string }) }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any, spend as any, admission as any)
+const svc = () => new IssueAnalysisService(analyserFor as any, store as any, projectsRepo as any, analyserRepo as any, vcsFor as any, new IssueAnalysisComment(), prompt as any, spend as any, admission as any, branches as any)
 
 beforeEach(() => {
     store.findAnalysisRow.mockReset().mockResolvedValue(null)
@@ -67,6 +71,7 @@ beforeEach(() => {
     projectsRepo.findTeamId.mockReset().mockResolvedValue("team-1")
     spend.check.mockReset().mockResolvedValue(null)
     admission.check.mockReset().mockResolvedValue(null)
+    branches.find.mockReset().mockResolvedValue(null)
     analyserFor.mockClear()
     analyserRepo.findByProjectId.mockReset().mockResolvedValue(null)
     analyserRepo.findGraphId.mockReset().mockResolvedValue("G1")
@@ -89,6 +94,8 @@ const analysisRow = {
     github_issue_number: 42,
     github_analysis_comment_id: null,
     analysis_status: null,
+    branch: null,
+    analysis_branch: null,
 }
 const readyAnalyser = { enabled: true, status: "ready", graph_id: "G1" }
 const analysisProject = {
@@ -278,6 +285,88 @@ describe("ensure — one-shot idempotency + gates", () => {
     })
 })
 
+// ── which indexed tree a run reads ─────────────────────────────────────────────
+//
+// The analyser REFUSES a branch it has not indexed rather than falling back, so
+// the rule here is "send a branch only when it can actually answer" — and the
+// cache has to be keyed by the same thing, or an answer about main gets replayed
+// for an issue that has since been re-targeted at a branch.
+describe("ensure — branch resolution", () => {
+    const branchRow = { ...analysisRow, branch: "feat/x" }
+
+    function ready() {
+        analyserRepo.findByProjectId.mockResolvedValue(readyAnalyser)
+        projectsRepo.findAnalysisContext.mockResolvedValue(null)
+    }
+
+    test("an untagged issue sends no branch — the default tree, exactly as before", async () => {
+        store.findAnalysisRow.mockResolvedValue(analysisRow)
+        ready()
+        await svc().ensure("iss-1", "https://app")
+        expect(analyser.startIssueAnalysis.mock.calls[0][0].branch).toBeUndefined()
+    })
+
+    test("a tagged issue whose branch is READY is investigated against that branch", async () => {
+        store.findAnalysisRow.mockResolvedValue(branchRow)
+        branches.find.mockResolvedValue({ branch: "feat/x", status: "ready" })
+        ready()
+        await svc().ensure("iss-1", "https://app")
+        expect(analyser.startIssueAnalysis.mock.calls[0][0].branch).toBe("feat/x")
+    })
+
+    // Sending a branch mid-index buys ErrBranchNotIndexed instead of an answer.
+    // The default tree is less specific; it is not an error.
+    test("a branch that is not ready falls back to the default tree", async () => {
+        store.findAnalysisRow.mockResolvedValue(branchRow)
+        branches.find.mockResolvedValue({ branch: "feat/x", status: "indexing" })
+        ready()
+        await svc().ensure("iss-1", "https://app")
+        expect(analyser.startIssueAnalysis.mock.calls[0][0].branch).toBeUndefined()
+    })
+
+    test("a branch nobody tracks falls back to the default tree", async () => {
+        store.findAnalysisRow.mockResolvedValue(branchRow)
+        branches.find.mockResolvedValue(null)
+        ready()
+        await svc().ensure("iss-1", "https://app")
+        expect(analyser.startIssueAnalysis.mock.calls[0][0].branch).toBeUndefined()
+    })
+
+    // The cache answers "do we already know about THIS tree", not "about this
+    // issue". Asking the store the unqualified question is how an answer
+    // computed against main ends up presented as an answer about feat/x.
+    test("the cache is asked about the resolved tree, not just the issue", async () => {
+        store.findAnalysisRow.mockResolvedValue(branchRow)
+        branches.find.mockResolvedValue({ branch: "feat/x", status: "ready" })
+        ready()
+        await svc().ensure("iss-1", "https://app")
+        expect(store.countSuggestions).toHaveBeenCalledWith("iss-1", "feat/x")
+    })
+
+    test("a cached answer for the OTHER tree does not stop a run", async () => {
+        store.findAnalysisRow.mockResolvedValue(branchRow)
+        branches.find.mockResolvedValue({ branch: "feat/x", status: "ready" })
+        // The store answers "none for feat/x" — which is the whole point of
+        // passing the branch. An unkeyed store would have said "one" and the
+        // service would have returned 'done' with main's answer.
+        store.countSuggestions.mockResolvedValue(0)
+        ready()
+        expect(await svc().ensure("iss-1", "https://app")).toBe("started")
+    })
+
+    // The callback arrives minutes later and must file the result under the tree
+    // the run actually used. Recording it at dispatch is what makes that
+    // possible; re-deriving it later reads a world that may have moved.
+    test("the resolved tree is stamped on the row at dispatch", async () => {
+        store.findAnalysisRow.mockResolvedValue(branchRow)
+        branches.find.mockResolvedValue({ branch: "feat/x", status: "ready" })
+        ready()
+        await svc().ensure("iss-1", "https://app")
+        const patch = store.updateSyncFields.mock.calls.at(-1)![1]
+        expect(patch.analysis_branch).toBe("feat/x")
+    })
+})
+
 // ── analyser callback ───────────────────────────────────────────────────────────
 describe("applyResult", () => {
     const row = { ...analysisRow, github_analysis_comment_id: 5001, analysis_status: "analysing" }
@@ -295,6 +384,17 @@ describe("applyResult", () => {
         expect(vcsSvc.updateComment).toHaveBeenCalledTimes(1)
         expect(store.updateSyncFields).toHaveBeenCalledWith("iss-1", { analysis_status: "done" })
         expect(store.insertSuggestion).toHaveBeenCalledTimes(1)
+    })
+    // The cached answer carries the tree it was computed from, taken from what
+    // dispatch recorded — NOT from the issue's current `branch`, which the user
+    // may have changed while the run was in flight, and not re-resolved here,
+    // where a branch that has since failed would file feat/x's answer as the
+    // default tree's.
+    test("the cached suggestion is stamped with the tree the RUN used", async () => {
+        store.findAnalysisRow.mockResolvedValue({ ...row, branch: "feat/y", analysis_branch: "feat/x" })
+        projectsRepo.findAnalysisContext.mockResolvedValue(analysisProject)
+        await svc().applyResult("iss-1", "done", result as never, "https://app")
+        expect(store.insertSuggestion.mock.calls[0][0].branch).toBe("feat/x")
     })
     test("failed → records status but caches NO suggestion", async () => {
         store.findAnalysisRow.mockResolvedValue(row)

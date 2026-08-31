@@ -11,6 +11,7 @@ import type {
     ProjectStatusColor,
 } from "@/lib/shared/types"
 import { PriorityChip, StatusChip } from "@/components/ui/status-chip"
+import { DEFAULT_BRANCH_VALUE, branchOptions, useReadyBranches } from "@/components/projects/branch-picker"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { Dropdown } from "@/components/ui/dropdown"
 import { LabelsEditor } from "@/components/issues/labels-editor"
@@ -87,7 +88,7 @@ export function IssueDetail({
         setInserted((m) => ({ ...m, [embed.embedId]: embed }))
     }
 
-    function patch(values: Partial<Issue>, onSaved?: () => void) {
+    function patch(values: Partial<Issue>, onSaved?: () => void, onError?: () => void) {
         startTransition(async () => {
             try {
                 await apiMutate(`/api/issues/${issue.id}`, { method: "PATCH", body: values })
@@ -95,7 +96,11 @@ export function IssueDetail({
                 onSaved?.()
             } catch (e) {
                 if (!(e instanceof ApiError)) throw e
-                // Server error: silently ignore, as before (no refresh).
+                // Server error: silently ignore, as before (no refresh) — unless
+                // the caller cares, which the branch control does: without a
+                // refresh the dropdown keeps showing a tree the issue was never
+                // moved to, which is the one thing this control must not do.
+                onError?.()
             }
         })
     }
@@ -196,6 +201,14 @@ export function IssueDetail({
                         onChange={(labels) => patch({ labels })}
                     />
                 </Field>
+                <BranchField
+                    projectId={issue.project_id}
+                    value={issue.branch ?? DEFAULT_BRANCH_VALUE}
+                    // A rejected retarget (the branch stopped being ready
+                    // between page load and this click) must not leave the
+                    // control claiming a tree the server refused.
+                    onChange={(branch) => patch({ branch: branch || null }, undefined, () => router.refresh())}
+                />
                 {projectId && (
                     <TimelinePeek
                         projectId={projectId}
@@ -207,6 +220,38 @@ export function IssueDetail({
                 )}
             </aside>
         </div>
+    )
+}
+
+// Which indexed tree this issue is about — and therefore which one the analyser
+// investigates it against.
+//
+// Renders NOTHING until the project tracks a ready branch, which is every
+// project until someone does: a control whose only option is the one you already
+// have costs space and teaches nothing. Retargeting is a plain PATCH; the
+// cached analysis is keyed by branch, so the next investigation runs against the
+// new tree rather than replaying an answer about the old one.
+function BranchField({
+    projectId,
+    value,
+    onChange,
+}: {
+    projectId: string
+    value: string
+    onChange: (branch: string) => void
+}) {
+    const ready = useReadyBranches(projectId)
+    if (ready.length === 0) return null
+    return (
+        <Field label="Branch">
+            <Dropdown
+                value={value}
+                onChange={onChange}
+                options={branchOptions(ready)}
+                searchable={ready.length > 8}
+                aria-label="Branch this issue is about"
+            />
+        </Field>
     )
 }
 

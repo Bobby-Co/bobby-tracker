@@ -22,6 +22,7 @@ export type NewIssue = Pick<
     | "ai_proposed"
     | "duplicate_of_issue_id"
     | "analyse_effort"
+    | "branch"
 >
 
 /** A validated column patch for an existing issue. Every key is optional — a
@@ -36,6 +37,7 @@ export type IssuePatch = Partial<
         | "priority"
         | "labels"
         | "duplicate_of_issue_id"
+        | "branch"
         | "starts_at"
         | "ends_at"
         | "lane_y"
@@ -55,6 +57,7 @@ export type IssueSuggestContext = Pick<
     | "priority"
     | "labels"
     | "analyse_effort"
+    | "branch"
     | "created_at"
     | "updated_at"
 >

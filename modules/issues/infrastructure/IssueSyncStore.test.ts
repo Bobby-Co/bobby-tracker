@@ -18,14 +18,24 @@ function recorder() {
     // fake that answers "nothing matched" means "this write did not land".
     const result: { data: unknown; error: unknown; count: number } = { data: [{ id: "i1" }], error: null, count: 0 }
     const chain: Record<string, unknown> = {}
-    for (const m of ["select", "eq", "not", "insert", "update", "upsert", "delete", "order", "limit"]) {
+    // Filters are recorded as well as swallowed: which COLUMN a read filters on,
+    // and with which operator, is load-bearing for the branch-keyed cache.
+    const filters: [string, unknown, unknown][] = []
+    for (const m of ["select", "not", "insert", "update", "upsert", "delete", "order", "limit"]) {
         chain[m] = () => chain
+    }
+    for (const m of ["eq", "is"]) {
+        chain[m] = (col: unknown, val: unknown) => {
+            filters.push([m, col, val])
+            return chain
+        }
     }
     chain.maybeSingle = () => Promise.resolve(result)
     chain.single = () => Promise.resolve(result)
     chain.then = (onFulfilled: (v: unknown) => unknown) => Promise.resolve(result).then(onFulfilled)
     return {
         tables,
+        filters,
         /** Make the next statement match nothing, as a wrong-region write does. */
         matchNothing() {
             result.data = []
@@ -60,6 +70,7 @@ const suggestion = {
     cost_usd: 0,
     duration_ms: 0,
     graph_id: null,
+    branch: null,
 }
 
 // issue_suggestions is in the supabase_realtime publication, so it lives with the
@@ -75,6 +86,19 @@ describe("control plane — issue_suggestions", () => {
         await store.countSuggestions("i1")
         expect(control.tables).toEqual(["issue_suggestions"])
         expect(data.tables).toEqual([])
+    })
+
+    // The cache is keyed by TREE, and the default tree is stored as null. A
+    // `.eq("branch", null)` renders as `= NULL`, matches nothing, and would make
+    // every untagged issue look uncached — re-running (and re-billing) a paid
+    // analysis on every ask. `.is` is the only spelling that matches.
+    test("countSuggestions matches the default tree with IS NULL, not = NULL", async () => {
+        await store.countSuggestions("i1")
+        expect(control.filters).toContainEqual(["is", "branch", null])
+
+        control.filters.length = 0
+        await store.countSuggestions("i1", "feat/x")
+        expect(control.filters).toContainEqual(["eq", "branch", "feat/x"])
     })
 })
 

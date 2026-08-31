@@ -9,6 +9,7 @@ import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
 import { Dropdown } from "@/components/ui/dropdown"
 import { cn } from "@/components/ui/cn"
 import { MarkdownEditor } from "@/components/markdown/markdown-editor"
+import { BranchPicker } from "@/components/projects/branch-picker"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
 import { EMPTY_DRAFT_FIELDS, type DraftEffort, type DraftFields, type DraftPriority, type DraftStatus } from "@/modules/issues/domain/IssueDraft"
 
@@ -62,7 +63,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
     const [localFields, setLocalFields] = useState<DraftFields>(EMPTY_DRAFT_FIELDS)
     const fields = value ?? localFields
     const patch = onChange ?? ((p: Partial<DraftFields>) => setLocalFields((f) => ({ ...f, ...p })))
-    const { title, body, status, priority, labels, effort } = fields
+    const { title, body, status, priority, labels, effort, branch } = fields
     const [advanced, setAdvanced] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [pending, startTransition] = useTransition()
@@ -83,6 +84,9 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                         labels: labels.split(",").map((l) => l.trim()).filter(Boolean),
                         // Omit when "" so the issue inherits the project default.
                         analyse_effort: effort || undefined,
+                        // Likewise: "" is the default tree, and the server reads
+                        // an absent/blank branch as exactly that.
+                        branch: branch || undefined,
                     },
                 })
                 onSuccess?.()
@@ -171,6 +175,16 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                                 ? "Inherits this project's saved default. Higher effort makes the analyser dig deeper for a richer, more accurate analysis — slower and pricier."
                                 : EFFORT_HINT[effort]}
                         </p>
+
+                        {/* Renders nothing until the project tracks a ready
+                            branch, which is every project until someone does —
+                            so the section stays exactly as it was for them. */}
+                        <BranchPicker
+                            projectId={projectId}
+                            value={branch}
+                            onChange={(v) => patch({ branch: v })}
+                            className="mt-3 flex-wrap"
+                        />
                     </div>
                 )}
             </div>

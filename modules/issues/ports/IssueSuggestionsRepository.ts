@@ -29,6 +29,9 @@ export type NewIssueSuggestion = {
     cost_usd: number
     duration_ms: number
     graph_id: string | null
+    /** The tree this analysis was computed from; null = the project default.
+     *  Part of the cache key — see the column comment in 0094. */
+    branch: string | null
 }
 
 export interface IssueSuggestionsRepository {

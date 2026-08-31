@@ -9,9 +9,11 @@ import { Project, type ProjectsRepository } from "@/modules/projects"
 import type { VcsAppService, VcsProviderBinding } from "@/modules/vcs"
 import type { IssueAnalysisData, IssuePriority } from "@/lib/shared/types"
 import { ProjectAnalyser } from "../domain/ProjectAnalyser"
+import { AnalysisBranch } from "../domain/AnalysisBranch"
 import type { AnalyserResolver } from "../ports/Analyser"
 import type { IssueAnalysis } from "../ports/AnalyserTypes"
 import type { ProjectAnalyserRepository } from "../ports/ProjectAnalyserRepository"
+import type { ProjectBranchRepository } from "../ports/ProjectBranchRepository"
 import { IssueAnalysisComment, type CommentCtx } from "./IssueAnalysisComment"
 import { callbackOrigin } from "../domain/CallbackOrigin"
 import { analysisIsAbandoned } from "../domain/AnalysisRun"
@@ -62,7 +64,26 @@ export class IssueAnalysisService {
          *  a different failure — a burst that outruns the ledger rather than a
          *  budget that has run out. */
         private readonly admission: RunAdmission,
+        /** The project's tracked branches, so an issue filed against one is
+         *  investigated against THAT branch's graph. Optional like the PR
+         *  service's: absent means every run reads the default tree, which is
+         *  what happened before branches existed. */
+        private readonly branches?: ProjectBranchRepository,
     ) {}
+
+    /** The branch a run should read for an issue, or undefined for the default
+     *  tree. Undefined whenever there is no branch repository, no branch on the
+     *  issue, or the branch is not tracked-and-ready — the analyser REFUSES a
+     *  branch it has not indexed rather than falling back, so sending a hopeful
+     *  guess buys an error instead of an answer.
+     *
+     *  Deliberately the same shape as PullRequestAnalysisService.reviewBranch:
+     *  one rule, two entry points. */
+    private async resolveBranch(projectId: string, branch: string | null): Promise<string | undefined> {
+        if (!this.branches || !branch) return undefined
+        const tracked = await tryOrNull(() => this.branches!.find(projectId, branch))
+        return AnalysisBranch.answerable(tracked)
+    }
 
     // ensure kicks off the SINGLE analysis run for an issue and is the one entry
     // point for both surfaces: the tracker's suggestion box (via the
@@ -106,8 +127,16 @@ export class IssueAnalysisService {
             trace("ensure.queued", { issueId, already: true })
             return "queued"
         }
-        const cached = await this.issues.countSuggestions(issueId)
-        trace("ensure.suggestions", { issueId, cached })
+        // Which tree this run is about, resolved BEFORE the cache check because
+        // it is part of the question the cache answers. An issue re-targeted
+        // from main to feat/x has no cached answer for feat/x, however many it
+        // has for main — and replaying main's would be exactly the confidently
+        // wrong answer branch support exists to prevent.
+        const branch = await this.resolveBranch(issue.project_id, issue.branch)
+        trace("ensure.branch", { issueId, requested: issue.branch, resolved: branch ?? null })
+
+        const cached = await this.issues.countSuggestions(issueId, branch ?? null)
+        trace("ensure.suggestions", { issueId, branch: branch ?? null, cached })
         if (cached > 0) return "done"
 
         // Fail-safe: a query error folds to null → treated as not-ready.
@@ -183,6 +212,10 @@ export class IssueAnalysisService {
         const update: IssueSyncPatch = {
             analysis_status: "analysing",
             analysis_started_at: new Date().toISOString(),
+            // Recorded now because the callback needs it and arrives minutes
+            // later, by which time re-deriving it could resolve differently —
+            // and file this run's answer under the wrong tree.
+            analysis_branch: branch ?? null,
         }
 
         // Post the "analysing…" placeholder only when the issue is linked + sync is
@@ -213,6 +246,9 @@ export class IssueAnalysisService {
             {
                 // isReady() above guarantees a non-null analyser with a graph_id.
                 repoId: analyser!.graph_id!,
+                // Omitted for the default tree, which is what every caller sent
+                // before branches existed.
+                branch,
                 title: issue.title,
                 body: issue.body || "",
                 labels: issue.labels || [],
@@ -305,6 +341,7 @@ export class IssueAnalysisService {
                             cost_usd: result.cost_usd ?? 0,
                             duration_ms: result.duration_ms ?? 0,
                             graph_id: graphId,
+                            branch: issue.analysis_branch,
                             created_at: new Date().toISOString(),
                         },
                     }),
@@ -323,6 +360,10 @@ export class IssueAnalysisService {
                     cost_usd: result.cost_usd ?? 0,
                     duration_ms: result.duration_ms ?? 0,
                     graph_id: graphId,
+                    // The tree this was computed from, as resolved at dispatch
+                    // — not re-derived here, where the answer would be filed
+                    // under whichever branch happens to be ready now.
+                    branch: issue.analysis_branch,
                 })
                 trace("apply.suggestionSaved", { taskId, issueId: issue.id })
             } catch (e) {

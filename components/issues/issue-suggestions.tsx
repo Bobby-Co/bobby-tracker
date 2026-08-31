@@ -153,7 +153,16 @@ export function IssueSuggestions({ issueId, projectId, repo, indexedSha, initial
                         {pending
                             ? "Reading the graph and source — typically 10–30s."
                             : suggestion
-                                ? <>Cached {timeAgo(suggestion.created_at)} · ${Number(suggestion.cost_usd ?? 0).toFixed(4)}</>
+                                ? <>
+                                    Cached {timeAgo(suggestion.created_at)} · ${Number(suggestion.cost_usd ?? 0).toFixed(4)}
+                                    {/* Which tree this answer is ABOUT. Shown only
+                                        when it isn't the default, because "the
+                                        project's own graph" is what every reader
+                                        already assumes — and because saying so on
+                                        every issue would train people to ignore
+                                        the one line that matters when it isn't. */}
+                                    {suggestion.branch && <> · from <span className="font-mono">{suggestion.branch}</span></>}
+                                </>
                                 : "Ask the indexed graph which files and lines to look at first."}
                     </p>
                 </div>

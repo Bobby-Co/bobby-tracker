@@ -18,7 +18,7 @@ import type {
 // The suggest / fix-prompt projection — kept in one place so the port type and
 // the select string can't drift apart.
 const SUGGEST_CONTEXT_COLS =
-    "id,project_id,issue_number,title,body,status,priority,labels,analyse_effort,created_at,updated_at"
+    "id,project_id,issue_number,title,body,status,priority,labels,analyse_effort,branch,created_at,updated_at"
 
 // The RLS client and the service-role client carry different schema generics;
 // accept any so both are assignable (mirrors the analyser repository).

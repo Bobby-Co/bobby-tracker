@@ -1,7 +1,8 @@
-import { AnalyserError, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
+import { AnalyserError, AnalysisBranch, getAnalyser, ProjectAnalyser } from "@/modules/analysis"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { IssuePrompt } from "@/modules/issues"
 import type { IssueAnalysisData } from "@/lib/shared/types"
+import { tryOrNull } from "@/lib/shared/kernel"
 
 // POST /api/issues/[id]/suggest
 //
@@ -48,6 +49,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // undefined (analyser falls back to project default → server default).
     const effort = overrideEffort ?? (ProjectAnalyser.isValidEffort(issue.analyse_effort) ? issue.analyse_effort : undefined)
 
+    // Which tree to answer from. The issue's own branch, but only when the
+    // project actually tracks it AND it is indexed: the analyser refuses a
+    // branch it has not seen rather than falling back, so an unready one would
+    // turn "investigate" into an error instead of a slightly less specific
+    // answer. Undefined = the project's default graph, as before.
+    const tracked = issue.branch ? await tryOrNull(() => ctx.projectBranches.find(issue.project_id, issue.branch!)) : null
+    const branch = AnalysisBranch.answerable(tracked)
+
     const { data: analyser, error: aErr } = await repoRead(() => analyserRepo.findByProjectId(issue.project_id))
     if (aErr) return aErr
     if (!analyser?.enabled || analyser.status !== "ready" || !analyser.graph_id) {
@@ -68,6 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     try {
         const result = await getAnalyser(cell).analyseIssue({
             repoId:   analyser.graph_id,
+            branch,
             title:    issue.title,
             body:     issue.body || "",
             labels:   issue.labels,
@@ -95,6 +105,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                     cost_usd: result.cost_usd ?? 0,
                     duration_ms: result.duration_ms ?? 0,
                     graph_id: analyser.graph_id,
+                    branch: branch ?? null,
                     created_at: new Date().toISOString(),
                 },
             }),
@@ -111,6 +122,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
                 cost_usd:    result.cost_usd ?? 0,
                 duration_ms: result.duration_ms ?? 0,
                 graph_id:    analyser.graph_id,
+                // Part of the cache key: an answer about main must not be
+                // replayed for the same issue re-targeted at a branch.
+                branch:      branch ?? null,
             }),
         )
         if (insErr) return insErr

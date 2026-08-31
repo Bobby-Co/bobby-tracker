@@ -42,14 +42,24 @@ export type IssueAnalysisRow = {
     /** When the current run was dispatched (0071). Null = unknown, which the
      *  staleness guard reads as abandoned. */
     analysis_started_at: string | null
+    /** The tree this issue is about (0094). Null = the project's default. The
+     *  user's intent; what a run is actually dispatched against is the
+     *  resolution of it against the project's tracked branches. */
+    branch: string | null
+    /** The tree the current/last run was dispatched against, already resolved.
+     *  Read by the callback, which must file the result under the branch it was
+     *  computed from rather than re-deriving one from a world that has moved. */
+    analysis_branch: string | null
 }
 
 const ANALYSIS_ISSUE_COLS =
-    "id,project_id,user_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status,analysis_started_at"
+    "id,project_id,user_id,issue_number,title,body,status,priority,labels,github_issue_number,github_analysis_comment_id,analysis_status,analysis_started_at,branch,analysis_branch"
 
 /** GitHub-integration / analysis columns on an issue row. */
 export interface IssueSyncPatch {
     analysis_started_at?: string | null
+    /** The resolved branch this run is dispatched against; null = default. */
+    analysis_branch?: string | null
     sync_source?: string
     last_synced_hash?: string
     github_synced_at?: string
@@ -92,6 +102,10 @@ export type IssueSuggestionInsert = {
     cost_usd: number
     duration_ms: number
     graph_id: string | null
+    /** The tree this analysis was computed from; null = the project default.
+     *  Part of the cache key, so retargeting an issue re-analyses instead of
+     *  replaying an answer about a different tree. */
+    branch: string | null
 }
 
 /** The issue-comment mirror row (tracker.issue_comments) — written by the webhook
@@ -122,8 +136,12 @@ export interface IssueSyncStore {
     updateSyncFields(issueId: string, patch: IssueSyncPatch): Promise<void>
     /** Insert an issue imported from GitHub. True on success. */
     insertImportedIssue(row: ImportedIssueInsert): Promise<boolean>
-    /** How many cached suggestions an issue has. */
-    countSuggestions(issueId: string): Promise<number>
+    /** How many cached suggestions an issue has FOR A GIVEN TREE. The branch is
+     *  part of the question: an answer computed against `main` does not answer
+     *  the same issue re-targeted at `feat/x`, and serving it would be the
+     *  silent-wrong-tree failure arrived at through the cache. Null = the
+     *  project's default tree. */
+    countSuggestions(issueId: string, branch?: string | null): Promise<number>
     /** Cache an analyser suggestion. */
     insertSuggestion(row: IssueSuggestionInsert): Promise<void>
     /** Upsert an issue-comment mirror row. */
@@ -187,11 +205,15 @@ export class ServiceIssueSyncStore implements IssueSyncStore {
 
     // ── control plane: issue_suggestions (realtime) ──────────────────────────
 
-    async countSuggestions(issueId: string): Promise<number> {
-        const { count } = await this.controlDb
+    async countSuggestions(issueId: string, branch?: string | null): Promise<number> {
+        // `.is(null)` rather than `.eq(null)`: PostgREST renders the latter as
+        // `branch=eq.null`, which is `= NULL` and matches nothing — so every
+        // default-tree issue would look uncached and re-analyse on every ask.
+        const q = this.controlDb
             .from("issue_suggestions")
             .select("id", { count: "exact", head: true })
             .eq("issue_id", issueId)
+        const { count } = await (branch ? q.eq("branch", branch) : q.is("branch", null))
         return count ?? 0
     }
 

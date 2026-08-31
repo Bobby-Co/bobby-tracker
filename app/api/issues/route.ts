@@ -1,6 +1,6 @@
 import { after } from "next/server"
 import { ApiContext, jsonError } from "@/lib/server/http/api"
-import { ProjectAnalyser, createIssueAnalysisService } from "@/modules/analysis"
+import { ProjectAnalyser, createIssueAnalysisService, selectIssueBranch } from "@/modules/analysis"
 import { tryOrNull, RepositoryError } from "@/lib/shared/kernel"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
@@ -68,6 +68,14 @@ export async function POST(request: Request) {
     // Null unless a real level was chosen, so untouched issues inherit the
     // project default (and then the analyser's own default) at analyse time.
     const analyse_effort = ProjectAnalyser.isValidEffort(body?.analyse_effort) ? body.analyse_effort : null
+    // Which tree this issue is about. Only a branch the project actually indexes
+    // may be pinned — the picker offers no others, and this is the server-side
+    // enforcement for callers that aren't the picker. An absent name is the
+    // project's default branch, which is what every issue meant before branches
+    // existed and is never an error.
+    const selection = await selectIssueBranch(ctx.projectBranches, project_id, body?.branch)
+    if (!selection.ok) return jsonError(selection.code, selection.message, 409)
+    const branch = selection.branch
 
     // Persist through the issues module's repository — the controller never
     // touches the DB client directly (see modules/README.md: the interface layer
@@ -85,6 +93,7 @@ export async function POST(request: Request) {
             ai_proposed,
             duplicate_of_issue_id,
             analyse_effort,
+            branch,
         })
     } catch (e) {
         const message = e instanceof RepositoryError ? e.message : "failed to create issue"

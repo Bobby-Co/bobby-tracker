@@ -2,6 +2,7 @@ import { after } from "next/server"
 import { ApiContext, jsonError, repoRead } from "@/lib/server/http/api"
 import { tryOrNull } from "@/lib/shared/kernel"
 import { getVcsAppService } from "@/modules/vcs"
+import { selectIssueBranch } from "@/modules/analysis"
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePatch } from "@/modules/issues"
 import { dataClientForProject } from "@/lib/server/regional"
@@ -38,6 +39,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (typeof body.status === "string" && (ISSUE_STATUSES as readonly string[]).includes(body.status)) patch.status = body.status as IssuePatch["status"]
     if (typeof body.priority === "string" && (ISSUE_PRIORITIES as readonly string[]).includes(body.priority)) patch.priority = body.priority as IssuePatch["priority"]
     if (Array.isArray(body.labels)) patch.labels = body.labels.filter((l: unknown): l is string => typeof l === "string")
+    // Retargeting the issue at another tree. Present-but-unusable (null, "",
+    // whitespace) means "the project's default branch", so it is a real value
+    // to write rather than a field to skip — `"branch" in body` is the test,
+    // not truthiness, or an issue could never be moved back to the default.
+    //
+    // Only a branch the project actually indexes may be pinned; the guard needs
+    // the project, which on this route means a read before the write. Fail-safe
+    // to a refusal rather than to "unchecked": an issue whose project we cannot
+    // resolve is not one we can validate a branch against.
+    if ("branch" in body) {
+        const projectId = await tryOrNull(() => issues.findProjectId(id))
+        if (!projectId) return jsonError("not_found", "issue not found", 404)
+        const selection = await selectIssueBranch(ctx.projectBranches, projectId, body.branch)
+        if (!selection.ok) return jsonError(selection.code, selection.message, 409)
+        patch.branch = selection.branch
+    }
     if (Object.keys(patch).length === 0) return jsonError("bad_request", "no valid fields", 400)
 
     const { data, error: dbErr } = await repoRead(() => issues.update(id, patch))

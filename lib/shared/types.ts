@@ -564,6 +564,13 @@ export interface Issue {
      *  no per-issue choice, so the analyse call omits effort and the
      *  analyser falls back to the project default → its own default. */
     analyse_effort: "fast" | "medium" | "high" | "veryhigh" | null
+    /** Which indexed tree this issue is about. Null = the project's default
+     *  branch, which is what every issue meant before branches existed.
+     *  Resolved at analyse time against the project's TRACKED branches: a
+     *  branch that isn't tracked and ready falls back to the default, because
+     *  the analyser refuses an unindexed branch outright. Deliberately not a
+     *  foreign key — issues outlive the branches they were filed against. */
+    branch: string | null
     created_at: string
     updated_at: string
 }
@@ -762,6 +769,10 @@ export interface IssueSuggestion {
     cost_usd: number | null
     duration_ms: number | null
     graph_id: string | null
+    /** The branch this analysis ran against; null = the project default. Read
+     *  as part of the cache key, so retargeting an issue to another branch
+     *  re-analyses instead of replaying an answer about a different tree. */
+    branch: string | null
     created_at: string
 }
 

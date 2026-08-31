@@ -90,6 +90,7 @@ function mk(
         lane_y: scheduled ? rowToLaneAbs(opts.lane ?? 0) : null,
         color: null,
         analyse_effort: null,
+        branch: null,
         created_at: new Date(Date.now() - DAY).toISOString(),
         updated_at: new Date().toISOString(),
     }

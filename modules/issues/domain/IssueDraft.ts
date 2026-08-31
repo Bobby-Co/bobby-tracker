@@ -26,6 +26,11 @@ export interface DraftFields {
     priority: DraftPriority
     labels: string
     effort: DraftEffort
+    /** Which indexed tree the issue is about. "" = the project's default
+     *  branch, mirroring `effort`'s "" = inherit. Kept as a plain string rather
+     *  than a union: the valid values are a project's tracked branches, which
+     *  are data, not a type. */
+    branch: string
 }
 
 // A stored draft: fields + identity + recency (for stable tab ordering).
@@ -42,6 +47,7 @@ export const EMPTY_DRAFT_FIELDS: DraftFields = {
     priority: "medium",
     labels: "",
     effort: "",
+    branch: "",
 }
 
 /** The localStorage key. One entry holds every project's drafts, grouped by
@@ -50,9 +56,10 @@ export const EMPTY_DRAFT_FIELDS: DraftFields = {
 export const DRAFTS_STORAGE_KEY = "issue-drafts:v1"
 
 /** A draft is worth keeping only if the author actually WROTE something — a
- *  title, a body, or labels. Status/priority/effort left at (or even moved from)
- *  their defaults don't make an otherwise-blank draft worth a tab: there's
- *  nothing to come back to. Blank drafts are discarded on minimize/navigation. */
+ *  title, a body, or labels. Status/priority/effort/branch left at (or even
+ *  moved from) their defaults don't make an otherwise-blank draft worth a tab:
+ *  there's nothing to come back to. Blank drafts are discarded on
+ *  minimize/navigation. */
 export function draftIsEmpty(f: DraftFields): boolean {
     return !f.title.trim() && !f.body.trim() && !f.labels.trim()
 }

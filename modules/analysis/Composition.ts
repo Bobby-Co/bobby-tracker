@@ -79,6 +79,10 @@ export function createIssueAnalysisService(dataDb?: SupabaseRlsClient): IssueAna
         // The burst bound. The gate above cannot see work that started since the
         // analyser last flushed its meter; this can.
         runAdmission(controlDb, data),
+        // Tracked branches, so an issue filed against one is investigated
+        // against that branch's graph rather than the trunk. CONTROL plane,
+        // with the projects they configure — same reasoning as the PR service.
+        createSupabaseProjectBranchRepository(controlDb),
     )
 }
 

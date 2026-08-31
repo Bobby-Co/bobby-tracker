@@ -20,6 +20,23 @@ import type { ProjectBranch } from "@/lib/shared/types"
  *  API expects — no branch means the default one. */
 export const DEFAULT_BRANCH_VALUE = ""
 
+/** The branches that can actually answer a question, for a project.
+ *
+ *  Only `ready` ones: a branch mid-index cannot answer, and the analyser refuses
+ *  it outright rather than falling back to the default — so offering it would
+ *  hand the user a choice that produces an error. Shared with the surfaces that
+ *  need the same list in a different chrome (the issue detail sidebar). */
+export function useReadyBranches(projectId: string): ProjectBranch[] {
+    const { data } = useApi<{ branches: ProjectBranch[] }>(`/api/projects/${projectId}/branches`)
+    return (data?.branches ?? []).filter((b) => b.status === "ready")
+}
+
+/** The options an indexed-tree control offers: the default, then every ready
+ *  branch. Kept next to the picker so both surfaces spell "default" the same. */
+export function branchOptions(ready: ProjectBranch[]): { value: string; label: string }[] {
+    return [{ value: DEFAULT_BRANCH_VALUE, label: "default" }, ...ready.map((b) => ({ value: b.branch, label: b.branch }))]
+}
+
 export function BranchPicker({
     projectId,
     value,
@@ -31,8 +48,7 @@ export function BranchPicker({
     onChange: (branch: string) => void
     className?: string
 }) {
-    const { data } = useApi<{ branches: ProjectBranch[] }>(`/api/projects/${projectId}/branches`)
-    const ready = (data?.branches ?? []).filter((b) => b.status === "ready")
+    const ready = useReadyBranches(projectId)
     if (ready.length === 0) return null
 
     return (
@@ -41,10 +57,7 @@ export function BranchPicker({
             <Dropdown
                 value={value}
                 onChange={onChange}
-                options={[
-                    { value: DEFAULT_BRANCH_VALUE, label: "default" },
-                    ...ready.map((b) => ({ value: b.branch, label: b.branch })),
-                ]}
+                options={branchOptions(ready)}
                 searchable={ready.length > 8}
                 aria-label="Branch to answer from"
                 // Dropdown is w-full by default, which is right for a form field

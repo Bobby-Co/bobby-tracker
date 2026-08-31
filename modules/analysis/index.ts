@@ -9,6 +9,12 @@
 export type { ProjectAnalyserState, AnalyserStatusValue, AnalyseEffort } from "./domain/ProjectAnalyser"
 export { ProjectAnalyser } from "./domain/ProjectAnalyser"
 
+// ─── AnalysisBranch — which indexed tree a run may be answered from ──────────
+// The name-shape rule the routes validate with, and the tracked-and-ready rule
+// both the issue and the PR paths resolve with.
+export { AnalysisBranch } from "./domain/AnalysisBranch"
+export type { TrackedBranchState } from "./domain/AnalysisBranch"
+
 // ─── project_analyser repository ─────────────────────────────────────────────
 export type { AnalyserReadinessRow, ProjectAnalyserRepository } from "./ports/ProjectAnalyserRepository"
 export { createSupabaseProjectAnalyserRepository } from "./infrastructure/SupabaseProjectAnalyserRepository"
@@ -98,6 +104,12 @@ export type {
 
 // ─── run admission: the per-team concurrency bound on billable work ──────────
 export { RunAdmission } from "./application/RunAdmission"
+
+// The WRITE-time branch guard: which branches a caller may pin an issue to.
+// Only tracked-and-ready ones, so a choice that cannot answer is refused with a
+// message rather than stored and discovered later.
+export { selectIssueBranch } from "./application/BranchSelection"
+export type { BranchSelection } from "./application/BranchSelection"
 export type { TeamRunRegistry, ActiveRun, ActiveRunKind } from "./ports/TeamRunRegistry"
 export { createSupabaseTeamRunRegistry } from "./infrastructure/SupabaseTeamRunRegistry"
 export { ExhaustionSweep } from "./application/ExhaustionSweep"
