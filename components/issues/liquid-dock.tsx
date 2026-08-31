@@ -56,13 +56,10 @@ export const WIDEN_MS = 240
 
 const BLOB_OUT =
     `transform ${TRAVEL_MS}ms cubic-bezier(0.34, 1.4, 0.5, 1),` +
-    ` width ${WIDEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${WIDEN_DELAY_MS}ms,` +
-    ` border-radius ${WIDEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${WIDEN_DELAY_MS}ms`
+    ` width ${WIDEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${WIDEN_DELAY_MS}ms`
 // Back: width first, then home. Retracting while still wide drags a long
 // tongue across the gap.
-const BLOB_BACK =
-    "transform 260ms cubic-bezier(0.4, 0, 0.2, 1) 100ms, width 150ms ease-in," +
-    " border-radius 150ms ease-in"
+const BLOB_BACK = "transform 260ms cubic-bezier(0.4, 0, 0.2, 1) 100ms, width 150ms ease-in"
 
 /** The label's transform, so it rides the drop rather than chasing it. */
 export const LABEL_TRAVEL = `transform ${TRAVEL_MS}ms cubic-bezier(0.34, 1.4, 0.5, 1)`
@@ -84,15 +81,16 @@ export const TEXT_DELAY_MS = WIDEN_DELAY_MS + 90
  *  push them further and the join is already gone before the motion is. */
 export const GOO_GAP = 7
 
-/** The controls' corner radius.
+/** The corner radius is a full capsule, matching the metadata chips this docks
+ *  beside — the same shape "Pick a branch" and the status chips already use.
  *
- *  It is a rounded rectangle, not a capsule, and getting there took reducing
- *  the blur rather than changing this number: a threshold filter imposes its
- *  OWN minimum corner radius, roughly proportional to the blur, and at the
- *  sigma this started with (6, on a 28px-tall control) the corners came out as
- *  full semicircles no matter what the source was set to. Source radii of 8 and
- *  even 4 rendered identically. The blur is the corner. */
-const BLOB_RADIUS = 10
+ *  Reaching it still needed the blur reduced, which is the non-obvious part: a
+ *  threshold filter imposes its OWN minimum corner radius, roughly proportional
+ *  to the blur, and at the sigma this started with (6, on a 28px-tall control)
+ *  every corner came out ROUNDER than a capsule no matter what the source said.
+ *  Source radii of 8 and even 4 rendered identically. At 3.5 the corner is
+ *  whatever it is drawn as, so drawing a capsule now yields one. */
+const capsule = (height: number) => height / 2
 
 export function LiquidBackdrop({
     open,
@@ -125,7 +123,7 @@ export function LiquidBackdrop({
             {/* The button. Never moves. */}
             <div
                 className="absolute bg-[color:var(--c-surface-2)]"
-                style={{ right: PAD, bottom: PAD, width: buttonWidth, height, borderRadius: BLOB_RADIUS }}
+                style={{ right: PAD, bottom: PAD, width: buttonWidth, height, borderRadius: capsule(height) }}
             />
             {/* The drop. Travels first, then opens — one property at a time, so
                 the neck has finished tearing before anything starts widening.
@@ -138,10 +136,10 @@ export function LiquidBackdrop({
                     bottom: PAD,
                     height,
                     width: open ? pillWidth : height,
-                    // A CIRCLE while it is a drop, the button's own corner once
-                    // it has become one. Rides the same timing as the width, so
-                    // the corners square up exactly as the pill opens.
-                    borderRadius: open ? BLOB_RADIUS : height / 2,
+                    // One value the whole way: half the height is a circle
+                    // while the drop is square and a capsule once it has opened,
+                    // so nothing about the corner has to be animated at all.
+                    borderRadius: capsule(height),
                     transform: `translateX(${open ? landed : parked}px)`,
                     transition: open ? BLOB_OUT : BLOB_BACK,
                 }}
