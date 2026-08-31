@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
+import { useLayoutEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
 import { MarkdownEditor } from "@/components/markdown/markdown-editor"
@@ -8,7 +8,7 @@ import { useReadyBranches } from "@/components/projects/branch-picker"
 import { branchChoicePending } from "@/components/issues/issue-branch-choice"
 import { IssueEffortChip, IssueMetaBar } from "@/components/issues/issue-meta-bar"
 import { AttachmentChips, MAX_ATTACHMENTS, isFileDrag, useIssueAttachments } from "@/components/issues/issue-attachments"
-import { LiquidSplit } from "@/components/issues/liquid-split"
+import { GOO_GAP, LiquidBackdrop, LiquidGooFilter } from "@/components/issues/liquid-dock"
 import { Spinner } from "@/components/ui/spinner"
 import { cn } from "@/components/ui/cn"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
@@ -330,121 +330,57 @@ function AiDraftDock({
     canDraft: boolean
     attachmentsFull: boolean
 }) {
-    const [phase, setPhase] = useState<Phase>("idle")
-    const [dims, setDims] = useState({ btn: 0, travel: 0, full: 0, height: 0 })
-    const [plays, setPlays] = useState(0)
+    const [open, setOpen] = useState(false)
+    const [dims, setDims] = useState({ btn: 0, pill: 0, height: 0 })
     const pillRef = useRef<HTMLLabelElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
-    const beat = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    // Layout effect, not a plain one: this decides where two elements sit and
-    // how wide one of them is. Read after paint, the first frame would show the
-    // pill at its natural size sitting on top of the button.
+    // Layout effect, not a plain one: the blobs are sized from these, and read
+    // after paint the first frame would draw them at zero.
     useLayoutEffect(() => {
         const btn = btnRef.current?.offsetWidth ?? 0
-        const full = pillRef.current?.offsetWidth ?? 0
+        const pill = pillRef.current?.offsetWidth ?? 0
         const height = btnRef.current?.offsetHeight ?? 0
-        if (btn > 0 && full > 0) setDims({ btn, travel: btn + GAP, full, height })
+        if (btn > 0 && pill > 0) setDims({ btn, pill, height })
     }, [])
 
-    useEffect(() => () => { if (beat.current) clearTimeout(beat.current) }, [])
-
-    // ─── the choreography ───────────────────────────────────────────────────
-    //
-    //   split   the button's own skin goes transparent and the SVG blob takes
-    //           its place, thinning at the waist until a ball pinches off the
-    //           left end.
-    //   land    the blob is dropped and the real control takes over AS THE BALL
-    //           — a circle, no label, exactly where and what the blob left. It
-    //           has to exist as its own frame: appearing full-width here would
-    //           throw away the ball the split just spent 240ms making, and the
-    //           whole gesture would end on a pop.
-    //   open    and only then does the circle grow into a pill and admit its
-    //           label.
-    //
-    // There WAS a beat before these two, where the button stretched left over
-    // the ground the split would use. It was choppy, and it was redundant: the
-    // blob's first frame is already the button's exact capsule — the ball
-    // starts coincident with the left cap, so their union IS the button — and
-    // the empty part of the viewBox is simply the space the ball flies into.
-    // The stretch was animating toward a shape the SVG never draws.
-    function openDock() {
-        if (beat.current) clearTimeout(beat.current)
-        if (phase !== "idle") return
-        setPhase("split")
-        setPlays((n) => n + 1)
-        beat.current = setTimeout(() => {
-            setPhase("land")
-            beat.current = setTimeout(() => setPhase("open"), LAND_MS)
-        }, SPLIT_MS)
-    }
-
-    function closeDock() {
-        if (beat.current) clearTimeout(beat.current)
-        // Straight back. Reversing the split would mean replaying it backwards
-        // for a gesture nobody watches — a pointer leaving is already gone.
-        setPhase("idle")
-    }
-
-    const splitting = phase === "split"
-    const landed = phase === "land" || phase === "open"
-    const opened = phase === "open"
-    const measured = dims.full > 0
+    const measured = dims.btn > 0
+    const travel = dims.btn + GOO_GAP
 
     return (
         <div
             className="absolute bottom-2.5 right-2.5 flex items-center"
-            onPointerEnter={openDock}
-            onPointerLeave={closeDock}
-            onFocus={openDock}
+            onPointerEnter={() => setOpen(true)}
+            onPointerLeave={() => setOpen(false)}
+            onFocus={() => setOpen(true)}
             onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closeDock()
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false)
             }}
         >
-            {/* The blob stands in for the button's skin for exactly one beat. */}
-            {measured && dims.height > 0 && (
-                <div
-                    aria-hidden
-                    className={cn(
-                        "pointer-events-none absolute bottom-0 right-0 transition-opacity",
-                        splitting ? "opacity-100 duration-0" : "opacity-0 duration-150",
-                    )}
-                >
-                    <LiquidSplit
-                        geo={{
-                            // The ball the split leaves is a circle of the
-                            // control's own height, so the span is the button
-                            // plus the gap plus that.
-                            width: dims.travel + dims.height,
-                            height: dims.height,
-                            capWidth: dims.btn,
-                        }}
-                        playToken={plays}
-                        durationMs={SPLIT_MS}
-                    />
-                </div>
-            )}
+            <LiquidGooFilter />
+            {/* The fill of BOTH controls, so the merge is between the things you
+                can actually see. Everything below renders on top of it with no
+                background of its own. */}
+            <LiquidBackdrop
+                open={open && measured}
+                buttonWidth={dims.btn}
+                height={dims.height}
+                pillWidth={dims.pill}
+            />
 
             <label
                 ref={pillRef}
                 style={{
-                    // Landing is a HANDOFF, not a move: the ball is already at
-                    // this spot, drawn by the blob. So the control is placed
-                    // there outright and only its width is ever animated.
-                    transform: landed ? `translateX(${-dims.travel}px)` : "translateX(0) scale(0.6)",
-                    // Exactly the ball the blob just drew — same diameter,
-                    // same place — or the handoff is a visible jump.
-                    width: measured ? (opened ? dims.full : dims.height) : undefined,
+                    // Rides the drop exactly: same distance, same curve, same
+                    // delay on the label. The blob is the surface; this is the
+                    // writing on it.
+                    transform: open && measured ? `translateX(${-travel}px)` : "translateX(0)",
+                    transitionDelay: open ? "0ms" : "120ms",
                 }}
                 className={cn(
-                    "absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
-                    // No transition on the landing frame, or the circle slides
-                    // in from under the button instead of simply BEING where the
-                    // blob left it. From `open` on, width eases.
-                    phase === "land"
-                        ? "transition-none"
-                        : "transition-[transform,width,opacity] duration-[240ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
-                    landed ? "opacity-100" : "pointer-events-none opacity-0",
+                    "ink-on-ember absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full py-[5px] pl-2.5 pr-3 text-[12px] font-semibold",
+                    "transition-[transform,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.34,1.4,0.5,1),ease-out]",
+                    open ? "opacity-100" : "pointer-events-none opacity-0",
                     attachmentsFull && "cursor-not-allowed opacity-50",
                 )}
             >
@@ -455,9 +391,7 @@ function AiDraftDock({
                         <path d="M4 16.5 9 12l3.5 3 2.5-2 5 4.5" />
                     </svg>
                 </span>
-                <span className={cn("transition-opacity duration-150", !opened && "opacity-0")}>
-                    Analyse image
-                </span>
+                Analyse image
                 <input
                     type="file"
                     accept="image/*"
@@ -478,17 +412,8 @@ function AiDraftDock({
                 onClick={onDraft}
                 disabled={!canDraft || drafting}
                 title={canDraft ? undefined : "Write a line or attach a screenshot first"}
-                className={cn(
-                    "relative inline-flex items-center justify-end gap-1.5 whitespace-nowrap rounded-full py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] disabled:cursor-not-allowed disabled:opacity-45",
-                    // No width or padding here: the button never changes size.
-                    // Only its skin hands over to the blob and comes back.
-                    "transition-[background,border-color,opacity] duration-100 ease-out",
-                    // Its skin is handed to the blob for the duration of the
-                    // split and taken back afterwards.
-                    splitting
-                        ? "border border-transparent bg-transparent shadow-none"
-                        : "border border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] hover:bg-[color:var(--c-surface-2)]",
-                )}
+                // No background and no border: its fill is the blob behind it.
+                className="ink-on-ember relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-transparent py-[5px] pl-2.5 pr-3 text-[12px] font-semibold transition-opacity duration-150 disabled:cursor-not-allowed disabled:opacity-45"
             >
                 {drafting ? <Spinner /> : <SparkleIcon />}
                 {drafting ? "Drafting…" : "Draft with AI"}
@@ -496,18 +421,6 @@ function AiDraftDock({
         </div>
     )
 }
-
-type Phase = "idle" | "split" | "land" | "open"
-
-/** How long the blob takes to pinch a ball off its left end. */
-const SPLIT_MS = 240
-/** How long the ball sits as a plain circle before it grows. Short — it is a
- *  beat, not a pause — but non-zero, so the eye registers that the thing the
- *  split produced is the thing that then becomes a button. */
-const LAND_MS = 90
-
-/** Space between the pill and the button once the pill has landed. */
-const GAP = 6
 
 function SparkleIcon() {
     return (
