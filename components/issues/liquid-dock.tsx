@@ -56,10 +56,13 @@ export const WIDEN_MS = 240
 
 const BLOB_OUT =
     `transform ${TRAVEL_MS}ms cubic-bezier(0.34, 1.4, 0.5, 1),` +
-    ` width ${WIDEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${WIDEN_DELAY_MS}ms`
+    ` width ${WIDEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${WIDEN_DELAY_MS}ms,` +
+    ` border-radius ${WIDEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${WIDEN_DELAY_MS}ms`
 // Back: width first, then home. Retracting while still wide drags a long
 // tongue across the gap.
-const BLOB_BACK = "transform 260ms cubic-bezier(0.4, 0, 0.2, 1) 100ms, width 150ms ease-in"
+const BLOB_BACK =
+    "transform 260ms cubic-bezier(0.4, 0, 0.2, 1) 100ms, width 150ms ease-in," +
+    " border-radius 150ms ease-in"
 
 /** The label's transform, so it rides the drop rather than chasing it. */
 export const LABEL_TRAVEL = `transform ${TRAVEL_MS}ms cubic-bezier(0.34, 1.4, 0.5, 1)`
@@ -80,6 +83,16 @@ export const TEXT_DELAY_MS = WIDEN_DELAY_MS + 90
  *  the filter has to still see them as neighbours to have drawn a neck at all;
  *  push them further and the join is already gone before the motion is. */
 export const GOO_GAP = 7
+
+/** The controls' corner radius.
+ *
+ *  It is a rounded rectangle, not a capsule, and getting there took reducing
+ *  the blur rather than changing this number: a threshold filter imposes its
+ *  OWN minimum corner radius, roughly proportional to the blur, and at the
+ *  sigma this started with (6, on a 28px-tall control) the corners came out as
+ *  full semicircles no matter what the source was set to. Source radii of 8 and
+ *  even 4 rendered identically. The blur is the corner. */
+const BLOB_RADIUS = 10
 
 export function LiquidBackdrop({
     open,
@@ -111,20 +124,24 @@ export function LiquidBackdrop({
         >
             {/* The button. Never moves. */}
             <div
-                className="absolute rounded-full bg-[color:var(--c-surface-2)]"
-                style={{ right: PAD, bottom: PAD, width: buttonWidth, height }}
+                className="absolute bg-[color:var(--c-surface-2)]"
+                style={{ right: PAD, bottom: PAD, width: buttonWidth, height, borderRadius: BLOB_RADIUS }}
             />
             {/* The drop. Travels first, then opens — one property at a time, so
                 the neck has finished tearing before anything starts widening.
                 Right-anchored, so opening grows it away from the button rather
                 than back toward it. */}
             <div
-                className="absolute rounded-full bg-[color:var(--c-surface-2)]"
+                className="absolute bg-[color:var(--c-surface-2)]"
                 style={{
                     right: PAD,
                     bottom: PAD,
                     height,
                     width: open ? pillWidth : height,
+                    // A CIRCLE while it is a drop, the button's own corner once
+                    // it has become one. Rides the same timing as the width, so
+                    // the corners square up exactly as the pill opens.
+                    borderRadius: open ? BLOB_RADIUS : height / 2,
                     transform: `translateX(${open ? landed : parked}px)`,
                     transition: open ? BLOB_OUT : BLOB_BACK,
                 }}
@@ -159,9 +176,16 @@ export function LiquidGooFilter() {
         <svg aria-hidden focusable="false" width="0" height="0" className="absolute">
             <defs>
                 <filter id="liquid-goo" x="-30%" y="-30%" width="160%" height="160%">
-                    {/* stdDeviation is the reach of the neck: how far apart two
-                        shapes can be and still be seen as one. */}
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="haze" />
+                    {/* stdDeviation is two things at once, and they pull against
+                        each other: the REACH of the neck — how far apart two
+                        shapes can be and still be seen as one — and the minimum
+                        CORNER RADIUS the filter will allow, since a blurred
+                        corner cannot re-harden tighter than the blur that made
+                        it. At 6 the neck was generous and every corner came out
+                        a semicircle whatever the source said. 3.5 still bridges
+                        the gap these two blobs end up with, and leaves the
+                        corners as the rounded rectangle they are drawn as. */}
+                    <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="haze" />
 
                     {/* The looser cut — the outer edge of the border. */}
                     <feColorMatrix
