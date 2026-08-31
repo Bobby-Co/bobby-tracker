@@ -2,17 +2,13 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "@/lib/shared/types"
 import type { IssuePriority, IssueStatus } from "@/lib/shared/types"
-import { ProjectAnalyser } from "@/modules/analysis/domain/ProjectAnalyser"
-import { EFFORT_LABEL, EFFORT_HINT } from "@/components/ui/effort-control"
-import { Dropdown } from "@/components/ui/dropdown"
-import { cn } from "@/components/ui/cn"
 import { MarkdownEditor } from "@/components/markdown/markdown-editor"
 import { useReadyBranches } from "@/components/projects/branch-picker"
-import { IssueBranchChoice, branchChoicePending } from "@/components/issues/issue-branch-choice"
+import { branchChoicePending } from "@/components/issues/issue-branch-choice"
+import { IssueMetaBar } from "@/components/issues/issue-meta-bar"
 import { ApiError, apiMutate } from "@/lib/client/http/api-client"
-import { EMPTY_DRAFT_FIELDS, type DraftEffort, type DraftFields, type DraftPriority, type DraftStatus } from "@/modules/issues/domain/IssueDraft"
+import { EMPTY_DRAFT_FIELDS, type DraftFields, type DraftPriority, type DraftStatus } from "@/modules/issues/domain/IssueDraft"
 
 // Drift guard: the draft's mirrored field unions (the domain layer can't import
 // lib/shared) must stay identical to the real issue enums. If either side gains
@@ -22,18 +18,6 @@ const _statusInSync: Exact<DraftStatus, IssueStatus> = true
 const _priorityInSync: Exact<DraftPriority, IssuePriority> = true
 void _statusInSync
 void _priorityInSync
-
-const STATUS_OPTIONS = ISSUE_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }))
-const PRIORITY_OPTIONS = ISSUE_PRIORITIES.map((p) => ({ value: p, label: p }))
-
-const EFFORT_OPTIONS: { value: DraftEffort; label: string; description: string }[] = [
-    { value: "", label: "Use project default", description: "Inherit the project's saved effort." },
-    ...ProjectAnalyser.EFFORTS.map((level) => ({
-        value: level,
-        label: EFFORT_LABEL[level],
-        description: EFFORT_HINT[level],
-    })),
-]
 
 interface IssueFormProps {
     projectId: string
@@ -65,7 +49,6 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
     const fields = value ?? localFields
     const patch = onChange ?? ((p: Partial<DraftFields>) => setLocalFields((f) => ({ ...f, ...p })))
     const { title, body, status, priority, labels, effort, branch } = fields
-    const [advanced, setAdvanced] = useState(false)
     // Fetched ONCE here and passed down: the submit gate and the control need
     // the same list, and useApi does no dedup.
     const { ready: readyBranches, defaultBranch } = useReadyBranches(projectId)
@@ -119,6 +102,15 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                 placeholder="Issue title…"
                 className="input text-[14px] font-semibold"
             />
+            {/* Under the title, ABOVE the description. These are decisions about
+                the thing you are about to write, and the description is the tall
+                element — anything below it is below the fold. */}
+            <IssueMetaBar
+                fields={fields}
+                patch={patch}
+                ready={readyBranches}
+                defaultBranch={defaultBranch}
+            />
             <MarkdownEditor
                 value={body}
                 onChange={(v) => patch({ body: v })}
@@ -127,73 +119,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                 placeholder="Describe what's happening. Press Enter to render a block; right-click for formatting."
                 ariaLabel="Issue description"
             />
-            {/* Above status/priority/labels, because it outranks them: those
-                describe the issue, this decides what the analysis reads. */}
-            <IssueBranchChoice
-                ready={readyBranches}
-                defaultBranch={defaultBranch}
-                value={branch}
-                onChange={(v) => patch({ branch: v })}
-            />
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Dropdown
-                    value={status}
-                    onChange={(v) => patch({ status: v })}
-                    options={STATUS_OPTIONS}
-                    aria-label="Status"
-                />
-                <Dropdown
-                    value={priority}
-                    onChange={(v) => patch({ priority: v })}
-                    options={PRIORITY_OPTIONS}
-                    aria-label="Priority"
-                />
-                <input
-                    value={labels}
-                    onChange={(e) => patch({ labels: e.target.value })}
-                    placeholder="bug, performance"
-                    className="input"
-                />
-            </div>
 
-            <div className="rounded-[10px] border border-[color:var(--c-border)]">
-                <button
-                    type="button"
-                    onClick={() => setAdvanced((v) => !v)}
-                    aria-expanded={advanced}
-                    className="flex w-full items-center gap-1.5 px-3 py-2 text-[12px] font-semibold text-[color:var(--c-text-muted)] transition-colors hover:text-[color:var(--c-text)]"
-                >
-                    <svg
-                        width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden
-                        className={cn("transition-transform duration-200", advanced && "rotate-90")}
-                    >
-                        <path d="M9 6l6 6-6 6" />
-                    </svg>
-                    Advanced settings
-                </button>
-                {advanced && (
-                    <div className="border-t border-[color:var(--c-border)] p-3">
-                        <label className="text-[11px] font-bold uppercase tracking-[0.10em] text-[color:var(--c-text-dim)]">
-                            Analyser effort
-                        </label>
-                        <div className="mt-1.5">
-                            <Dropdown
-                                value={effort}
-                                onChange={(v) => patch({ effort: v })}
-                                options={EFFORT_OPTIONS}
-                                aria-label="Analyser effort"
-                            />
-                        </div>
-                        <p className="mt-2 text-[11.5px] leading-4 text-[color:var(--c-text-muted)]">
-                            {effort === ""
-                                ? "Inherits this project's saved default. Higher effort makes the analyser dig deeper for a richer, more accurate analysis — slower and pricier."
-                                : EFFORT_HINT[effort]}
-                        </p>
-
-                    </div>
-                )}
-            </div>
 
             {error && <p className="text-[12px] text-rose-700">{error}</p>}
             <div className="mt-1 flex justify-end gap-2">

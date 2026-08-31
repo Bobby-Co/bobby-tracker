@@ -27,6 +27,11 @@ interface DropdownProps<V extends string = string> {
     leadingIcon?: ReactNode
     tag?: string             // small right-side tag inside the trigger ("live", "default")
     searchable?: boolean
+    /** How the TRIGGER reads. "field" is a full-width form control; "chip" is a
+     *  compact inline pill for a dense metadata row, where four of these sit
+     *  side by side and a stack of full-width selects would eat the composer.
+     *  The popover is identical in both — only the button changes. */
+    variant?: "field" | "chip"
     className?: string
     triggerClassName?: string
     disabled?: boolean
@@ -51,6 +56,7 @@ export function Dropdown<V extends string = string>({
     leadingIcon,
     tag,
     searchable = false,
+    variant = "field",
     className,
     triggerClassName,
     disabled,
@@ -98,6 +104,11 @@ export function Dropdown<V extends string = string>({
     const flatOptions = filtered
 
     const selected = options.find((o) => o.value === value) ?? null
+    const chip = variant === "chip"
+    // The SELECTED option's own icon, when it has one, in preference to the
+    // fixed leading one: a status chip should show the status's colour, not a
+    // generic glyph that means "status" — the label already says that.
+    const triggerIcon = selected?.icon ?? leadingIcon
 
     useEffect(() => {
         if (!open) return
@@ -179,7 +190,11 @@ export function Dropdown<V extends string = string>({
     return (
         <div
             ref={rootRef}
-            className={cn("relative inline-block w-full", className)}
+            // A chip's WRAPPER has to shrink to its content too, not just its
+            // button: `w-full` here is what made a row of chips render as a
+            // column of chips, each pill correctly sized inside a full-width
+            // block that pushed the next one onto its own line.
+            className={cn("relative inline-block", chip ? "max-w-full" : "w-full", className)}
             data-open={open ? "true" : "false"}
             onKeyDown={onKeyDown}
         >
@@ -197,23 +212,33 @@ export function Dropdown<V extends string = string>({
                     else openIt()
                 }}
                 className={cn(
-                    "inline-flex w-full items-center gap-2 rounded-[12px] border bg-[color:var(--c-surface)] px-3 py-[9px] text-[13px]",
-                    "font-medium text-[color:var(--c-text)] text-left transition-[border-color,box-shadow,background] duration-[140ms]",
+                    "inline-flex items-center text-left font-medium text-[color:var(--c-text)]",
+                    "transition-[border-color,box-shadow,background] duration-[140ms]",
                     "hover:border-[color:var(--c-border-strong)] disabled:cursor-not-allowed disabled:opacity-60",
+                    chip
+                        ? "w-auto max-w-full gap-1.5 rounded-full border bg-[color:var(--c-surface)] py-[5px] pl-2 pr-2.5 text-[12px]"
+                        : "w-full gap-2 rounded-[12px] border bg-[color:var(--c-surface)] px-3 py-[9px] text-[13px]",
                     open
                         ? "border-[color:var(--c-inverse)] ring-[3px] ring-[color:var(--c-inverse)]/8"
                         : "border-[color:var(--c-border)]",
                     triggerClassName,
                 )}
             >
-                {leadingIcon && (
-                    <span className="grid h-4 w-4 shrink-0 place-items-center text-[color:var(--c-text-muted)]">
-                        {leadingIcon}
+                {triggerIcon && (
+                    <span className={cn(
+                        "grid shrink-0 place-items-center text-[color:var(--c-text-muted)]",
+                        chip ? "h-3.5 w-3.5" : "h-4 w-4",
+                    )}>
+                        {triggerIcon}
                     </span>
                 )}
                 <span
                     className={cn(
-                        "flex-1 min-w-0 truncate",
+                        "min-w-0 truncate",
+                        // A chip is sized by its content — that is what makes a
+                        // row of them read as a row rather than as four stacked
+                        // form fields. A field fills its column.
+                        chip ? "shrink" : "flex-1",
                         !selected && "text-[color:var(--c-text-dim)]",
                     )}
                 >
@@ -225,12 +250,12 @@ export function Dropdown<V extends string = string>({
                     </span>
                 )}
                 <svg
-                    width="14"
-                    height="14"
+                    width={chip ? "11" : "14"}
+                    height={chip ? "11" : "14"}
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth={chip ? "2.5" : "2"}
                     className={cn(
                         "shrink-0 text-[color:var(--c-text-dim)] transition-transform duration-[140ms]",
                         open && "rotate-180",
@@ -250,7 +275,14 @@ export function Dropdown<V extends string = string>({
                         position: "fixed",
                         top: panelPos.top,
                         left: panelPos.left,
-                        width: panelPos.width,
+                        // A field's panel matches its trigger. A CHIP's trigger is
+                        // as narrow as its content — "Open" is about 70px — so
+                        // matching it would produce a panel too narrow to read
+                        // its own options. It grows to fit instead, with the
+                        // trigger width only as a floor.
+                        width: chip ? "max-content" : panelPos.width,
+                        minWidth: chip ? Math.max(panelPos.width, 176) : undefined,
+                        maxWidth: chip ? "min(20rem, calc(100vw - 24px))" : undefined,
                         zIndex: 60,
                     }}
                     className={cn(
