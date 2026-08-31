@@ -80,6 +80,18 @@ function useStubbedApi() {
                 }
                 return json({ configured: true, online: true, project: "preview", components: COMPONENTS.map((x) => x.c) })
             }
+            if (url.includes("/api/issues/ai-compose")) {
+                await new Promise((r) => setTimeout(r, 600))
+                return json({
+                    proposal: {
+                        title: "Export button on the dashboard returns a 500",
+                        body: "## What happens\n\nClicking **Export** on the dashboard fails.\n\n## Expected\n\nA CSV download starts.",
+                        priority: "high",
+                        labels: ["bug", "dashboard", "export"],
+                        confidence: "high",
+                    },
+                })
+            }
             if (url.includes("/api/issues") && init?.method === "POST") {
                 // Don't actually navigate the harness away — report success without an id.
                 return json({ issue: {} }, 201)

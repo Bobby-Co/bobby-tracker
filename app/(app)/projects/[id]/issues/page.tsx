@@ -4,7 +4,6 @@ import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
 import { useApi } from "@/lib/client/hooks/use-api"
 import { NewIssueButton } from "@/components/issues/new-issue-button"
-import { AiComposeButton } from "@/components/issues/ai-compose-button"
 import { IssueList, type ParentRow } from "@/components/issues/issue-list"
 import { IssueTile } from "@/components/issues/issue-tile"
 import { IssueFolderTile } from "@/components/issues/issue-folder-tile"
@@ -133,11 +132,6 @@ export default function IssuesPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <IssuesViewToggle active={view} projectId={id} />
-                    <AiComposeButton
-                        projectId={id}
-                        disabled={!ready}
-                        disabledReason="Enable the analyser and run the first index on the Intelligence tab before creating issues."
-                    />
                     <NewIssueButton
                         projectId={id}
                         disabled={!ready}
