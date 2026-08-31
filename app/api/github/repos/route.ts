@@ -39,8 +39,10 @@ export async function GET() {
     const { data: tokenRow, error: tokErr } = await repoRead(() => ctx.githubTokens.findAccess(user.id))
     if (tokErr) return tokErr
     if (!tokenRow) {
+        // Distinct from the reauth codes below: nobody ever connected, so the
+        // picker should stay quiet rather than warn about a broken connection.
         return jsonError(
-            "github_reauth_required",
+            "github_not_connected",
             "Connect GitHub to list your repositories.",
             401,
         )

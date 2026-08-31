@@ -35,8 +35,12 @@ function LoginInner() {
         setPending(provider)
         setError(null)
         const supabase = createClient()
+        // `connect` tells the callback which provider this round-trip is for.
+        // It can't infer that from the session: app_metadata.provider is the
+        // signup provider, so a Google sign-in on a GitHub-created account
+        // otherwise reads as GitHub and clobbers the stored GitHub token.
         const options: { redirectTo: string; scopes?: string } = {
-            redirectTo: `${getUrl()}?next=${encodeURIComponent(next)}`,
+            redirectTo: `${getUrl()}?next=${encodeURIComponent(next)}&connect=${provider}`,
         }
         // GitHub is the only provider that grants repo access: `repo` lets
         // the user pick from + analyse their private repositories (GitHub

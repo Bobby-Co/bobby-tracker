@@ -24,7 +24,10 @@ interface GitlabConnection {
 }
 interface ConnectionsResponse {
     providers: {
-        github: { connected: boolean; login: string | null }
+        // `stale` = a token is stored but GitHub no longer accepts it. Connected
+        // in the database, useless in practice — the row still has to offer a
+        // way back, which "Connected + Disconnect" alone did not.
+        github: { connected: boolean; login: string | null; stale?: boolean }
         gitlab: { connections: GitlabConnection[] }
     }
 }
@@ -46,9 +49,16 @@ export function ConnectionsPanel() {
     async function connectGithub() {
         setActionError(null)
         setBusy("github")
+        // signInWithOAuth (not linkIdentity) because this doubles as RECONNECT:
+        // GitHub tokens get revoked, and re-authorising an already-linked
+        // identity is a sign-in, not a link. ?connect=github tells the callback
+        // to capture the returned provider_token as the GitHub credential.
         const { error } = await createClient().auth.signInWithOAuth({
             provider: "github",
-            options: { redirectTo: callbackUrl({}), scopes: "repo read:user user:email" },
+            options: {
+                redirectTo: callbackUrl({ connect: "github" }),
+                scopes: "repo read:user user:email",
+            },
         })
         if (error) {
             setActionError(error.message)
@@ -114,20 +124,22 @@ export function ConnectionsPanel() {
                     loading
                         ? "Checking…"
                         : github?.connected
-                          ? github.login
-                              ? `Connected as @${github.login}`
-                              : "Connected"
+                          ? github.stale
+                              ? "GitHub rejected the stored token — reconnect to restore repo access"
+                              : github.login
+                                ? `Connected as @${github.login}`
+                                : "Connected"
                           : "Not connected"
                 }
                 icon={<IconlyGithub size={20} />}
                 action={
-                    github?.connected ? (
+                    github?.connected && !github.stale ? (
                         <SmallButton onClick={() => disconnect("github")} busy={busy === "github"}>
                             Disconnect
                         </SmallButton>
                     ) : (
                         <PrimaryButton onClick={connectGithub} busy={busy === "github"} disabled={loading}>
-                            Connect
+                            {github?.stale ? "Reconnect" : "Connect"}
                         </PrimaryButton>
                     )
                 }

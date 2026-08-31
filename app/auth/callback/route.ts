@@ -61,12 +61,19 @@ export async function GET(request: Request) {
     const user = data?.user
     const accessToken = session?.provider_token
 
-    // Our own "Connect GitLab" flow (Settings → Connections) sets ?connect=gitlab
-    // on the callback URL. We can't infer the provider from app_metadata.provider
-    // here: a user who first signed in with GitHub keeps provider === "github"
-    // even while linking GitLab, so without this hint the GitLab token would be
-    // mis-written into github_tokens below. The hint is our own redirect param,
-    // not attacker-controlled provider data.
+    // Every OAuth start we own — the sign-in buttons and the Connections page —
+    // stamps ?connect=<provider> onto this callback URL, and it is the ONLY
+    // trustworthy statement of which provider the user just came back from.
+    //
+    // app_metadata.provider cannot answer this: it records the provider the
+    // account was CREATED with and never changes afterwards. An account that
+    // signed up with GitHub and later linked Google keeps provider === "github"
+    // on every Google sign-in — so reading it here treated a Google round-trip
+    // as a GitHub one, which either flagged a bogus `reconnect_failed` or wrote
+    // Google's provider_token into github_tokens (leaving GitHub 401ing until
+    // the user reconnected by hand). The reverse hole is why the GitLab flow
+    // has always needed this hint. The param is our own redirect data, not
+    // anything the provider controls.
     const connectProvider = url.searchParams.get("connect")
 
     // Capture the GitLab OAuth token into provider_tokens (migration 0055). Only
@@ -110,13 +117,18 @@ export async function GET(request: Request) {
         // signed-in user connecting GitLab just lands back on `next`).
     }
 
-    // Only GitHub sign-ins need a provider token captured (for repo access).
+    // Only GitHub round-trips need a provider token captured (for repo access).
     // Google/Apple are identity-only and may return no provider_token at all
     // (Apple typically doesn't), so running the GitHub-token logic for them
     // would wrongly flag `reconnect_failed` or stash a non-GitHub token in
-    // `github_tokens`. Skip straight to the app for those providers. The GitLab
-    // connect flow is handled above, never as a GitHub sign-in.
-    const isGithub = connectProvider !== "gitlab" && user?.app_metadata?.provider === "github"
+    // `github_tokens`. The GitLab connect flow is handled above.
+    //
+    // The hint decides it when present. It is absent only for a callback minted
+    // before this param existed (a link already in flight, a bookmarked URL), and
+    // there the old signup-provider reading is the best guess left.
+    const isGithub = connectProvider
+        ? connectProvider === "github"
+        : user?.app_metadata?.provider === "github"
 
     // Reached here when the user authenticated but GitHub didn't return a
     // provider token (Supabase only includes it on a fresh grant). The

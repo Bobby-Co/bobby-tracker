@@ -80,8 +80,22 @@ async function fetchRepoListState(): Promise<LoadState> {
                     external_id: r.id,
                 })
             }
+        } else {
+            // `github_not_connected` is the quiet case — connecting happens in
+            // Settings, not here. Anything else means a connection the user
+            // believes they have is broken (revoked token, downgraded scope), and
+            // an empty list with no explanation is the worst way to say so.
+            const body = (await gh.value.json().catch(() => ({}))) as { error?: { code?: string } }
+            const code = body.error?.code
+            if (code !== "github_not_connected") {
+                githubConnected = true
+                warnings.push(
+                    code === "github_reauth_required"
+                        ? "github.com: reconnect in Settings — GitHub rejected the stored token."
+                        : `github.com: couldn't load repos (${code ?? gh.value.status}).`,
+                )
+            }
         }
-        // 401 = GitHub not connected; silently contribute nothing.
     }
 
     if (gl.status === "fulfilled" && gl.value.ok) {
