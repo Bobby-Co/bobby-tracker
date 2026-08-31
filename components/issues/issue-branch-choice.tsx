@@ -34,6 +34,19 @@ import type { ProjectBranch } from "@/lib/shared/types"
  *  between "not asked yet" and "asked and answered". */
 export const BRANCH_UNCHOSEN = null
 
+/** What "unchosen" is handed to the Dropdown as.
+ *
+ *  The Dropdown shows its `placeholder` when the value matches NO option, which
+ *  is exactly the rendering we want — but the obvious way to get there, adding a
+ *  "Choose a branch…" option with an empty value, collides with the default
+ *  branch's own empty value. Two options with the same value are two children
+ *  with the same React key, and the list silently drops one of them.
+ *
+ *  A NUL is the sentinel because a git ref cannot contain one, so it can never
+ *  collide with a real branch, and it is not "" so it cannot collide with the
+ *  default either. */
+const UNCHOSEN_VALUE = "\u0000"
+
 /** Whether the composer is still waiting on this decision. True only when the
  *  project offers a real choice and the author hasn't made it. */
 export function branchChoicePending(ready: ProjectBranch[], value: string | null): boolean {
@@ -58,19 +71,34 @@ export function IssueBranchChoice({
     const pending = value === null
 
     return (
-        <div className={cn("rounded-[10px] border border-[color:var(--c-border)] p-3", pending && "border-[color:var(--c-border-strong)]", className)}>
+        // ONE border class, chosen — not two with the strong one appended.
+        // `cn` is a plain joiner with no tailwind-merge, so emitting both leaves
+        // the winner to stylesheet order rather than to this condition.
+        //
+        // A surface of its own, because a bordered box with a transparent
+        // background reads as a hole punched in the panel on the dark theme
+        // rather than as a raised field group. surface-2 and NOT surface: the
+        // Dropdown's own trigger is surface, so matching it would dissolve the
+        // control into its container.
+        <div
+            className={cn(
+                "rounded-[10px] border bg-[color:var(--c-surface-2)] p-3",
+                pending ? "border-[color:var(--c-border-strong)]" : "border-[color:var(--c-border)]",
+                className,
+            )}
+        >
             <label className="text-[11px] font-bold uppercase tracking-[0.10em] text-[color:var(--c-text-dim)]">
-                Analyse against <span className="text-rose-600">*</span>
+                {/* The themed error token, not a raw Tailwind rose: rose-600 is
+                    a deep red that all but disappears against the dark theme's
+                    near-black navy. */}
+                Analyse against <span className="text-[color:var(--c-error)]">*</span>
             </label>
             <div className="mt-1.5">
                 <Dropdown
-                    value={value ?? ""}
+                    value={value ?? UNCHOSEN_VALUE}
                     onChange={onChange}
+                    placeholder="Choose a branch…"
                     options={[
-                        // The placeholder is an OPTION rather than a separate
-                        // empty state so the control has a stable size and the
-                        // author can see there is something to answer.
-                        ...(pending ? [{ value: "", label: "Choose a branch…" }] : []),
                         { value: DEFAULT_BRANCH_VALUE, label: "Default branch" },
                         ...ready.map((b) => ({ value: b.branch, label: b.branch })),
                     ]}

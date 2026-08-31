@@ -52,6 +52,14 @@ const COMPONENTS: { c: ZooComponent; e: SignedEmbed }[] = [
     },
 ]
 
+// Two ready branches + one still indexing, so the preview shows both what the
+// picker offers and what it deliberately withholds.
+const BRANCHES = [
+    { id: "b1", project_id: "preview", branch: "development", status: "ready" },
+    { id: "b2", project_id: "preview", branch: "feat/multi-branch", status: "ready" },
+    { id: "b3", project_id: "preview", branch: "feat/half-done", status: "indexing" },
+]
+
 function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })
 }
@@ -79,6 +87,9 @@ function useStubbedApi() {
             if (url.includes("/api/teams") && url.includes("/groups")) return json({ groups: [] })
             if (url.includes("/api/teams")) return json({ teams: [] })
             if (url.includes("/api/billing/balance")) return json({ balance: null })
+            // Before the generic /api/projects catch-all, or it would swallow
+            // this and the branch control would never render in the preview.
+            if (url.includes("/branches")) return json({ branches: BRANCHES })
             if (url.includes("/api/projects")) return json({ projects: PROJECTS })
             return real(input, init)
         }
