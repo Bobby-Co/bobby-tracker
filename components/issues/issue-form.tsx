@@ -331,7 +331,7 @@ function AiDraftDock({
     attachmentsFull: boolean
 }) {
     const [phase, setPhase] = useState<Phase>("idle")
-    const [dims, setDims] = useState({ travel: 0, full: 0, height: 0 })
+    const [dims, setDims] = useState({ btn: 0, travel: 0, full: 0, height: 0 })
     const [plays, setPlays] = useState(0)
     const pillRef = useRef<HTMLLabelElement>(null)
     const btnRef = useRef<HTMLButtonElement>(null)
@@ -344,33 +344,31 @@ function AiDraftDock({
         const btn = btnRef.current?.offsetWidth ?? 0
         const full = pillRef.current?.offsetWidth ?? 0
         const height = btnRef.current?.offsetHeight ?? 0
-        if (btn > 0 && full > 0) setDims({ travel: btn + GAP, full, height })
+        if (btn > 0 && full > 0) setDims({ btn, travel: btn + GAP, full, height })
     }, [])
 
     useEffect(() => () => { if (beat.current) clearTimeout(beat.current) }, [])
 
     // ─── the choreography ───────────────────────────────────────────────────
     //
-    //   reach   the button stretches LEFT over the ground both halves will
-    //           occupy. Nothing has split yet; there is just more of it.
     //   split   the button's own skin goes transparent and the SVG blob takes
     //           its place, thinning at the waist until a ball pinches off the
     //           left end.
     //   open    the blob is dropped, the real pill appears where the ball
-    //           ended and grows to admit its label, and the button is back to
-    //           its own width.
+    //           ended and grows to admit its label.
     //
-    // Three states rather than a flag because each has different things
-    // visible, and a boolean cannot say which of them we are in.
+    // There WAS a beat before these two, where the button stretched left over
+    // the ground the split would use. It was choppy, and it was redundant: the
+    // blob's first frame is already the button's exact capsule — the ball
+    // starts coincident with the left cap, so their union IS the button — and
+    // the empty part of the viewBox is simply the space the ball flies into.
+    // The stretch was animating toward a shape the SVG never draws.
     function openDock() {
         if (beat.current) clearTimeout(beat.current)
         if (phase !== "idle") return
-        setPhase("reach")
-        beat.current = setTimeout(() => {
-            setPhase("split")
-            setPlays((n) => n + 1)
-            beat.current = setTimeout(() => setPhase("open"), SPLIT_MS)
-        }, REACH_MS)
+        setPhase("split")
+        setPlays((n) => n + 1)
+        beat.current = setTimeout(() => setPhase("open"), SPLIT_MS)
     }
 
     function closeDock() {
@@ -380,7 +378,6 @@ function AiDraftDock({
         setPhase("idle")
     }
 
-    const reaching = phase !== "idle"
     const splitting = phase === "split"
     const opened = phase === "open"
     const measured = dims.full > 0
@@ -425,7 +422,7 @@ function AiDraftDock({
                 }}
                 className={cn(
                     "absolute right-0 top-0 flex cursor-pointer items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
-                    "transition-[transform,width,opacity] duration-[320ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
+                    "transition-[transform,width,opacity] duration-[240ms] [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1),cubic-bezier(0.16,1,0.3,1),linear]",
                     opened ? "opacity-100" : "pointer-events-none opacity-0",
                     attachmentsFull && "cursor-not-allowed opacity-50",
                 )}
@@ -460,15 +457,11 @@ function AiDraftDock({
                 onClick={onDraft}
                 disabled={!canDraft || drafting}
                 title={canDraft ? undefined : "Write a line or attach a screenshot first"}
-                style={{
-                    // Reaches left over the ground the split will use, then lets
-                    // go once the pill is real. Padding-left carries the label to
-                    // the right so the text never moves.
-                    paddingLeft: reaching && !opened && measured ? dims.travel + 10 : undefined,
-                }}
                 className={cn(
                     "relative inline-flex items-center justify-end gap-1.5 whitespace-nowrap rounded-full py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] disabled:cursor-not-allowed disabled:opacity-45",
-                    "transition-[padding,background,border-color,opacity] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    // No width or padding here: the button never changes size.
+                    // Only its skin hands over to the blob and comes back.
+                    "transition-[background,border-color,opacity] duration-100 ease-out",
                     // Its skin is handed to the blob for the duration of the
                     // split and taken back afterwards.
                     splitting
@@ -483,12 +476,10 @@ function AiDraftDock({
     )
 }
 
-type Phase = "idle" | "reach" | "split" | "open"
+type Phase = "idle" | "split" | "open"
 
-/** How long the button takes to stretch over the ground it is about to split. */
-const REACH_MS = 200
 /** How long the blob takes to pinch a ball off its left end. */
-const SPLIT_MS = 380
+const SPLIT_MS = 240
 
 /** Space between the pill and the button once the pill has landed. */
 const GAP = 6

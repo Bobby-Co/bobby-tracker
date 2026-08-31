@@ -96,11 +96,22 @@ export function splitPath(geo: SplitGeometry, t: number): string {
     ].join(" ")
 }
 
+/** Ease baked into the SAMPLING rather than into the playback.
+ *
+ *  SMIL applies keySplines per INTERVAL, so easing a spline-mode animation eases
+ *  each hop between samples separately — it slows to a near-stop at every keyframe
+ *  and the split visibly stutters its way across. Sampling the geometry on the
+ *  eased curve and then playing the frames back linearly gives one continuous
+ *  motion, and costs nothing but a few more sample points. */
+function ease(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+}
+
 /** The keyframes SMIL tweens between. Sampled rather than handed two endpoints
  *  because the ball's travel and the waist's collapse are on different curves —
  *  interpolating straight from t=0 to t=1 would average them into one. */
-export function splitKeyframes(geo: SplitGeometry, steps = 6): string[] {
-    return Array.from({ length: steps + 1 }, (_, i) => splitPath(geo, i / steps))
+export function splitKeyframes(geo: SplitGeometry, steps = 12): string[] {
+    return Array.from({ length: steps + 1 }, (_, i) => splitPath(geo, ease(i / steps)))
 }
 
 /** The blob itself. Plays once per `playToken` change.
@@ -162,9 +173,9 @@ export function LiquidSplit({
                     // would be a visible flash.
                     fill="freeze"
                     begin="indefinite"
-                    calcMode="spline"
-                    keyTimes={frames.map((_, i) => (i / (frames.length - 1)).toFixed(3)).join(";")}
-                    keySplines={frames.slice(1).map(() => "0.4 0 0.2 1").join(";")}
+                    // Linear BETWEEN frames — the curve is already in where the
+                    // frames were sampled. See `ease`.
+                    calcMode="linear"
                 />
             </path>
         </svg>
