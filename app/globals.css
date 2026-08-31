@@ -812,6 +812,44 @@ main[data-page="landing"] {
     .anim-ping-in { animation: ping-in 420ms cubic-bezier(0.4, 0, 0.2, 1) backwards; }
     .stagger > * { animation-delay: calc(var(--stagger-step, 60ms) * var(--i, 0)); }
 
+    /* The editor while a draft is being written for it. The band is a child
+       pseudo-element rather than a background on the editor itself, so it can
+       travel independently of the text and leave it perfectly legible — you can
+       keep reading your own words while they are being rewritten. */
+    .ai-thinking { position: relative; }
+    .ai-thinking::after {
+        content: "";
+        position: absolute;
+        inset-inline: 0;
+        top: 0;
+        height: 18%;
+        pointer-events: none;
+        background: linear-gradient(
+            to bottom,
+            transparent,
+            color-mix(in srgb, var(--c-primary) 16%, transparent),
+            transparent
+        );
+        animation: ai-scan 1600ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+
+    /* Each block resolving out of blur. The delay is per-block (--i), capped by
+       the caller so a forty-block document does not take four seconds to land. */
+    .ai-morph > * {
+        animation: ai-morph-in 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+        animation-delay: calc(var(--stagger-step, 45ms) * var(--i, 0));
+    }
+
+    /* The secondary action springing out from under the primary one. The
+       overshoot in the curve is the "momentum": it passes its resting position
+       and settles back, which is what makes it read as thrown rather than
+       faded in. */
+    .spring-out {
+        transition:
+            transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1),
+            opacity 200ms ease-out;
+    }
+
     .skeleton {
         @apply relative overflow-hidden rounded bg-[color:var(--c-surface-2)];
     }
@@ -828,6 +866,30 @@ main[data-page="landing"] {
 @keyframes fade    { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ping-in { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: scale(1); } }
 @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+/* ─── the AI rewrite ────────────────────────────────────────────────────────
+   Two states, and they have to read as one continuous act: the editor is
+   THINKING, then the text it produced ARRIVES.
+
+   Thinking is a band of light travelling down the editor rather than a spinner
+   in a corner — the thing being worked on is the document, so that is what
+   should look busy.
+
+   Arrival resolves each block out of a blur. Blur is the whole trick: text
+   sliding in is a list appearing, text sharpening is a sentence being decided
+   on. Blocks stagger a few tens of milliseconds apart so it reads top-to-bottom
+   as writing, not as a panel being swapped. */
+@keyframes ai-scan {
+    0%   { transform: translateY(-60%); opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { transform: translateY(560%); opacity: 0; }
+}
+@keyframes ai-morph-in {
+    from { opacity: 0; filter: blur(7px); transform: translateY(5px) scale(0.995); }
+    60%  { opacity: 1; }
+    to   { opacity: 1; filter: blur(0); transform: none; }
+}
 
 /* Rainbow glow — rotating conic gradient drives both a blurred flare and a crisp border ring */
 @property --rainbow-angle {
@@ -975,6 +1037,12 @@ main[data-page="landing"] {
 
 @media (prefers-reduced-motion: reduce) {
     .anim-rise, .anim-fade, .anim-ping-in { animation: none; }
+    /* The rewrite still needs to be legible as an event, so the blur/scan go
+       and nothing replaces them — the text simply changes, which is the honest
+       minimum. */
+    .ai-thinking::after { animation: none; opacity: 0; }
+    .ai-morph > * { animation: none; }
+    .spring-out { transition: none; }
     .skeleton::after        { animation: none; }
     .rainbow-glow::before, .rainbow-glow::after { animation: none; }
     .graph-scan .gnode, .graph-scan .gsonar, .graph-scan .gedge-flow { animation: none; }

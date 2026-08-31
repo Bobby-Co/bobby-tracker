@@ -78,6 +78,10 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
     // Whether the AI produced what is currently in the form. Kept so the created
     // issue is still flagged ai_proposed, exactly as the old modal flagged it.
     const [aiProposed, setAiProposed] = useState(false)
+    // Bumped per successful rewrite so the editor replays its arrival
+    // animation. Two drafts in a row are two events; a boolean could only
+    // express the first.
+    const [morphSignal, setMorphSignal] = useState(0)
 
     // There is something for the model to read: prose, or a screenshot.
     const canDraft = Boolean(title.trim() || body.trim() || images.length > 0)
@@ -124,6 +128,7 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                     ...(proposal.labels?.length ? { labels: proposal.labels.join(", ") } : {}),
                 })
                 setAiProposed(true)
+                setMorphSignal((n) => n + 1)
             } catch (e) {
                 // Everything surfaces here. Elsewhere in this file a non-ApiError
                 // is re-thrown as a programmer error, but this runs detached from
@@ -230,14 +235,28 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                 ready={readyBranches}
                 defaultBranch={defaultBranch}
             />
-            <MarkdownEditor
-                value={body}
-                onChange={(v) => patch({ body: v })}
-                projectId={projectId}
-                minHeight={panel ? 280 : 160}
-                placeholder="Describe what's happening. Press Enter to render a block; right-click for formatting."
-                ariaLabel="Issue description"
-            />
+            {/* The editor is the anchor for the AI affordance, so the button
+                sits ON the thing it rewrites rather than in a toolbar that
+                could be about anything. */}
+            <div className="relative">
+                <MarkdownEditor
+                    value={body}
+                    onChange={(v) => patch({ body: v })}
+                    projectId={projectId}
+                    minHeight={panel ? 280 : 160}
+                    placeholder="Describe what's happening. Press Enter to render a block; right-click for formatting."
+                    ariaLabel="Issue description"
+                    thinking={drafting}
+                    morphSignal={morphSignal}
+                />
+                <AiDraftDock
+                    onDraft={draftWithAi}
+                    onFiles={addFiles}
+                    drafting={drafting}
+                    canDraft={canDraft}
+                    attachmentsFull={images.length >= MAX_ATTACHMENTS}
+                />
+            </div>
 
             <AttachmentChips images={images} onRemove={removeImage} />
             {imageError && <p className="text-[11.5px] text-[color:var(--c-text-muted)]">{imageError}</p>}
@@ -248,22 +267,6 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
                     works on the investigation that Create kicks off, not a fact
                     about the issue. */}
                 <IssueEffortChip value={effort} onChange={(v) => patch({ effort: v })} />
-
-                <AttachButton onFiles={addFiles} disabled={images.length >= MAX_ATTACHMENTS} />
-
-                {/* The whole of the old compose modal, as one button. It reads
-                    what is already in the form rather than asking for the same
-                    thing again in a different surface. */}
-                <button
-                    type="button"
-                    onClick={draftWithAi}
-                    disabled={!canDraft || drafting}
-                    title={canDraft ? undefined : "Write a line or attach a screenshot first"}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] pl-2 pr-2.5 text-[12px] font-semibold text-[color:var(--c-text)] transition-colors hover:border-[color:var(--c-border-strong)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                    {drafting ? <Spinner /> : <SparkleIcon />}
-                    {drafting ? "Drafting…" : "Draft with AI"}
-                </button>
 
                 <div className="ml-auto flex items-center gap-2">
                 {onCancel && (
@@ -280,40 +283,86 @@ export function IssueForm({ projectId, onSuccess, onCancel, variant = "modal", v
     )
 }
 
-/** The paperclip. A plain file input styled as a chip, because a screenshot is
- *  usually dragged in — this is the fallback for the times it isn't (a phone
- *  photo, a file manager that won't drag, a keyboard-only user). */
-function AttachButton({
+/** The AI affordance, docked to the editor's bottom-right corner.
+ *
+ *  On the editor rather than in the footer because it acts on the DOCUMENT: a
+ *  button in the row with Cancel and Create reads as another way to submit,
+ *  and this rewrites what you are looking at.
+ *
+ *  "Analyse image" is a second, smaller action that lives UNDER the primary one
+ *  until you reach for it. Hovering or focusing the dock throws it out to the
+ *  left on a curve that overshoots and settles — the overshoot is what makes it
+ *  read as thrown rather than faded in. Leftward and not rightward because the
+ *  dock is already against the editor's right edge; there is nothing to the
+ *  right but the panel wall.
+ *
+ *  It stays out whenever the dock holds focus, so a keyboard user can Tab to it
+ *  rather than having to produce a hover they cannot produce. */
+function AiDraftDock({
+    onDraft,
     onFiles,
-    disabled,
+    drafting,
+    canDraft,
+    attachmentsFull,
 }: {
+    onDraft: () => void
     onFiles: (files: FileList | null) => void
-    disabled?: boolean
+    drafting: boolean
+    canDraft: boolean
+    attachmentsFull: boolean
 }) {
+    const [open, setOpen] = useState(false)
+
     return (
-        <label
-            className={cn(
-                "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-[color:var(--c-border-strong)] py-[5px] pl-2 pr-2.5 text-[12px] font-medium text-[color:var(--c-text-muted)] transition-colors hover:border-[color:var(--c-text-dim)] hover:text-[color:var(--c-text)]",
-                disabled && "cursor-not-allowed opacity-50",
-            )}
+        <div
+            className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5"
+            onPointerEnter={() => setOpen(true)}
+            onPointerLeave={() => setOpen(false)}
+            onFocus={() => setOpen(true)}
+            onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false)
+            }}
         >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M21.4 11.05 12.25 20.2a5.5 5.5 0 0 1-7.78-7.78l9.2-9.19a3.67 3.67 0 1 1 5.18 5.18l-9.2 9.2a1.83 1.83 0 1 1-2.6-2.6l8.5-8.48" />
-            </svg>
-            Screenshot
-            <input
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={disabled}
-                onChange={(e) => {
-                    onFiles(e.target.files)
-                    // Reset so picking the SAME file twice still fires a change.
-                    e.target.value = ""
-                }}
-                className="sr-only"
-            />
-        </label>
+            <label
+                // Translated out from BEHIND the primary button, so the motion
+                // starts where the thing you clicked is.
+                className={cn(
+                    "spring-out inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[color:var(--c-border)] bg-[color:var(--c-surface)] py-[5px] pl-2.5 pr-3 text-[12px] font-medium text-[color:var(--c-text-muted)] shadow-[var(--shadow-pop)] hover:text-[color:var(--c-text)]",
+                    open ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-[46px] opacity-0",
+                    attachmentsFull && "cursor-not-allowed opacity-50",
+                )}
+            >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+                    <circle cx="8.5" cy="9.5" r="1.6" />
+                    <path d="M4 16.5 9 12l3.5 3 2.5-2 5 4.5" />
+                </svg>
+                Analyse image
+                <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={attachmentsFull}
+                    onChange={(e) => {
+                        onFiles(e.target.files)
+                        // Reset so picking the SAME file twice still fires.
+                        e.target.value = ""
+                    }}
+                    className="sr-only"
+                />
+            </label>
+
+            <button
+                type="button"
+                onClick={onDraft}
+                disabled={!canDraft || drafting}
+                title={canDraft ? undefined : "Write a line or attach a screenshot first"}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--c-primary)] bg-[color:var(--c-primary-tint)] py-[5px] pl-2.5 pr-3 text-[12px] font-semibold text-[color:var(--c-text)] shadow-[var(--shadow-pop)] transition-[opacity,background] duration-150 hover:bg-[color:var(--c-surface-2)] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+                {drafting ? <Spinner /> : <SparkleIcon />}
+                {drafting ? "Drafting…" : "Draft with AI"}
+            </button>
+        </div>
     )
 }
 

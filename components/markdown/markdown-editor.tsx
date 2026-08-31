@@ -65,6 +65,8 @@ export function MarkdownEditor({
     placeholder = "Write in markdown… press Enter to render a block.",
     minHeight = 160,
     ariaLabel = "Markdown editor",
+    thinking = false,
+    morphSignal = 0,
 }: {
     value: string
     onChange: (value: string) => void
@@ -80,6 +82,16 @@ export function MarkdownEditor({
     placeholder?: string
     minHeight?: number
     ariaLabel?: string
+    /** Something is writing into this editor right now — drives the scan band.
+     *  The document is what is being worked on, so the document is what looks
+     *  busy; a spinner elsewhere would point at the wrong thing. */
+    thinking?: boolean
+    /** Bump to replay the arrival animation. A NUMBER rather than a boolean
+     *  because two consecutive rewrites are two events, and a flag that is
+     *  already true cannot express the second one. The owner bumps it; this
+     *  never infers a rewrite from `value` changing, or every keystroke echoed
+     *  back through the prop would re-animate the document. */
+    morphSignal?: number
 }) {
     const [blocks, setBlocks] = useState<Block[]>(() =>
         splitBlocks(value).map((text) => ({ id: nid(), text })),
@@ -506,6 +518,11 @@ export function MarkdownEditor({
                 />
             ) : (
                 <div
+                    // `key` on the morph signal so the animation RESTARTS: CSS
+                    // animations do not replay on an element that is merely
+                    // re-rendered, and remounting is the one reliable way to
+                    // fire the same one twice.
+                    key={morphSignal}
                     // Selection-level keys land here because a selection across
                     // several rendered blocks belongs to none of them. No ref:
                     // containerRef is the outer shell and already contains these,
@@ -515,7 +532,13 @@ export function MarkdownEditor({
                     // margins collapse with its neighbours' exactly as they do
                     // in the rendered body — the editor then reads at the same
                     // vertical rhythm as the saved output, not looser.
-                    className="prose-editor px-3 py-2.5"
+                    className={cn(
+                        "prose-editor px-3 py-2.5",
+                        thinking && "ai-thinking",
+                        // Only after a rewrite. On first mount the document is
+                        // simply there and had nothing done to it.
+                        morphSignal > 0 && "ai-morph",
+                    )}
                     style={{ minHeight }}
                     onContextMenu={(e) => {
                         // Right-click in the empty gutter: open a block first.
@@ -535,7 +558,7 @@ export function MarkdownEditor({
                             {placeholder}
                         </button>
                     ) : (
-                        blocks.map((b) =>
+                        blocks.map((b, i) =>
                             b.id === activeId ? (
                                 <textarea
                                     key={b.id}
@@ -578,6 +601,10 @@ export function MarkdownEditor({
                                 <RenderedBlock
                                     key={b.id}
                                     id={b.id}
+                                    // Capped: a long document should still land
+                                    // in well under a second, so past the tenth
+                                    // block everything arrives together.
+                                    index={Math.min(i, 10)}
                                     text={b.text}
                                     embeds={mergedEmbeds}
                                     onActivate={() => activate(b.id, b.text.length)}
@@ -648,6 +675,7 @@ function Divider() {
 
 function RenderedBlock({
     id,
+    index,
     text,
     embeds,
     onActivate,
@@ -657,6 +685,8 @@ function RenderedBlock({
      *  over nodes, and this is what maps the nodes it touches back to the
      *  blocks the editor is holding. */
     id: string
+    /** Position in the stagger — see the .ai-morph rule. */
+    index: number
     text: string
     embeds: SignedEmbedMap
     onActivate: () => void
@@ -665,6 +695,7 @@ function RenderedBlock({
     return (
         <div
             data-block-id={id}
+            style={{ "--i": index } as React.CSSProperties}
             role="button"
             tabIndex={0}
             onClick={(e) => {
