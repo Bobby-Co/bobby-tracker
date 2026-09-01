@@ -161,7 +161,13 @@ describe("the monthly allowance", () => {
         periodUsage.forSubject.mockResolvedValue(spent(2_000))
         const refusal = await gate().check("t1")
         expect(refusal?.reason).toBe("exhausted")
-        expect(periodUsage.forSubject).toHaveBeenCalledWith(null, "t1", "2026-08-01T00:00:00.000Z")
+        // The calendar month, DERIVED the way the gate derives it. It was
+        // hardcoded to a literal month, which meant the test stopped being about
+        // the fallback and started being about the date: it passed all through
+        // August and failed at midnight on the 1st of September, on a file
+        // nobody had touched. What is being pinned is that a subject-less team
+        // is metered over the current month — not which month that is.
+        expect(periodUsage.forSubject).toHaveBeenCalledWith(null, "t1", Balance.currentPeriodStart())
     })
 })
 
